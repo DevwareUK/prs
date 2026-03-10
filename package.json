@@ -1,0 +1,21 @@
+{
+  "name": "ai-actions",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm -r dev",
+    "lint": "eslint ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.7.0",
+  "devDependencies": {
+    "@types/node": "^25.4.0",
+    "eslint": "^10.0.3",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
+  }
+}

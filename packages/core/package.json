@@ -1,0 +1,12 @@
+{
+  "name": "@ai-actions/core",
+  "version": "0.0.1",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "rm -rf dist && mkdir -p dist && cp src/*.js dist/"
+  },
+  "dependencies": {
+    "@ai-actions/contracts": "workspace:*",
+    "@ai-actions/providers": "workspace:*"
+  }
+}

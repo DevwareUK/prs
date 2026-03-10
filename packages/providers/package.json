@@ -1,0 +1,8 @@
+{
+  "name": "@ai-actions/providers",
+  "version": "0.0.1",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "rm -rf dist && mkdir -p dist && cp src/*.js dist/"
+  }
+}
