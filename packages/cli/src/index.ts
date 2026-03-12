@@ -101,14 +101,19 @@ function formatCommitMessage(title: string, body?: string): string {
 function formatDiffSummary(
   summary: Awaited<ReturnType<typeof generateDiffSummary>>
 ): string {
-  const sections = ["## Summary", summary.summary, "", "## Major Areas"];
+  const sections = [
+    "Changes Overview",
+    summary.summary,
+    "",
+    "Major Areas Affected",
+  ];
 
   for (const area of summary.majorAreas) {
     sections.push(`- ${area}`);
   }
 
   if (summary.riskAreas && summary.riskAreas.length > 0) {
-    sections.push("", "## Risk Areas");
+    sections.push("", "Potential Risk Areas");
     for (const risk of summary.riskAreas) {
       sections.push(`- ${risk}`);
     }

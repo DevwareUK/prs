@@ -31,3 +31,9 @@ git-ai commit
 ```
 
 This will generate a commit message from the staged diff.
+
+```bash
+git-ai diff
+```
+
+This will summarize the current `git diff HEAD`.
