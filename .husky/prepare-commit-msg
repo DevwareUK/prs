@@ -49,7 +49,7 @@ fi
 
 generated_message=$(
   cd "$repo_root" &&
-    pnpm --silent --filter @ai-actions/cli commit 2>/dev/null
+    pnpm --silent --filter @git-ai/cli commit 2>/dev/null
 )
 status=$?
 
