@@ -32,9 +32,6 @@ jobs:
           node-version: 20
           cache: pnpm
 
-      - name: Configure pnpm
-        run: pnpm config set inject-workspace-packages true
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
