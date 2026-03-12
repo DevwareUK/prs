@@ -1,5 +1,5 @@
 {
-  "name": "@ai-actions/pr-description-action",
+  "name": "@git-ai/pr-description-action",
   "version": "0.0.1",
   "private": true,
   "main": "dist/index.js",
@@ -8,9 +8,9 @@
     "build": "tsup src/index.ts --format cjs --dts --out-dir dist"
   },
   "dependencies": {
-    "@ai-actions/contracts": "workspace:*",
-    "@ai-actions/core": "workspace:*",
-    "@ai-actions/providers": "workspace:*"
+    "@git-ai/contracts": "workspace:*",
+    "@git-ai/core": "workspace:*",
+    "@git-ai/providers": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8.5.1"

@@ -1,20 +1,20 @@
 {
-  "name": "@ai-actions/cli",
+  "name": "@git-ai/cli",
   "version": "0.0.1",
   "private": true,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "ai-actions": "dist/index.js"
+    "git-ai": "dist/index.js"
   },
   "scripts": {
     "build": "tsup src/index.ts --format cjs --dts --out-dir dist",
-    "commit": "pnpm --filter @ai-actions/cli... build && node dist/index.js commit",
-    "diff": "pnpm --filter @ai-actions/cli... build && node dist/index.js diff"
+    "commit": "pnpm --filter @git-ai/cli... build && node dist/index.js commit",
+    "diff": "pnpm --filter @git-ai/cli... build && node dist/index.js diff"
   },
   "dependencies": {
-    "@ai-actions/core": "workspace:*",
-    "@ai-actions/providers": "workspace:*",
+    "@git-ai/core": "workspace:*",
+    "@git-ai/providers": "workspace:*",
     "dotenv": "^17.2.3"
   },
   "devDependencies": {

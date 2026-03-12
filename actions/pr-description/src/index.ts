@@ -1,7 +1,7 @@
 import { appendFileSync } from "node:fs";
-import { PRDescriptionInput } from "@ai-actions/contracts";
-import { generatePRDescription } from "@ai-actions/core";
-import { OpenAIProvider } from "@ai-actions/providers";
+import { PRDescriptionInput } from "@git-ai/contracts";
+import { generatePRDescription } from "@git-ai/core";
+import { OpenAIProvider } from "@git-ai/providers";
 
 function getRequiredInput(name: string): string {
   const envName = `INPUT_${name.replace(/ /g, "_").toUpperCase()}`;

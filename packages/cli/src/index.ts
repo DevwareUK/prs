@@ -2,8 +2,8 @@
 
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
-import { generateCommitMessage, generateDiffSummary } from "@ai-actions/core";
-import { OpenAIProvider } from "@ai-actions/providers";
+import { generateCommitMessage, generateDiffSummary } from "@git-ai/core";
+import { OpenAIProvider } from "@git-ai/providers";
 import dotenv from "dotenv";
 
 dotenv.config({ path: resolve(__dirname, "../../..", ".env"), quiet: true });

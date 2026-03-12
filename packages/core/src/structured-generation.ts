@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AIProvider } from "@ai-actions/providers";
+import { AIProvider } from "@git-ai/providers";
 
 interface GenerateStructuredOutputOptions<TSchema extends z.ZodTypeAny> {
   provider: AIProvider;

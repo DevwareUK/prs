@@ -1,6 +1,6 @@
-# AI Actions Architecture
+# git-ai Architecture
 
-This repository is a pnpm monorepo for reusable AI-powered GitHub Actions.
+This repository is a pnpm monorepo for reusable AI tooling, provider adapters, GitHub Actions, a CLI, and Husky Git hook integration.
 
 ## Package responsibilities
 

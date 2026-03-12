@@ -1,12 +1,12 @@
 {
-  "name": "ai-actions",
+  "name": "git-ai",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
   "scripts": {
     "build": "pnpm -r build",
-    "cli:commit": "pnpm --filter @ai-actions/cli commit",
-    "cli:diff": "pnpm --filter @ai-actions/cli diff",
+    "cli:commit": "pnpm --filter @git-ai/cli commit",
+    "cli:diff": "pnpm --filter @git-ai/cli diff",
     "dev": "pnpm -r dev",
     "lint": "eslint .",
     "prepare": "husky"

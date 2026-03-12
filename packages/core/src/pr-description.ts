@@ -3,8 +3,8 @@ import {
   PRDescriptionInputType,
   PRDescriptionOutput,
   PRDescriptionOutputType,
-} from "@ai-actions/contracts";
-import { AIProvider } from "@ai-actions/providers";
+} from "@git-ai/contracts";
+import { AIProvider } from "@git-ai/providers";
 import { generateStructuredOutput } from "./structured-generation";
 
 const PR_DESCRIPTION_SYSTEM_PROMPT =

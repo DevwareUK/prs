@@ -27,13 +27,13 @@ importers:
 
   actions/pr-description:
     dependencies:
-      '@ai-actions/contracts':
+      '@git-ai/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@ai-actions/core':
+      '@git-ai/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@ai-actions/providers':
+      '@git-ai/providers':
         specifier: workspace:*
         version: link:../../packages/providers
     devDependencies:
@@ -43,10 +43,10 @@ importers:
 
   packages/cli:
     dependencies:
-      '@ai-actions/core':
+      '@git-ai/core':
         specifier: workspace:*
         version: link:../core
-      '@ai-actions/providers':
+      '@git-ai/providers':
         specifier: workspace:*
         version: link:../providers
       dotenv:
@@ -69,10 +69,10 @@ importers:
 
   packages/core:
     dependencies:
-      '@ai-actions/contracts':
+      '@git-ai/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@ai-actions/providers':
+      '@git-ai/providers':
         specifier: workspace:*
         version: link:../providers
     devDependencies:

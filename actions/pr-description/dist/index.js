@@ -2,9 +2,9 @@
 
 // src/index.ts
 var import_node_fs = require("fs");
-var import_contracts = require("@ai-actions/contracts");
-var import_core = require("@ai-actions/core");
-var import_providers = require("@ai-actions/providers");
+var import_contracts = require("@git-ai/contracts");
+var import_core = require("@git-ai/core");
+var import_providers = require("@git-ai/providers");
 function getRequiredInput(name) {
   const envName = `INPUT_${name.replace(/ /g, "_").toUpperCase()}`;
   const value = process.env[envName]?.trim();

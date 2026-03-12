@@ -1,5 +1,5 @@
 {
-  "name": "@ai-actions/core",
+  "name": "@git-ai/core",
   "version": "0.0.1",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -7,8 +7,8 @@
     "build": "tsup src/index.ts --dts"
   },
   "dependencies": {
-    "@ai-actions/contracts": "workspace:*",
-    "@ai-actions/providers": "workspace:*"
+    "@git-ai/contracts": "workspace:*",
+    "@git-ai/providers": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8.5.1"
