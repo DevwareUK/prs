@@ -1,13 +1,23 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
+import { resolve } from "node:path";
 import { generateCommitMessage } from "@ai-actions/core";
 import { OpenAIProvider } from "@ai-actions/providers";
+import dotenv from "dotenv";
+
+dotenv.config({ path: resolve(__dirname, "../../..", ".env"), quiet: true });
 
 function getRequiredEnv(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
+    if (name === "OPENAI_API_KEY") {
+      throw new Error(
+        "OPENAI_API_KEY is required. Set it in your environment or in a .env file."
+      );
+    }
+
+    throw new Error(`${name} is required.`);
   }
 
   return value;

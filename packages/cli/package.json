@@ -13,7 +13,8 @@
   },
   "dependencies": {
     "@ai-actions/core": "workspace:*",
-    "@ai-actions/providers": "workspace:*"
+    "@ai-actions/providers": "workspace:*",
+    "dotenv": "^17.2.3"
   },
   "devDependencies": {
     "tsup": "^8.5.1"
