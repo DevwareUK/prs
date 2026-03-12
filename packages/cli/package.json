@@ -1,0 +1,21 @@
+{
+  "name": "@ai-actions/cli",
+  "version": "0.0.1",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "ai-actions": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs --dts --out-dir dist",
+    "commit": "pnpm --filter @ai-actions/cli... build && node dist/index.js commit"
+  },
+  "dependencies": {
+    "@ai-actions/core": "workspace:*",
+    "@ai-actions/providers": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1"
+  }
+}

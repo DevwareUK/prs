@@ -38,6 +38,19 @@ importers:
         specifier: ^8.5.1
         version: 8.5.1(typescript@5.9.3)
 
+  packages/cli:
+    dependencies:
+      '@ai-actions/core':
+        specifier: workspace:*
+        version: link:../core
+      '@ai-actions/providers':
+        specifier: workspace:*
+        version: link:../providers
+    devDependencies:
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(typescript@5.9.3)
+
   packages/contracts:
     dependencies:
       zod:

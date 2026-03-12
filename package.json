@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build": "pnpm -r build",
+    "cli:commit": "pnpm --filter @ai-actions/cli commit",
     "dev": "pnpm -r dev",
     "lint": "eslint ."
   },

@@ -1,6 +1,8 @@
 import {
   CommitMessageInput,
   CommitMessageInputType,
+  CommitMessageModelOutput,
+  CommitMessageModelOutputType,
   CommitMessageOutput,
   CommitMessageOutputType,
 } from "@ai-actions/contracts";
@@ -9,9 +11,10 @@ import { AIProvider } from "@ai-actions/providers";
 const COMMIT_MESSAGE_SYSTEM_PROMPT =
   [
     "You are a senior software engineer writing git commit messages.",
-    "Be concise and accurate.",
-    "Prefer Conventional Commit style when appropriate.",
-    "Keep the title under 72 characters when possible.",
+    "Write a concise one-line title in imperative mood.",
+    "Prefer Conventional Commit prefixes when they fit, such as feat:, fix:, refactor:, docs:, chore:, and test:.",
+    "Avoid vague titles like Update files, Fix stuff, or Misc changes.",
+    "Keep the title under roughly 72 characters.",
     "Include a short body only when it adds useful context.",
     "Do not hallucinate or invent missing context.",
     "Return valid JSON only.",
@@ -20,15 +23,18 @@ const COMMIT_MESSAGE_SYSTEM_PROMPT =
 function buildPrompt(input: CommitMessageInputType): string {
   return [
     "Generate a git commit message from the provided diff.",
+    "The title must be a concise single line in imperative mood.",
+    "Prefer a Conventional Commit prefix when it clearly matches the change, for example feat:, fix:, refactor:, docs:, chore:, or test:.",
+    "Avoid vague titles such as Update files, Fix stuff, or Misc changes.",
+    "Keep the title under roughly 72 characters.",
+    "Only include a body when it adds useful context beyond the title.",
+    "Do not invent behavior, rationale, or scope that is not supported by the diff.",
     "Return strictly valid JSON in this exact shape:",
     "{",
     '  "title": string,',
     '  "body": string | null',
     "}",
     "",
-    'The "title" should be a concise commit title.',
-    "Prefer Conventional Commit style when appropriate.",
-    "Keep the title under roughly 72 characters.",
     'Use "body" only if a short explanatory body is needed; otherwise return null.',
     "Do not wrap JSON in markdown fences.",
     "",
@@ -57,17 +63,13 @@ function parseModelJson(raw: string): unknown {
   }
 }
 
-function normalizeNullableBody(value: unknown): unknown {
-  if (!value || typeof value !== "object") {
-    return value;
-  }
-
-  const result = { ...(value as Record<string, unknown>) };
-  if (result.body === null) {
-    result.body = undefined;
-  }
-
-  return result;
+function normalizeCommitMessageOutput(
+  value: CommitMessageModelOutputType
+): CommitMessageOutputType {
+  return CommitMessageOutput.parse({
+    title: value.title,
+    body: value.body ?? undefined,
+  });
 }
 
 export async function generateCommitMessage(
@@ -83,14 +85,12 @@ export async function generateCommitMessage(
   });
 
   const parsedJson = parseModelJson(rawResponse.trim());
-  const normalizedOutput = normalizeNullableBody(parsedJson);
-
-  const validated = CommitMessageOutput.safeParse(normalizedOutput);
-  if (!validated.success) {
+  const validatedModelOutput = CommitMessageModelOutput.safeParse(parsedJson);
+  if (!validatedModelOutput.success) {
     throw new Error(
-      `Model output failed commit message schema validation: ${validated.error.message}`
+      `Model output failed commit message schema validation: ${validatedModelOutput.error.message}`
     );
   }
 
-  return validated.data;
+  return normalizeCommitMessageOutput(validatedModelOutput.data);
 }
