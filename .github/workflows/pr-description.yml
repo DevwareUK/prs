@@ -26,29 +26,11 @@ jobs:
         with:
           version: 10.7.0
 
-      - name: Debug tool versions
-        run: |
-          echo "pnpm: $(pnpm -v)"
-          echo "node: $(node -v)"
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
-
-      - name: Debug repo config
-        run: |
-          echo "--- pwd ---"
-          pwd
-          echo "--- ls -la ---"
-          ls -la
-          echo "--- .npmrc ---"
-          cat .npmrc || true
-          echo "--- pnpm-lock.yaml (top 20 lines) ---"
-          sed -n '1,20p' pnpm-lock.yaml || true
-          echo "--- pnpm config list ---"
-          pnpm config list
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
