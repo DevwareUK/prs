@@ -31,6 +31,24 @@ function parseModelJson(raw: string): unknown {
   }
 }
 
+export function normalizeNullableFields(
+  value: unknown,
+  fieldNames: string[]
+): unknown {
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const result = { ...(value as Record<string, unknown>) };
+  for (const fieldName of fieldNames) {
+    if (result[fieldName] === null) {
+      result[fieldName] = undefined;
+    }
+  }
+
+  return result;
+}
+
 export async function generateStructuredOutput<TSchema extends z.ZodTypeAny>(
   options: GenerateStructuredOutputOptions<TSchema>
 ): Promise<z.output<TSchema>> {
