@@ -26,7 +26,28 @@ type IssueWorkspace = {
   outputLogPath: string;
 };
 
-const ISSUE_USAGE = 'Usage: git-ai issue <number>';
+type IssueExecutionMode = "local" | "github-action";
+
+type IssueCommandOptions = {
+  action: "run" | "prepare" | "finalize";
+  issueNumber: number;
+  mode: IssueExecutionMode;
+};
+
+type IssueRunContext = {
+  issueNumber: number;
+  issue: IssueDetails;
+  branchName: string;
+  workspace: IssueWorkspace;
+  mode: IssueExecutionMode;
+};
+
+const ISSUE_USAGE = [
+  "Usage:",
+  "  git-ai issue <number>",
+  "  git-ai issue prepare <number> [--mode <local|github-action>]",
+  "  git-ai issue finalize <number>",
+].join("\n");
 
 function getCliArgs(): string[] {
   return process.argv.slice(2).filter((arg) => arg !== "--");
@@ -199,6 +220,70 @@ function parseIssueNumber(rawValue: string | undefined): number {
   }
 
   return issueNumber;
+}
+
+function parseIssueMode(rawArgs: string[]): IssueExecutionMode {
+  if (rawArgs.length === 0) {
+    return "local";
+  }
+
+  let mode: string | undefined;
+
+  for (let index = 0; index < rawArgs.length; index += 1) {
+    const rawArg = rawArgs[index];
+    if (rawArg === "--mode") {
+      mode = rawArgs[index + 1];
+      index += 1;
+      continue;
+    }
+
+    if (rawArg.startsWith("--mode=")) {
+      mode = rawArg.slice("--mode=".length);
+      continue;
+    }
+
+    throw new Error(`Unknown issue option "${rawArg}". ${ISSUE_USAGE}`);
+  }
+
+  if (mode !== "local" && mode !== "github-action") {
+    throw new Error(
+      `Invalid issue mode "${mode ?? ""}". Expected "local" or "github-action".`
+    );
+  }
+
+  return mode;
+}
+
+function parseIssueCommandArgs(args: string[]): IssueCommandOptions {
+  const issueArgs = args.slice(1);
+  const subcommand = issueArgs[0];
+
+  if (subcommand === "prepare") {
+    return {
+      action: "prepare",
+      issueNumber: parseIssueNumber(issueArgs[1]),
+      mode: parseIssueMode(issueArgs.slice(2)),
+    };
+  }
+
+  if (subcommand === "finalize") {
+    const optionArgs = issueArgs.slice(2);
+    if (optionArgs.length > 0) {
+      throw new Error(`Unknown issue option "${optionArgs[0]}". ${ISSUE_USAGE}`);
+    }
+
+    return {
+      action: "finalize",
+      issueNumber: parseIssueNumber(issueArgs[1]),
+      mode: "local",
+    };
+  }
+
+  return {
+    action: "run",
+    issueNumber: parseIssueNumber(issueArgs[0]),
+    mode: parseIssueMode(issueArgs.slice(1)),
+  };
 }
 
 function parseGitHubRepoFromRemote(): { owner: string; repo: string } {
@@ -402,15 +487,26 @@ function ensureBranchDoesNotExist(branchName: string): void {
   }
 }
 
-function buildCodexPrompt(workspace: IssueWorkspace): string {
+function buildCodexPrompt(
+  workspace: IssueWorkspace,
+  mode: IssueExecutionMode
+): string {
   const issueFile = toRepoRelativePath(workspace.issueFilePath);
   const runDir = toRepoRelativePath(workspace.runDir);
+  const modeSpecificInstructions =
+    mode === "github-action"
+      ? [
+          "You are running inside a GitHub Actions workflow via Codex.",
+          "Do not wait for interactive user input.",
+        ]
+      : [];
 
   return [
     "You are working in the git-ai repository.",
+    ...modeSpecificInstructions,
     "",
     `Read the issue snapshot at \`${issueFile}\` before making changes.`,
-    `Use \`${runDir}\` for local run artifacts created by this workflow.`,
+    `Use \`${runDir}\` for run artifacts created by this workflow.`,
     "",
     "Instructions to Codex:",
     "- analyze the repository only as needed for this issue",
@@ -426,10 +522,11 @@ function writeIssueWorkspaceFiles(
   issueNumber: number,
   issue: IssueDetails,
   branchName: string,
-  workspace: IssueWorkspace
+  workspace: IssueWorkspace,
+  mode: IssueExecutionMode
 ): void {
   const createdAt = new Date().toISOString();
-  const prompt = buildCodexPrompt(workspace);
+  const prompt = buildCodexPrompt(workspace, mode);
 
   writeFileSync(
     workspace.issueFilePath,
@@ -442,6 +539,7 @@ function writeIssueWorkspaceFiles(
     `${JSON.stringify(
       {
         createdAt,
+        mode,
         issueNumber,
         issueTitle: issue.title,
         issueUrl: issue.url,
@@ -468,6 +566,39 @@ function writeIssueWorkspaceFiles(
     ].join("\n"),
     "utf8"
   );
+}
+
+function writeGitHubOutput(name: string, value: string): void {
+  const outputPath = process.env.GITHUB_OUTPUT?.trim();
+  if (!outputPath) {
+    return;
+  }
+
+  const delimiter = `git_ai_${name}_${Date.now()}`;
+  appendFileSync(
+    outputPath,
+    `${name}<<${delimiter}\n${value}\n${delimiter}\n`,
+    "utf8"
+  );
+}
+
+function emitIssuePrepareOutputs(context: IssueRunContext): void {
+  writeGitHubOutput("issue_number", String(context.issueNumber));
+  writeGitHubOutput("issue_title", context.issue.title);
+  writeGitHubOutput("issue_url", context.issue.url);
+  writeGitHubOutput("branch_name", context.branchName);
+  writeGitHubOutput("issue_file", toRepoRelativePath(context.workspace.issueFilePath));
+  writeGitHubOutput(
+    "prompt_file",
+    toRepoRelativePath(context.workspace.promptFilePath)
+  );
+  writeGitHubOutput(
+    "metadata_file",
+    toRepoRelativePath(context.workspace.metadataFilePath)
+  );
+  writeGitHubOutput("output_log", toRepoRelativePath(context.workspace.outputLogPath));
+  writeGitHubOutput("run_dir", toRepoRelativePath(context.workspace.runDir));
+  writeGitHubOutput("mode", context.mode);
 }
 
 function appendRunLog(
@@ -680,9 +811,10 @@ function createProvider(): OpenAIProvider {
   });
 }
 
-async function runIssueCommand(): Promise<void> {
-  const args = getCliArgs();
-  const issueNumber = parseIssueNumber(args[1]);
+async function prepareIssueRun(
+  issueNumber: number,
+  mode: IssueExecutionMode
+): Promise<IssueRunContext> {
   ensureCleanWorkingTree();
   console.log(`Fetching GitHub issue #${issueNumber}...`);
   const issue = await fetchIssueDetails(issueNumber);
@@ -690,7 +822,7 @@ async function runIssueCommand(): Promise<void> {
   const branchName = createIssueBranchName(issueNumber, issue.title);
   ensureBranchDoesNotExist(branchName);
   const workspace = createIssueWorkspace(issueNumber, issue);
-  writeIssueWorkspaceFiles(issueNumber, issue, branchName, workspace);
+  writeIssueWorkspaceFiles(issueNumber, issue, branchName, workspace, mode);
 
   console.log(`Creating branch ${branchName}...`);
   runInteractiveCommand(
@@ -699,29 +831,86 @@ async function runIssueCommand(): Promise<void> {
     `Failed to create branch "${branchName}".`
   );
 
-  console.log("Opening an interactive Codex session in this terminal...");
-  console.log("Complete the issue work in Codex.");
-  console.log("When Codex exits, git-ai will resume with build and commit steps.");
-  runCodex(workspace);
+  return {
+    issueNumber,
+    issue,
+    branchName,
+    workspace,
+    mode,
+  };
+}
 
-  console.log("Verifying build...");
-  verifyBuild(workspace.outputLogPath);
-
+function finalizeIssueRun(issueNumber: number): void {
   console.log("Committing generated changes...");
   commitIssueChanges(issueNumber);
+}
 
-  if (isGhAuthenticated()) {
-    console.log("Pushing branch and opening a pull request...");
-    pushBranchAndCreatePr(
-      branchName,
-      issueNumber,
-      issue.title,
-      workspace.outputLogPath
+async function runIssueCommand(): Promise<void> {
+  const args = getCliArgs();
+  const issueCommand = parseIssueCommandArgs(args);
+
+  if (issueCommand.action === "prepare") {
+    const context = await prepareIssueRun(
+      issueCommand.issueNumber,
+      issueCommand.mode
+    );
+    emitIssuePrepareOutputs(context);
+    process.stdout.write(
+      `${JSON.stringify(
+        {
+          issueNumber: context.issueNumber,
+          issueTitle: context.issue.title,
+          issueUrl: context.issue.url,
+          branchName: context.branchName,
+          issueFile: toRepoRelativePath(context.workspace.issueFilePath),
+          promptFile: toRepoRelativePath(context.workspace.promptFilePath),
+          metadataFile: toRepoRelativePath(context.workspace.metadataFilePath),
+          outputLog: toRepoRelativePath(context.workspace.outputLogPath),
+          runDir: toRepoRelativePath(context.workspace.runDir),
+          mode: context.mode,
+        },
+        null,
+        2
+      )}\n`
     );
     return;
   }
 
-  printManualPrInstructions(branchName, issueNumber);
+  if (issueCommand.action === "finalize") {
+    finalizeIssueRun(issueCommand.issueNumber);
+    return;
+  }
+
+  if (issueCommand.mode !== "local") {
+    throw new Error(
+      'Full issue runs only support local mode. Use `git-ai issue prepare <number> --mode github-action` in workflows.'
+    );
+  }
+
+  const context = await prepareIssueRun(issueCommand.issueNumber, issueCommand.mode);
+
+  console.log("Opening an interactive Codex session in this terminal...");
+  console.log("Complete the issue work in Codex.");
+  console.log("When Codex exits, git-ai will resume with build and commit steps.");
+  runCodex(context.workspace);
+
+  console.log("Verifying build...");
+  verifyBuild(context.workspace.outputLogPath);
+
+  finalizeIssueRun(context.issueNumber);
+
+  if (isGhAuthenticated()) {
+    console.log("Pushing branch and opening a pull request...");
+    pushBranchAndCreatePr(
+      context.branchName,
+      context.issueNumber,
+      context.issue.title,
+      context.workspace.outputLogPath
+    );
+    return;
+  }
+
+  printManualPrInstructions(context.branchName, context.issueNumber);
 }
 
 async function run(): Promise<void> {

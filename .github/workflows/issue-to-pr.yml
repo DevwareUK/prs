@@ -1,0 +1,179 @@
+name: Issue to PR
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: GitHub issue number to address
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: issue-to-pr-${{ inputs.issue_number }}
+  cancel-in-progress: false
+
+jobs:
+  issue-to-pr:
+    runs-on: ubuntu-latest
+    env:
+      ISSUE_NUMBER: ${{ inputs.issue_number }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.7.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          CI: true
+
+      - name: Build CLI
+        run: pnpm --filter @git-ai/cli... build
+
+      - name: Prepare issue workspace
+        id: prepare
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node packages/cli/dist/index.js issue prepare "$ISSUE_NUMBER" --mode github-action
+
+      - name: Run Codex remotely
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: ${{ steps.prepare.outputs.prompt_file }}
+          sandbox: workspace-write
+          safety-strategy: drop-sudo
+
+      - name: Build workspace
+        run: pnpm build
+
+      - name: Configure git author
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit generated changes
+        run: node packages/cli/dist/index.js issue finalize "$ISSUE_NUMBER"
+
+      - name: Push issue branch
+        run: git push -u origin "${{ steps.prepare.outputs.branch_name }}"
+
+      - name: Create or reuse pull request
+        id: pr
+        uses: actions/github-script@v7
+        env:
+          BRANCH_NAME: ${{ steps.prepare.outputs.branch_name }}
+          ISSUE_NUMBER: ${{ steps.prepare.outputs.issue_number }}
+          ISSUE_TITLE: ${{ steps.prepare.outputs.issue_title }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const title = `Fix: ${process.env.ISSUE_TITLE}`;
+            const body = `Closes #${process.env.ISSUE_NUMBER}`;
+            const head = `${context.repo.owner}:${process.env.BRANCH_NAME}`;
+            const { owner, repo } = context.repo;
+
+            const existing = await github.paginate(
+              github.rest.pulls.list,
+              {
+                owner,
+                repo,
+                state: "open",
+                head,
+                base: "main",
+                per_page: 100,
+              }
+            );
+
+            let pullRequest = existing[0];
+
+            if (pullRequest) {
+              pullRequest = (
+                await github.rest.pulls.update({
+                  owner,
+                  repo,
+                  pull_number: pullRequest.number,
+                  title,
+                  body,
+                  base: "main",
+                })
+              ).data;
+            } else {
+              pullRequest = (
+                await github.rest.pulls.create({
+                  owner,
+                  repo,
+                  title,
+                  body,
+                  head: process.env.BRANCH_NAME,
+                  base: "main",
+                })
+              ).data;
+            }
+
+            core.setOutput("pr_number", String(pullRequest.number));
+            core.setOutput("pr_url", pullRequest.html_url);
+
+      - name: Comment on issue with PR link
+        uses: actions/github-script@v7
+        env:
+          ISSUE_NUMBER: ${{ steps.prepare.outputs.issue_number }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+          PR_URL: ${{ steps.pr.outputs.pr_url }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const marker = "<!-- git-ai-issue-to-pr -->";
+            const body = `${marker}\nCreated PR #${process.env.PR_NUMBER}: ${process.env.PR_URL}`;
+            const { owner, repo } = context.repo;
+            const issue_number = Number(process.env.ISSUE_NUMBER);
+
+            const comments = await github.paginate(
+              github.rest.issues.listComments,
+              {
+                owner,
+                repo,
+                issue_number,
+                per_page: 100,
+              }
+            );
+
+            const existingComment = comments.find((comment) => {
+              const commentBody = comment.body ?? "";
+              return commentBody.includes(marker) && comment.user?.type === "Bot";
+            });
+
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existingComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body,
+              });
+            }

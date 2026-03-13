@@ -50,3 +50,23 @@ and authenticated, push the branch and open a pull request automatically.
 
 `.git-ai/` is local working state for issue snapshots and run artifacts. It is
 intentionally gitignored and should not be committed.
+
+## GitHub Actions issue flow
+
+This repository also includes a manual `Issue to PR` workflow under
+`.github/workflows/issue-to-pr.yml`.
+
+Trigger it with `workflow_dispatch`, provide an issue number, and the workflow
+will:
+
+- fetch the GitHub issue details
+- create the issue branch and Codex prompt workspace
+- run Codex remotely in GitHub Actions
+- build the repository with `pnpm build`
+- commit and push the generated changes
+- create or reuse a PR targeting `main`
+- comment on the issue with the PR link
+
+Required secrets:
+
+- `OPENAI_API_KEY`
