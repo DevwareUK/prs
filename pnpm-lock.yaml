@@ -41,6 +41,22 @@ importers:
         specifier: ^8.5.1
         version: 8.5.1(typescript@5.9.3)
 
+  actions/review-summary:
+    dependencies:
+      '@git-ai/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@git-ai/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@git-ai/providers':
+        specifier: workspace:*
+        version: link:../../packages/providers
+    devDependencies:
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(typescript@5.9.3)
+
   packages/cli:
     dependencies:
       '@git-ai/core':
