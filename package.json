@@ -11,6 +11,7 @@
     "cli:test-backlog": "pnpm --filter @git-ai/cli... build && node packages/cli/dist/index.js test-backlog",
     "dev": "pnpm -r dev",
     "lint": "eslint .",
+    "test": "pnpm build && node --test test/*.test.js",
     "prepare": "husky"
   },
   "keywords": [],
