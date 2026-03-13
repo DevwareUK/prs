@@ -21,6 +21,7 @@ coverage/
 *.tsbuildinfo
 .turbo/
 .cache/
+.git-ai/
 
 # Logs
 *.log
