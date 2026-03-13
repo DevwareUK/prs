@@ -43,6 +43,10 @@ git-ai issue 123
 ```
 
 This will fetch GitHub issue `#123`, create a branch named from the issue title,
-run `codex exec` with a structured repository prompt, verify the build with
-`pnpm build`, commit the resulting changes, and if `gh` is installed and
-authenticated, push the branch and open a pull request automatically.
+write a local issue snapshot under `.git-ai/issues/`, write run artifacts under
+`.git-ai/runs/`, run `codex exec` against that local workspace, verify the
+build with `pnpm build`, commit the resulting changes, and if `gh` is installed
+and authenticated, push the branch and open a pull request automatically.
+
+`.git-ai/` is local working state for issue snapshots and run artifacts. It is
+intentionally gitignored and should not be committed.

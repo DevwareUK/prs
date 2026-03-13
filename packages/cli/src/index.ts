@@ -1,17 +1,29 @@
 #!/usr/bin/env node
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { resolve } from "node:path";
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { relative, resolve } from "node:path";
 import { generateCommitMessage, generateDiffSummary } from "@git-ai/core";
 import { OpenAIProvider } from "@git-ai/providers";
 import dotenv from "dotenv";
 
 dotenv.config({ path: resolve(__dirname, "../../..", ".env"), quiet: true });
 
+const REPO_ROOT = resolve(__dirname, "../../..");
+
 type IssueDetails = {
   title: string;
   body: string;
   url: string;
+};
+
+type IssueWorkspace = {
+  issueDir: string;
+  issueFilePath: string;
+  runDir: string;
+  promptFilePath: string;
+  metadataFilePath: string;
+  outputLogPath: string;
 };
 
 const ISSUE_USAGE = 'Usage: git-ai issue <number>';
@@ -316,6 +328,70 @@ function createIssueBranchName(issueNumber: number, title: string): string {
   return `feat/issue-${issueNumber}-${slug}`;
 }
 
+function toRepoRelativePath(filePath: string): string {
+  return (relative(REPO_ROOT, filePath) || ".").split("\\").join("/");
+}
+
+function formatRunTimestamp(date = new Date()): string {
+  const pad = (value: number, length = 2): string =>
+    String(value).padStart(length, "0");
+
+  return [
+    `${date.getUTCFullYear()}`,
+    pad(date.getUTCMonth() + 1),
+    pad(date.getUTCDate()),
+    "T",
+    pad(date.getUTCHours()),
+    pad(date.getUTCMinutes()),
+    pad(date.getUTCSeconds()),
+    pad(date.getUTCMilliseconds(), 3),
+    "Z",
+  ].join("");
+}
+
+function createIssueWorkspace(
+  issueNumber: number,
+  issue: IssueDetails
+): IssueWorkspace {
+  const slug = slugifyIssueTitle(issue.title) || `issue-${issueNumber}`;
+  const issueDir = resolve(REPO_ROOT, ".git-ai", "issues", `${issueNumber}-${slug}`);
+  const runDir = resolve(
+    REPO_ROOT,
+    ".git-ai",
+    "runs",
+    `${formatRunTimestamp()}-issue-${issueNumber}`
+  );
+
+  mkdirSync(issueDir, { recursive: true });
+  mkdirSync(runDir, { recursive: true });
+
+  return {
+    issueDir,
+    issueFilePath: resolve(issueDir, "issue.md"),
+    runDir,
+    promptFilePath: resolve(runDir, "prompt.md"),
+    metadataFilePath: resolve(runDir, "metadata.json"),
+    outputLogPath: resolve(runDir, "output.log"),
+  };
+}
+
+function formatIssueSnapshot(issueNumber: number, issue: IssueDetails): string {
+  const issueBody = issue.body.trim() || "(No issue body provided.)";
+
+  return [
+    "# GitHub Issue Snapshot",
+    "",
+    `- Issue number: ${issueNumber}`,
+    `- Title: ${issue.title}`,
+    `- URL: ${issue.url}`,
+    "",
+    "## Body",
+    "",
+    issueBody,
+    "",
+  ].join("\n");
+}
+
 function ensureBranchDoesNotExist(branchName: string): void {
   const result = spawnSync("git", ["rev-parse", "--verify", branchName], {
     stdio: "ignore",
@@ -326,55 +402,156 @@ function ensureBranchDoesNotExist(branchName: string): void {
   }
 }
 
-function buildCodexPrompt(issueNumber: number, issue: IssueDetails): string {
-  const issueBody = issue.body.trim() || "(No issue body provided.)";
+function buildCodexPrompt(workspace: IssueWorkspace): string {
+  const issueFile = toRepoRelativePath(workspace.issueFilePath);
+  const runDir = toRepoRelativePath(workspace.runDir);
 
   return [
     "You are working in the git-ai repository.",
     "",
-    "Issue context:",
-    `- issue number: ${issueNumber}`,
-    `- title: ${issue.title}`,
-    `- url: ${issue.url}`,
-    "- body:",
-    issueBody,
+    `Read the issue snapshot at \`${issueFile}\` before making changes.`,
+    `Use \`${runDir}\` for local run artifacts created by this workflow.`,
     "",
     "Instructions to Codex:",
-    "- analyze the repository",
-    "- implement a solution to the issue",
-    "- modify the necessary files",
-    "- ensure the project builds",
+    "- analyze the repository only as needed for this issue",
+    "- keep code changes focused on the issue snapshot",
     "- follow existing architecture patterns",
-    "- run build/tests if available",
-    "- keep changes minimal and focused",
-    "",
-    "Output expectations:",
-    "- working code changes",
-    "- passing build",
-    "- sensible commit message",
+    "- run `pnpm build` before finishing if code changes are made",
+    "- do not modify `.git-ai/` unless needed for local workflow artifacts",
+    "- do not commit `.git-ai/` files",
   ].join("\n");
 }
 
-function runCodex(prompt: string): void {
+function writeIssueWorkspaceFiles(
+  issueNumber: number,
+  issue: IssueDetails,
+  branchName: string,
+  workspace: IssueWorkspace
+): void {
+  const createdAt = new Date().toISOString();
+  const prompt = buildCodexPrompt(workspace);
+
+  writeFileSync(
+    workspace.issueFilePath,
+    formatIssueSnapshot(issueNumber, issue),
+    "utf8"
+  );
+  writeFileSync(workspace.promptFilePath, `${prompt}\n`, "utf8");
+  writeFileSync(
+    workspace.metadataFilePath,
+    `${JSON.stringify(
+      {
+        createdAt,
+        issueNumber,
+        issueTitle: issue.title,
+        issueUrl: issue.url,
+        branchName,
+        issueDir: toRepoRelativePath(workspace.issueDir),
+        issueFile: toRepoRelativePath(workspace.issueFilePath),
+        promptFile: toRepoRelativePath(workspace.promptFilePath),
+        outputLog: toRepoRelativePath(workspace.outputLogPath),
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+  writeFileSync(
+    workspace.outputLogPath,
+    [
+      "# git-ai issue run log",
+      "",
+      `Created: ${createdAt}`,
+      `Issue snapshot: ${toRepoRelativePath(workspace.issueFilePath)}`,
+      `Prompt file: ${toRepoRelativePath(workspace.promptFilePath)}`,
+      "",
+    ].join("\n"),
+    "utf8"
+  );
+}
+
+function appendRunLog(
+  outputLogPath: string,
+  command: string,
+  args: string[],
+  stdout: string,
+  stderr: string
+): void {
+  const renderedCommand = [command, ...args]
+    .map((value) => (value.includes(" ") ? JSON.stringify(value) : value))
+    .join(" ");
+
+  appendFileSync(
+    outputLogPath,
+    [`$ ${renderedCommand}`, stdout, stderr, ""].join("\n"),
+    "utf8"
+  );
+}
+
+function runTrackedCommand(
+  command: string,
+  args: string[],
+  errorMessage: string,
+  outputLogPath: string
+): void {
+  const result = spawnSync(command, args, {
+    encoding: "utf8",
+    maxBuffer: 10 * 1024 * 1024,
+    stdio: ["inherit", "pipe", "pipe"],
+  });
+  const stdout = result.stdout ?? "";
+  const stderr = result.stderr ?? "";
+
+  appendRunLog(outputLogPath, command, args, stdout, stderr);
+
+  if (stdout) {
+    process.stdout.write(stdout);
+  }
+
+  if (stderr) {
+    process.stderr.write(stderr);
+  }
+
+  if (result.error) {
+    throw new Error(`${errorMessage} ${result.error.message}`);
+  }
+
+  if (result.status !== 0) {
+    throw new Error(errorMessage);
+  }
+}
+
+function runCodex(workspace: IssueWorkspace): void {
   if (!canRunCommand("codex")) {
     throw new Error(
       "The `codex` CLI is not available on PATH. Install it before running `git-ai issue`."
     );
   }
 
-  runInteractiveCommand(
+  runTrackedCommand(
     "codex",
-    ["exec", prompt],
-    "Codex execution failed."
+    [
+      "exec",
+      `Read and follow the instructions in ${toRepoRelativePath(
+        workspace.promptFilePath
+      )}.`,
+    ],
+    "Codex execution failed.",
+    workspace.outputLogPath
   );
 }
 
-function verifyBuild(): void {
+function verifyBuild(outputLogPath: string): void {
   if (!canRunCommand("pnpm")) {
     throw new Error("The `pnpm` CLI is not available on PATH.");
   }
 
-  runInteractiveCommand("pnpm", ["build"], "Build failed. Changes were not committed.");
+  runTrackedCommand(
+    "pnpm",
+    ["build"],
+    "Build failed. Changes were not committed.",
+    outputLogPath
+  );
 }
 
 function commitIssueChanges(issueNumber: number): void {
@@ -405,14 +582,16 @@ function isGhAuthenticated(): boolean {
 function pushBranchAndCreatePr(
   branchName: string,
   issueNumber: number,
-  issueTitle: string
+  issueTitle: string,
+  outputLogPath: string
 ): void {
-  runInteractiveCommand(
+  runTrackedCommand(
     "git",
     ["push", "-u", "origin", branchName],
-    `Failed to push branch "${branchName}".`
+    `Failed to push branch "${branchName}".`,
+    outputLogPath
   );
-  runInteractiveCommand(
+  runTrackedCommand(
     "gh",
     [
       "pr",
@@ -424,7 +603,8 @@ function pushBranchAndCreatePr(
       "--base",
       "main",
     ],
-    "Failed to create a pull request."
+    "Failed to create a pull request.",
+    outputLogPath
   );
 }
 
@@ -484,6 +664,8 @@ async function runIssueCommand(): Promise<void> {
 
   const branchName = createIssueBranchName(issueNumber, issue.title);
   ensureBranchDoesNotExist(branchName);
+  const workspace = createIssueWorkspace(issueNumber, issue);
+  writeIssueWorkspaceFiles(issueNumber, issue, branchName, workspace);
 
   console.log(`Creating branch ${branchName}...`);
   runInteractiveCommand(
@@ -493,18 +675,22 @@ async function runIssueCommand(): Promise<void> {
   );
 
   console.log("Running Codex locally...");
-  const prompt = buildCodexPrompt(issueNumber, issue);
-  runCodex(prompt);
+  runCodex(workspace);
 
   console.log("Verifying build...");
-  verifyBuild();
+  verifyBuild(workspace.outputLogPath);
 
   console.log("Committing generated changes...");
   commitIssueChanges(issueNumber);
 
   if (isGhAuthenticated()) {
     console.log("Pushing branch and opening a pull request...");
-    pushBranchAndCreatePr(branchName, issueNumber, issue.title);
+    pushBranchAndCreatePr(
+      branchName,
+      issueNumber,
+      issue.title,
+      workspace.outputLogPath
+    );
     return;
   }
 
