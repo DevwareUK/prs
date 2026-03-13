@@ -2,6 +2,8 @@
 
 AI tooling for Git workflows, including a CLI and GitHub Actions.
 
+Pull request workflows in this repo currently cover AI PR descriptions, review summaries, and test suggestions.
+
 ## Local Setup
 
 Install dependencies:
