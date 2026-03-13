@@ -5,7 +5,10 @@ import {
   DiffSummaryOutputType,
 } from "@git-ai/contracts";
 import { AIProvider } from "@git-ai/providers";
-import { generateStructuredOutput } from "./structured-generation";
+import {
+  generateStructuredOutput,
+  normalizeNullableFields,
+} from "./structured-generation";
 
 const DIFF_SUMMARY_SYSTEM_PROMPT =
   [
@@ -45,19 +48,6 @@ function buildPrompt(input: DiffSummaryInputType): string {
   ].join("\n");
 }
 
-function normalizeDiffSummaryOutput(value: unknown): unknown {
-  if (!value || typeof value !== "object") {
-    return value;
-  }
-
-  const result = { ...(value as Record<string, unknown>) };
-  if (result.riskAreas === null) {
-    result.riskAreas = undefined;
-  }
-
-  return result;
-}
-
 export async function generateDiffSummary(
   provider: AIProvider,
   input: DiffSummaryInputType
@@ -71,6 +61,6 @@ export async function generateDiffSummary(
     prompt,
     schema: DiffSummaryOutput,
     validationErrorPrefix: "Model output failed diff summary schema validation",
-    normalizeParsedJson: normalizeDiffSummaryOutput,
+    normalizeParsedJson: (value) => normalizeNullableFields(value, ["riskAreas"]),
   });
 }
