@@ -528,17 +528,42 @@ function runCodex(workspace: IssueWorkspace): void {
     );
   }
 
-  runTrackedCommand(
+  const args = [
+    "--sandbox",
+    "workspace-write",
+    "--ask-for-approval",
+    "on-request",
+    "--cd",
+    REPO_ROOT,
+    `Read and follow the instructions in ${toRepoRelativePath(
+      workspace.promptFilePath
+    )}.`,
+  ];
+
+  appendRunLog(
+    workspace.outputLogPath,
     "codex",
-    [
-      "exec",
-      `Read and follow the instructions in ${toRepoRelativePath(
-        workspace.promptFilePath
-      )}.`,
-    ],
-    "Codex execution failed.",
-    workspace.outputLogPath
+    args,
+    "[interactive Codex session opened in current terminal]",
+    ""
   );
+
+  const result = spawnSync("codex", args, {
+    cwd: REPO_ROOT,
+    stdio: "inherit",
+  });
+
+  if (result.error) {
+    throw new Error(
+      `Failed to start the interactive Codex session. ${result.error.message}`
+    );
+  }
+
+  if (result.status !== 0) {
+    throw new Error(
+      "The interactive Codex session did not complete successfully."
+    );
+  }
 }
 
 function verifyBuild(outputLogPath: string): void {
@@ -674,7 +699,9 @@ async function runIssueCommand(): Promise<void> {
     `Failed to create branch "${branchName}".`
   );
 
-  console.log("Running Codex locally...");
+  console.log("Opening an interactive Codex session in this terminal...");
+  console.log("Complete the issue work in Codex.");
+  console.log("When Codex exits, git-ai will resume with build and commit steps.");
   runCodex(workspace);
 
   console.log("Verifying build...");
