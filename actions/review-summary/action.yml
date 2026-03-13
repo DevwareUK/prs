@@ -1,0 +1,33 @@
+name: "AI Review Summary"
+description: "Generate a PR-level AI review summary using OpenAI"
+
+inputs:
+  diff:
+    description: "Unified git diff for the pull request"
+    required: true
+  pr_title:
+    description: "Optional pull request title"
+    required: false
+  pr_body:
+    description: "Optional pull request body"
+    required: false
+  openai_api_key:
+    description: "OpenAI API key"
+    required: true
+  openai_model:
+    description: "OpenAI model name"
+    required: false
+    default: "gpt-4o-mini"
+  openai_base_url:
+    description: "Optional OpenAI-compatible API base URL"
+    required: false
+
+outputs:
+  summary:
+    description: "Generated review summary paragraph"
+  body:
+    description: "Generated markdown comment body"
+
+runs:
+  using: "node20"
+  main: "dist/index.js"
