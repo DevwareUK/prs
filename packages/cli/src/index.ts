@@ -3,7 +3,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
-import { generateCommitMessage, generateDiffSummary } from "@git-ai/core";
+import { analyzeTestBacklog, generateCommitMessage, generateDiffSummary } from "@git-ai/core";
 import { OpenAIProvider } from "@git-ai/providers";
 import dotenv from "dotenv";
 
@@ -34,6 +34,24 @@ type IssueCommandOptions = {
   mode: IssueExecutionMode;
 };
 
+type TestBacklogOutputFormat = "json" | "markdown";
+
+type TestBacklogCommandOptions = {
+  repoRoot: string;
+  format: TestBacklogOutputFormat;
+  top: number;
+  createIssues: boolean;
+  maxIssues: number;
+  labels: string[];
+};
+
+type CreatedIssueRecord = {
+  number: number;
+  title: string;
+  url: string;
+  status: "created" | "existing";
+};
+
 type IssueRunContext = {
   issueNumber: number;
   issue: IssueDetails;
@@ -47,6 +65,13 @@ const ISSUE_USAGE = [
   "  git-ai issue <number>",
   "  git-ai issue prepare <number> [--mode <local|github-action>]",
   "  git-ai issue finalize <number>",
+].join("\n");
+
+const TEST_BACKLOG_USAGE = [
+  "Usage:",
+  "  git-ai test-backlog [--format <markdown|json>] [--top <count>]",
+  "                       [--repo-root <path>] [--create-issues]",
+  "                       [--max-issues <count>] [--label <name>] [--labels <a,b>]",
 ].join("\n");
 
 function getCliArgs(): string[] {
@@ -283,6 +308,147 @@ function parseIssueCommandArgs(args: string[]): IssueCommandOptions {
     action: "run",
     issueNumber: parseIssueNumber(issueArgs[0]),
     mode: parseIssueMode(issueArgs.slice(1)),
+  };
+}
+
+function parsePositiveInteger(value: string | undefined, flagName: string): number {
+  if (!value || !/^\d+$/.test(value)) {
+    throw new Error(`Invalid value for ${flagName}: "${value ?? ""}". Expected a positive integer.`);
+  }
+
+  const parsedValue = Number.parseInt(value, 10);
+  if (!Number.isSafeInteger(parsedValue) || parsedValue <= 0) {
+    throw new Error(`Invalid value for ${flagName}: "${value}". Expected a positive integer.`);
+  }
+
+  return parsedValue;
+}
+
+function parseTestBacklogCommandArgs(args: string[]): TestBacklogCommandOptions {
+  const optionArgs = args.slice(1);
+  let repoRoot = REPO_ROOT;
+  let format: TestBacklogOutputFormat = "markdown";
+  let top = 5;
+  let createIssues = false;
+  let maxIssues = 3;
+  const labels = new Set<string>();
+
+  for (let index = 0; index < optionArgs.length; index += 1) {
+    const rawArg = optionArgs[index];
+
+    if (rawArg === "--repo-root") {
+      const rawRepoRoot = optionArgs[index + 1];
+      if (!rawRepoRoot) {
+        throw new Error(`Missing value for --repo-root. ${TEST_BACKLOG_USAGE}`);
+      }
+      repoRoot = resolve(REPO_ROOT, rawRepoRoot);
+      index += 1;
+      continue;
+    }
+
+    if (rawArg.startsWith("--repo-root=")) {
+      const rawRepoRoot = rawArg.slice("--repo-root=".length);
+      if (!rawRepoRoot) {
+        throw new Error(`Missing value for --repo-root. ${TEST_BACKLOG_USAGE}`);
+      }
+      repoRoot = resolve(REPO_ROOT, rawRepoRoot);
+      continue;
+    }
+
+    if (rawArg === "--format") {
+      const rawFormat = optionArgs[index + 1];
+      if (rawFormat !== "json" && rawFormat !== "markdown") {
+        throw new Error(`Invalid format "${rawFormat ?? ""}". ${TEST_BACKLOG_USAGE}`);
+      }
+      format = rawFormat;
+      index += 1;
+      continue;
+    }
+
+    if (rawArg.startsWith("--format=")) {
+      const rawFormat = rawArg.slice("--format=".length);
+      if (rawFormat !== "json" && rawFormat !== "markdown") {
+        throw new Error(`Invalid format "${rawFormat}". ${TEST_BACKLOG_USAGE}`);
+      }
+      format = rawFormat;
+      continue;
+    }
+
+    if (rawArg === "--top") {
+      top = parsePositiveInteger(optionArgs[index + 1], "--top");
+      index += 1;
+      continue;
+    }
+
+    if (rawArg.startsWith("--top=")) {
+      top = parsePositiveInteger(rawArg.slice("--top=".length), "--top");
+      continue;
+    }
+
+    if (rawArg === "--create-issues") {
+      createIssues = true;
+      continue;
+    }
+
+    if (rawArg === "--max-issues") {
+      maxIssues = parsePositiveInteger(optionArgs[index + 1], "--max-issues");
+      index += 1;
+      continue;
+    }
+
+    if (rawArg.startsWith("--max-issues=")) {
+      maxIssues = parsePositiveInteger(
+        rawArg.slice("--max-issues=".length),
+        "--max-issues"
+      );
+      continue;
+    }
+
+    if (rawArg === "--label") {
+      const label = optionArgs[index + 1]?.trim();
+      if (!label) {
+        throw new Error(`Missing value for --label. ${TEST_BACKLOG_USAGE}`);
+      }
+      labels.add(label);
+      index += 1;
+      continue;
+    }
+
+    if (rawArg === "--labels") {
+      const rawLabels = optionArgs[index + 1];
+      if (!rawLabels) {
+        throw new Error(`Missing value for --labels. ${TEST_BACKLOG_USAGE}`);
+      }
+      for (const label of rawLabels.split(",")) {
+        const trimmed = label.trim();
+        if (trimmed) {
+          labels.add(trimmed);
+        }
+      }
+      index += 1;
+      continue;
+    }
+
+    if (rawArg.startsWith("--labels=")) {
+      for (const label of rawArg.slice("--labels=".length).split(",")) {
+        const trimmed = label.trim();
+        if (trimmed) {
+          labels.add(trimmed);
+        }
+      }
+      continue;
+    }
+
+    throw new Error(`Unknown test-backlog option "${rawArg}". ${TEST_BACKLOG_USAGE}`);
+  }
+
+  return {
+    repoRoot,
+    format,
+    top,
+    createIssues,
+    maxIssues: Math.min(maxIssues, top),
+    labels: [...labels],
   };
 }
 
@@ -778,6 +944,10 @@ function formatCommitMessage(title: string, body?: string): string {
   return body ? `${title}\n\n${body}\n` : `${title}\n`;
 }
 
+function toTitleCase(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
 function formatDiffSummary(
   summary: Awaited<ReturnType<typeof generateDiffSummary>>
 ): string {
@@ -809,6 +979,233 @@ function createProvider(): OpenAIProvider {
     model: getOptionalEnv("OPENAI_MODEL"),
     baseUrl: getOptionalEnv("OPENAI_BASE_URL"),
   });
+}
+
+function formatTestBacklogMarkdown(
+  result: Awaited<ReturnType<typeof analyzeTestBacklog>>,
+  createdIssues: CreatedIssueRecord[]
+): string {
+  const lines: string[] = [
+    "# AI Test Backlog",
+    "",
+    "## Summary",
+    result.summary,
+    "",
+    "## Current testing setup",
+    `- Status: ${toTitleCase(result.currentTestingSetup.status)}`,
+    `- Test files detected: ${result.currentTestingSetup.testFileCount}`,
+    `- Frameworks: ${
+      result.currentTestingSetup.frameworks.length > 0
+        ? result.currentTestingSetup.frameworks.join(", ")
+        : "None detected"
+    }`,
+  ];
+
+  if (result.currentTestingSetup.evidence.length > 0) {
+    lines.push(
+      `- Evidence: ${result.currentTestingSetup.evidence.slice(0, 5).join("; ")}`
+    );
+  }
+
+  if (result.currentTestingSetup.notes.length > 0) {
+    lines.push("");
+    lines.push("## Notes");
+    lines.push(...result.currentTestingSetup.notes.map((note) => `- ${note}`));
+  }
+
+  lines.push("", "## Prioritized findings", "");
+  for (const finding of result.findings) {
+    lines.push(`### ${finding.title}`);
+    lines.push(`- Priority: ${toTitleCase(finding.priority)}`);
+    lines.push(`- Suggested test types: ${finding.suggestedTestTypes.join(", ")}`);
+    lines.push(`- Rationale: ${finding.rationale}`);
+    if (finding.existingCoverage) {
+      lines.push(`- Existing coverage signal: ${finding.existingCoverage}`);
+    }
+    lines.push(
+      `- Related paths: ${finding.relatedPaths.map((path) => `\`${path}\``).join(", ")}`
+    );
+    lines.push(`- Draft issue title: ${finding.issueTitle}`);
+    lines.push("");
+  }
+
+  if (createdIssues.length > 0) {
+    lines.push("## GitHub issue results");
+    lines.push(
+      ...createdIssues.map(
+        (issue) =>
+          `- ${issue.status === "created" ? "Created" : "Reused"} #${issue.number}: ${issue.title} (${issue.url})`
+      )
+    );
+    lines.push("");
+  }
+
+  while (lines[lines.length - 1] === "") {
+    lines.pop();
+  }
+
+  return lines.join("\n");
+}
+
+function getGitHubApiToken(): string {
+  const token = process.env.GH_TOKEN?.trim() || process.env.GITHUB_TOKEN?.trim();
+  if (!token) {
+    throw new Error(
+      "Creating GitHub issues requires GH_TOKEN or GITHUB_TOKEN to be set."
+    );
+  }
+
+  return token;
+}
+
+async function listOpenIssues(
+  owner: string,
+  repo: string,
+  token: string
+): Promise<Array<{ number: number; title: string; url: string }>> {
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/issues?state=open&per_page=100`,
+    {
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${token}`,
+        "User-Agent": "git-ai-cli",
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to list GitHub issues (${response.status} ${response.statusText}).`
+    );
+  }
+
+  const payload = (await response.json()) as Array<{
+    number?: number;
+    title?: string;
+    html_url?: string;
+    pull_request?: unknown;
+  }>;
+
+  return payload
+    .filter((item) => !item.pull_request && item.number && item.title && item.html_url)
+    .map((item) => ({
+      number: item.number as number,
+      title: item.title as string,
+      url: item.html_url as string,
+    }));
+}
+
+async function createGitHubIssue(
+  owner: string,
+  repo: string,
+  token: string,
+  title: string,
+  body: string,
+  labels: string[]
+): Promise<{ number: number; title: string; url: string }> {
+  const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/issues`, {
+    method: "POST",
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "User-Agent": "git-ai-cli",
+    },
+    body: JSON.stringify({
+      title,
+      body,
+      labels,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to create GitHub issue "${title}" (${response.status} ${response.statusText}).`
+    );
+  }
+
+  const payload = (await response.json()) as {
+    number?: number;
+    title?: string;
+    html_url?: string;
+  };
+
+  if (!payload.number || !payload.title || !payload.html_url) {
+    throw new Error(`GitHub issue creation for "${title}" returned an incomplete payload.`);
+  }
+
+  return {
+    number: payload.number,
+    title: payload.title,
+    url: payload.html_url,
+  };
+}
+
+async function maybeCreateTestBacklogIssues(
+  options: TestBacklogCommandOptions,
+  analysis: Awaited<ReturnType<typeof analyzeTestBacklog>>
+): Promise<CreatedIssueRecord[]> {
+  if (!options.createIssues) {
+    return [];
+  }
+
+  const token = getGitHubApiToken();
+  const { owner, repo } = parseGitHubRepoFromRemote();
+  const existingIssues = await listOpenIssues(owner, repo, token);
+  const existingByTitle = new Map(
+    existingIssues.map((issue) => [issue.title.trim().toLowerCase(), issue])
+  );
+  const createdIssues: CreatedIssueRecord[] = [];
+
+  for (const finding of analysis.findings.slice(0, options.maxIssues)) {
+    const existingIssue = existingByTitle.get(finding.issueTitle.trim().toLowerCase());
+    if (existingIssue) {
+      createdIssues.push({
+        ...existingIssue,
+        status: "existing",
+      });
+      continue;
+    }
+
+    const createdIssue = await createGitHubIssue(
+      owner,
+      repo,
+      token,
+      finding.issueTitle,
+      finding.issueBody,
+      options.labels
+    );
+
+    const record: CreatedIssueRecord = {
+      ...createdIssue,
+      status: "created",
+    };
+    existingByTitle.set(record.title.trim().toLowerCase(), record);
+    createdIssues.push(record);
+  }
+
+  return createdIssues;
+}
+
+async function runTestBacklogCommand(): Promise<void> {
+  const options = parseTestBacklogCommandArgs(getCliArgs());
+  const analysis = await analyzeTestBacklog({
+    repoRoot: options.repoRoot,
+    maxFindings: options.top,
+  });
+  const createdIssues = await maybeCreateTestBacklogIssues(options, analysis);
+  const output = {
+    ...analysis,
+    createdIssues,
+  };
+
+  if (options.format === "json") {
+    process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+    return;
+  }
+
+  process.stdout.write(`${formatTestBacklogMarkdown(analysis, createdIssues)}\n`);
 }
 
 async function prepareIssueRun(
@@ -916,9 +1313,14 @@ async function runIssueCommand(): Promise<void> {
 async function run(): Promise<void> {
   const args = getCliArgs();
   const command = args[0] ?? "commit";
-  if (command !== "commit" && command !== "diff" && command !== "issue") {
+  if (
+    command !== "commit" &&
+    command !== "diff" &&
+    command !== "issue" &&
+    command !== "test-backlog"
+  ) {
     throw new Error(
-      `Unknown command: ${command}. Supported commands: "commit", "diff", "issue".`
+      `Unknown command: ${command}. Supported commands: "commit", "diff", "issue", "test-backlog".`
     );
   }
 
@@ -932,6 +1334,11 @@ async function run(): Promise<void> {
 
   if (command === "issue") {
     await runIssueCommand();
+    return;
+  }
+
+  if (command === "test-backlog") {
+    await runTestBacklogCommand();
     return;
   }
 

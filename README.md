@@ -2,7 +2,7 @@
 
 AI tooling for Git workflows, including a CLI and GitHub Actions.
 
-Pull request workflows in this repo currently cover AI PR descriptions, review summaries, and test suggestions.
+Pull request workflows in this repo currently cover AI PR descriptions, review summaries, test suggestions, and repo-wide test backlog generation.
 
 ## Local Setup
 
@@ -53,6 +53,29 @@ and authenticated, push the branch and open a pull request automatically.
 `.git-ai/` is local working state for issue snapshots and run artifacts. It is
 intentionally gitignored and should not be committed.
 
+```bash
+git-ai test-backlog
+```
+
+This scans the current repository, detects the current testing setup, and prints
+a prioritized backlog of missing automated test coverage.
+
+Use JSON output when you want to script the result:
+
+```bash
+git-ai test-backlog --format json --top 5
+```
+
+GitHub issue creation is explicit and opt-in:
+
+```bash
+GITHUB_TOKEN=... git-ai test-backlog --create-issues --max-issues 3
+```
+
+When `--create-issues` is enabled, `git-ai` checks for matching open issue
+titles first so it can reuse existing backlog items instead of creating
+duplicates.
+
 ## GitHub Actions issue flow
 
 This repository also includes a manual `Issue to PR` workflow under
@@ -72,3 +95,16 @@ will:
 Required secrets:
 
 - `OPENAI_API_KEY`
+
+## Repo-wide test backlog workflow
+
+This repository also includes a manual `Test Backlog` workflow under
+`.github/workflows/test-backlog.yml`.
+
+Trigger it with `workflow_dispatch` to:
+
+- scan the repository for existing test setup and likely gaps
+- publish a prioritized backlog summary in the workflow run
+- optionally create GitHub issues for the highest-value findings
+
+Issue creation is disabled by default and requires a deliberate manual trigger.

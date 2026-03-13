@@ -8,6 +8,7 @@
     "cli:commit": "pnpm --filter @git-ai/cli commit",
     "cli:diff": "pnpm --filter @git-ai/cli diff",
     "cli:issue": "pnpm --filter @git-ai/cli... build && node packages/cli/dist/index.js issue",
+    "cli:test-backlog": "pnpm --filter @git-ai/cli... build && node packages/cli/dist/index.js test-backlog",
     "dev": "pnpm -r dev",
     "lint": "eslint .",
     "prepare": "husky"

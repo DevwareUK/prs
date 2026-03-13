@@ -1,0 +1,133 @@
+name: Test Backlog
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_findings:
+        description: Maximum number of backlog findings to return
+        required: false
+        default: "5"
+        type: string
+      create_issues:
+        description: Create GitHub issues for the highest-priority findings
+        required: false
+        default: false
+        type: boolean
+      max_issues:
+        description: Maximum number of GitHub issues to create when enabled
+        required: false
+        default: "3"
+        type: string
+      issue_labels:
+        description: Optional comma-separated labels to add to created issues
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  test-backlog:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.7.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          CI: true
+
+      - name: Build workspace
+        run: pnpm build
+
+      - name: Generate test backlog report
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MAX_FINDINGS: ${{ inputs.max_findings }}
+          CREATE_ISSUES: ${{ inputs.create_issues }}
+          MAX_ISSUES: ${{ inputs.max_issues }}
+          ISSUE_LABELS: ${{ inputs.issue_labels }}
+        run: |
+          args=(test-backlog --format json --top "$MAX_FINDINGS")
+          if [ "$CREATE_ISSUES" = "true" ]; then
+            args+=(--create-issues --max-issues "$MAX_ISSUES")
+            if [ -n "$ISSUE_LABELS" ]; then
+              args+=(--labels "$ISSUE_LABELS")
+            fi
+          fi
+
+          node packages/cli/dist/index.js "${args[@]}" > test-backlog-report.json
+
+      - name: Upload backlog report
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-backlog-report
+          path: test-backlog-report.json
+
+      - name: Publish workflow summary
+        uses: actions/github-script@v7
+        env:
+          REPORT_PATH: test-backlog-report.json
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require("node:fs");
+            const report = JSON.parse(fs.readFileSync(process.env.REPORT_PATH, "utf8"));
+
+            core.summary
+              .addHeading("AI Test Backlog")
+              .addRaw(report.summary)
+              .addEOL()
+              .addHeading("Current testing setup", 2)
+              .addList([
+                `Status: ${report.currentTestingSetup.status}`,
+                `Test files detected: ${report.currentTestingSetup.testFileCount}`,
+                `Frameworks: ${report.currentTestingSetup.frameworks.length > 0 ? report.currentTestingSetup.frameworks.join(", ") : "None detected"}`,
+              ]);
+
+            if (report.currentTestingSetup.notes.length > 0) {
+              core.summary.addHeading("Notes", 2).addList(report.currentTestingSetup.notes);
+            }
+
+            core.summary.addHeading("Prioritized findings", 2);
+            for (const finding of report.findings) {
+              core.summary
+                .addHeading(finding.title, 3)
+                .addList([
+                  `Priority: ${finding.priority}`,
+                  `Suggested test types: ${finding.suggestedTestTypes.join(", ")}`,
+                  `Draft issue title: ${finding.issueTitle}`,
+                ])
+                .addRaw(finding.rationale)
+                .addEOL();
+            }
+
+            if (Array.isArray(report.createdIssues) && report.createdIssues.length > 0) {
+              core.summary
+                .addHeading("GitHub issue results", 2)
+                .addList(
+                  report.createdIssues.map(
+                    (issue) =>
+                      `${issue.status === "created" ? "Created" : "Reused"} #${issue.number}: ${issue.title} (${issue.url})`
+                  )
+                );
+            }
+
+            await core.summary.write();
