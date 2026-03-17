@@ -11,6 +11,7 @@
     "cli:test-backlog": "pnpm --filter @git-ai/cli... build && node packages/cli/dist/index.js test-backlog",
     "dev": "pnpm -r dev",
     "lint": "eslint .",
+    "test": "vitest run",
     "prepare": "husky"
   },
   "keywords": [],
@@ -22,6 +23,7 @@
     "eslint": "^10.0.3",
     "husky": "^9.1.7",
     "tsup": "^8.5.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
   }
 }

@@ -26,6 +26,15 @@ OPENAI_API_KEY=your_key_here
 
 The CLI tools and Husky commit hook will read environment variables from this file.
 
+Run the shared monorepo smoke tests with:
+
+```bash
+pnpm test
+```
+
+Vitest is the default repository test runner. Baseline tests live alongside the
+packages they cover using `*.test.ts` files under `packages/` and `actions/`.
+
 Example usage:
 
 ```bash
@@ -112,3 +121,8 @@ Trigger it with `workflow_dispatch` to:
 - optionally create GitHub issues for the highest-value findings
 
 Issue creation is disabled by default and requires a deliberate manual trigger.
+
+## Test workflow
+
+Pull requests and pushes to `main` also run `.github/workflows/test.yml`, which
+builds the workspace and executes the shared `pnpm test` command.

@@ -324,7 +324,7 @@ function parsePositiveInteger(value: string | undefined, flagName: string): numb
   return parsedValue;
 }
 
-function parseTestBacklogCommandArgs(args: string[]): TestBacklogCommandOptions {
+export function parseTestBacklogCommandArgs(args: string[]): TestBacklogCommandOptions {
   const optionArgs = args.slice(1);
   let repoRoot = REPO_ROOT;
   let format: TestBacklogOutputFormat = "markdown";
@@ -1340,7 +1340,7 @@ async function runIssueCommand(): Promise<void> {
   printManualPrInstructions(context.branchName, context.issueNumber);
 }
 
-async function run(): Promise<void> {
+export async function run(): Promise<void> {
   const args = getCliArgs();
   const command = args[0] ?? "commit";
   if (
@@ -1378,8 +1378,10 @@ async function run(): Promise<void> {
   process.stdout.write(formatDiffSummary(result));
 }
 
-run().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(message);
-  process.exitCode = 1;
-});
+if (process.env.GIT_AI_DISABLE_AUTO_RUN !== "1") {
+  void run().catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(message);
+    process.exitCode = 1;
+  });
+}
