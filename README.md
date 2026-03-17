@@ -58,7 +58,9 @@ git-ai test-backlog
 ```
 
 This scans the current repository, detects the current testing setup, and prints
-a prioritized backlog of missing automated test coverage.
+a prioritized backlog of missing automated test coverage. The report now calls
+out the detected framework state, whether tests are wired into GitHub Actions,
+and a default framework recommendation when no suitable test runner exists yet.
 
 Use JSON output when you want to script the result:
 
@@ -104,6 +106,8 @@ This repository also includes a manual `Test Backlog` workflow under
 Trigger it with `workflow_dispatch` to:
 
 - scan the repository for existing test setup and likely gaps
+- recommend a default test framework when the repo does not have one yet
+- report whether automated tests are enforced in GitHub Actions
 - publish a prioritized backlog summary in the workflow run
 - optionally create GitHub issues for the highest-value findings
 

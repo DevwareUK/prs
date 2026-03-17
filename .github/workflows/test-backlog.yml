@@ -100,10 +100,26 @@ jobs:
                 `Status: ${report.currentTestingSetup.status}`,
                 `Test files detected: ${report.currentTestingSetup.testFileCount}`,
                 `Frameworks: ${report.currentTestingSetup.frameworks.length > 0 ? report.currentTestingSetup.frameworks.join(", ") : "None detected"}`,
+                `CI integration: ${report.currentTestingSetup.ciIntegration.status}`,
               ]);
+
+            if (report.currentTestingSetup.frameworkRecommendation) {
+              core.summary
+                .addHeading("Framework recommendation", 2)
+                .addList([
+                  `Recommended: ${report.currentTestingSetup.frameworkRecommendation.recommended}`,
+                  `Why: ${report.currentTestingSetup.frameworkRecommendation.rationale}`,
+                ]);
+            }
 
             if (report.currentTestingSetup.notes.length > 0) {
               core.summary.addHeading("Notes", 2).addList(report.currentTestingSetup.notes);
+            }
+
+            if (report.currentTestingSetup.ciIntegration.notes.length > 0) {
+              core.summary
+                .addHeading("CI notes", 2)
+                .addList(report.currentTestingSetup.ciIntegration.notes);
             }
 
             core.summary.addHeading("Prioritized findings", 2);

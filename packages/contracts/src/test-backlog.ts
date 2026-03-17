@@ -19,6 +19,26 @@ export type TestBacklogInputType = z.infer<typeof TestBacklogInput>;
 
 export const TestingSetupStatus = z.enum(["none", "partial", "established"]);
 
+export const CiIntegrationStatus = z.enum(["missing", "partial", "established"]);
+
+export const FrameworkRecommendation = z.object({
+  recommended: z.string().trim().min(1),
+  rationale: z.string().trim().min(1),
+  alternatives: z.array(z.string().trim().min(1)),
+});
+
+export type FrameworkRecommendationType = z.infer<typeof FrameworkRecommendation>;
+
+export const CiIntegrationAssessment = z.object({
+  status: CiIntegrationStatus,
+  hasGitHubActions: z.boolean(),
+  workflows: z.array(z.string().trim().min(1)),
+  evidence: z.array(z.string().trim().min(1)),
+  notes: z.array(z.string().trim().min(1)),
+});
+
+export type CiIntegrationAssessmentType = z.infer<typeof CiIntegrationAssessment>;
+
 export const CurrentTestingSetup = z.object({
   status: TestingSetupStatus,
   hasTests: z.boolean(),
@@ -27,6 +47,8 @@ export const CurrentTestingSetup = z.object({
   evidence: z.array(z.string().trim().min(1)),
   testDirectories: z.array(z.string().trim().min(1)),
   notes: z.array(z.string().trim().min(1)),
+  frameworkRecommendation: FrameworkRecommendation.optional(),
+  ciIntegration: CiIntegrationAssessment,
 });
 
 export type CurrentTestingSetupType = z.infer<typeof CurrentTestingSetup>;

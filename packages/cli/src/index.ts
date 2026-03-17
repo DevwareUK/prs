@@ -999,6 +999,7 @@ function formatTestBacklogMarkdown(
         ? result.currentTestingSetup.frameworks.join(", ")
         : "None detected"
     }`,
+    `- CI integration: ${toTitleCase(result.currentTestingSetup.ciIntegration.status)}`,
   ];
 
   if (result.currentTestingSetup.evidence.length > 0) {
@@ -1007,10 +1008,39 @@ function formatTestBacklogMarkdown(
     );
   }
 
+  if (result.currentTestingSetup.frameworkRecommendation) {
+    lines.push(
+      `- Recommended framework: ${result.currentTestingSetup.frameworkRecommendation.recommended}`
+    );
+    lines.push(
+      `- Recommendation rationale: ${result.currentTestingSetup.frameworkRecommendation.rationale}`
+    );
+  }
+
+  if (result.currentTestingSetup.ciIntegration.workflows.length > 0) {
+    lines.push(
+      `- CI workflows: ${result.currentTestingSetup.ciIntegration.workflows.join(", ")}`
+    );
+  }
+
+  if (result.currentTestingSetup.ciIntegration.evidence.length > 0) {
+    lines.push(
+      `- CI evidence: ${result.currentTestingSetup.ciIntegration.evidence.slice(0, 5).join("; ")}`
+    );
+  }
+
   if (result.currentTestingSetup.notes.length > 0) {
     lines.push("");
     lines.push("## Notes");
     lines.push(...result.currentTestingSetup.notes.map((note) => `- ${note}`));
+  }
+
+  if (result.currentTestingSetup.ciIntegration.notes.length > 0) {
+    lines.push("");
+    lines.push("## CI notes");
+    lines.push(
+      ...result.currentTestingSetup.ciIntegration.notes.map((note) => `- ${note}`)
+    );
   }
 
   lines.push("", "## Prioritized findings", "");
