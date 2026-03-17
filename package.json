@@ -11,7 +11,7 @@
     "cli:test-backlog": "pnpm --filter @git-ai/cli... build && node packages/cli/dist/index.js test-backlog",
     "dev": "pnpm -r dev",
     "lint": "eslint .",
-    "test": "vitest run",
+    "test": "vitest run --coverage",
     "prepare": "husky"
   },
   "keywords": [],
@@ -20,6 +20,7 @@
   "packageManager": "pnpm@10.7.0",
   "devDependencies": {
     "@types/node": "^25.4.0",
+    "@vitest/coverage-v8": "^3.2.4",
     "eslint": "^10.0.3",
     "husky": "^9.1.7",
     "tsup": "^8.5.1",
