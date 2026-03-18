@@ -1,9 +1,15 @@
 #!/usr/bin/env node
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
-import { analyzeTestBacklog, generateCommitMessage, generateDiffSummary } from "@git-ai/core";
+import { createInterface } from "node:readline/promises";
+import {
+  analyzeTestBacklog,
+  generateCommitMessage,
+  generateDiffSummary,
+  generateIssueDraft,
+} from "@git-ai/core";
 import { OpenAIProvider } from "@git-ai/providers";
 import dotenv from "dotenv";
 
@@ -28,11 +34,17 @@ type IssueWorkspace = {
 
 type IssueExecutionMode = "local" | "github-action";
 
-type IssueCommandOptions = {
-  action: "run" | "prepare" | "finalize";
-  issueNumber: number;
-  mode: IssueExecutionMode;
-};
+type IssueCommandOptions =
+  | {
+      action: "run" | "prepare" | "finalize";
+      issueNumber: number;
+      mode: IssueExecutionMode;
+    }
+  | {
+      action: "draft";
+    };
+
+type GeneratedIssueDraft = Awaited<ReturnType<typeof generateIssueDraft>>;
 
 type TestBacklogOutputFormat = "json" | "markdown";
 
@@ -63,6 +75,7 @@ type IssueRunContext = {
 const ISSUE_USAGE = [
   "Usage:",
   "  git-ai issue <number>",
+  "  git-ai issue draft",
   "  git-ai issue prepare <number> [--mode <local|github-action>]",
   "  git-ai issue finalize <number>",
 ].join("\n");
@@ -279,9 +292,19 @@ function parseIssueMode(rawArgs: string[]): IssueExecutionMode {
   return mode;
 }
 
-function parseIssueCommandArgs(args: string[]): IssueCommandOptions {
+export function parseIssueCommandArgs(args: string[]): IssueCommandOptions {
   const issueArgs = args.slice(1);
   const subcommand = issueArgs[0];
+
+  if (subcommand === "draft") {
+    if (issueArgs.length > 1) {
+      throw new Error(`Unknown issue option "${issueArgs[1]}". ${ISSUE_USAGE}`);
+    }
+
+    return {
+      action: "draft",
+    };
+  }
 
   if (subcommand === "prepare") {
     return {
@@ -577,6 +600,13 @@ function slugifyIssueTitle(title: string): string {
 function createIssueBranchName(issueNumber: number, title: string): string {
   const slug = slugifyIssueTitle(title) || `issue-${issueNumber}`;
   return `feat/issue-${issueNumber}-${slug}`;
+}
+
+function createIssueDraftFilePath(): string {
+  const issueDir = resolve(REPO_ROOT, ".git-ai", "issues");
+  mkdirSync(issueDir, { recursive: true });
+
+  return resolve(issueDir, `issue-draft-${formatRunTimestamp()}.md`);
 }
 
 function toRepoRelativePath(filePath: string): string {
@@ -944,6 +974,123 @@ function formatCommitMessage(title: string, body?: string): string {
   return body ? `${title}\n\n${body}\n` : `${title}\n`;
 }
 
+function formatMarkdownList(items: string[]): string {
+  return items.map((item) => `- ${item}`).join("\n");
+}
+
+function renderIssueDraftMarkdown(draft: GeneratedIssueDraft): string {
+  const lines = [
+    `# ${draft.title}`,
+    "",
+    "## Summary",
+    draft.summary,
+    "",
+    "## Motivation",
+    draft.motivation,
+    "",
+    "## Goal",
+    draft.goal,
+    "",
+    "## Proposed behavior",
+    formatMarkdownList(draft.proposedBehavior),
+    "",
+    "## Requirements",
+    formatMarkdownList(draft.requirements),
+  ];
+
+  if (draft.constraints && draft.constraints.length > 0) {
+    lines.push("", "## Constraints", formatMarkdownList(draft.constraints));
+  }
+
+  lines.push(
+    "",
+    "## Acceptance criteria",
+    formatMarkdownList(draft.acceptanceCriteria),
+    ""
+  );
+
+  return lines.join("\n");
+}
+
+function parseIssueDraftDocument(content: string): { title: string; body: string } {
+  const lines = content.split(/\r?\n/);
+  const titleLineIndex = lines.findIndex((line) => line.trim().length > 0);
+
+  if (titleLineIndex === -1 || !lines[titleLineIndex].startsWith("# ")) {
+    throw new Error(
+      "Issue draft must start with a top-level markdown heading like `# Issue title`."
+    );
+  }
+
+  const title = lines[titleLineIndex].slice(2).trim();
+  const body = lines.slice(titleLineIndex + 1).join("\n").trim();
+
+  if (!title) {
+    throw new Error("Issue draft title cannot be empty.");
+  }
+
+  if (!body) {
+    throw new Error("Issue draft body cannot be empty.");
+  }
+
+  return {
+    title,
+    body,
+  };
+}
+
+async function promptForLine(prompt: string): Promise<string> {
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  try {
+    return await rl.question(prompt);
+  } finally {
+    rl.close();
+  }
+}
+
+function shouldCreateIssue(response: string): boolean {
+  return ["y", "yes"].includes(response.trim().toLowerCase());
+}
+
+function openFileInEditor(filePath: string): void {
+  const editor = process.env.VISUAL?.trim() || process.env.EDITOR?.trim();
+  if (!editor) {
+    console.log(
+      `Draft saved to ${toRepoRelativePath(filePath)}. Review and edit it manually before creating a GitHub issue.`
+    );
+    return;
+  }
+
+  console.log(`Opening draft in ${editor}...`);
+  const result = spawnSync(`${editor} ${JSON.stringify(filePath)}`, {
+    stdio: "inherit",
+    shell: true,
+  });
+
+  if (result.error) {
+    throw new Error(`Failed to open the draft in ${editor}. ${result.error.message}`);
+  }
+
+  if (result.status !== 0) {
+    throw new Error(`Editor command "${editor}" exited with status ${result.status}.`);
+  }
+}
+
+function createGitHubIssueWithGh(title: string, body: string): string {
+  const output = runCommand(
+    "gh",
+    ["issue", "create", "--title", title, "--body", body],
+    `Failed to create GitHub issue "${title}" with gh.`
+  );
+
+  const lines = output.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  return lines[lines.length - 1] ?? output;
+}
+
 function toTitleCase(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
@@ -1238,6 +1385,39 @@ async function runTestBacklogCommand(): Promise<void> {
   process.stdout.write(`${formatTestBacklogMarkdown(analysis, createdIssues)}\n`);
 }
 
+async function runIssueDraftCommand(): Promise<void> {
+  const featureIdea = (await promptForLine("Feature idea: ")).trim();
+  if (!featureIdea) {
+    throw new Error("Feature idea is required.");
+  }
+
+  const additionalContext = (await promptForLine("Optional context: ")).trim();
+  const provider = createProvider();
+  const draft = await generateIssueDraft(provider, {
+    featureIdea,
+    additionalContext: additionalContext || undefined,
+  });
+
+  const draftFilePath = createIssueDraftFilePath();
+  writeFileSync(draftFilePath, renderIssueDraftMarkdown(draft), "utf8");
+  openFileInEditor(draftFilePath);
+
+  if (!isGhAuthenticated()) {
+    console.log("GitHub issue creation skipped because gh is unavailable or not authenticated.");
+    return;
+  }
+
+  const createNow = await promptForLine("Create GitHub issue with gh now? [y/N]: ");
+  if (!shouldCreateIssue(createNow)) {
+    console.log(`Draft kept at ${toRepoRelativePath(draftFilePath)}.`);
+    return;
+  }
+
+  const reviewedDraft = parseIssueDraftDocument(readFileSync(draftFilePath, "utf8"));
+  const issueUrl = createGitHubIssueWithGh(reviewedDraft.title, reviewedDraft.body);
+  console.log(`Created GitHub issue: ${issueUrl}`);
+}
+
 async function prepareIssueRun(
   issueNumber: number,
   mode: IssueExecutionMode
@@ -1275,6 +1455,11 @@ function finalizeIssueRun(issueNumber: number): void {
 async function runIssueCommand(): Promise<void> {
   const args = getCliArgs();
   const issueCommand = parseIssueCommandArgs(args);
+
+  if (issueCommand.action === "draft") {
+    await runIssueDraftCommand();
+    return;
+  }
 
   if (issueCommand.action === "prepare") {
     const context = await prepareIssueRun(
