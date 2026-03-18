@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -67,6 +67,33 @@ function createTestBacklogAnalysis() {
   };
 }
 
+function createIssueDraftResult() {
+  return {
+    title: "Merge PR description and review summary into one PR assistant action",
+    summary:
+      "Draft a single implementation path for combining the repository's PR description and review summary generation flows.",
+    motivation:
+      "The current workflow spreads related pull request authoring guidance across separate outputs, which adds friction and inconsistency.",
+    goal:
+      "Provide one shared PR assistant action that produces a cohesive, implementation-ready pull request body update.",
+    proposedBehavior: [
+      "Generate one managed PR assistant output instead of separate PR description and review summary artifacts.",
+      "Update the existing PR body in place rather than replacing unrelated user-authored sections.",
+    ],
+    requirements: [
+      "Reuse the existing PR assistant and body-merging patterns where possible.",
+      "Preserve manual pull request body content outside the managed section.",
+    ],
+    constraints: [
+      "Do not overwrite non-managed PR body content.",
+    ],
+    acceptanceCriteria: [
+      "Running the action updates a single managed PR assistant section.",
+      "Existing non-managed PR body content is preserved.",
+    ],
+  };
+}
+
 function createFetchResponse(
   payload: unknown,
   init: { ok?: boolean; status?: number; statusText?: string } = {}
@@ -94,10 +121,26 @@ function captureStdout(): { output: () => string } {
   };
 }
 
+function listIssueDraftFiles(): string[] {
+  try {
+    return readdirSync(resolve(REPO_ROOT, ".git-ai", "issues"))
+      .filter((entry) => entry.startsWith("issue-draft-") && entry.endsWith(".md"))
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
 async function loadCli(options: {
   analysisResult?: ReturnType<typeof createTestBacklogAnalysis>;
+  issueDraftResult?: ReturnType<typeof createIssueDraftResult>;
+  readlineAnswers?: string[];
   execFileSyncImpl?: (command: string, args: string[]) => string;
-  spawnSyncImpl?: (command: string, args: string[]) => { status: number; error?: Error };
+  spawnSyncImpl?: (
+    command: string,
+    args: string[],
+    rawSecondArg?: unknown
+  ) => { status: number; error?: Error; stdout?: string; stderr?: string };
 } = {}) {
   vi.resetModules();
   process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
@@ -105,6 +148,10 @@ async function loadCli(options: {
   const analyzeTestBacklog = vi.fn();
   if (options.analysisResult) {
     analyzeTestBacklog.mockResolvedValue(options.analysisResult);
+  }
+  const generateIssueDraft = vi.fn();
+  if (options.issueDraftResult) {
+    generateIssueDraft.mockResolvedValue(options.issueDraftResult);
   }
 
   const execFileSync = vi.fn((command: string, args: string[]) => {
@@ -114,31 +161,44 @@ async function loadCli(options: {
 
     throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
   });
-  const spawnSync = vi.fn((command: string, args: string[]) => {
+  const spawnSync = vi.fn((command: string, rawSecondArg?: unknown) => {
+    const args = Array.isArray(rawSecondArg) ? rawSecondArg : [];
     if (options.spawnSyncImpl) {
-      return options.spawnSyncImpl(command, args);
+      return options.spawnSyncImpl(command, args, rawSecondArg);
     }
 
     return { status: 0 };
   });
+  const readlineAnswers = [...(options.readlineAnswers ?? [])];
+  const createInterface = vi.fn(() => ({
+    question: vi.fn(async () => readlineAnswers.shift() ?? ""),
+    close: vi.fn(),
+  }));
 
   vi.doMock("@git-ai/core", () => ({
     analyzeTestBacklog,
     generateCommitMessage: vi.fn(),
     generateDiffSummary: vi.fn(),
+    generateIssueDraft,
   }));
   vi.doMock("node:child_process", () => ({
     execFileSync,
     spawnSync,
+  }));
+  vi.doMock("node:readline/promises", () => ({
+    createInterface,
   }));
 
   const module = await import("./index");
 
   return {
     run: module.run,
+    parseIssueCommandArgs: module.parseIssueCommandArgs,
     analyzeTestBacklog,
+    generateIssueDraft,
     execFileSync,
     spawnSync,
+    createInterface,
   };
 }
 
@@ -148,6 +208,7 @@ afterEach(() => {
   delete process.env.GITHUB_OUTPUT;
   delete process.env.GITHUB_TOKEN;
   delete process.env.GH_TOKEN;
+  delete process.env.OPENAI_API_KEY;
 
   for (const target of cleanupTargets) {
     rmSync(target, { recursive: true, force: true });
@@ -160,6 +221,15 @@ afterEach(() => {
 });
 
 describe("CLI integration", () => {
+  it("parses issue draft as a dedicated issue subcommand", async () => {
+    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    const { parseIssueCommandArgs } = await loadCli();
+
+    expect(parseIssueCommandArgs(["issue", "draft"])).toEqual({
+      action: "draft",
+    });
+  });
+
   it("parses repo-level test-backlog flags for the CLI", async () => {
     process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
     const { parseTestBacklogCommandArgs } = await import("./index");
@@ -318,6 +388,96 @@ describe("CLI integration", () => {
 
     await expect(run()).rejects.toThrow(
       "Creating GitHub issues requires GH_TOKEN or GITHUB_TOKEN to be set."
+    );
+  });
+
+  it("generates a local issue draft and saves it under .git-ai/issues", async () => {
+    const beforeDrafts = listIssueDraftFiles();
+    const issueDraft = createIssueDraftResult();
+    const { run, generateIssueDraft } = await loadCli({
+      issueDraftResult: issueDraft,
+      readlineAnswers: [
+        "Combine PR description and review summary into a single PR assistant action.",
+        "Should update the PR body rather than replacing it.",
+      ],
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.env.OPENAI_API_KEY = "test-key";
+    process.argv = ["node", "git-ai", "issue", "draft"];
+
+    await run();
+
+    expect(generateIssueDraft).toHaveBeenCalledWith(expect.any(Object), {
+      featureIdea: "Combine PR description and review summary into a single PR assistant action.",
+      additionalContext: "Should update the PR body rather than replacing it.",
+    });
+
+    const createdDraft = listIssueDraftFiles().find((entry) => !beforeDrafts.includes(entry));
+    expect(createdDraft).toBeDefined();
+
+    const createdDraftPath = resolve(REPO_ROOT, ".git-ai", "issues", createdDraft as string);
+    cleanupTargets.add(createdDraftPath);
+
+    const content = readFileSync(createdDraftPath, "utf8");
+    expect(content).toContain(`# ${issueDraft.title}`);
+    expect(content).toContain("## Summary");
+    expect(content).toContain("## Proposed behavior");
+    expect(content).toContain("- Do not overwrite non-managed PR body content.");
+  });
+
+  it("creates a GitHub issue from the reviewed draft only after confirmation", async () => {
+    const beforeDrafts = listIssueDraftFiles();
+    const issueDraft = createIssueDraftResult();
+    const { run, execFileSync } = await loadCli({
+      issueDraftResult: issueDraft,
+      readlineAnswers: ["Unify PR assistant outputs.", "", "y"],
+      execFileSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "issue" && args[1] === "create") {
+          return "https://github.com/DevwareUK/git-ai/issues/99\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "gh" && args[0] === "auth" && args[1] === "status") {
+          return { status: 0 };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.env.OPENAI_API_KEY = "test-key";
+    process.argv = ["node", "git-ai", "issue", "draft"];
+
+    await run();
+
+    const createdDraft = listIssueDraftFiles().find((entry) => !beforeDrafts.includes(entry));
+    expect(createdDraft).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "issues", createdDraft as string));
+
+    expect(execFileSync).toHaveBeenCalledWith(
+      "gh",
+      [
+        "issue",
+        "create",
+        "--title",
+        issueDraft.title,
+        "--body",
+        expect.stringContaining("## Summary"),
+      ],
+      expect.any(Object)
     );
   });
 
