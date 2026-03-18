@@ -1,5 +1,5 @@
 {
-  "name": "@git-ai/review-summary-action",
+  "name": "@git-ai/pr-assistant-action",
   "version": "0.0.1",
   "private": true,
   "main": "dist/index.js",

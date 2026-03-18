@@ -31,23 +31,7 @@ importers:
         specifier: ^3.2.4
         version: 3.2.4(@types/node@25.4.0)
 
-  actions/pr-description:
-    dependencies:
-      '@git-ai/contracts':
-        specifier: workspace:*
-        version: link:../../packages/contracts
-      '@git-ai/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@git-ai/providers':
-        specifier: workspace:*
-        version: link:../../packages/providers
-    devDependencies:
-      tsup:
-        specifier: ^8.5.1
-        version: 8.5.1(postcss@8.5.8)(typescript@5.9.3)
-
-  actions/review-summary:
+  actions/pr-assistant:
     dependencies:
       '@git-ai/contracts':
         specifier: workspace:*

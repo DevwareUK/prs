@@ -613,8 +613,7 @@ function buildComponents(snapshot: RepositorySnapshot, setup: LocalTestingSetup)
       issueTitle: "Add smoke coverage for GitHub Action entrypoints",
       kind: "actions",
       relatedPaths: existingPaths(snapshot, [
-        "actions/pr-description/src/index.ts",
-        "actions/review-summary/src/index.ts",
+        "actions/pr-assistant/src/index.ts",
         "actions/test-suggestions/src/index.ts",
       ]),
       coverageEvidence: relatedCoverage(snapshot.testFiles, ["action", "workflow"], ["actions", ".github/workflows"]),
@@ -627,7 +626,7 @@ function buildComponents(snapshot: RepositorySnapshot, setup: LocalTestingSetup)
         "Assert output keys and failure handling rather than trying to emulate the full GitHub Actions runtime.",
       ],
       starterTests: [
-        "The PR description action writes the expected body output when core generation succeeds.",
+        "The PR assistant action writes the expected body output when core generation succeeds.",
         "The test suggestions action fails cleanly when required inputs are missing.",
       ],
       acceptanceCriteria: [
