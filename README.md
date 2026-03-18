@@ -2,7 +2,7 @@
 
 AI tooling for Git workflows, including a CLI and GitHub Actions.
 
-Pull request workflows in this repo currently cover AI PR descriptions, review summaries, test suggestions, and repo-wide test backlog generation.
+Pull request workflows in this repo currently cover an AI PR assistant section, test suggestions, and repo-wide test backlog generation.
 
 ## Local Setup
 

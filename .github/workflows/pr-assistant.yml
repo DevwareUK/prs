@@ -1,4 +1,4 @@
-name: PR Description
+name: PR Assistant
 
 on:
   pull_request:
@@ -12,7 +12,7 @@ permissions:
   pull-requests: write
 
 jobs:
-  pr-description:
+  pr-assistant:
     runs-on: ubuntu-latest
 
     steps:
@@ -52,19 +52,32 @@ jobs:
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
-      - name: Generate PR description
-        id: pr_description
-        uses: ./actions/pr-description
+      - name: Generate PR commit messages
+        id: commits
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          {
+            echo 'commit_messages<<EOF'
+            git log --reverse --format='%s%n%b%n---' "$BASE_SHA..$HEAD_SHA"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Generate PR assistant section
+        id: pr_assistant
+        uses: ./actions/pr-assistant
         with:
           diff: ${{ steps.diff.outputs.diff }}
-          issue_title: ${{ github.event.pull_request.title }}
-          issue_body: ${{ github.event.pull_request.body }}
+          commit_messages: ${{ steps.commits.outputs.commit_messages }}
+          pr_title: ${{ github.event.pull_request.title }}
+          pr_body: ${{ github.event.pull_request.body }}
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
 
       - name: Update PR body
         uses: actions/github-script@v7
         env:
-          BODY: ${{ steps.pr_description.outputs.body }}
+          BODY: ${{ steps.pr_assistant.outputs.body }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |

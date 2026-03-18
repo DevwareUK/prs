@@ -1,15 +1,18 @@
-name: "AI Review Summary"
-description: "Generate a PR-level AI review summary using OpenAI"
+name: "AI PR Assistant"
+description: "Generate and merge a managed PR assistant section into the pull request body"
 
 inputs:
   diff:
     description: "Unified git diff for the pull request"
     required: true
+  commit_messages:
+    description: "Optional commit messages included in the pull request"
+    required: false
   pr_title:
     description: "Optional pull request title"
     required: false
   pr_body:
-    description: "Optional pull request body"
+    description: "Optional current pull request body"
     required: false
   openai_api_key:
     description: "OpenAI API key"
@@ -24,9 +27,11 @@ inputs:
 
 outputs:
   summary:
-    description: "Generated review summary paragraph"
+    description: "Generated PR assistant summary paragraph"
+  section:
+    description: "Generated managed PR assistant section markdown"
   body:
-    description: "Generated markdown comment body"
+    description: "Updated pull request body with the managed PR assistant section"
 
 runs:
   using: "node20"

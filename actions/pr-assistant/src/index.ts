@@ -1,7 +1,12 @@
 import { appendFileSync } from "node:fs";
-import { ReviewSummaryInput } from "@git-ai/contracts";
-import { generateReviewSummary } from "@git-ai/core";
+import { PRAssistantInput } from "@git-ai/contracts";
+import { generatePRAssistant } from "@git-ai/core";
 import { OpenAIProvider } from "@git-ai/providers";
+import {
+  buildPRAssistantSection,
+  mergePRAssistantSection,
+  stripManagedPRAssistantSection,
+} from "./body";
 
 function getRequiredInput(name: string): string {
   const envName = `INPUT_${name.replace(/ /g, "_").toUpperCase()}`;
@@ -30,33 +35,15 @@ function setOutput(name: string, value: string): void {
   appendFileSync(outputPath, payload);
 }
 
-function renderBulletSection(title: string, items: string[] | undefined): string[] {
-  if (!items || items.length === 0) {
-    return [];
-  }
-
-  return [`### ${title}`, ...items.map((item) => `- ${item}`), ""];
-}
-
-function buildCommentBody(summary: Awaited<ReturnType<typeof generateReviewSummary>>): string {
-  const lines: string[] = ["## AI Review Summary", "", "### What changed", summary.summary, ""];
-
-  lines.push(...renderBulletSection("Risk areas", summary.riskAreas));
-  lines.push(...renderBulletSection("Suggested reviewer focus", summary.reviewerFocus));
-  lines.push(...renderBulletSection("Possible missing tests", summary.missingTests));
-
-  while (lines[lines.length - 1] === "") {
-    lines.pop();
-  }
-
-  return lines.join("\n");
-}
-
 async function run(): Promise<void> {
-  const input = ReviewSummaryInput.parse({
+  const prBody = getOptionalInput("pr_body");
+  const promptBody = stripManagedPRAssistantSection(prBody);
+
+  const input = PRAssistantInput.parse({
     diff: getRequiredInput("diff"),
+    commitMessages: getOptionalInput("commit_messages"),
     prTitle: getOptionalInput("pr_title"),
-    prBody: getOptionalInput("pr_body"),
+    prBody: promptBody,
   });
 
   const provider = new OpenAIProvider({
@@ -65,10 +52,13 @@ async function run(): Promise<void> {
     baseUrl: getOptionalInput("openai_base_url"),
   });
 
-  const result = await generateReviewSummary(provider, input);
+  const result = await generatePRAssistant(provider, input);
+  const section = buildPRAssistantSection(result);
+  const body = mergePRAssistantSection(prBody, section);
 
   setOutput("summary", result.summary);
-  setOutput("body", buildCommentBody(result));
+  setOutput("section", section);
+  setOutput("body", body);
 }
 
 run().catch((error: unknown) => {
