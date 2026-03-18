@@ -266,8 +266,7 @@ function canRunCommand(command: string, args: string[] = ["--version"]): boolean
   return !result.error && result.status === 0;
 }
 
-function hasChanges(): boolean {
-  const repoRoot = getDefaultRepoRoot();
+function hasChanges(repoRoot: string): boolean {
   return runCommand(
     "git",
     ["-C", repoRoot, "status", "--porcelain"],
@@ -275,8 +274,8 @@ function hasChanges(): boolean {
   ).length > 0;
 }
 
-function ensureCleanWorkingTree(): void {
-  if (hasChanges()) {
+function ensureCleanWorkingTree(repoRoot: string): void {
+  if (hasChanges(repoRoot)) {
     throw new Error(
       "Working tree is not clean. Commit or stash existing changes before running `git-ai issue`."
     );
@@ -1043,7 +1042,7 @@ function verifyBuild(repoRoot: string, buildCommand: string[], outputLogPath: st
 }
 
 function commitIssueChanges(repoRoot: string, issueNumber: number): void {
-  if (!hasChanges()) {
+  if (!hasChanges(repoRoot)) {
     throw new Error("Codex completed without producing any file changes to commit.");
   }
 
@@ -1621,9 +1620,11 @@ async function prepareIssueRun(
   const forge = getRepositoryForge(repoRoot);
   const repositoryConfig = getRepositoryConfig(repoRoot);
   if (forge.type === "none") {
-    await forge.fetchIssueDetails(issueNumber);
+    throw new Error(
+      "Repository forge support is disabled by .git-ai/config.json. Configure `forge.type` to enable issue workflows."
+    );
   }
-  ensureCleanWorkingTree();
+  ensureCleanWorkingTree(repoRoot);
   console.log(`Fetching issue #${issueNumber}...`);
   const issue = await forge.fetchIssueDetails(issueNumber);
   const planComment = await forge.fetchIssuePlanComment(issueNumber);

@@ -844,6 +844,64 @@ describe("CLI integration", () => {
     );
   });
 
+  it("creates a draft issue with a GitHub token when gh is unavailable", async () => {
+    const beforeDrafts = listIssueDraftFiles();
+    const issueDraft = createIssueDraftResult();
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      createFetchResponse({
+        number: 109,
+        title: issueDraft.title,
+        html_url: "https://github.com/DevwareUK/git-ai/issues/109",
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { run } = await loadCli({
+      issueDraftResult: issueDraft,
+      readlineAnswers: ["Unify PR assistant outputs.", "", "y"],
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/git-ai.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.env.OPENAI_API_KEY = "test-key";
+    process.env.GH_TOKEN = "";
+    process.env.GITHUB_TOKEN = "test-token";
+    process.argv = ["node", "git-ai", "issue", "draft"];
+
+    await run();
+
+    const createdDraft = listIssueDraftFiles().find((entry) => !beforeDrafts.includes(entry));
+    expect(createdDraft).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "issues", createdDraft as string));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.github.com/repos/DevwareUK/git-ai/issues",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer test-token",
+        }),
+      })
+    );
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
+      title: issueDraft.title,
+      body: expect.stringContaining("## Summary"),
+      labels: [],
+    });
+  });
+
   it("generates an issue resolution plan comment when none exists", async () => {
     const issueNumber = 42;
     const fetchMock = vi
