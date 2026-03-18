@@ -1,6 +1,7 @@
 export * from "./commit-message";
 export * from "./diff-summary";
 export * from "./issue-draft";
+export * from "./issue-resolution-plan";
 export * from "./pr-assistant";
 export * from "./pr-description";
 export * from "./review-summary";
