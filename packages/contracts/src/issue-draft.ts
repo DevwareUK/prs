@@ -24,7 +24,8 @@ export const IssueDraftModelOutput = z.object({
     .min(1, "requirements must contain at least one item"),
   constraints: z
     .array(z.string().trim().min(1, "constraints items must be non-empty"))
-    .nullable(),
+    .nullable()
+    .optional(),
   acceptanceCriteria: z
     .array(z.string().trim().min(1, "acceptanceCriteria items must be non-empty"))
     .min(1, "acceptanceCriteria must contain at least one item"),
