@@ -127,6 +127,8 @@ git-ai pr fix-comments 88
 
 Use this when the PR branch is already checked out locally and you want `git-ai` to fetch the PR review comments, let you choose which actionable comments to address, open Codex with a focused prompt, run the configured build command, and optionally commit the result.
 
+Nearby comments on the same file are grouped into optional review tasks, non-trivial reply comments are kept as thread context, and the generated `.git-ai/runs/.../pr-review-comments.md` snapshot includes linked issue context plus local file excerpts when available.
+
 ### Repository backlog analysis
 
 ```bash
@@ -273,7 +275,7 @@ Available subcommands:
 
 | Command | What it does |
 | --- | --- |
-| `git-ai pr fix-comments <pr-number>` | Fetches pull request metadata and review comments from the configured forge, filters out obviously non-actionable comments, prompts you to choose which comments to address, writes `.git-ai/` run artifacts, opens an interactive Codex session, runs the configured build command, and optionally commits the resulting fixes. |
+| `git-ai pr fix-comments <pr-number>` | Fetches pull request metadata and review comments from the configured forge, filters out obviously non-actionable comments, groups nearby threads into selectable review tasks, preserves non-trivial replies as thread context, writes richer `.git-ai/` run artifacts, opens an interactive Codex session, runs the configured build command, and optionally commits the resulting fixes. |
 
 Important behavior:
 
@@ -281,6 +283,7 @@ Important behavior:
 - local PR comment-fix runs require the `codex` CLI on `PATH`
 - PR comment-fix runs execute the configured `buildCommand`, defaulting to `pnpm build`
 - the command expects the relevant PR branch to already be checked out locally before Codex starts editing
+- the interactive selector accepts numbered thread choices and, when available, grouped task choices like `g1`; `all` still selects every individual thread
 - when `forge.type` is `github`, PR fetching uses `gh pr view` when available, otherwise the GitHub API
 - when `forge.type` is `github`, GitHub API access for PR metadata and review comments uses `GH_TOKEN` or `GITHUB_TOKEN` when present
 - when `forge.type` is `none`, pull request workflows are disabled for the repository

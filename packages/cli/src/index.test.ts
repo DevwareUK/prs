@@ -1069,6 +1069,153 @@ describe("CLI integration", () => {
     );
   });
 
+  it("groups nearby PR review threads, keeps reply context, and snapshots linked issue details", async () => {
+    const beforeRuns = listRunDirectories();
+    let gitStatusCallCount = 0;
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          number: 66,
+          title: "Improve fix-comments task handoff",
+          body: "Closes #42\n\nImprove the prompt quality for Codex handoff.",
+          html_url: "https://github.com/DevwareUK/git-ai/pull/66",
+          base: { ref: "main" },
+          head: { ref: "feat/fix-comment-task-handoff" },
+        })
+      )
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          title: "Improve PR comment selection and context quality",
+          body: "Make the review-fix snapshot more coherent for Codex.",
+          html_url: "https://github.com/DevwareUK/git-ai/issues/42",
+        })
+      )
+      .mockResolvedValueOnce(
+        createFetchResponse([
+          {
+            id: 701,
+            body: "Group nearby review comments into one selectable task.",
+            path: "packages/cli/src/index.ts",
+            line: 1200,
+            side: "RIGHT",
+            diff_hunk: "@@ -1196,0 +1200,4 @@",
+            html_url:
+              "https://github.com/DevwareUK/git-ai/pull/66#discussion_r701",
+            user: { login: "reviewer-a" },
+            created_at: "2026-03-18T08:00:00Z",
+            updated_at: "2026-03-18T08:05:00Z",
+          },
+          {
+            id: 702,
+            body: "The replies here explain that `all` should still mean every individual thread.",
+            path: "packages/cli/src/index.ts",
+            line: 1200,
+            side: "RIGHT",
+            diff_hunk: "@@ -1196,0 +1200,4 @@",
+            html_url:
+              "https://github.com/DevwareUK/git-ai/pull/66#discussion_r702",
+            user: { login: "reviewer-b" },
+            created_at: "2026-03-18T08:06:00Z",
+            updated_at: "2026-03-18T08:08:00Z",
+            in_reply_to_id: 701,
+          },
+          {
+            id: 703,
+            body: "Include the local file excerpt in the Codex snapshot for nearby comments.",
+            path: "packages/cli/src/index.ts",
+            line: 1208,
+            side: "RIGHT",
+            diff_hunk: "@@ -1204,0 +1208,4 @@",
+            html_url:
+              "https://github.com/DevwareUK/git-ai/pull/66#discussion_r703",
+            user: { login: "reviewer-c" },
+            created_at: "2026-03-18T08:09:00Z",
+            updated_at: "2026-03-18T08:10:00Z",
+          },
+        ])
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { run } = await loadCli({
+      readlineAnswers: ["g1", "n"],
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          gitStatusCallCount += 1;
+          return gitStatusCallCount === 1 ? "" : " M packages/cli/src/index.ts\n";
+        }
+
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/git-ai.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "codex") {
+          return { status: 0 };
+        }
+
+        if (command === "pnpm" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "pnpm" && args[0] === "build") {
+          return { status: 0, stdout: "built\n", stderr: "" };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.argv = ["node", "git-ai", "pr", "fix-comments", "66"];
+
+    await run();
+
+    const createdRun = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
+    expect(createdRun).toBeDefined();
+
+    const runDirPath = resolve(REPO_ROOT, ".git-ai", "runs", createdRun as string);
+    const snapshotFilePath = resolve(runDirPath, "pr-review-comments.md");
+    const metadataFilePath = resolve(runDirPath, "metadata.json");
+    cleanupTargets.add(runDirPath);
+
+    const snapshot = readFileSync(snapshotFilePath, "utf8");
+    expect(snapshot).toContain("## Linked issues");
+    expect(snapshot).toContain("Issue #42: Improve PR comment selection and context quality");
+    expect(snapshot).toContain("### Task 1");
+    expect(snapshot).toContain("Selection type: Grouped review task");
+    expect(snapshot).toContain("reviewer-b (2026-03-18T08:08:00Z)");
+    expect(snapshot).toContain("##### Local file excerpt");
+
+    expect(JSON.parse(readFileSync(metadataFilePath, "utf8"))).toMatchObject({
+      prNumber: 66,
+      linkedIssues: [
+        {
+          number: 42,
+          title: "Improve PR comment selection and context quality",
+          url: "https://github.com/DevwareUK/git-ai/issues/42",
+        },
+      ],
+      selectedTasks: [
+        {
+          kind: "group",
+          path: "packages/cli/src/index.ts",
+          commentIds: [701, 702, 703],
+        },
+      ],
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
   it("fails pr fix-comments clearly when no actionable review comments remain after filtering", async () => {
     const fetchMock = vi
       .fn()

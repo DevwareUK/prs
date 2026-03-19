@@ -48,6 +48,33 @@ type PullRequestFixWorkspace = {
   outputLogPath: string;
 };
 
+type PullRequestReviewThread = {
+  threadId: number;
+  path: string;
+  startLine?: number;
+  endLine?: number;
+  anchorLine?: number;
+  rootComment: PullRequestReviewComment;
+  comments: PullRequestReviewComment[];
+  actionableComments: PullRequestReviewComment[];
+  summary: string;
+};
+
+type PullRequestReviewTask = {
+  taskId: string;
+  kind: "group" | "thread";
+  path: string;
+  startLine?: number;
+  endLine?: number;
+  summary: string;
+  comments: PullRequestReviewComment[];
+  threads: PullRequestReviewThread[];
+};
+
+type PullRequestLinkedIssueContext = IssueDetails & {
+  number: number;
+};
+
 type IssueExecutionMode = "local" | "github-action";
 
 type IssueCommandOptions =
@@ -1092,25 +1119,42 @@ function getReviewCommentDisplayLine(comment: PullRequestReviewComment): number 
   );
 }
 
-function isActionablePullRequestReviewComment(comment: PullRequestReviewComment): boolean {
-  const normalizedBody = comment.body.trim().toLowerCase();
+function getReviewCommentLineRange(
+  comment: PullRequestReviewComment
+): { startLine?: number; endLine?: number } {
+  const endLine =
+    comment.line ?? comment.originalLine ?? getReviewCommentDisplayLine(comment);
+  const startLine = comment.startLine ?? comment.originalStartLine ?? endLine;
+
+  return {
+    startLine,
+    endLine,
+  };
+}
+
+function formatReviewCommentLineRange(startLine?: number, endLine?: number): string {
+  if (startLine === undefined && endLine === undefined) {
+    return "Unknown";
+  }
+
+  if (startLine === undefined) {
+    return String(endLine);
+  }
+
+  if (endLine === undefined || startLine === endLine) {
+    return String(startLine);
+  }
+
+  return `${startLine}-${endLine}`;
+}
+
+function isTriviallyNonActionableReviewCommentBody(body: string): boolean {
+  const normalizedBody = body.trim().toLowerCase();
   if (!normalizedBody) {
-    return false;
+    return true;
   }
 
-  if (comment.inReplyToId !== undefined) {
-    return false;
-  }
-
-  if (!comment.path.trim()) {
-    return false;
-  }
-
-  if (getReviewCommentDisplayLine(comment) === undefined) {
-    return false;
-  }
-
-  return ![
+  return [
     /^\+1$/,
     /^lgtm[.!]?$/,
     /^looks good(?: to me)?[.!]?$/,
@@ -1124,9 +1168,327 @@ function isActionablePullRequestReviewComment(comment: PullRequestReviewComment)
   ].some((pattern) => pattern.test(normalizedBody));
 }
 
-function formatPullRequestReviewCommentsSnapshot(
-  pullRequest: PullRequestDetails,
+function hasReviewCommentTaskContext(comment: PullRequestReviewComment): boolean {
+  return Boolean(comment.path.trim()) && getReviewCommentDisplayLine(comment) !== undefined;
+}
+
+function isActionablePullRequestReviewComment(comment: PullRequestReviewComment): boolean {
+  if (!hasReviewCommentTaskContext(comment)) {
+    return false;
+  }
+
+  return !isTriviallyNonActionableReviewCommentBody(comment.body);
+}
+
+function shouldRetainPullRequestReviewCommentInThread(
+  comment: PullRequestReviewComment
+): boolean {
+  if (!hasReviewCommentTaskContext(comment)) {
+    return false;
+  }
+
+  return !isTriviallyNonActionableReviewCommentBody(comment.body);
+}
+
+function summarizeReviewCommentBody(body: string): string {
+  const normalized = body.replace(/\s+/g, " ").trim();
+  if (normalized.length <= 140) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, 137)}...`;
+}
+
+function resolvePullRequestReviewThreadId(
+  comment: PullRequestReviewComment,
+  commentsById: Map<number, PullRequestReviewComment>
+): number {
+  let current = comment;
+  const visited = new Set<number>();
+
+  while (current.inReplyToId !== undefined && !visited.has(current.inReplyToId)) {
+    const parent = commentsById.get(current.inReplyToId);
+    if (!parent) {
+      break;
+    }
+
+    visited.add(current.id);
+    current = parent;
+  }
+
+  return current.id;
+}
+
+function formatPullRequestReviewThreadSummary(thread: PullRequestReviewThread): string {
+  const summaries = [...new Set(thread.actionableComments.map((comment) => summarizeReviewCommentBody(comment.body)))];
+  if (summaries.length === 0) {
+    return summarizeReviewCommentBody(thread.rootComment.body);
+  }
+
+  if (summaries.length === 1) {
+    return summaries[0];
+  }
+
+  const visibleSummaries = summaries.slice(0, 2);
+  const suffix =
+    summaries.length > visibleSummaries.length
+      ? ` (+${summaries.length - visibleSummaries.length} more)`
+      : "";
+  return `${visibleSummaries.join(" / ")}${suffix}`;
+}
+
+function buildPullRequestReviewThreads(
   comments: PullRequestReviewComment[]
+): PullRequestReviewThread[] {
+  const retainedComments = comments.filter(shouldRetainPullRequestReviewCommentInThread);
+  const commentsById = new Map(comments.map((comment) => [comment.id, comment]));
+  const commentsByThreadId = new Map<number, PullRequestReviewComment[]>();
+
+  for (const comment of retainedComments) {
+    const threadId = resolvePullRequestReviewThreadId(comment, commentsById);
+    const existing = commentsByThreadId.get(threadId);
+    if (existing) {
+      existing.push(comment);
+    } else {
+      commentsByThreadId.set(threadId, [comment]);
+    }
+  }
+
+  const threads: PullRequestReviewThread[] = [];
+
+  for (const [threadId, threadComments] of commentsByThreadId.entries()) {
+    const sortedComments = [...threadComments].sort((left, right) => {
+      const createdAtComparison =
+        Date.parse(left.createdAt) - Date.parse(right.createdAt);
+      if (createdAtComparison !== 0) {
+        return createdAtComparison;
+      }
+
+      return left.id - right.id;
+    });
+    const actionableComments = sortedComments.filter(isActionablePullRequestReviewComment);
+    if (actionableComments.length === 0) {
+      continue;
+    }
+
+    const rootComment =
+      sortedComments.find((comment) => comment.id === threadId) ?? sortedComments[0];
+    const ranges = sortedComments.map(getReviewCommentLineRange);
+    const lineNumbers = ranges.flatMap(({ startLine, endLine }) =>
+      [startLine, endLine].filter((line): line is number => line !== undefined)
+    );
+    const anchorLine = getReviewCommentDisplayLine(rootComment);
+    const baseThread = {
+      threadId,
+      path: rootComment.path,
+      startLine: lineNumbers.length > 0 ? Math.min(...lineNumbers) : anchorLine,
+      endLine: lineNumbers.length > 0 ? Math.max(...lineNumbers) : anchorLine,
+      anchorLine,
+      rootComment,
+      comments: sortedComments,
+      actionableComments,
+    };
+
+    threads.push({
+      ...baseThread,
+      summary: formatPullRequestReviewThreadSummary({ ...baseThread, summary: "" }),
+    });
+  }
+
+  return threads.sort((left, right) => {
+    const pathComparison = left.path.localeCompare(right.path);
+    if (pathComparison !== 0) {
+      return pathComparison;
+    }
+
+    const lineComparison =
+      (left.startLine ?? Number.MAX_SAFE_INTEGER) -
+      (right.startLine ?? Number.MAX_SAFE_INTEGER);
+    if (lineComparison !== 0) {
+      return lineComparison;
+    }
+
+    return left.threadId - right.threadId;
+  });
+}
+
+function shouldGroupPullRequestReviewThreads(
+  currentGroup: PullRequestReviewThread[],
+  nextThread: PullRequestReviewThread
+): boolean {
+  const previousThread = currentGroup[currentGroup.length - 1];
+  if (previousThread.path !== nextThread.path) {
+    return false;
+  }
+
+  const previousEndLine = previousThread.endLine ?? previousThread.startLine;
+  const nextStartLine = nextThread.startLine ?? nextThread.endLine;
+  if (previousEndLine !== undefined && nextStartLine !== undefined) {
+    return nextStartLine <= previousEndLine + 12;
+  }
+
+  const previousDiffHunks = new Set(
+    previousThread.comments
+      .map((comment) => comment.diffHunk?.trim())
+      .filter((diffHunk): diffHunk is string => Boolean(diffHunk))
+  );
+  return nextThread.comments.some(
+    (comment) => comment.diffHunk?.trim() && previousDiffHunks.has(comment.diffHunk.trim())
+  );
+}
+
+function formatPullRequestReviewTaskSummary(threads: PullRequestReviewThread[]): string {
+  const summaries = [...new Set(threads.map((thread) => thread.summary))];
+  if (summaries.length === 1) {
+    return summaries[0];
+  }
+
+  const visibleSummaries = summaries.slice(0, 2);
+  const suffix =
+    summaries.length > visibleSummaries.length
+      ? ` (+${summaries.length - visibleSummaries.length} more)`
+      : "";
+  return `${visibleSummaries.join(" / ")}${suffix}`;
+}
+
+function createPullRequestReviewTask(
+  kind: "group" | "thread",
+  taskId: string,
+  threads: PullRequestReviewThread[]
+): PullRequestReviewTask {
+  const lineNumbers = threads.flatMap((thread) =>
+    [thread.startLine, thread.endLine].filter((line): line is number => line !== undefined)
+  );
+  const commentsById = new Map<number, PullRequestReviewComment>();
+  for (const thread of threads) {
+    for (const comment of thread.comments) {
+      commentsById.set(comment.id, comment);
+    }
+  }
+
+  return {
+    taskId,
+    kind,
+    path: threads[0]?.path ?? "",
+    startLine: lineNumbers.length > 0 ? Math.min(...lineNumbers) : undefined,
+    endLine: lineNumbers.length > 0 ? Math.max(...lineNumbers) : undefined,
+    summary: formatPullRequestReviewTaskSummary(threads),
+    comments: [...commentsById.values()].sort((left, right) => left.id - right.id),
+    threads,
+  };
+}
+
+function buildPullRequestReviewTasks(
+  comments: PullRequestReviewComment[]
+): { groupTasks: PullRequestReviewTask[]; threadTasks: PullRequestReviewTask[] } {
+  const threads = buildPullRequestReviewThreads(comments);
+  const threadTasks = threads.map((thread) =>
+    createPullRequestReviewTask("thread", `thread-${thread.threadId}`, [thread])
+  );
+  const groupTasks: PullRequestReviewTask[] = [];
+
+  let currentGroup: PullRequestReviewThread[] = [];
+  for (const thread of threads) {
+    if (currentGroup.length === 0 || shouldGroupPullRequestReviewThreads(currentGroup, thread)) {
+      currentGroup.push(thread);
+      continue;
+    }
+
+    if (currentGroup.length > 1) {
+      groupTasks.push(
+        createPullRequestReviewTask("group", `group-${groupTasks.length + 1}`, currentGroup)
+      );
+    }
+    currentGroup = [thread];
+  }
+
+  if (currentGroup.length > 1) {
+    groupTasks.push(
+      createPullRequestReviewTask("group", `group-${groupTasks.length + 1}`, currentGroup)
+    );
+  }
+
+  return {
+    groupTasks,
+    threadTasks,
+  };
+}
+
+function formatLocalFileExcerpt(
+  repoRoot: string,
+  filePath: string,
+  startLine?: number,
+  endLine?: number
+): string | undefined {
+  const excerptStartLine = startLine ?? endLine;
+  const excerptEndLine = endLine ?? startLine;
+  if (excerptStartLine === undefined || excerptEndLine === undefined) {
+    return undefined;
+  }
+
+  try {
+    const fileContents = readFileSync(resolve(repoRoot, filePath), "utf8");
+    if (fileContents.includes("\u0000")) {
+      return undefined;
+    }
+
+    const lines = fileContents.split(/\r?\n/);
+    const firstLine = Math.max(1, excerptStartLine - 4);
+    const lastLine = Math.min(lines.length, excerptEndLine + 4);
+    const lineNumberWidth = String(lastLine).length;
+
+    return lines
+      .slice(firstLine - 1, lastLine)
+      .map(
+        (line, index) =>
+          `${String(firstLine + index).padStart(lineNumberWidth, " ")} | ${line}`
+      )
+      .join("\n");
+  } catch {
+    return undefined;
+  }
+}
+
+function formatPullRequestReviewTaskLocation(task: PullRequestReviewTask): string {
+  const lineRange = formatReviewCommentLineRange(task.startLine, task.endLine);
+  return lineRange === "Unknown" ? task.path : `${task.path}:${lineRange}`;
+}
+
+async function fetchLinkedIssuesForPullRequest(
+  forge: RepositoryForge,
+  pullRequest: PullRequestDetails
+): Promise<PullRequestLinkedIssueContext[]> {
+  const linkedIssueNumbers = new Set<number>();
+  for (const match of pullRequest.body.matchAll(
+    /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)\b/gi
+  )) {
+    const parsed = Number.parseInt(match[1] ?? "", 10);
+    if (Number.isSafeInteger(parsed) && parsed > 0) {
+      linkedIssueNumbers.add(parsed);
+    }
+  }
+
+  const linkedIssues: PullRequestLinkedIssueContext[] = [];
+  for (const issueNumber of [...linkedIssueNumbers].sort((left, right) => left - right)) {
+    try {
+      const issue = await forge.fetchIssueDetails(issueNumber);
+      linkedIssues.push({
+        number: issueNumber,
+        ...issue,
+      });
+    } catch {
+      continue;
+    }
+  }
+
+  return linkedIssues;
+}
+
+function formatPullRequestReviewCommentsSnapshot(
+  repoRoot: string,
+  pullRequest: PullRequestDetails,
+  tasks: PullRequestReviewTask[],
+  linkedIssues: PullRequestLinkedIssueContext[]
 ): string {
   const pullRequestBody = pullRequest.body.trim() || "(No pull request body provided.)";
   const lines = [
@@ -1143,30 +1505,85 @@ function formatPullRequestReviewCommentsSnapshot(
     "## Body",
     "",
     pullRequestBody,
-    "",
-    "## Selected review comments",
   ];
 
-  for (const [index, comment] of comments.entries()) {
+  if (linkedIssues.length > 0) {
+    lines.push("", "## Linked issues");
+
+    for (const issue of linkedIssues) {
+      lines.push(
+        "",
+        `### Issue #${issue.number}: ${issue.title}`,
+        "",
+        `- URL: ${issue.url}`,
+        "",
+        issue.body.trim() || "(No issue body provided.)"
+      );
+    }
+  }
+
+  lines.push("", "## Selected review tasks");
+
+  for (const [index, task] of tasks.entries()) {
     lines.push(
       "",
-      `### Comment ${index + 1}`,
+      `### Task ${index + 1}`,
       "",
-      `- Comment ID: ${comment.id}`,
-      `- Reviewer: ${comment.author}`,
-      `- URL: ${comment.url}`,
-      `- File: ${comment.path}`,
-      `- Line: ${getReviewCommentDisplayLine(comment) ?? "Unknown"}`,
-      `- Side: ${comment.side ?? "Unknown"}`,
-      `- Updated: ${comment.updatedAt}`,
+      `- Selection type: ${task.kind === "group" ? "Grouped review task" : "Review thread"}`,
+      `- File: ${task.path}`,
+      `- Lines: ${formatReviewCommentLineRange(task.startLine, task.endLine)}`,
+      `- Threads: ${task.threads.length}`,
+      `- Comments: ${task.comments.length}`,
+      `- Summary: ${task.summary}`,
       "",
-      "#### Comment body",
+      "#### Success looks like",
       "",
-      comment.body.trim()
+      "- Address each actionable review point captured in this task.",
+      "- Preserve any clarifications from follow-up review replies.",
+      "- Leave the affected code in a state that passes the configured verification command."
     );
 
-    if (comment.diffHunk?.trim()) {
-      lines.push("", "#### Diff hunk", "", "```diff", comment.diffHunk.trim(), "```");
+    for (const [threadIndex, thread] of task.threads.entries()) {
+      lines.push(
+        "",
+        `#### Thread ${threadIndex + 1}`,
+        "",
+        `- Root comment ID: ${thread.rootComment.id}`,
+        `- Reviewer: ${thread.rootComment.author}`,
+        `- URL: ${thread.rootComment.url}`,
+        `- Lines: ${formatReviewCommentLineRange(thread.startLine, thread.endLine)}`,
+        `- Summary: ${thread.summary}`,
+        "",
+        "##### Thread conversation"
+      );
+
+      for (const comment of thread.comments) {
+        lines.push(
+          "",
+          `${comment.author} (${comment.updatedAt})`,
+          "",
+          comment.body.trim()
+        );
+      }
+
+      const diffHunks = [...new Set(
+        thread.comments
+          .map((comment) => comment.diffHunk?.trim())
+          .filter((diffHunk): diffHunk is string => Boolean(diffHunk))
+      )];
+      if (diffHunks.length > 0) {
+        lines.push("", "##### Diff hunk", "", "```diff", diffHunks[0], "```");
+      }
+
+      const localExcerpt = formatLocalFileExcerpt(
+        repoRoot,
+        thread.path,
+        thread.startLine,
+        thread.endLine
+      );
+      if (localExcerpt) {
+        lines.push("", "##### Local file excerpt", "", "```text", localExcerpt, "```");
+      }
     }
   }
 
@@ -1233,10 +1650,10 @@ function buildPullRequestFixCodexPrompt(
     `Use \`${runDir}\` for run artifacts created by this workflow.`,
     "",
     "Instructions to Codex:",
-    "- analyze the repository only as needed for the selected review comments",
-    "- keep code changes focused on addressing the selected review comments",
+    "- analyze the repository only as needed for the selected review tasks",
+    "- keep code changes focused on addressing the selected review tasks",
     "- follow existing architecture patterns",
-    "- verify each selected comment is fully addressed before finishing",
+    "- verify each selected review thread or grouped task is fully addressed before finishing",
     `- run \`${formatCommandForDisplay(buildCommand)}\` before finishing if code changes are made`,
     "- do not modify `.git-ai/` unless needed for local workflow artifacts",
     "- do not commit `.git-ai/` files",
@@ -1300,16 +1717,18 @@ function writeIssueWorkspaceFiles(
 function writePullRequestFixWorkspaceFiles(
   repoRoot: string,
   pullRequest: PullRequestDetails,
-  comments: PullRequestReviewComment[],
+  tasks: PullRequestReviewTask[],
   workspace: PullRequestFixWorkspace,
-  buildCommand: string[]
+  buildCommand: string[],
+  linkedIssues: PullRequestLinkedIssueContext[]
 ): void {
   const createdAt = new Date().toISOString();
   const prompt = buildPullRequestFixCodexPrompt(repoRoot, workspace, buildCommand);
+  const selectedComments = tasks.flatMap((task) => task.comments);
 
   writeFileSync(
     workspace.snapshotFilePath,
-    formatPullRequestReviewCommentsSnapshot(pullRequest, comments),
+    formatPullRequestReviewCommentsSnapshot(repoRoot, pullRequest, tasks, linkedIssues),
     "utf8"
   );
   writeFileSync(workspace.promptFilePath, `${prompt}\n`, "utf8");
@@ -1327,7 +1746,22 @@ function writePullRequestFixWorkspaceFiles(
         promptFile: toRepoRelativePath(repoRoot, workspace.promptFilePath),
         outputLog: toRepoRelativePath(repoRoot, workspace.outputLogPath),
         runDir: toRepoRelativePath(repoRoot, workspace.runDir),
-        selectedComments: comments.map((comment) => ({
+        linkedIssues: linkedIssues.map((issue) => ({
+          number: issue.number,
+          title: issue.title,
+          url: issue.url,
+        })),
+        selectedTasks: tasks.map((task) => ({
+          id: task.taskId,
+          kind: task.kind,
+          path: task.path,
+          startLine: task.startLine,
+          endLine: task.endLine,
+          summary: task.summary,
+          threadIds: task.threads.map((thread) => thread.threadId),
+          commentIds: task.comments.map((comment) => comment.id),
+        })),
+        selectedComments: selectedComments.map((comment) => ({
           id: comment.id,
           path: comment.path,
           line: getReviewCommentDisplayLine(comment),
@@ -1767,30 +2201,47 @@ async function runReviewCommand(): Promise<void> {
   process.stdout.write(`${formatPRReviewMarkdown(result, issue, options.issueNumber)}\n`);
 }
 
-function summarizeReviewCommentBody(body: string): string {
-  const normalized = body.replace(/\s+/g, " ").trim();
-  if (normalized.length <= 140) {
-    return normalized;
-  }
-
-  return `${normalized.slice(0, 137)}...`;
-}
-
-function formatReviewCommentLocation(comment: PullRequestReviewComment): string {
-  const line = getReviewCommentDisplayLine(comment);
-  return line !== undefined ? `${comment.path}:${line}` : comment.path;
-}
-
-function printPullRequestReviewComments(
+function printPullRequestReviewTasks(
   pullRequest: PullRequestDetails,
-  comments: PullRequestReviewComment[]
+  groupTasks: PullRequestReviewTask[],
+  threadTasks: PullRequestReviewTask[]
 ): void {
-  console.log(`Actionable review comments for PR #${pullRequest.number}: ${pullRequest.title}`);
-  for (const [index, comment] of comments.entries()) {
-    console.log(
-      `${index + 1}. ${formatReviewCommentLocation(comment)} by ${comment.author} (comment ${comment.id})`
-    );
-    console.log(`   ${summarizeReviewCommentBody(comment.body)}`);
+  console.log(`Actionable review tasks for PR #${pullRequest.number}: ${pullRequest.title}`);
+  const paths = [...new Set(threadTasks.map((task) => task.path))];
+
+  for (const path of paths) {
+    const fileGroupTasks = groupTasks.filter((task) => task.path === path);
+    const fileThreadTasks = threadTasks.filter((task) => task.path === path);
+
+    console.log("");
+    console.log(path);
+
+    for (const groupTask of fileGroupTasks) {
+      const groupNumber =
+        groupTasks.findIndex((task) => task.taskId === groupTask.taskId) + 1;
+      console.log(
+        `  g${groupNumber}. ${formatPullRequestReviewTaskLocation(groupTask)} (${groupTask.threads.length} threads, ${groupTask.comments.length} comments)`
+      );
+      console.log(`      ${groupTask.summary}`);
+    }
+
+    for (const threadTask of fileThreadTasks) {
+      const threadNumber =
+        threadTasks.findIndex((task) => task.taskId === threadTask.taskId) + 1;
+      const thread = threadTask.threads[0];
+      const commentLabel = thread.comments.length === 1 ? "comment" : "comments";
+
+      console.log(
+        `  ${threadNumber}. ${formatPullRequestReviewTaskLocation(threadTask)} by ${thread.rootComment.author} (${thread.comments.length} ${commentLabel})`
+      );
+      console.log(`      ${threadTask.summary}`);
+      if (thread.comments.length > 1) {
+        const replyAuthors = [...new Set(thread.comments.slice(1).map((comment) => comment.author))];
+        if (replyAuthors.length > 0) {
+          console.log(`      Thread context from: ${replyAuthors.join(", ")}`);
+        }
+      }
+    }
   }
 }
 
@@ -1806,18 +2257,60 @@ function shouldCommitGeneratedChanges(response: string): boolean {
 async function selectPullRequestReviewComments(
   pullRequest: PullRequestDetails,
   comments: PullRequestReviewComment[]
-): Promise<PullRequestReviewComment[]> {
-  printPullRequestReviewComments(pullRequest, comments);
-  const selection = await promptForLine(
-    "Select comments to address [all|none|1,2,...]: "
-  );
-  const selectedIndexes = parseNumberedSelection(
-    selection,
-    comments.length,
-    "comment"
-  );
+): Promise<PullRequestReviewTask[]> {
+  const { groupTasks, threadTasks } = buildPullRequestReviewTasks(comments);
+  printPullRequestReviewTasks(pullRequest, groupTasks, threadTasks);
 
-  return selectedIndexes.map((index) => comments[index]);
+  const selectionPrompt =
+    groupTasks.length > 0
+      ? "Select tasks to address [all|none|g1,2,...] (`all` selects every individual thread): "
+      : "Select tasks to address [all|none|1,2,...]: ";
+  const selection = await promptForLine(selectionPrompt);
+  const selectedEntries = parsePullRequestReviewSelection(
+    selection,
+    threadTasks.length,
+    groupTasks.length
+  );
+  const selectedGroupIndexes = new Set(
+    selectedEntries
+      .filter((entry) => entry.kind === "group")
+      .map((entry) => entry.index)
+  );
+  const coveredThreadIds = new Set(
+    [...selectedGroupIndexes].flatMap((groupIndex) =>
+      groupTasks[groupIndex]?.threads.map((thread) => thread.threadId) ?? []
+    )
+  );
+  const selectedTasks: PullRequestReviewTask[] = [];
+  const addedTaskIds = new Set<string>();
+
+  for (const entry of selectedEntries) {
+    if (entry.kind === "group") {
+      const task = groupTasks[entry.index];
+      if (!task || addedTaskIds.has(task.taskId)) {
+        continue;
+      }
+
+      selectedTasks.push(task);
+      addedTaskIds.add(task.taskId);
+      continue;
+    }
+
+    const task = threadTasks[entry.index];
+    if (!task || addedTaskIds.has(task.taskId)) {
+      continue;
+    }
+
+    const thread = task.threads[0];
+    if (coveredThreadIds.has(thread.threadId)) {
+      continue;
+    }
+
+    selectedTasks.push(task);
+    addedTaskIds.add(task.taskId);
+  }
+
+  return selectedTasks;
 }
 
 async function runPrCommand(): Promise<void> {
@@ -1836,8 +2329,9 @@ async function runPrCommand(): Promise<void> {
 
   console.log(`Fetching pull request #${prCommand.prNumber}...`);
   const pullRequest = await forge.fetchPullRequestDetails(prCommand.prNumber);
+  const linkedIssues = await fetchLinkedIssuesForPullRequest(forge, pullRequest);
   const comments = (await forge.fetchPullRequestReviewComments(prCommand.prNumber))
-    .filter(isActionablePullRequestReviewComment)
+    .filter(shouldRetainPullRequestReviewCommentInThread)
     .sort((left, right) => {
       const pathComparison = left.path.localeCompare(right.path);
       if (pathComparison !== 0) {
@@ -1854,15 +2348,15 @@ async function runPrCommand(): Promise<void> {
       return left.id - right.id;
     });
 
-  if (comments.length === 0) {
+  if (buildPullRequestReviewThreads(comments).length === 0) {
     throw new Error(
       `No actionable pull request review comments were found for PR #${prCommand.prNumber}.`
     );
   }
 
-  const selectedComments = await selectPullRequestReviewComments(pullRequest, comments);
-  if (selectedComments.length === 0) {
-    console.log("No review comments selected. Exiting without changes.");
+  const selectedTasks = await selectPullRequestReviewComments(pullRequest, comments);
+  if (selectedTasks.length === 0) {
+    console.log("No review tasks selected. Exiting without changes.");
     return;
   }
 
@@ -1870,13 +2364,14 @@ async function runPrCommand(): Promise<void> {
   writePullRequestFixWorkspaceFiles(
     repoRoot,
     pullRequest,
-    selectedComments,
+    selectedTasks,
     workspace,
-    repositoryConfig.buildCommand
+    repositoryConfig.buildCommand,
+    linkedIssues
   );
 
   console.log("Opening an interactive Codex session in this terminal...");
-  console.log("Complete the selected review comment fixes in Codex.");
+  console.log("Complete the selected review task fixes in Codex.");
   console.log("When Codex exits, git-ai will resume with build and commit steps.");
   runCodex(repoRoot, workspace);
 
@@ -2097,6 +2592,77 @@ function parseNumberedSelection(
   }
 
   return [...selected].sort((left, right) => left - right);
+}
+
+function parsePullRequestReviewSelection(
+  response: string,
+  threadCount: number,
+  groupCount: number
+): Array<{ kind: "group" | "thread"; index: number }> {
+  const normalized = response.trim().toLowerCase();
+  if (!normalized || normalized === "none" || normalized === "n") {
+    return [];
+  }
+
+  if (normalized === "all") {
+    return Array.from({ length: threadCount }, (_, index) => ({
+      kind: "thread" as const,
+      index,
+    }));
+  }
+
+  const selectedEntries: Array<{ kind: "group" | "thread"; index: number }> = [];
+  const seenEntries = new Set<string>();
+
+  for (const part of normalized.split(",")) {
+    const trimmed = part.trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    if (/^g\d+$/.test(trimmed)) {
+      if (groupCount === 0) {
+        throw new Error(
+          'Invalid selection. No grouped review tasks are available for this pull request.'
+        );
+      }
+
+      const parsed = Number.parseInt(trimmed.slice(1), 10);
+      if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > groupCount) {
+        throw new Error(
+          `Invalid selection "${trimmed}". Choose group values between g1 and g${groupCount}.`
+        );
+      }
+
+      const key = `group:${parsed - 1}`;
+      if (!seenEntries.has(key)) {
+        selectedEntries.push({ kind: "group", index: parsed - 1 });
+        seenEntries.add(key);
+      }
+      continue;
+    }
+
+    if (!/^\d+$/.test(trimmed)) {
+      throw new Error(
+        'Invalid selection. Use comma-separated thread numbers, optional group values like "g1", "all", or "none".'
+      );
+    }
+
+    const parsed = Number.parseInt(trimmed, 10);
+    if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > threadCount) {
+      throw new Error(
+        `Invalid selection "${trimmed}". Choose thread values between 1 and ${threadCount}.`
+      );
+    }
+
+    const key = `thread:${parsed - 1}`;
+    if (!seenEntries.has(key)) {
+      selectedEntries.push({ kind: "thread", index: parsed - 1 });
+      seenEntries.add(key);
+    }
+  }
+
+  return selectedEntries;
 }
 
 function appendAdditionalDescription(body: string, additionalDescription: string): string {
