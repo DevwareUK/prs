@@ -1,32 +1,79 @@
 # git-ai
 
-AI tooling for Git workflows, including a CLI and GitHub Actions.
+`git-ai` is AI tooling for Git workflows. It ships a local CLI for working inside a Git repository, Node-based GitHub Actions for pull request review, pull request assistance, and test suggestions, plus workflow-driven issue-to-PR and backlog automation.
 
-Pull request workflows in this repo currently cover AI PR review, an AI PR assistant section, test suggestions, repo-wide test backlog generation, and repository feature backlog generation.
+The repository serves two audiences:
 
-## Local Setup
+- users who want to run `git-ai` against another repository
+- contributors who want to develop the `git-ai` monorepo itself
 
-Install dependencies:
+## How to use
+
+### What `git-ai` does
+
+The CLI currently supports these workflows:
+
+- `git-ai commit` generates a commit message from the staged diff
+- `git-ai diff` summarizes the current `git diff HEAD`
+- `git-ai review` reviews a local diff or branch comparison
+- `git-ai issue ...` drafts issues, generates issue plans, and runs issue-to-PR flows
+- `git-ai test-backlog` scans a repository for high-value testing gaps
+- `git-ai feature-backlog` scans a repository for high-value feature opportunities
+
+### Prerequisites
+
+- `git`
+- Node.js and `pnpm`
+- `OPENAI_API_KEY`
+- `codex` on `PATH` for full local `git-ai issue <number>` runs
+- `gh`, `GH_TOKEN`, or `GITHUB_TOKEN` for GitHub-backed issue and pull request flows
+
+### Install the CLI for another repository
+
+Build the CLI from this repository:
 
 ```bash
+cd /path/to/ai-actions
 pnpm install
+pnpm --filter @git-ai/cli build
 ```
 
-Create a `.env` file in the repo root:
+Then move to the repository you want to analyze and run the built CLI from there:
 
 ```bash
-cp .env.example .env
+cd /path/to/your-repo
+node /path/to/ai-actions/packages/cli/dist/index.js review
 ```
 
-Then set your OpenAI API key:
+If you want a shorter command while working in another repository, add a shell alias:
+
+```bash
+alias git-ai='node /path/to/ai-actions/packages/cli/dist/index.js'
+```
+
+Then you can run:
+
+```bash
+git-ai review
+git-ai test-backlog
+git-ai feature-backlog .
+```
+
+The CLI resolves the active repository from the current Git working tree at runtime with `git rev-parse --show-toplevel`. `.env` and `.git-ai/config.json` are loaded from that repository root, not from the CLI build location.
+
+### Set up the target repository
+
+Create a `.env` file in the target repository root:
 
 ```env
 OPENAI_API_KEY=your_key_here
+OPENAI_MODEL=gpt-4o-mini
+OPENAI_BASE_URL=https://api.openai.com/v1
 ```
 
-The CLI tools and Husky commit hook will read environment variables from this file.
+`OPENAI_MODEL` and `OPENAI_BASE_URL` are optional. The CLI defaults to `gpt-4o-mini` and `https://api.openai.com/v1`.
 
-Optional: create `.git-ai/config.json` in the repository root to override repository-specific workflow defaults:
+Optional: create `.git-ai/config.json` in the target repository root to override repository-specific defaults:
 
 ```json
 {
@@ -50,65 +97,77 @@ Optional: create `.git-ai/config.json` in the repository root to override reposi
 
 Supported config fields:
 
-- `aiContext.excludePaths`: repository-relative glob patterns excluded from AI diff and repository context. These exclusions apply to `git-ai commit`, `git-ai diff`, `git-ai review`, the PR automation workflows in this repo, and repo-wide backlog scans. Bare filename globs like `*.map` match by basename anywhere in the repository. Defaults: `["**/node_modules/**", "**/vendor/**", "**/dist/**", "**/build/**", "*.map"]`.
+- `aiContext.excludePaths`: repository-relative glob patterns excluded from AI diff and repository context. These exclusions apply to `git-ai commit`, `git-ai diff`, `git-ai review`, PR automation, and repo-wide backlog scans. Bare filename globs like `*.map` match by basename anywhere in the repository. Defaults: `["**/node_modules/**", "**/vendor/**", "**/dist/**", "**/build/**", "*.map"]`.
 - `baseBranch`: default pull request base branch for `git-ai issue <number>`. Default: `main`.
 - `buildCommand`: command run after Codex exits during full local `git-ai issue <number>` flows. Default: `["pnpm", "build"]`.
-- `forge.type`: repository forge integration. Use `"github"` for the current GitHub-backed flows or `"none"` to disable issue and PR creation features for non-GitHub repositories.
+- `forge.type`: forge integration. Use `"github"` for GitHub-backed issue and PR flows or `"none"` to disable those features for the repository.
 
-The CLI resolves the active repository from the current Git working tree at runtime with `git rev-parse --show-toplevel`. `.env` and `.git-ai/config.json` are loaded from that repository root, not from the CLI package install location.
+### What `.git-ai/` is
 
-## Command Reference
+`.git-ai/` is repository-local working state used by issue and backlog workflows. It is intentionally gitignored and should not be committed.
 
-This repository exposes commands in four places:
+Typical contents include:
 
-- root `pnpm` scripts in the workspace `package.json`
-- package-level `pnpm` scripts inside individual workspaces
-- the `git-ai` CLI
-- direct Node entrypoints for the bundled GitHub Actions
+- `.git-ai/issues/`: issue snapshots and generated drafts
+- `.git-ai/runs/`: run prompts, metadata, and logs for automated issue work
 
-### Root workspace commands
+### Typical workflows
 
-Run these from the repository root.
+#### Daily local usage
 
-| Command | What it does |
-| --- | --- |
-| `pnpm install` | Installs all workspace dependencies. |
-| `pnpm build` | Runs `pnpm -r build` and builds every workspace package and action bundle. |
-| `pnpm test` | Runs `vitest run --coverage` across the repository. |
-| `pnpm lint` | Runs `eslint .`. |
-| `pnpm dev` | Runs `pnpm -r dev` for workspace packages that define a `dev` script. |
-| `pnpm prepare` | Runs `husky` to install/update Git hooks. This also runs automatically during install. |
-| `pnpm cli:commit` | Builds the CLI package and runs `git-ai commit`. |
-| `pnpm cli:diff` | Builds the CLI package and runs `git-ai diff`. |
-| `pnpm cli:feature-backlog -- <args>` | Builds the CLI package and runs `git-ai feature-backlog <args>`. |
-| `pnpm cli:issue -- <args>` | Builds the CLI package and runs `git-ai issue <args>`. |
-| `pnpm cli:review -- <args>` | Builds the CLI package and runs `git-ai review <args>`. |
-| `pnpm cli:test-backlog -- <args>` | Builds the CLI package and runs `git-ai test-backlog <args>`. |
+```bash
+git-ai commit
+git-ai diff
+git-ai review --base origin/main
+```
 
-### Package-level commands
+Use these when you want commit help, a high-level diff summary, or a PR-style review before opening a pull request.
 
-These are useful when working on an individual workspace directly.
+#### Issue-to-PR workflow
 
-| Package | Command | What it does |
-| --- | --- | --- |
-| `packages/cli` | `pnpm --filter @git-ai/cli build` | Builds the `git-ai` CLI into `packages/cli/dist`. |
-| `packages/cli` | `pnpm --filter @git-ai/cli commit` | Builds the CLI package and runs `node dist/index.js commit`. |
-| `packages/cli` | `pnpm --filter @git-ai/cli diff` | Builds the CLI package and runs `node dist/index.js diff`. |
-| `packages/cli` | `pnpm --filter @git-ai/cli feature-backlog -- <args>` | Builds the CLI package and runs `node dist/index.js feature-backlog <args>`. |
-| `packages/cli` | `pnpm --filter @git-ai/cli issue -- <args>` | Builds the CLI package and runs `node dist/index.js <args>`. Use this when testing CLI issue flows directly. |
-| `packages/cli` | `pnpm --filter @git-ai/cli review -- <args>` | Builds the CLI package and runs `node dist/index.js review <args>`. |
-| `packages/core` | `pnpm --filter @git-ai/core build` | Builds the shared core library. |
-| `packages/contracts` | `pnpm --filter @git-ai/contracts build` | Builds the shared contract/schema package. |
-| `packages/providers` | `pnpm --filter @git-ai/providers build` | Builds the provider integrations package. |
-| `actions/pr-assistant` | `pnpm --filter @git-ai/pr-assistant-action build` | Builds the PR assistant GitHub Action bundle. |
-| `actions/pr-review` | `pnpm --filter @git-ai/pr-review-action build` | Builds the PR review GitHub Action bundle. |
-| `actions/test-suggestions` | `pnpm --filter @git-ai/test-suggestions-action build` | Builds the test suggestions GitHub Action bundle. |
+1. Draft an issue when the work does not exist yet:
 
-### `git-ai` CLI commands
+   ```bash
+   git-ai issue draft
+   ```
 
-After `pnpm install`, the CLI can be run either through the package scripts above or directly with `git-ai ...` if your shell resolves workspace binaries.
+2. Generate or refresh the issue resolution plan for an existing issue:
 
-If you run `git-ai` with no arguments, it defaults to `git-ai commit`.
+   ```bash
+   git-ai issue plan 54
+   ```
+
+3. Run the full local issue flow:
+
+   ```bash
+   git-ai issue 54
+   ```
+
+   This fetches the issue, creates the branch, writes `.git-ai/` run artifacts, opens Codex, runs the configured build command, commits the result, and opens a PR if the configured forge supports it.
+
+4. If you need a split workflow for automation or manual control, prepare and finalize separately:
+
+   ```bash
+   git-ai issue prepare 54
+   git-ai issue finalize 54
+   ```
+
+5. For GitHub Actions runs, prepare with the GitHub Actions prompt mode:
+
+   ```bash
+   git-ai issue prepare 54 --mode github-action
+   ```
+
+#### Repository backlog workflows
+
+```bash
+git-ai test-backlog --top 5
+git-ai feature-backlog . --top 5
+```
+
+Add `--create-issues` to create or reuse GitHub issues for the highest-value findings when the target repository uses the GitHub forge integration.
+
+### CLI command reference
 
 #### `git-ai commit`
 
@@ -287,11 +346,63 @@ Important behavior:
 
 - the repository analysis is heuristic and based on the repository structure, current product surface, and automation signals
 - with the default GitHub forge integration, `--create-issues` requires `GH_TOKEN` or `GITHUB_TOKEN`
-- with the default GitHub forge integration, issue creation targets the analyzed repository’s `origin` remote, not just the current working directory
+- with the default GitHub forge integration, issue creation targets the analyzed repository's `origin` remote, not just the current working directory
 - before each issue is created, `git-ai` prompts for the final title, optional extra description, and labels
 - if an open GitHub issue already exists with the chosen title, `git-ai` reuses it instead of creating a duplicate
 - if `.git-ai/config.json` sets `forge.type` to `none`, feature backlog issue creation is disabled for that repository
 - repository scans respect `.git-ai/config.json` `aiContext.excludePaths`
+
+## Developing `git-ai`
+
+### Monorepo layout
+
+| Path | Responsibility |
+| --- | --- |
+| `packages/cli` | The `git-ai` CLI entrypoint, argument parsing, repository config loading, forge integration, and local issue workflow orchestration. |
+| `packages/core` | Shared workflow logic for commit messages, diff summaries, PR review, issue drafting, issue planning, and backlog analysis. |
+| `packages/contracts` | Shared Zod contracts and schema types for workflow inputs and outputs. |
+| `packages/providers` | AI provider integrations, currently including the OpenAI-backed provider used by the CLI and actions. |
+| `actions/pr-review` | GitHub Action bundle for AI pull request review. |
+| `actions/pr-assistant` | GitHub Action bundle for managed pull request assistant sections. |
+| `actions/test-suggestions` | GitHub Action bundle for AI test suggestions on pull requests. |
+
+### Root workspace commands
+
+Run these from the repository root.
+
+| Command | What it does |
+| --- | --- |
+| `pnpm install` | Installs all workspace dependencies. |
+| `pnpm build` | Runs `pnpm -r build` and builds every workspace package and action bundle. |
+| `pnpm test` | Runs `vitest run --coverage` across the repository. |
+| `pnpm lint` | Runs `eslint .`. |
+| `pnpm dev` | Runs `pnpm -r dev` for workspace packages that define a `dev` script. |
+| `pnpm prepare` | Runs `husky` to install or update Git hooks. This also runs automatically during install. |
+| `pnpm cli:commit` | Builds the CLI package and runs `git-ai commit`. |
+| `pnpm cli:diff` | Builds the CLI package and runs `git-ai diff`. |
+| `pnpm cli:feature-backlog -- <args>` | Builds the CLI package and runs `git-ai feature-backlog <args>`. |
+| `pnpm cli:issue -- <args>` | Builds the CLI package and runs `git-ai issue <args>`. |
+| `pnpm cli:review -- <args>` | Builds the CLI package and runs `git-ai review <args>`. |
+| `pnpm cli:test-backlog -- <args>` | Builds the CLI package and runs `git-ai test-backlog <args>`. |
+
+### Package-level commands
+
+Use these when working on an individual workspace directly.
+
+| Package | Command | What it does |
+| --- | --- | --- |
+| `packages/cli` | `pnpm --filter @git-ai/cli build` | Builds the `git-ai` CLI into `packages/cli/dist`. |
+| `packages/cli` | `pnpm --filter @git-ai/cli commit` | Builds the CLI package and runs `node dist/index.js commit`. |
+| `packages/cli` | `pnpm --filter @git-ai/cli diff` | Builds the CLI package and runs `node dist/index.js diff`. |
+| `packages/cli` | `pnpm --filter @git-ai/cli feature-backlog -- <args>` | Builds the CLI package and runs `node dist/index.js feature-backlog <args>`. |
+| `packages/cli` | `pnpm --filter @git-ai/cli issue -- <args>` | Builds the CLI package and runs `node dist/index.js <args>`. Use this when testing CLI issue flows directly. |
+| `packages/cli` | `pnpm --filter @git-ai/cli review -- <args>` | Builds the CLI package and runs `node dist/index.js review <args>`. |
+| `packages/core` | `pnpm --filter @git-ai/core build` | Builds the shared core library. |
+| `packages/contracts` | `pnpm --filter @git-ai/contracts build` | Builds the shared contract and schema package. |
+| `packages/providers` | `pnpm --filter @git-ai/providers build` | Builds the provider integrations package. |
+| `actions/pr-assistant` | `pnpm --filter @git-ai/pr-assistant-action build` | Builds the PR assistant GitHub Action bundle. |
+| `actions/pr-review` | `pnpm --filter @git-ai/pr-review-action build` | Builds the PR review GitHub Action bundle. |
+| `actions/test-suggestions` | `pnpm --filter @git-ai/test-suggestions-action build` | Builds the test suggestions GitHub Action bundle. |
 
 ### GitHub Action local entrypoints
 
@@ -413,66 +524,25 @@ Outputs:
 
 When `GITHUB_OUTPUT` is not set, outputs are printed to stdout.
 
-## Testing
+### Testing and CI expectations
 
-Run the shared monorepo smoke tests with:
+Run the shared monorepo checks with:
 
 ```bash
+pnpm build
 pnpm test
+pnpm lint
 ```
 
-Vitest is the default repository test runner. Baseline tests live alongside the
-packages they cover using `*.test.ts` files under `packages/` and `actions/`.
+Vitest is the default repository test runner. Tests live alongside the packages they cover using `*.test.ts` files under `packages/` and `actions/`.
 
-`.git-ai/` is local working state for issue snapshots and run artifacts. It is
-intentionally gitignored and should not be committed.
+This repository includes these GitHub workflows:
 
-## GitHub Actions pull request review workflows
+- `.github/workflows/test.yml`: builds the workspace and runs `pnpm test` on pushes to `main` and on pull requests
+- `.github/workflows/pr-review.yml`: generates an AI PR review summary, updates a managed PR comment, and posts filtered inline review comments against added lines
+- `.github/workflows/pr-assistant.yml`: updates the pull request body with a managed PR assistant section
+- `.github/workflows/test-suggestions.yml`: creates or updates a managed PR comment with suggested automated test coverage
+- `.github/workflows/issue-to-pr.yml`: manual issue-to-PR automation that prepares issue context, runs Codex in GitHub Actions, builds the repository, commits generated changes, and opens or reuses a PR
+- `.github/workflows/test-backlog.yml`: manual repository-wide test backlog scan with optional issue creation
 
-This repository includes three pull-request-triggered workflows:
-
-- `.github/workflows/pr-review.yml` generates an AI PR review summary, resolves the first linked closing issue when one exists, updates a managed PR comment, and posts filtered inline review comments against added lines in the diff.
-- `.github/workflows/pr-assistant.yml` updates the pull request body with a managed PR assistant section.
-- `.github/workflows/test-suggestions.yml` creates or updates a managed PR comment with suggested automated test coverage.
-
-All three workflows generate their diff input through the built CLI helper, so `.git-ai/config.json` `aiContext.excludePaths` is honored in pull request automation as well.
-
-## GitHub Actions issue flow
-
-This repository also includes a manual `Issue to PR` workflow under
-`.github/workflows/issue-to-pr.yml`.
-
-Trigger it with `workflow_dispatch`, provide an issue number, and the workflow
-will:
-
-- fetch the GitHub issue details
-- create the issue branch and Codex prompt workspace
-- run Codex remotely in GitHub Actions
-- build the repository with `pnpm build`
-- commit and push the generated changes
-- create or reuse a PR targeting `main`
-- comment on the issue with the PR link
-
-Required secrets:
-
-- `OPENAI_API_KEY`
-
-## Repo-wide test backlog workflow
-
-This repository also includes a manual `Test Backlog` workflow under
-`.github/workflows/test-backlog.yml`.
-
-Trigger it with `workflow_dispatch` to:
-
-- scan the repository for existing test setup and likely gaps
-- recommend a default test framework when the repo does not have one yet
-- report whether automated tests are enforced in GitHub Actions
-- publish a prioritized backlog summary in the workflow run
-- optionally create GitHub issues for the highest-value findings
-
-Issue creation is disabled by default and requires a deliberate manual trigger.
-
-## Test workflow
-
-Pull requests and pushes to `main` also run `.github/workflows/test.yml`, which
-builds the workspace and executes the shared `pnpm test` command.
+All three pull-request-triggered AI workflows generate their diff input through the built CLI helper, so `.git-ai/config.json` `aiContext.excludePaths` is honored in pull request automation as well.
