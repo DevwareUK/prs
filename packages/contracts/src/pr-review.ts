@@ -1,19 +1,34 @@
 import { z } from "zod";
 
+const PRReviewSeverity = z.enum(["high", "medium", "low"]);
+
+const PRReviewCategory = z.enum([
+  "bug",
+  "correctness",
+  "security",
+  "performance",
+  "maintainability",
+  "testing",
+  "documentation",
+  "usability",
+]);
+
 const PRReviewComment = z.object({
   path: z.string().trim().min(1, "path must be non-empty"),
   line: z.number().int().positive("line must be a positive integer"),
-  severity: z.enum(["high", "medium", "low"]),
-  category: z.enum([
-    "bug",
-    "correctness",
-    "security",
-    "performance",
-    "maintainability",
-    "testing",
-  ]),
+  severity: PRReviewSeverity,
+  category: PRReviewCategory,
   body: z.string().trim().min(1, "body must be non-empty"),
   suggestion: z.string().trim().min(1).optional(),
+});
+
+const PRReviewFinding = z.object({
+  title: z.string().trim().min(1, "title must be non-empty"),
+  severity: PRReviewSeverity,
+  category: PRReviewCategory,
+  body: z.string().trim().min(1, "body must be non-empty"),
+  suggestion: z.string().trim().min(1).optional(),
+  relatedPaths: z.array(z.string().trim().min(1)).min(1).max(5).optional(),
 });
 
 export const PRReviewInput = z.object({
@@ -31,6 +46,7 @@ export type PRReviewInputType = z.infer<typeof PRReviewInput>;
 export const PRReviewOutput = z.object({
   summary: z.string().trim().min(1, "summary must be non-empty"),
   comments: z.array(PRReviewComment),
+  findings: z.array(PRReviewFinding).max(3).default([]),
 });
 
 export type PRReviewOutputType = z.infer<typeof PRReviewOutput>;

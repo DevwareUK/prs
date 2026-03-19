@@ -14,11 +14,13 @@ The repository also includes GitHub Actions for pull request review, PR assistan
 
 ## Quick start
 
-Prerequisites:
+### Prerequisites
 
 - `git`
 - Node.js and `pnpm`
 - `OPENAI_API_KEY`
+
+### Install the CLI once
 
 Build the CLI and link it globally from this repository:
 
@@ -30,6 +32,8 @@ cd packages/cli
 pnpm link --global
 ```
 
+### Configure each target repository
+
 Create a `.env` file in the target repository:
 
 ```env
@@ -38,7 +42,9 @@ OPENAI_MODEL=gpt-4o-mini
 OPENAI_BASE_URL=https://api.openai.com/v1
 ```
 
-Then move into that target repository and try the two fastest workflows:
+### First successful run
+
+Move into that target repository and try the two fastest workflows:
 
 ```bash
 cd /path/to/your-repo
@@ -46,7 +52,7 @@ git-ai review
 git-ai issue draft
 ```
 
-Useful next commands:
+### Useful next commands
 
 ```bash
 git-ai diff
@@ -261,7 +267,7 @@ Flags:
 | `--base <git-ref>` | Reviews the diff from `<git-ref>...HEAD` by default, or `<git-ref>...<head>` when `--head` is also provided. Without `--base`, `git-ai review` uses `git diff HEAD`. |
 | `--head <git-ref>` | Optional comparison head revision. Requires `--base`. |
 | `--format markdown` | Prints a readable Markdown review report. This is the default. |
-| `--format json` | Prints the structured review payload, including line-linked comments. |
+| `--format json` | Prints the structured review payload, including higher-level findings and line-linked comments. |
 | `--issue-number <number>` | Fetches the linked issue from the configured forge and includes it as review context. |
 
 Examples:
@@ -278,7 +284,7 @@ Important behavior:
 - `git-ai review` requires `OPENAI_API_KEY`
 - without `--base`, it reviews the current `git diff HEAD`
 - with `--issue-number`, the CLI fetches the issue title and body from the configured forge and grounds the review in that context
-- JSON output includes line-linked comment suggestions with file paths and right-side line numbers taken from the diff
+- JSON output includes higher-level findings plus line-linked comment suggestions with file paths and right-side line numbers taken from the diff
 
 ### `git-ai test-backlog`
 
@@ -457,6 +463,7 @@ Outputs:
 
 - `summary`
 - `body`
+- `findings_json`
 - `comments_json`
 
 When `GITHUB_OUTPUT` is not set, outputs are printed to stdout.

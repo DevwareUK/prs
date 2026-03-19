@@ -1,5 +1,5 @@
 name: "AI PR Review"
-description: "Generate an AI pull request review summary and line-linked review comments"
+description: "Generate an AI pull request review summary, higher-level findings, and line-linked review comments"
 
 inputs:
   diff:
@@ -39,6 +39,8 @@ outputs:
     description: "Generated PR review summary"
   body:
     description: "Generated managed PR review comment body"
+  findings_json:
+    description: "JSON array of higher-level review findings"
   comments_json:
     description: "JSON array of line-linked review comments"
 
