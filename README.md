@@ -30,6 +30,16 @@ Optional: create `.git-ai/config.json` in the repository root to override reposi
 
 ```json
 {
+  "aiContext": {
+    "excludePaths": [
+      "vendor/**",
+      "dist/**",
+      "build/**",
+      "*.map",
+      "web/themes/**/css/**",
+      "web/themes/**/js/**"
+    ]
+  },
   "baseBranch": "main",
   "buildCommand": ["pnpm", "build"],
   "forge": {
@@ -40,6 +50,7 @@ Optional: create `.git-ai/config.json` in the repository root to override reposi
 
 Supported config fields:
 
+- `aiContext.excludePaths`: repository-relative glob patterns excluded from AI diff and repository context. These exclusions apply to `git-ai commit`, `git-ai diff`, `git-ai review`, the PR automation workflows in this repo, and repo-wide backlog scans. Bare filename globs like `*.map` match by basename anywhere in the repository. Defaults: `["**/node_modules/**", "**/vendor/**", "**/dist/**", "**/build/**", "*.map"]`.
 - `baseBranch`: default pull request base branch for `git-ai issue <number>`. Default: `main`.
 - `buildCommand`: command run after Codex exits during full local `git-ai issue <number>` flows. Default: `["pnpm", "build"]`.
 - `forge.type`: repository forge integration. Use `"github"` for the current GitHub-backed flows or `"none"` to disable issue and PR creation features for non-GitHub repositories.
@@ -111,6 +122,7 @@ Requirements:
 
 - staged changes must exist
 - `OPENAI_API_KEY` must be set
+- `.git-ai/config.json` `aiContext.excludePaths` is applied before the staged diff is sent to AI
 
 #### `git-ai diff`
 
@@ -125,6 +137,7 @@ Requirements:
 - the repository must already have at least one commit
 - there must be changes in `git diff HEAD`
 - `OPENAI_API_KEY` must be set
+- `.git-ai/config.json` `aiContext.excludePaths` is applied before the diff is summarized
 
 #### `git-ai issue`
 
@@ -199,6 +212,7 @@ Important behavior:
 - without `--base`, it reviews the current `git diff HEAD`
 - with `--issue-number`, the CLI fetches the issue title/body from the configured forge and grounds the review in that context
 - JSON output includes line-linked comment suggestions with file paths and right-side line numbers taken from the diff
+- `.git-ai/config.json` `aiContext.excludePaths` is applied before the review diff is generated
 
 #### `git-ai test-backlog`
 
@@ -235,6 +249,7 @@ git-ai test-backlog --labels testing,backlog
 
 When `--create-issues` is enabled, `git-ai` checks for matching open issue titles first so it can reuse existing backlog items instead of creating duplicates.
 If `.git-ai/config.json` sets `forge.type` to `none`, backlog issue creation is disabled for that repository.
+Repository scans also respect `.git-ai/config.json` `aiContext.excludePaths`.
 
 #### `git-ai feature-backlog`
 
@@ -276,6 +291,7 @@ Important behavior:
 - before each issue is created, `git-ai` prompts for the final title, optional extra description, and labels
 - if an open GitHub issue already exists with the chosen title, `git-ai` reuses it instead of creating a duplicate
 - if `.git-ai/config.json` sets `forge.type` to `none`, feature backlog issue creation is disabled for that repository
+- repository scans respect `.git-ai/config.json` `aiContext.excludePaths`
 
 ### GitHub Action local entrypoints
 
@@ -418,6 +434,8 @@ This repository includes three pull-request-triggered workflows:
 - `.github/workflows/pr-review.yml` generates an AI PR review summary, resolves the first linked closing issue when one exists, updates a managed PR comment, and posts filtered inline review comments against added lines in the diff.
 - `.github/workflows/pr-assistant.yml` updates the pull request body with a managed PR assistant section.
 - `.github/workflows/test-suggestions.yml` creates or updates a managed PR comment with suggested automated test coverage.
+
+All three workflows generate their diff input through the built CLI helper, so `.git-ai/config.json` `aiContext.excludePaths` is honored in pull request automation as well.
 
 ## GitHub Actions issue flow
 

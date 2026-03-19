@@ -11,6 +11,7 @@ export const SuggestedTestType = z.enum([
 ]);
 
 export const TestBacklogInput = z.object({
+  excludePaths: z.array(z.string().trim().min(1)).optional(),
   repoRoot: z.string().trim().min(1, "repoRoot must be non-empty"),
   maxFindings: z.number().int().min(1).max(20).optional(),
 });

@@ -49,7 +49,7 @@ jobs:
         run: |
           {
             echo 'diff<<EOF'
-            git diff --unified=3 "$BASE_SHA...$HEAD_SHA"
+            GIT_AI_DISABLE_AUTO_RUN=1 node -e "const { readReviewDiffForAutomation } = require('./packages/cli/dist/index.js'); process.stdout.write(readReviewDiffForAutomation(process.env.BASE_SHA, process.env.HEAD_SHA));"
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 

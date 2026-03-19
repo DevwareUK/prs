@@ -75,4 +75,43 @@ describe("analyzeTestBacklog", () => {
       "initial-test-harness"
     );
   });
+
+  it("ignores excluded test paths from the repository scan", async () => {
+    const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-test-backlog-exclude-"));
+
+    writeFile(
+      repoRoot,
+      "package.json",
+      JSON.stringify(
+        {
+          name: "fixture-repo",
+          private: true,
+        },
+        null,
+        2
+      )
+    );
+    writeFile(
+      repoRoot,
+      "packages/core/src/example.ts",
+      'export function example(): string { return "ok"; }\n'
+    );
+    writeFile(
+      repoRoot,
+      "generated/tests/example.test.ts",
+      'import { describe, it } from "vitest";\n' +
+        'describe("generated", () => {\n' +
+        '  it("is ignored", () => {});\n' +
+        "});\n"
+    );
+
+    const result = await analyzeTestBacklog({
+      excludePaths: ["generated/**"],
+      repoRoot,
+      maxFindings: 10,
+    });
+
+    expect(result.currentTestingSetup.hasTests).toBe(false);
+    expect(result.currentTestingSetup.testFileCount).toBe(0);
+  });
 });

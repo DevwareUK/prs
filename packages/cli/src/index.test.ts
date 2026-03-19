@@ -10,6 +10,8 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { filterRepositoryPaths } from "../../core/src/path-filter";
+import { DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS } from "../../core/src/repository-config";
 
 const REPO_ROOT = resolve(__dirname, "../../..");
 const ORIGINAL_ARGV = [...process.argv];
@@ -229,10 +231,22 @@ function createFetchResponse(
 
 function parseMockRepositoryConfig(value?: unknown): Record<string, unknown> {
   const config = (value ?? {}) as {
+    aiContext?: { excludePaths?: unknown };
     baseBranch?: unknown;
     buildCommand?: unknown;
     forge?: { type?: unknown };
   };
+
+  if (config.aiContext?.excludePaths !== undefined) {
+    if (
+      !Array.isArray(config.aiContext.excludePaths) ||
+      config.aiContext.excludePaths.some(
+        (pattern) => typeof pattern !== "string" || pattern.trim().length === 0
+      )
+    ) {
+      throw new Error("aiContext.excludePaths must be a string array");
+    }
+  }
 
   if (config.baseBranch !== undefined) {
     if (typeof config.baseBranch !== "string" || config.baseBranch.trim().length === 0) {
@@ -307,6 +321,8 @@ function withRepositoryConfig(
 
 async function loadCli(options: {
   analysisResult?: ReturnType<typeof createTestBacklogAnalysis>;
+  commitMessageResult?: { title: string; body?: string };
+  diffSummaryResult?: { summary: string; filesChanged?: string[]; notableChanges?: string[] };
   featureAnalysisResult?: ReturnType<typeof createFeatureBacklogAnalysis>;
   issueDraftResult?: ReturnType<typeof createIssueDraftResult>;
   issueResolutionPlanResult?: ReturnType<typeof createIssueResolutionPlanResult>;
@@ -337,6 +353,14 @@ async function loadCli(options: {
   const generateIssueResolutionPlan = vi.fn();
   if (options.issueResolutionPlanResult) {
     generateIssueResolutionPlan.mockResolvedValue(options.issueResolutionPlanResult);
+  }
+  const generateCommitMessage = vi.fn();
+  if (options.commitMessageResult) {
+    generateCommitMessage.mockResolvedValue(options.commitMessageResult);
+  }
+  const generateDiffSummary = vi.fn();
+  if (options.diffSummaryResult) {
+    generateDiffSummary.mockResolvedValue(options.diffSummaryResult);
   }
   const generatePRReview = vi.fn();
   if (options.prReviewResult) {
@@ -382,16 +406,26 @@ async function loadCli(options: {
   vi.doMock("@git-ai/core", () => ({
     analyzeFeatureBacklog,
     analyzeTestBacklog,
-    generateCommitMessage: vi.fn(),
-    generateDiffSummary: vi.fn(),
+    filterRepositoryPaths,
+    generateCommitMessage,
+    generateDiffSummary,
     generateIssueDraft,
     generatePRReview,
     generateIssueResolutionPlan,
     resolveRepositoryConfig: vi.fn((config?: {
+      aiContext?: { excludePaths?: string[] };
       baseBranch?: string;
       buildCommand?: string[];
       forge?: { type?: "github" | "none" };
     }) => ({
+      aiContext: {
+        excludePaths: [
+          ...new Set([
+            ...DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS,
+            ...(config?.aiContext?.excludePaths ?? []),
+          ]),
+        ],
+      },
       baseBranch: config?.baseBranch ?? "main",
       buildCommand: config?.buildCommand ?? ["pnpm", "build"],
       forge: {
@@ -415,11 +449,15 @@ async function loadCli(options: {
   const module = await import("./index");
 
   return {
+    readReviewDiffForAutomation: module.readReviewDiffForAutomation,
     run: module.run,
     parseFeatureBacklogCommandArgs: module.parseFeatureBacklogCommandArgs,
     parseIssueCommandArgs: module.parseIssueCommandArgs,
+    parseReviewCommandArgs: module.parseReviewCommandArgs,
     analyzeFeatureBacklog,
     analyzeTestBacklog,
+    generateCommitMessage,
+    generateDiffSummary,
     generateIssueDraft,
     generatePRReview,
     generateIssueResolutionPlan,
@@ -545,6 +583,132 @@ describe("CLI integration", () => {
     });
   });
 
+  it("filters excluded paths from commit diffs", async () => {
+    await withRepositoryConfig(
+      JSON.stringify(
+        {
+          aiContext: {
+            excludePaths: ["generated/**"],
+          },
+        },
+        null,
+        2
+      ),
+      async () => {
+        const { run, execFileSync, generateCommitMessage } = await loadCli({
+          commitMessageResult: {
+            title: "feat: keep source diff only",
+          },
+          execFileSyncImpl: (command, args) => {
+            if (command === "git" && args[0] === "diff" && args[1] === "--name-only") {
+              return "src/index.ts\ngenerated/app.js\n";
+            }
+
+            if (
+              command === "git" &&
+              args[0] === "diff" &&
+              args[1] === "--cached" &&
+              args[2] === "--" &&
+              args[3] === "src/index.ts"
+            ) {
+              return [
+                "diff --git a/src/index.ts b/src/index.ts",
+                "+++ b/src/index.ts",
+                "@@ -0,0 +1 @@",
+                "+export const value = 1;",
+              ].join("\n");
+            }
+
+            throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+          },
+        });
+
+        process.env.OPENAI_API_KEY = "test-key";
+        process.argv = ["node", "git-ai", "commit"];
+
+        const stdout = captureStdout();
+        await run();
+
+        expect(execFileSync).toHaveBeenCalledWith(
+          "git",
+          ["-C", REPO_ROOT, "diff", "--name-only", "--cached"],
+          expect.any(Object)
+        );
+        expect(execFileSync).toHaveBeenCalledWith(
+          "git",
+          ["-C", REPO_ROOT, "diff", "--cached", "--", "src/index.ts"],
+          expect.any(Object)
+        );
+        expect(generateCommitMessage).toHaveBeenCalledWith(
+          expect.any(Object),
+          expect.stringContaining("src/index.ts")
+        );
+        expect(generateCommitMessage).toHaveBeenCalledWith(
+          expect.any(Object),
+          expect.not.stringContaining("generated/app.js")
+        );
+        expect(stdout.output()).toContain("feat: keep source diff only");
+      }
+    );
+  });
+
+  it("reads review diffs for automation with repo exclusions applied", async () => {
+    await withRepositoryConfig(
+      JSON.stringify(
+        {
+          aiContext: {
+            excludePaths: ["generated/**"],
+          },
+        },
+        null,
+        2
+      ),
+      async () => {
+        const { readReviewDiffForAutomation, execFileSync } = await loadCli({
+          execFileSyncImpl: (command, args) => {
+            if (
+              command === "git" &&
+              args[0] === "diff" &&
+              args[1] === "--name-only" &&
+              args[2] === "--unified=3" &&
+              args[3] === "origin/main...HEAD"
+            ) {
+              return "src/index.ts\ngenerated/app.js\n";
+            }
+
+            if (
+              command === "git" &&
+              args[0] === "diff" &&
+              args[1] === "--unified=3" &&
+              args[2] === "origin/main...HEAD" &&
+              args[3] === "--" &&
+              args[4] === "src/index.ts"
+            ) {
+              return [
+                "diff --git a/src/index.ts b/src/index.ts",
+                "+++ b/src/index.ts",
+                "@@ -0,0 +1 @@",
+                "+export const value = 1;",
+              ].join("\n");
+            }
+
+            throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+          },
+        });
+
+        const diff = readReviewDiffForAutomation("origin/main", "HEAD");
+
+        expect(diff).toContain("src/index.ts");
+        expect(diff).not.toContain("generated/app.js");
+        expect(execFileSync).toHaveBeenCalledWith(
+          "git",
+          ["-C", REPO_ROOT, "diff", "--name-only", "--unified=3", "origin/main...HEAD"],
+          expect.any(Object)
+        );
+      }
+    );
+  });
+
   it("runs test-backlog in JSON mode and reuses duplicate GitHub issues", async () => {
     const analysis = createTestBacklogAnalysis();
     const fetchMock = vi
@@ -605,6 +769,13 @@ describe("CLI integration", () => {
     await run();
 
     expect(analyzeTestBacklog).toHaveBeenCalledWith({
+      excludePaths: [
+        "**/node_modules/**",
+        "**/vendor/**",
+        "**/dist/**",
+        "**/build/**",
+        "*.map",
+      ],
       repoRoot: REPO_ROOT,
       maxFindings: 3,
     });
@@ -652,6 +823,13 @@ describe("CLI integration", () => {
     await run();
 
     expect(analyzeTestBacklog).toHaveBeenCalledWith({
+      excludePaths: [
+        "**/node_modules/**",
+        "**/vendor/**",
+        "**/dist/**",
+        "**/build/**",
+        "*.map",
+      ],
       repoRoot: REPO_ROOT,
       maxFindings: 2,
     });
@@ -721,6 +899,45 @@ describe("CLI integration", () => {
     expect(stdout.output()).toContain("# AI PR Review");
     expect(stdout.output()).toContain("## Linked issue");
     expect(stdout.output()).toContain("packages/cli/src/index.ts:412");
+  });
+
+  it("passes configured excludePaths into test-backlog analysis", async () => {
+    await withRepositoryConfig(
+      JSON.stringify(
+        {
+          aiContext: {
+            excludePaths: ["web/themes/**/css/**"],
+          },
+        },
+        null,
+        2
+      ),
+      async () => {
+        const analysis = createTestBacklogAnalysis();
+        const { run, analyzeTestBacklog } = await loadCli({
+          analysisResult: analysis,
+        });
+
+        process.argv = ["node", "git-ai", "test-backlog", "--top", "1"];
+
+        const stdout = captureStdout();
+        await run();
+
+        expect(analyzeTestBacklog).toHaveBeenCalledWith({
+          excludePaths: [
+            "**/node_modules/**",
+            "**/vendor/**",
+            "**/dist/**",
+            "**/build/**",
+            "*.map",
+            "web/themes/**/css/**",
+          ],
+          repoRoot: REPO_ROOT,
+          maxFindings: 1,
+        });
+        expect(stdout.output()).toContain("# AI Test Backlog");
+      }
+    );
   });
 
   it("fails test-backlog issue creation clearly when no GitHub token is configured", async () => {
@@ -801,6 +1018,13 @@ describe("CLI integration", () => {
     await run();
 
     expect(analyzeFeatureBacklog).toHaveBeenCalledWith({
+      excludePaths: [
+        "**/node_modules/**",
+        "**/vendor/**",
+        "**/dist/**",
+        "**/build/**",
+        "*.map",
+      ],
       repoRoot: REPO_ROOT,
       maxSuggestions: 5,
     });
@@ -842,6 +1066,13 @@ describe("CLI integration", () => {
     await run();
 
     expect(analyzeFeatureBacklog).toHaveBeenCalledWith({
+      excludePaths: [
+        "**/node_modules/**",
+        "**/vendor/**",
+        "**/dist/**",
+        "**/build/**",
+        "*.map",
+      ],
       repoRoot: REPO_ROOT,
       maxSuggestions: 2,
     });

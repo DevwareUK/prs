@@ -7,6 +7,7 @@ import { createInterface } from "node:readline/promises";
 import {
   analyzeFeatureBacklog,
   analyzeTestBacklog,
+  filterRepositoryPaths,
   generateCommitMessage,
   generateDiffSummary,
   generateIssueDraft,
@@ -163,30 +164,19 @@ function getRepositoryForge(repoRoot = getDefaultRepoRoot()): RepositoryForge {
   return createRepositoryForge(repoRoot, getRepositoryConfig(repoRoot));
 }
 
-function readGitDiff(
+function executeGitDiff(
+  repoRoot: string,
   args: string[],
-  emptyDiffMessage: string,
   commandDescription: string,
   missingRevisionMessage?: string
 ): string {
-  const repoRoot = getDefaultRepoRoot();
   try {
-    const diff = execFileSync("git", ["-C", repoRoot, ...args], {
+    return execFileSync("git", ["-C", repoRoot, ...args], {
       encoding: "utf8",
       maxBuffer: 10 * 1024 * 1024,
       stdio: ["ignore", "pipe", "pipe"],
     });
-
-    if (!diff.trim()) {
-      throw new Error(emptyDiffMessage);
-    }
-
-    return diff;
   } catch (error: unknown) {
-    if (error instanceof Error && error.message === emptyDiffMessage) {
-      throw error;
-    }
-
     const stderr =
       typeof error === "object" &&
       error !== null &&
@@ -213,34 +203,114 @@ function readGitDiff(
   }
 }
 
+function buildNameOnlyDiffArgs(args: string[]): string[] {
+  return args[0] === "diff" ? [args[0], "--name-only", ...args.slice(1)] : args;
+}
+
+type ReadGitDiffOptions = {
+  allowEmpty?: boolean;
+  excludePaths?: string[];
+  repoRoot?: string;
+};
+
+function readGitDiff(
+  args: string[],
+  emptyDiffMessage: string,
+  commandDescription: string,
+  missingRevisionMessage?: string,
+  options: ReadGitDiffOptions = {}
+): string {
+  const repoRoot = options.repoRoot ?? getDefaultRepoRoot();
+  const excludePaths = options.excludePaths ?? [];
+
+  let effectiveArgs = args;
+  if (excludePaths.length > 0) {
+    const changedPaths = executeGitDiff(
+      repoRoot,
+      buildNameOnlyDiffArgs(args),
+      commandDescription,
+      missingRevisionMessage
+    )
+      .split(/\r?\n/)
+      .map((filePath) => filePath.trim())
+      .filter(Boolean);
+    const includedPaths = filterRepositoryPaths(changedPaths, excludePaths);
+
+    if (includedPaths.length === 0) {
+      if (options.allowEmpty) {
+        return "";
+      }
+
+      throw new Error(emptyDiffMessage);
+    }
+
+    effectiveArgs = [...args, "--", ...includedPaths];
+  }
+
+  const diff = executeGitDiff(
+    repoRoot,
+    effectiveArgs,
+    commandDescription,
+    missingRevisionMessage
+  );
+
+  if (!diff.trim()) {
+    if (options.allowEmpty) {
+      return "";
+    }
+
+    throw new Error(emptyDiffMessage);
+  }
+
+  return diff;
+}
+
 function readStagedDiff(): string {
+  const repoRoot = getDefaultRepoRoot();
   return readGitDiff(
     ["diff", "--cached"],
     "No staged changes found. Stage changes before generating a commit message.",
-    "staged"
+    "staged",
+    undefined,
+    {
+      excludePaths: getRepositoryConfig(repoRoot).aiContext.excludePaths,
+      repoRoot,
+    }
   );
 }
 
 function readHeadDiff(): string {
+  const repoRoot = getDefaultRepoRoot();
   return readGitDiff(
     ["diff", "HEAD"],
     "No changes found in git diff HEAD. Make a change before generating a diff summary.",
     "HEAD",
-    "git diff HEAD requires at least one commit. Create an initial commit before generating a diff summary."
+    "git diff HEAD requires at least one commit. Create an initial commit before generating a diff summary.",
+    {
+      excludePaths: getRepositoryConfig(repoRoot).aiContext.excludePaths,
+      repoRoot,
+    }
   );
 }
 
-function readReviewDiff(base?: string, head?: string): string {
+export function readReviewDiff(base?: string, head?: string): string {
   if (head && !base) {
     throw new Error(`--head requires --base. ${REVIEW_USAGE}`);
   }
+
+  const repoRoot = getDefaultRepoRoot();
+  const excludePaths = getRepositoryConfig(repoRoot).aiContext.excludePaths;
 
   if (!base) {
     return readGitDiff(
       ["diff", "--unified=3", "HEAD"],
       "No changes found in git diff HEAD. Make a change before generating a PR review.",
       "HEAD",
-      "git diff HEAD requires at least one commit. Create an initial commit before generating a PR review."
+      "git diff HEAD requires at least one commit. Create an initial commit before generating a PR review.",
+      {
+        excludePaths,
+        repoRoot,
+      }
     );
   }
 
@@ -249,8 +319,35 @@ function readReviewDiff(base?: string, head?: string): string {
     ["diff", "--unified=3", range],
     `No changes found in git diff ${range}. Make a change before generating a PR review.`,
     range,
-    `git diff ${range} requires the referenced revisions to exist before generating a PR review.`
+    `git diff ${range} requires the referenced revisions to exist before generating a PR review.`,
+    {
+      excludePaths,
+      repoRoot,
+    }
   );
+}
+
+export function readReviewDiffForAutomation(base?: string, head?: string): string {
+  if (head && !base) {
+    throw new Error(`--head requires --base. ${REVIEW_USAGE}`);
+  }
+
+  const repoRoot = getDefaultRepoRoot();
+  const excludePaths = getRepositoryConfig(repoRoot).aiContext.excludePaths;
+  const range = base ? (head ? `${base}...${head}` : `${base}...HEAD`) : "HEAD";
+  const args = base ? ["diff", "--unified=3", range] : ["diff", "--unified=3", "HEAD"];
+  const emptyDiffMessage = base
+    ? `No changes found in git diff ${range}. Make a change before generating a PR review.`
+    : "No changes found in git diff HEAD. Make a change before generating a PR review.";
+  const missingRevisionMessage = base
+    ? `git diff ${range} requires the referenced revisions to exist before generating a PR review.`
+    : "git diff HEAD requires at least one commit. Create an initial commit before generating a PR review.";
+
+  return readGitDiff(args, emptyDiffMessage, range, missingRevisionMessage, {
+    allowEmpty: true,
+    excludePaths,
+    repoRoot,
+  });
 }
 
 function runCommand(
@@ -1705,7 +1802,9 @@ async function maybeCreateFeatureBacklogIssues(
 
 async function runTestBacklogCommand(): Promise<void> {
   const options = parseTestBacklogCommandArgs(getCliArgs());
+  const repositoryConfig = getRepositoryConfig(options.repoRoot);
   const analysis = await analyzeTestBacklog({
+    excludePaths: repositoryConfig.aiContext.excludePaths,
     repoRoot: options.repoRoot,
     maxFindings: options.top,
   });
@@ -1725,7 +1824,9 @@ async function runTestBacklogCommand(): Promise<void> {
 
 async function runFeatureBacklogCommand(): Promise<void> {
   const options = parseFeatureBacklogCommandArgs(getCliArgs());
+  const repositoryConfig = getRepositoryConfig(options.repoRoot);
   const analysis = await analyzeFeatureBacklog({
+    excludePaths: repositoryConfig.aiContext.excludePaths,
     repoRoot: options.repoRoot,
     maxSuggestions: options.top,
   });

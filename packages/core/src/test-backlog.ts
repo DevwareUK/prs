@@ -10,6 +10,8 @@ import {
   type TestBacklogInputType,
   type TestBacklogOutputType,
 } from "@git-ai/contracts";
+import { createRepositoryPathMatcher } from "./path-filter";
+import { resolveRepositoryConfig } from "./repository-config";
 
 type PackageJson = {
   path: string;
@@ -136,26 +138,36 @@ function isSourceFile(filePath: string): boolean {
   );
 }
 
-function walkFiles(rootDir: string, currentDir = rootDir): string[] {
+function walkFiles(
+  rootDir: string,
+  matchesExcludedPath: (filePath: string) => boolean,
+  currentDir = rootDir
+): string[] {
   const entries = readdirSync(currentDir, { withFileTypes: true });
   const files: string[] = [];
 
   for (const entry of entries) {
-    if (entry.isDirectory() && SKIP_DIRECTORIES.has(entry.name)) {
-      continue;
-    }
-
     const absolutePath = resolve(currentDir, entry.name);
+    const relativePath = normalizePath(relative(rootDir, absolutePath));
+
     if (entry.isDirectory()) {
-      files.push(...walkFiles(rootDir, absolutePath));
+      if (
+        SKIP_DIRECTORIES.has(entry.name) ||
+        matchesExcludedPath(relativePath) ||
+        matchesExcludedPath(`${relativePath}/`)
+      ) {
+        continue;
+      }
+
+      files.push(...walkFiles(rootDir, matchesExcludedPath, absolutePath));
       continue;
     }
 
-    if (!entry.isFile()) {
+    if (!entry.isFile() || matchesExcludedPath(relativePath)) {
       continue;
     }
 
-    files.push(normalizePath(relative(rootDir, absolutePath)));
+    files.push(relativePath);
   }
 
   return files.sort((left, right) => left.localeCompare(right));
@@ -399,8 +411,8 @@ function collectCiIntegration(
   };
 }
 
-function collectSnapshot(repoRoot: string): RepositorySnapshot {
-  const allFiles = walkFiles(repoRoot);
+function collectSnapshot(repoRoot: string, excludePaths: string[]): RepositorySnapshot {
+  const allFiles = walkFiles(repoRoot, createRepositoryPathMatcher(excludePaths));
   const packageJsons = collectPackageJsons(repoRoot, allFiles);
   const workflowPaths = allFiles.filter((filePath) =>
     /^\.github\/workflows\/.+\.(yml|yaml)$/.test(filePath)
@@ -926,7 +938,12 @@ export async function analyzeTestBacklog(
 ): Promise<TestBacklogOutputType> {
   const parsed = TestBacklogInput.parse(input);
   const repoRoot = resolve(parsed.repoRoot);
-  const snapshot = collectSnapshot(repoRoot);
+  const excludePaths = resolveRepositoryConfig({
+    aiContext: {
+      excludePaths: parsed.excludePaths,
+    },
+  }).aiContext.excludePaths;
+  const snapshot = collectSnapshot(repoRoot, excludePaths);
   const localSetup = collectTestingSetup(snapshot);
   const ciIntegration = collectCiIntegration(snapshot, localSetup);
   const setup: CurrentTestingSetupType = {

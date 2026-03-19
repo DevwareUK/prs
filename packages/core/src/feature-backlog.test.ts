@@ -85,4 +85,37 @@ describe("analyzeFeatureBacklog", () => {
       "multi-provider",
     ]);
   });
+
+  it("ignores excluded example paths from repository signals", async () => {
+    const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-feature-backlog-exclude-"));
+
+    writeFile(
+      repoRoot,
+      "package.json",
+      JSON.stringify(
+        {
+          name: "fixture-repo",
+          private: true,
+          bin: {
+            "fixture-cli": "dist/index.js",
+          },
+        },
+        null,
+        2
+      )
+    );
+    writeFile(repoRoot, "README.md", "# Fixture Repo\n");
+    writeFile(repoRoot, "examples/basic/README.md", "# Example\n");
+
+    const result = await analyzeFeatureBacklog({
+      excludePaths: ["examples/**"],
+      repoRoot,
+      maxSuggestions: 10,
+    });
+
+    expect(result.repositorySignals.hasExamples).toBe(false);
+    expect(result.suggestions.map((suggestion) => suggestion.id)).toContain(
+      "starter-templates"
+    );
+  });
 });
