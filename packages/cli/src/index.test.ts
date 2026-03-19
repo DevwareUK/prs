@@ -204,6 +204,16 @@ function createPRReviewResult() {
   return {
     summary:
       "The change largely matches the requested behavior, but one new branch still needs a guard.",
+    findings: [
+      {
+        title: "Quick start still leaves setup and daily usage mixed together",
+        severity: "medium" as const,
+        category: "usability" as const,
+        body: "The onboarding path is better, but a new user still has to infer which commands are one-time setup versus normal operation.",
+        suggestion: "Split install/configuration from the first successful run in the README flow.",
+        relatedPaths: ["README.md"],
+      },
+    ],
     comments: [
       {
         path: "packages/cli/src/index.ts",
@@ -897,6 +907,8 @@ describe("CLI integration", () => {
       issueUrl: "https://github.com/DevwareUK/git-ai/issues/50",
     });
     expect(stdout.output()).toContain("# AI PR Review");
+    expect(stdout.output()).toContain("## Higher-level findings");
+    expect(stdout.output()).toContain("README.md");
     expect(stdout.output()).toContain("## Linked issue");
     expect(stdout.output()).toContain("packages/cli/src/index.ts:412");
   });

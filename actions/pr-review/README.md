@@ -1,6 +1,6 @@
 # pr-review action
 
-Generate an AI pull request review summary and line-linked review comments from a pull request diff via OpenAI.
+Generate an AI pull request review summary, higher-level findings, and line-linked review comments from a pull request diff via OpenAI.
 
 ## Local test
 
@@ -26,4 +26,4 @@ INPUT_OPENAI_MODEL="gpt-4o-mini" \
 node actions/pr-review/dist/index.js
 ```
 
-When `GITHUB_OUTPUT` is not set, outputs are printed to stdout as `summary=...`, `body=...`, and `comments_json=...`.
+When `GITHUB_OUTPUT` is not set, outputs are printed to stdout as `summary=...`, `body=...`, `findings_json=...`, and `comments_json=...`.

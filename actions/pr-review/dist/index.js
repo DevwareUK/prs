@@ -61,6 +61,20 @@ function buildCommentBody(review, issue) {
       `- ${issue.number !== void 0 ? `#${issue.number}: ` : ""}[${issue.title}](${issue.url})`
     );
   }
+  if (review.findings.length > 0) {
+    lines.push("", "### Higher-level findings");
+    for (const finding of review.findings) {
+      lines.push(
+        `- ${finding.title} (${toTitleCase(finding.severity)} ${finding.category}): ${finding.body}`
+      );
+      if (finding.relatedPaths && finding.relatedPaths.length > 0) {
+        lines.push(`  Related paths: ${finding.relatedPaths.map((path) => `\`${path}\``).join(", ")}`);
+      }
+      if (finding.suggestion) {
+        lines.push(`  Suggestion: ${finding.suggestion}`);
+      }
+    }
+  }
   lines.push("", "### Line-level findings");
   if (review.comments.length === 0) {
     lines.push("- No actionable line-level concerns identified.");
@@ -102,6 +116,7 @@ async function run() {
       url: input.issueUrl
     })
   );
+  setOutput("findings_json", JSON.stringify(result.findings, null, 2));
   setOutput("comments_json", JSON.stringify(result.comments, null, 2));
 }
 run().catch((error) => {
