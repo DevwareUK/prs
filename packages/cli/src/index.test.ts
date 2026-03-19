@@ -310,6 +310,14 @@ function listIssueDraftFiles(): string[] {
   }
 }
 
+function listRunDirectories(): string[] {
+  try {
+    return readdirSync(resolve(REPO_ROOT, ".git-ai", "runs")).sort();
+  } catch {
+    return [];
+  }
+}
+
 function withRepositoryConfig(
   contents: string,
   callback: () => Promise<void>
@@ -463,6 +471,7 @@ async function loadCli(options: {
     run: module.run,
     parseFeatureBacklogCommandArgs: module.parseFeatureBacklogCommandArgs,
     parseIssueCommandArgs: module.parseIssueCommandArgs,
+    parsePrCommandArgs: module.parsePrCommandArgs,
     parseReviewCommandArgs: module.parseReviewCommandArgs,
     analyzeFeatureBacklog,
     analyzeTestBacklog,
@@ -513,6 +522,16 @@ describe("CLI integration", () => {
       action: "plan",
       issueNumber: 42,
       mode: "local",
+    });
+  });
+
+  it("parses pr fix-comments as a dedicated pr subcommand", async () => {
+    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    const { parsePrCommandArgs } = await loadCli();
+
+    expect(parsePrCommandArgs(["pr", "fix-comments", "73"])).toEqual({
+      action: "fix-comments",
+      prNumber: 73,
     });
   });
 
@@ -911,6 +930,202 @@ describe("CLI integration", () => {
     expect(stdout.output()).toContain("README.md");
     expect(stdout.output()).toContain("## Linked issue");
     expect(stdout.output()).toContain("packages/cli/src/index.ts:412");
+  });
+
+  it("runs pr fix-comments, writes run artifacts, verifies the build, and commits the result", async () => {
+    const beforeRuns = listRunDirectories();
+    let gitStatusCallCount = 0;
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          number: 88,
+          title: "Tighten PR review comment fixing flow",
+          body: "Apply selected review feedback with Codex and keep the workflow auditable.",
+          html_url: "https://github.com/DevwareUK/git-ai/pull/88",
+          base: { ref: "main" },
+          head: { ref: "feat/pr-fix-comments" },
+        })
+      )
+      .mockResolvedValueOnce(
+        createFetchResponse([
+          {
+            id: 501,
+            body: "Guard against an empty comment selection before starting Codex.",
+            path: "packages/cli/src/index.ts",
+            line: 1900,
+            side: "RIGHT",
+            diff_hunk: "@@ -1890,0 +1900,4 @@",
+            html_url:
+              "https://github.com/DevwareUK/git-ai/pull/88#discussion_r501",
+            user: { login: "reviewer-a" },
+            created_at: "2026-03-18T08:00:00Z",
+            updated_at: "2026-03-18T08:05:00Z",
+          },
+          {
+            id: 502,
+            body: "Thanks!",
+            path: "packages/cli/src/index.ts",
+            line: 1904,
+            side: "RIGHT",
+            html_url:
+              "https://github.com/DevwareUK/git-ai/pull/88#discussion_r502",
+            user: { login: "reviewer-b" },
+            created_at: "2026-03-18T08:06:00Z",
+            updated_at: "2026-03-18T08:06:00Z",
+          },
+        ])
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { run, spawnSync } = await loadCli({
+      readlineAnswers: ["all", "y"],
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          gitStatusCallCount += 1;
+          return gitStatusCallCount === 1 ? "" : " M packages/cli/src/index.ts\n";
+        }
+
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/git-ai.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "codex") {
+          return { status: 0 };
+        }
+
+        if (command === "pnpm" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "pnpm" && args[0] === "build") {
+          return { status: 0, stdout: "built\n", stderr: "" };
+        }
+
+        if (command === "git" && args[0] === "add") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "commit") {
+          return { status: 0 };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.argv = ["node", "git-ai", "pr", "fix-comments", "88"];
+
+    await run();
+
+    const createdRun = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
+    expect(createdRun).toBeDefined();
+
+    const runDirPath = resolve(REPO_ROOT, ".git-ai", "runs", createdRun as string);
+    const snapshotFilePath = resolve(runDirPath, "pr-review-comments.md");
+    const promptFilePath = resolve(runDirPath, "prompt.md");
+    const metadataFilePath = resolve(runDirPath, "metadata.json");
+    const outputLogPath = resolve(runDirPath, "output.log");
+    cleanupTargets.add(runDirPath);
+
+    expect(readFileSync(snapshotFilePath, "utf8")).toContain("# Pull Request Review Fix Snapshot");
+    expect(readFileSync(snapshotFilePath, "utf8")).toContain("Guard against an empty comment selection");
+    expect(readFileSync(snapshotFilePath, "utf8")).not.toContain("Thanks!");
+    expect(readFileSync(promptFilePath, "utf8")).toContain(
+      "Read the pull request review fix snapshot"
+    );
+    expect(readFileSync(promptFilePath, "utf8")).toContain("keep code changes focused");
+    expect(readFileSync(outputLogPath, "utf8")).toContain("# git-ai pr fix-comments run log");
+    expect(JSON.parse(readFileSync(metadataFilePath, "utf8"))).toMatchObject({
+      prNumber: 88,
+      prTitle: "Tighten PR review comment fixing flow",
+      baseRefName: "main",
+      headRefName: "feat/pr-fix-comments",
+      selectedComments: [
+        {
+          id: 501,
+          path: "packages/cli/src/index.ts",
+          line: 1900,
+          url: "https://github.com/DevwareUK/git-ai/pull/88#discussion_r501",
+        },
+      ],
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(spawnSync).toHaveBeenCalledWith(
+      "git",
+      ["commit", "-m", "fix: address PR review comments for #88"],
+      expect.any(Object)
+    );
+  });
+
+  it("fails pr fix-comments clearly when no actionable review comments remain after filtering", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          number: 89,
+          title: "No actionable review comments",
+          body: "",
+          html_url: "https://github.com/DevwareUK/git-ai/pull/89",
+          base: { ref: "main" },
+          head: { ref: "feat/no-actionable-comments" },
+        })
+      )
+      .mockResolvedValueOnce(
+        createFetchResponse([
+          {
+            id: 601,
+            body: "Thanks!",
+            path: "packages/cli/src/index.ts",
+            line: 10,
+            side: "RIGHT",
+            html_url:
+              "https://github.com/DevwareUK/git-ai/pull/89#discussion_r601",
+            user: { login: "reviewer-a" },
+            created_at: "2026-03-18T09:00:00Z",
+            updated_at: "2026-03-18T09:01:00Z",
+          },
+        ])
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { run } = await loadCli({
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          return "";
+        }
+
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/git-ai.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.argv = ["node", "git-ai", "pr", "fix-comments", "89"];
+
+    await expect(run()).rejects.toThrow(
+      "No actionable pull request review comments were found for PR #89."
+    );
   });
 
   it("passes configured excludePaths into test-backlog analysis", async () => {

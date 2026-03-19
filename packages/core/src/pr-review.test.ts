@@ -82,6 +82,52 @@ describe("generatePRReview", () => {
     expect(request?.prompt).toContain('"findings": [');
   });
 
+  it("keeps docs-heavy diffs predictable when no higher-level findings are needed", async () => {
+    const provider = createProvider({
+      summary: "The documentation changes look correct and no broader onboarding issues stand out.",
+      comments: [],
+      findings: [],
+    });
+
+    const review = await generatePRReview(provider, {
+      diff: [
+        "diff --git a/docs/setup.md b/docs/setup.md",
+        "--- a/docs/setup.md",
+        "+++ b/docs/setup.md",
+        "@@ -1,2 +1,18 @@",
+        "-Old setup",
+        "+# Setup",
+        "+",
+        "+pnpm install",
+        "+pnpm build",
+        "+pnpm test",
+        "+",
+        "+Run the CLI after build.",
+        "+Verify the output before opening a PR.",
+        "+Repeat for CI if needed.",
+        "+Keep the branch up to date.",
+        "+Review the generated summary.",
+        "diff --git a/examples/config.example.json b/examples/config.example.json",
+        "--- a/examples/config.example.json",
+        "+++ b/examples/config.example.json",
+        "@@ -0,0 +1,10 @@",
+        '+{"apiKey":"demo"}',
+        '+{"apiKey":"demo"}',
+        '+{"apiKey":"demo"}',
+        '+{"apiKey":"demo"}',
+        '+{"apiKey":"demo"}',
+      ].join("\n"),
+    });
+
+    expect(review.findings).toEqual([]);
+
+    const request = provider.generateText.mock.calls[0]?.[0];
+    expect(request?.prompt).toContain("Review classification: docs-heavy.");
+    expect(request?.prompt).toContain(
+      'Prefer the "findings" array for invalid or confusing commands'
+    );
+  });
+
   it("keeps standard diffs on the conservative rubric and defaults findings to empty", async () => {
     const provider = createProvider({
       summary: "The change is small and no broader concerns stand out.",
@@ -113,6 +159,76 @@ describe("generatePRReview", () => {
     expect(request?.prompt).toContain("Review classification: standard.");
     expect(request?.prompt).toContain(
       'The "findings" array should usually stay empty for code-heavy diffs'
+    );
+    expect(request?.prompt).not.toContain("This diff is documentation-heavy");
+  });
+
+  it("treats mixed diffs as standard when docs do not dominate the change", async () => {
+    const provider = createProvider({
+      summary: "The code changes look sound and do not justify broader findings.",
+      comments: [],
+      findings: [],
+    });
+
+    await generatePRReview(provider, {
+      diff: [
+        "diff --git a/README.md b/README.md",
+        "--- a/README.md",
+        "+++ b/README.md",
+        "@@ -1,2 +1,6 @@",
+        "-Old note",
+        "+Updated usage note",
+        "+Added one more sentence",
+        "diff --git a/packages/core/src/pr-review.ts b/packages/core/src/pr-review.ts",
+        "--- a/packages/core/src/pr-review.ts",
+        "+++ b/packages/core/src/pr-review.ts",
+        "@@ -10,4 +10,8 @@",
+        "-const oldValue = before();",
+        "+const newValue = after();",
+        "+if (newValue) {",
+        "+  return newValue;",
+        "+}",
+        "diff --git a/packages/core/src/repository-config.ts b/packages/core/src/repository-config.ts",
+        "--- a/packages/core/src/repository-config.ts",
+        "+++ b/packages/core/src/repository-config.ts",
+        "@@ -1,4 +1,8 @@",
+        "-export const config = oldConfig;",
+        "+export const config = nextConfig;",
+        "+export function readConfig() {",
+        "+  return config;",
+        "+}",
+      ].join("\n"),
+    });
+
+    const request = provider.generateText.mock.calls[0]?.[0];
+    expect(request?.prompt).toContain("Review classification: standard.");
+    expect(request?.prompt).toContain("Classification signal: Changed files: 3; doc-like files: 1.");
+    expect(request?.prompt).toContain(
+      'The "findings" array should usually stay empty for code-heavy diffs'
+    );
+  });
+
+  it("treats header-only diffs as low-signal standard reviews", async () => {
+    const provider = createProvider({
+      summary: "The diff does not contain enough changed lines to support review findings.",
+      comments: [],
+      findings: [],
+    });
+
+    const review = await generatePRReview(provider, {
+      diff: [
+        "diff --git a/README.md b/README.md",
+        "--- a/README.md",
+        "+++ b/README.md",
+      ].join("\n"),
+    });
+
+    expect(review.findings).toEqual([]);
+
+    const request = provider.generateText.mock.calls[0]?.[0];
+    expect(request?.prompt).toContain("Review classification: standard.");
+    expect(request?.prompt).toContain(
+      "Classification signal: No added or removed lines were detected in the diff."
     );
     expect(request?.prompt).not.toContain("This diff is documentation-heavy");
   });

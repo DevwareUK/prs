@@ -5,6 +5,8 @@ import type {
   CreatedIssueRecord,
   IssueDetails,
   IssuePlanComment,
+  PullRequestDetails,
+  PullRequestReviewComment,
   RepositoryForge,
 } from "./forge";
 
@@ -196,6 +198,54 @@ async function listIssueComments(
     }));
 }
 
+function tryFetchPullRequestWithGh(
+  owner: string,
+  repo: string,
+  prNumber: number
+): PullRequestDetails | undefined {
+  if (!canRunCommand("gh")) {
+    return undefined;
+  }
+
+  try {
+    const payload = runCommand(
+      "gh",
+      [
+        "pr",
+        "view",
+        String(prNumber),
+        "--repo",
+        `${owner}/${repo}`,
+        "--json",
+        "number,title,body,url,baseRefName,headRefName",
+      ],
+      `Failed to fetch GitHub pull request #${prNumber} with gh.`
+    );
+
+    const parsed = JSON.parse(payload) as Partial<PullRequestDetails>;
+    if (
+      !parsed.number ||
+      !parsed.title ||
+      !parsed.url ||
+      !parsed.baseRefName ||
+      !parsed.headRefName
+    ) {
+      throw new Error("Pull request payload was incomplete.");
+    }
+
+    return {
+      number: parsed.number,
+      title: parsed.title,
+      body: parsed.body ?? "",
+      url: parsed.url,
+      baseRefName: parsed.baseRefName,
+      headRefName: parsed.headRefName,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 function tryFetchIssueWithGh(
   owner: string,
   repo: string,
@@ -268,6 +318,135 @@ async function fetchIssueWithApi(
     body: payload.body ?? "",
     url: payload.html_url,
   };
+}
+
+async function fetchPullRequestWithApi(
+  owner: string,
+  repo: string,
+  prNumber: number
+): Promise<PullRequestDetails> {
+  const token = tryResolveGitHubApiToken();
+  const headers: Record<string, string> = {
+    Accept: "application/vnd.github+json",
+    "User-Agent": "git-ai-cli",
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}`,
+    { headers }
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch GitHub pull request #${prNumber} via GitHub API (${response.status} ${response.statusText}).`
+    );
+  }
+
+  const payload = (await response.json()) as {
+    number?: number;
+    title?: string;
+    body?: string | null;
+    html_url?: string;
+    base?: { ref?: string };
+    head?: { ref?: string };
+  };
+
+  if (
+    !payload.number ||
+    !payload.title ||
+    !payload.html_url ||
+    !payload.base?.ref ||
+    !payload.head?.ref
+  ) {
+    throw new Error(`GitHub pull request #${prNumber} did not return the required fields.`);
+  }
+
+  return {
+    number: payload.number,
+    title: payload.title,
+    body: payload.body ?? "",
+    url: payload.html_url,
+    baseRefName: payload.base.ref,
+    headRefName: payload.head.ref,
+  };
+}
+
+async function listPullRequestReviewComments(
+  owner: string,
+  repo: string,
+  prNumber: number
+): Promise<PullRequestReviewComment[]> {
+  const token = tryResolveGitHubApiToken();
+  const headers: Record<string, string> = {
+    Accept: "application/vnd.github+json",
+    "User-Agent": "git-ai-cli",
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}/comments?per_page=100`,
+    { headers }
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to list review comments for GitHub pull request #${prNumber} (${response.status} ${response.statusText}).`
+    );
+  }
+
+  const payload = (await response.json()) as Array<{
+    id?: number;
+    body?: string | null;
+    path?: string;
+    line?: number | null;
+    original_line?: number | null;
+    start_line?: number | null;
+    original_start_line?: number | null;
+    side?: string | null;
+    start_side?: string | null;
+    diff_hunk?: string | null;
+    html_url?: string;
+    user?: { login?: string };
+    created_at?: string;
+    updated_at?: string;
+    in_reply_to_id?: number | null;
+  }>;
+
+  return payload
+    .filter(
+      (comment) =>
+        comment.id &&
+        comment.body &&
+        comment.path &&
+        comment.html_url &&
+        comment.user?.login &&
+        comment.created_at &&
+        comment.updated_at
+    )
+    .map((comment) => ({
+      id: comment.id as number,
+      body: comment.body as string,
+      path: comment.path as string,
+      line: comment.line ?? undefined,
+      originalLine: comment.original_line ?? undefined,
+      startLine: comment.start_line ?? undefined,
+      originalStartLine: comment.original_start_line ?? undefined,
+      side: comment.side ?? undefined,
+      startSide: comment.start_side ?? undefined,
+      diffHunk: comment.diff_hunk ?? undefined,
+      url: comment.html_url as string,
+      author: comment.user?.login as string,
+      createdAt: comment.created_at as string,
+      updatedAt: comment.updated_at as string,
+      inReplyToId: comment.in_reply_to_id ?? undefined,
+    }));
 }
 
 async function listOpenIssues(
@@ -379,6 +558,21 @@ class GitHubRepositoryForge implements RepositoryForge {
     return comments
       .filter((comment) => comment.body.includes("<!-- git-ai:issue-plan -->"))
       .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0];
+  }
+
+  async fetchPullRequestDetails(prNumber: number): Promise<PullRequestDetails> {
+    const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
+    const ghPullRequest = tryFetchPullRequestWithGh(owner, repo, prNumber);
+    if (ghPullRequest) {
+      return ghPullRequest;
+    }
+
+    return fetchPullRequestWithApi(owner, repo, prNumber);
+  }
+
+  async fetchPullRequestReviewComments(prNumber: number): Promise<PullRequestReviewComment[]> {
+    const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
+    return listPullRequestReviewComments(owner, repo, prNumber);
   }
 
   async createIssuePlanComment(

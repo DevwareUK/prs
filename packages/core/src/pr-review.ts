@@ -105,6 +105,16 @@ function classifyReviewDiff(diff: string): ReviewClassification {
     (sum, file) => sum + file.changedLines,
     0
   );
+  if (totalChangedLines === 0) {
+    return {
+      mode: "standard",
+      signals: [
+        `Changed files: ${fileStats.length}; doc-like files: ${docFiles.length}.`,
+        "No added or removed lines were detected in the diff.",
+      ],
+    };
+  }
+
   const docChangedLines = docFiles.reduce(
     (sum, file) => sum + file.changedLines,
     0

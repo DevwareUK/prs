@@ -49,4 +49,57 @@ describe("PRReviewOutput", () => {
       })
     ).toThrow();
   });
+
+  it("rejects malformed higher-level findings", () => {
+    expect(() =>
+      PRReviewOutput.parse({
+        summary: "The review found a broader onboarding issue.",
+        comments: [],
+        findings: [
+          {
+            title: "  ",
+            severity: "medium",
+            category: "usability",
+            body: "This finding is malformed because the title is empty.",
+            relatedPaths: [],
+          },
+        ],
+      })
+    ).toThrow();
+  });
+
+  it("rejects more than three higher-level findings", () => {
+    expect(() =>
+      PRReviewOutput.parse({
+        summary: "Too many higher-level findings were returned.",
+        comments: [],
+        findings: [
+          {
+            title: "Finding 1",
+            severity: "low",
+            category: "documentation",
+            body: "First finding.",
+          },
+          {
+            title: "Finding 2",
+            severity: "low",
+            category: "documentation",
+            body: "Second finding.",
+          },
+          {
+            title: "Finding 3",
+            severity: "low",
+            category: "documentation",
+            body: "Third finding.",
+          },
+          {
+            title: "Finding 4",
+            severity: "low",
+            category: "documentation",
+            body: "Fourth finding.",
+          },
+        ],
+      })
+    ).toThrow();
+  });
 });

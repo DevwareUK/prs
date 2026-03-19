@@ -25,6 +25,8 @@ import {
   type CreatedIssueRecord,
   type IssueDetails,
   type IssuePlanComment,
+  type PullRequestDetails,
+  type PullRequestReviewComment,
   type RepositoryForge,
 } from "./forge";
 import { resolveRuntimeRepoRoot } from "./repo-root";
@@ -33,6 +35,14 @@ type IssueWorkspace = {
   issueDir: string;
   issueFilePath: string;
   runDir: string;
+  promptFilePath: string;
+  metadataFilePath: string;
+  outputLogPath: string;
+};
+
+type PullRequestFixWorkspace = {
+  runDir: string;
+  snapshotFilePath: string;
   promptFilePath: string;
   metadataFilePath: string;
   outputLogPath: string;
@@ -49,6 +59,11 @@ type IssueCommandOptions =
   | {
       action: "draft";
     };
+
+type PrCommandOptions = {
+  action: "fix-comments";
+  prNumber: number;
+};
 
 type GeneratedIssueDraft = Awaited<ReturnType<typeof generateIssueDraft>>;
 type GeneratedIssueResolutionPlan = Awaited<
@@ -122,6 +137,11 @@ const REVIEW_USAGE = [
   "Usage:",
   "  git-ai review [--base <git-ref>] [--head <git-ref>] [--format <markdown|json>]",
   "                [--issue-number <number>]",
+].join("\n");
+
+const PR_USAGE = [
+  "Usage:",
+  "  git-ai pr fix-comments <pr-number>",
 ].join("\n");
 
 function getCliArgs(): string[] {
@@ -413,7 +433,7 @@ function hasChanges(repoRoot: string): boolean {
 function ensureCleanWorkingTree(repoRoot: string): void {
   if (hasChanges(repoRoot)) {
     throw new Error(
-      "Working tree is not clean. Commit or stash existing changes before running `git-ai issue`."
+      "Working tree is not clean. Commit or stash existing changes before running interactive git-ai workflows."
     );
   }
 }
@@ -519,6 +539,25 @@ export function parseIssueCommandArgs(args: string[]): IssueCommandOptions {
     action: "run",
     issueNumber: parseIssueNumber(issueArgs[0]),
     mode: parseIssueMode(issueArgs.slice(1)),
+  };
+}
+
+export function parsePrCommandArgs(args: string[]): PrCommandOptions {
+  const prArgs = args.slice(1);
+  const subcommand = prArgs[0];
+
+  if (subcommand !== "fix-comments") {
+    throw new Error(`Unknown pr subcommand "${subcommand ?? ""}". ${PR_USAGE}`);
+  }
+
+  const optionArgs = prArgs.slice(2);
+  if (optionArgs.length > 0) {
+    throw new Error(`Unknown pr option "${optionArgs[0]}". ${PR_USAGE}`);
+  }
+
+  return {
+    action: "fix-comments",
+    prNumber: parseIssueNumber(prArgs[1]),
   };
 }
 
@@ -989,6 +1028,28 @@ function createIssueWorkspace(
   };
 }
 
+function createPullRequestFixWorkspace(
+  repoRoot: string,
+  prNumber: number
+): PullRequestFixWorkspace {
+  const runDir = resolve(
+    repoRoot,
+    ".git-ai",
+    "runs",
+    `${formatRunTimestamp()}-pr-${prNumber}-fix-comments`
+  );
+
+  mkdirSync(runDir, { recursive: true });
+
+  return {
+    runDir,
+    snapshotFilePath: resolve(runDir, "pr-review-comments.md"),
+    promptFilePath: resolve(runDir, "prompt.md"),
+    metadataFilePath: resolve(runDir, "metadata.json"),
+    outputLogPath: resolve(runDir, "output.log"),
+  };
+}
+
 function formatIssueSnapshot(
   issueNumber: number,
   issue: IssueDetails,
@@ -1016,6 +1077,97 @@ function formatIssueSnapshot(
       "",
       stripIssuePlanCommentMarker(planComment.body)
     );
+  }
+
+  lines.push("");
+  return lines.join("\n");
+}
+
+function getReviewCommentDisplayLine(comment: PullRequestReviewComment): number | undefined {
+  return (
+    comment.line ??
+    comment.originalLine ??
+    comment.startLine ??
+    comment.originalStartLine
+  );
+}
+
+function isActionablePullRequestReviewComment(comment: PullRequestReviewComment): boolean {
+  const normalizedBody = comment.body.trim().toLowerCase();
+  if (!normalizedBody) {
+    return false;
+  }
+
+  if (comment.inReplyToId !== undefined) {
+    return false;
+  }
+
+  if (!comment.path.trim()) {
+    return false;
+  }
+
+  if (getReviewCommentDisplayLine(comment) === undefined) {
+    return false;
+  }
+
+  return ![
+    /^\+1$/,
+    /^lgtm[.!]?$/,
+    /^looks good(?: to me)?[.!]?$/,
+    /^nice work[.!]?$/,
+    /^great work[.!]?$/,
+    /^thanks[.!]?$/,
+    /^thank you[.!]?$/,
+    /^resolved[.!]?$/,
+    /^done[.!]?$/,
+    /^approved[.!]?$/,
+  ].some((pattern) => pattern.test(normalizedBody));
+}
+
+function formatPullRequestReviewCommentsSnapshot(
+  pullRequest: PullRequestDetails,
+  comments: PullRequestReviewComment[]
+): string {
+  const pullRequestBody = pullRequest.body.trim() || "(No pull request body provided.)";
+  const lines = [
+    "# Pull Request Review Fix Snapshot",
+    "",
+    "## Pull Request",
+    "",
+    `- PR number: ${pullRequest.number}`,
+    `- Title: ${pullRequest.title}`,
+    `- URL: ${pullRequest.url}`,
+    `- Base branch: ${pullRequest.baseRefName}`,
+    `- Head branch: ${pullRequest.headRefName}`,
+    "",
+    "## Body",
+    "",
+    pullRequestBody,
+    "",
+    "## Selected review comments",
+  ];
+
+  for (const [index, comment] of comments.entries()) {
+    lines.push(
+      "",
+      `### Comment ${index + 1}`,
+      "",
+      `- Comment ID: ${comment.id}`,
+      `- Reviewer: ${comment.author}`,
+      `- URL: ${comment.url}`,
+      `- File: ${comment.path}`,
+      `- Line: ${getReviewCommentDisplayLine(comment) ?? "Unknown"}`,
+      `- Side: ${comment.side ?? "Unknown"}`,
+      `- Updated: ${comment.updatedAt}`,
+      "",
+      "#### Comment body",
+      "",
+      comment.body.trim()
+    );
+
+    if (comment.diffHunk?.trim()) {
+      lines.push("", "#### Diff hunk", "", "```diff", comment.diffHunk.trim(), "```");
+    }
   }
 
   lines.push("");
@@ -1060,6 +1212,31 @@ function buildCodexPrompt(
     "- keep code changes focused on the issue snapshot",
     "- follow existing architecture patterns",
     "- if the issue snapshot includes a resolution plan, treat it as the latest plan of record",
+    `- run \`${formatCommandForDisplay(buildCommand)}\` before finishing if code changes are made`,
+    "- do not modify `.git-ai/` unless needed for local workflow artifacts",
+    "- do not commit `.git-ai/` files",
+  ].join("\n");
+}
+
+function buildPullRequestFixCodexPrompt(
+  repoRoot: string,
+  workspace: PullRequestFixWorkspace,
+  buildCommand: string[]
+): string {
+  const snapshotFile = toRepoRelativePath(repoRoot, workspace.snapshotFilePath);
+  const runDir = toRepoRelativePath(repoRoot, workspace.runDir);
+
+  return [
+    "You are working in the current repository.",
+    "",
+    `Read the pull request review fix snapshot at \`${snapshotFile}\` before making changes.`,
+    `Use \`${runDir}\` for run artifacts created by this workflow.`,
+    "",
+    "Instructions to Codex:",
+    "- analyze the repository only as needed for the selected review comments",
+    "- keep code changes focused on addressing the selected review comments",
+    "- follow existing architecture patterns",
+    "- verify each selected comment is fully addressed before finishing",
     `- run \`${formatCommandForDisplay(buildCommand)}\` before finishing if code changes are made`,
     "- do not modify `.git-ai/` unless needed for local workflow artifacts",
     "- do not commit `.git-ai/` files",
@@ -1113,6 +1290,62 @@ function writeIssueWorkspaceFiles(
       "",
       `Created: ${createdAt}`,
       `Issue snapshot: ${toRepoRelativePath(repoRoot, workspace.issueFilePath)}`,
+      `Prompt file: ${toRepoRelativePath(repoRoot, workspace.promptFilePath)}`,
+      "",
+    ].join("\n"),
+    "utf8"
+  );
+}
+
+function writePullRequestFixWorkspaceFiles(
+  repoRoot: string,
+  pullRequest: PullRequestDetails,
+  comments: PullRequestReviewComment[],
+  workspace: PullRequestFixWorkspace,
+  buildCommand: string[]
+): void {
+  const createdAt = new Date().toISOString();
+  const prompt = buildPullRequestFixCodexPrompt(repoRoot, workspace, buildCommand);
+
+  writeFileSync(
+    workspace.snapshotFilePath,
+    formatPullRequestReviewCommentsSnapshot(pullRequest, comments),
+    "utf8"
+  );
+  writeFileSync(workspace.promptFilePath, `${prompt}\n`, "utf8");
+  writeFileSync(
+    workspace.metadataFilePath,
+    `${JSON.stringify(
+      {
+        createdAt,
+        prNumber: pullRequest.number,
+        prTitle: pullRequest.title,
+        prUrl: pullRequest.url,
+        baseRefName: pullRequest.baseRefName,
+        headRefName: pullRequest.headRefName,
+        snapshotFile: toRepoRelativePath(repoRoot, workspace.snapshotFilePath),
+        promptFile: toRepoRelativePath(repoRoot, workspace.promptFilePath),
+        outputLog: toRepoRelativePath(repoRoot, workspace.outputLogPath),
+        runDir: toRepoRelativePath(repoRoot, workspace.runDir),
+        selectedComments: comments.map((comment) => ({
+          id: comment.id,
+          path: comment.path,
+          line: getReviewCommentDisplayLine(comment),
+          url: comment.url,
+        })),
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+  writeFileSync(
+    workspace.outputLogPath,
+    [
+      "# git-ai pr fix-comments run log",
+      "",
+      `Created: ${createdAt}`,
+      `Snapshot file: ${toRepoRelativePath(repoRoot, workspace.snapshotFilePath)}`,
       `Prompt file: ${toRepoRelativePath(repoRoot, workspace.promptFilePath)}`,
       "",
     ].join("\n"),
@@ -1206,10 +1439,13 @@ function runTrackedCommand(
   }
 }
 
-function runCodex(repoRoot: string, workspace: IssueWorkspace): void {
+function runCodex(
+  repoRoot: string,
+  workspace: { promptFilePath: string; outputLogPath: string }
+): void {
   if (!canRunCommand("codex")) {
     throw new Error(
-      "The `codex` CLI is not available on PATH. Install it before running `git-ai issue`."
+      "The `codex` CLI is not available on PATH. Install it before running interactive git-ai Codex workflows."
     );
   }
 
@@ -1266,7 +1502,7 @@ function verifyBuild(repoRoot: string, buildCommand: string[], outputLogPath: st
   );
 }
 
-function commitIssueChanges(repoRoot: string, issueNumber: number): void {
+function commitGeneratedChanges(repoRoot: string, commitMessage: string): void {
   if (!hasChanges(repoRoot)) {
     throw new Error("Codex completed without producing any file changes to commit.");
   }
@@ -1274,8 +1510,8 @@ function commitIssueChanges(repoRoot: string, issueNumber: number): void {
   runInteractiveCommand("git", ["add", "."], "Failed to stage the generated changes.", repoRoot);
   runInteractiveCommand(
     "git",
-    ["commit", "-m", `feat: address issue #${issueNumber}`],
-    "Failed to create the issue commit.",
+    ["commit", "-m", commitMessage],
+    "Failed to create the generated commit.",
     repoRoot
   );
 }
@@ -1531,6 +1767,141 @@ async function runReviewCommand(): Promise<void> {
   process.stdout.write(`${formatPRReviewMarkdown(result, issue, options.issueNumber)}\n`);
 }
 
+function summarizeReviewCommentBody(body: string): string {
+  const normalized = body.replace(/\s+/g, " ").trim();
+  if (normalized.length <= 140) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, 137)}...`;
+}
+
+function formatReviewCommentLocation(comment: PullRequestReviewComment): string {
+  const line = getReviewCommentDisplayLine(comment);
+  return line !== undefined ? `${comment.path}:${line}` : comment.path;
+}
+
+function printPullRequestReviewComments(
+  pullRequest: PullRequestDetails,
+  comments: PullRequestReviewComment[]
+): void {
+  console.log(`Actionable review comments for PR #${pullRequest.number}: ${pullRequest.title}`);
+  for (const [index, comment] of comments.entries()) {
+    console.log(
+      `${index + 1}. ${formatReviewCommentLocation(comment)} by ${comment.author} (comment ${comment.id})`
+    );
+    console.log(`   ${summarizeReviewCommentBody(comment.body)}`);
+  }
+}
+
+function shouldCommitGeneratedChanges(response: string): boolean {
+  const normalized = response.trim().toLowerCase();
+  if (!normalized) {
+    return true;
+  }
+
+  return ["y", "yes"].includes(normalized);
+}
+
+async function selectPullRequestReviewComments(
+  pullRequest: PullRequestDetails,
+  comments: PullRequestReviewComment[]
+): Promise<PullRequestReviewComment[]> {
+  printPullRequestReviewComments(pullRequest, comments);
+  const selection = await promptForLine(
+    "Select comments to address [all|none|1,2,...]: "
+  );
+  const selectedIndexes = parseNumberedSelection(
+    selection,
+    comments.length,
+    "comment"
+  );
+
+  return selectedIndexes.map((index) => comments[index]);
+}
+
+async function runPrCommand(): Promise<void> {
+  const repoRoot = getDefaultRepoRoot();
+  const prCommand = parsePrCommandArgs(getCliArgs());
+  const forge = getRepositoryForge(repoRoot);
+  const repositoryConfig = getRepositoryConfig(repoRoot);
+
+  if (forge.type === "none") {
+    throw new Error(
+      "Repository forge support is disabled by .git-ai/config.json. Configure `forge.type` to enable pull request workflows."
+    );
+  }
+
+  ensureCleanWorkingTree(repoRoot);
+
+  console.log(`Fetching pull request #${prCommand.prNumber}...`);
+  const pullRequest = await forge.fetchPullRequestDetails(prCommand.prNumber);
+  const comments = (await forge.fetchPullRequestReviewComments(prCommand.prNumber))
+    .filter(isActionablePullRequestReviewComment)
+    .sort((left, right) => {
+      const pathComparison = left.path.localeCompare(right.path);
+      if (pathComparison !== 0) {
+        return pathComparison;
+      }
+
+      const lineComparison =
+        (getReviewCommentDisplayLine(left) ?? Number.MAX_SAFE_INTEGER) -
+        (getReviewCommentDisplayLine(right) ?? Number.MAX_SAFE_INTEGER);
+      if (lineComparison !== 0) {
+        return lineComparison;
+      }
+
+      return left.id - right.id;
+    });
+
+  if (comments.length === 0) {
+    throw new Error(
+      `No actionable pull request review comments were found for PR #${prCommand.prNumber}.`
+    );
+  }
+
+  const selectedComments = await selectPullRequestReviewComments(pullRequest, comments);
+  if (selectedComments.length === 0) {
+    console.log("No review comments selected. Exiting without changes.");
+    return;
+  }
+
+  const workspace = createPullRequestFixWorkspace(repoRoot, pullRequest.number);
+  writePullRequestFixWorkspaceFiles(
+    repoRoot,
+    pullRequest,
+    selectedComments,
+    workspace,
+    repositoryConfig.buildCommand
+  );
+
+  console.log("Opening an interactive Codex session in this terminal...");
+  console.log("Complete the selected review comment fixes in Codex.");
+  console.log("When Codex exits, git-ai will resume with build and commit steps.");
+  runCodex(repoRoot, workspace);
+
+  console.log("Verifying build...");
+  verifyBuild(repoRoot, repositoryConfig.buildCommand, workspace.outputLogPath);
+
+  if (!hasChanges(repoRoot)) {
+    throw new Error("Codex completed without producing any file changes to commit.");
+  }
+
+  const commitNow = shouldCommitGeneratedChanges(
+    await promptForLine("Commit fixes now? [Y/n]: ")
+  );
+  if (!commitNow) {
+    console.log("Leaving the generated changes uncommitted.");
+    return;
+  }
+
+  console.log("Committing generated changes...");
+  commitGeneratedChanges(
+    repoRoot,
+    `fix: address PR review comments for #${pullRequest.number}`
+  );
+}
+
 function formatTestBacklogMarkdown(
   result: Awaited<ReturnType<typeof analyzeTestBacklog>>,
   createdIssues: CreatedIssueRecord[]
@@ -1692,9 +2063,10 @@ function formatFeatureBacklogMarkdown(
   return lines.join("\n");
 }
 
-function parseBacklogSelection(
+function parseNumberedSelection(
   response: string,
-  maxIndex: number
+  maxIndex: number,
+  itemType = "item"
 ): number[] {
   const normalized = response.trim().toLowerCase();
   if (!normalized || normalized === "none" || normalized === "n") {
@@ -1710,14 +2082,14 @@ function parseBacklogSelection(
     const trimmed = part.trim();
     if (!/^\d+$/.test(trimmed)) {
       throw new Error(
-        `Invalid selection "${trimmed}". Use comma-separated suggestion numbers, "all", or "none".`
+        `Invalid selection "${trimmed}". Use comma-separated ${itemType} numbers, "all", or "none".`
       );
     }
 
     const parsed = Number.parseInt(trimmed, 10);
     if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > maxIndex) {
       throw new Error(
-        `Invalid selection "${trimmed}". Choose values between 1 and ${maxIndex}.`
+        `Invalid selection "${trimmed}". Choose ${itemType} values between 1 and ${maxIndex}.`
       );
     }
 
@@ -1776,9 +2148,10 @@ async function maybeCreateFeatureBacklogIssues(
   const rawSelection = await promptForLine(
     `Create issues for which suggestions? [all|none|${selectionPrompt}]: `
   );
-  const selectedIndexes = parseBacklogSelection(
+  const selectedIndexes = parseNumberedSelection(
     rawSelection,
-    analysis.suggestions.length
+    analysis.suggestions.length,
+    "suggestion"
   ).slice(0, options.maxIssues);
 
   if (selectedIndexes.length === 0) {
@@ -1981,7 +2354,7 @@ async function prepareIssueRun(
 
 function finalizeIssueRun(repoRoot: string, issueNumber: number): void {
   console.log("Committing generated changes...");
-  commitIssueChanges(repoRoot, issueNumber);
+  commitGeneratedChanges(repoRoot, `feat: address issue #${issueNumber}`);
 }
 
 async function runIssueCommand(): Promise<void> {
@@ -2084,12 +2457,13 @@ export async function run(): Promise<void> {
     command !== "commit" &&
     command !== "diff" &&
     command !== "issue" &&
+    command !== "pr" &&
     command !== "review" &&
     command !== "test-backlog" &&
     command !== "feature-backlog"
   ) {
     throw new Error(
-      `Unknown command: ${command}. Supported commands: "commit", "diff", "issue", "review", "test-backlog", "feature-backlog".`
+      `Unknown command: ${command}. Supported commands: "commit", "diff", "issue", "pr", "review", "test-backlog", "feature-backlog".`
     );
   }
 
@@ -2103,6 +2477,11 @@ export async function run(): Promise<void> {
 
   if (command === "issue") {
     await runIssueCommand();
+    return;
+  }
+
+  if (command === "pr") {
+    await runPrCommand();
     return;
   }
 
