@@ -23,7 +23,7 @@ Prerequisites:
 Build the CLI and link it globally from this repository:
 
 ```bash
-cd /path/to/ai-actions
+cd /path/to/git-ai
 pnpm install
 pnpm --filter @git-ai/cli build
 cd packages/cli
@@ -169,7 +169,7 @@ Supported fields:
 
 `.git-ai/` is repository-local working state used by issue and backlog workflows. It is intentionally gitignored and should not be committed.
 
-Think of `.git-ai/` as the working memory for AI-driven workflows. It stores issue snapshots, prompts, and run metadata so local and CI flows stay consistent.
+Think of `.git-ai/` as the working memory for issue, planning, and backlog flows.
 
 Typical contents:
 
