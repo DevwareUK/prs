@@ -1,14 +1,16 @@
 # git-ai
 
-`git-ai` brings AI-assisted Git workflows into the repositories you already work in. Build the CLI from this monorepo once, link it globally, then run commands like `git-ai review` or `git-ai issue draft` inside any Git repository you want to analyze.
+`git-ai` adds an AI engineering workflow layer on top of your Git repository.
 
-Core capabilities:
+Build the CLI from this monorepo once, link it globally, then use it inside any target repository to:
 
-- issue drafting and issue-plan generation
-- local diff summaries and PR-style review
-- issue-to-PR automation for GitHub-backed repositories
-- pull request review, PR assistant, and test-suggestion GitHub Actions
-- repository backlog analysis for testing gaps and feature opportunities
+- review changes like a senior engineer
+- turn rough ideas into structured issues
+- generate issue-resolution plans
+- run issue-to-PR workflows with AI
+- analyze backlog opportunities for testing and product work
+
+The repository also includes GitHub Actions for pull request review, PR assistance, and test suggestions.
 
 ## Quick start
 
@@ -23,12 +25,12 @@ Build the CLI and link it globally from this repository:
 ```bash
 cd /path/to/ai-actions
 pnpm install
-pnpm --filter @git-ai/cli... build
+pnpm --filter @git-ai/cli build
 cd packages/cli
 pnpm link --global
 ```
 
-Create a `.env` file in the repository you want to analyze:
+Create a `.env` file in the target repository:
 
 ```env
 OPENAI_API_KEY=your_key_here
@@ -36,18 +38,18 @@ OPENAI_MODEL=gpt-4o-mini
 OPENAI_BASE_URL=https://api.openai.com/v1
 ```
 
-Then move into that repository and run your first review:
+Then move into that target repository and try the two fastest workflows:
 
 ```bash
 cd /path/to/your-repo
 git-ai review
+git-ai issue draft
 ```
 
 Useful next commands:
 
 ```bash
 git-ai diff
-git-ai issue draft
 git-ai test-backlog --top 5
 ```
 
@@ -58,18 +60,14 @@ You only need extra tooling for advanced workflows:
 
 `git-ai` resolves the active repository from your current Git working tree at runtime. It loads `.env` and `.git-ai/config.json` from that repository root, not from the CLI build location.
 
-## What `git-ai` does
-
-The CLI supports these user-facing workflows:
+## Commands at a glance
 
 - `git-ai commit`: generate a commit message from staged changes
 - `git-ai diff`: summarize `git diff HEAD`
-- `git-ai review`: produce a PR-style review for the current diff or a branch comparison
+- `git-ai review`: review the current diff or a branch comparison
 - `git-ai issue ...`: draft issues, generate issue plans, and run issue-to-PR flows
 - `git-ai test-backlog`: find high-value automated testing gaps
 - `git-ai feature-backlog`: find high-value feature opportunities
-
-The repository also includes Node-based GitHub Actions for PR review, PR assistance, and test suggestions.
 
 ## Typical workflows
 
@@ -170,6 +168,8 @@ Supported fields:
 ### `.git-ai/`
 
 `.git-ai/` is repository-local working state used by issue and backlog workflows. It is intentionally gitignored and should not be committed.
+
+Think of `.git-ai/` as the working memory for AI-driven workflows. It stores issue snapshots, prompts, and run metadata so local and CI flows stay consistent.
 
 Typical contents:
 
