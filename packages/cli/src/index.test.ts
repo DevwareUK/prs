@@ -1380,6 +1380,90 @@ describe("CLI integration", () => {
     );
   });
 
+  it("exits pr fix-tests cleanly when no test suggestions are selected", async () => {
+    const beforeRuns = listRunDirectories();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          number: 94,
+          title: "Allow skipping selected AI test suggestions",
+          body: "",
+          html_url: "https://github.com/DevwareUK/git-ai/pull/94",
+          base: { ref: "main" },
+          head: { ref: "feat/skip-test-suggestions" },
+        })
+      )
+      .mockResolvedValueOnce(
+        createFetchResponse([
+          {
+            id: 804,
+            body: [
+              "<!-- git-ai-test-suggestions -->",
+              "## AI Test Suggestions",
+              "",
+              "### Suggested test areas",
+              "",
+              "#### Verify selection can exit without changes",
+              "- Priority: Medium",
+              "- Why it matters: Users should be able to back out cleanly.",
+            ].join("\n"),
+            html_url: "https://github.com/DevwareUK/git-ai/issues/94#issuecomment-804",
+            updated_at: "2026-03-19T11:30:00Z",
+            user: { login: "github-actions[bot]", type: "Bot" },
+          },
+        ])
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { run, spawnSync } = await loadCli({
+      readlineAnswers: ["none"],
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          return "";
+        }
+
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/git-ai.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "pnpm" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.argv = ["node", "git-ai", "pr", "fix-tests", "94"];
+
+    await run();
+
+    expect(listRunDirectories()).toEqual(beforeRuns);
+    expect(spawnSync).not.toHaveBeenCalledWith(
+      "codex",
+      expect.any(Array),
+      expect.any(Object)
+    );
+    expect(spawnSync).not.toHaveBeenCalledWith(
+      "pnpm",
+      ["build"],
+      expect.any(Object)
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("fails pr fix-tests clearly when no managed AI test suggestions comment exists", async () => {
     const fetchMock = vi
       .fn()

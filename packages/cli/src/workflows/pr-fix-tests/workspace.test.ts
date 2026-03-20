@@ -157,4 +157,52 @@ describe("pr-fix-tests workspace", () => {
     expect(outputLog).toContain("Snapshot file: .git-ai/runs/");
     expect(outputLog).toContain("Prompt file: .git-ai/runs/");
   });
+
+  it("formats the configured build command in the generated Codex prompt", () => {
+    const repoRoot = createTempRepoRoot();
+    const workspace = createPullRequestFixTestsWorkspace(repoRoot, 88);
+
+    writePullRequestFixTestsWorkspaceFiles(
+      repoRoot,
+      {
+        number: 88,
+        title: "Test prompt build command formatting",
+        body: "",
+        url: "https://github.com/DevwareUK/git-ai/pull/88",
+        baseRefName: "main",
+        headRefName: "feat/prompt-build-command-formatting",
+      },
+      [
+        {
+          suggestionId: "suggestion-1",
+          area: "Verify prompt build command formatting",
+          priority: "medium",
+          value: "Prompt instructions should reflect the configured verification command.",
+          likelyLocations: [],
+        },
+      ],
+      {
+        sourceComment: {
+          id: 901,
+          body: "<!-- git-ai-test-suggestions -->",
+          url: "https://github.com/DevwareUK/git-ai/pull/88#issuecomment-901",
+          createdAt: "2026-03-20T12:00:00Z",
+          updatedAt: "2026-03-20T12:00:00Z",
+          author: "github-actions[bot]",
+          isBot: true,
+        },
+        overview: "",
+        suggestions: [],
+        edgeCases: [],
+        likelyLocations: [],
+      },
+      workspace,
+      ["pnpm", "exec", "vitest", "--project", "cli smoke"],
+      []
+    );
+
+    expect(readFileSync(workspace.promptFilePath, "utf8")).toContain(
+      '- run `pnpm exec vitest --project "cli smoke"` before finishing if code changes are made'
+    );
+  });
 });

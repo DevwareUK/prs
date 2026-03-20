@@ -190,6 +190,77 @@ describe("runPrFixTestsCommand", () => {
     expect(promptForLine).toHaveBeenNthCalledWith(2, "Commit fixes now? [Y/n]: ");
   });
 
+  it("uses the newest managed AI test suggestions comment when multiple candidates exist", async () => {
+    const olderComment = createManagedComment(
+      [
+        "<!-- git-ai-test-suggestions -->",
+        "## AI Test Suggestions",
+        "",
+        "### Suggested test areas",
+        "",
+        "#### Older suggestion",
+        "- Priority: Low",
+        "- Why it matters: Older comments should not win selection.",
+      ].join("\n")
+    );
+    const newerComment = {
+      ...createManagedComment(
+        [
+          "<!-- git-ai-test-suggestions -->",
+          "## AI Test Suggestions",
+          "",
+          "### Suggested test areas",
+          "",
+          "#### Newer suggestion",
+          "- Priority: High",
+          "- Why it matters: The most recent managed comment should drive the workflow.",
+          "- Likely locations: `packages/cli/src/workflows/pr-fix-tests/run.test.ts`",
+        ].join("\n")
+      ),
+      id: 802,
+      updatedAt: "2026-03-20T11:45:00Z",
+    };
+    const { forge } = createForge([olderComment, newerComment]);
+    const promptForLine = vi.fn().mockResolvedValueOnce("1").mockResolvedValueOnce("n");
+    const runCodex = vi.fn();
+    const verifyBuild = vi.fn();
+    const hasChanges = vi.fn().mockReturnValue(true);
+    const commitGeneratedChanges = vi.fn();
+
+    await runPrFixTestsCommand({
+      prNumber: 71,
+      repoRoot,
+      buildCommand: ["pnpm", "build"],
+      forge,
+      ensureCleanWorkingTree: vi.fn(),
+      promptForLine,
+      runCodex,
+      verifyBuild,
+      hasChanges,
+      commitGeneratedChanges,
+    });
+
+    expect(writePullRequestFixTestsWorkspaceFiles).toHaveBeenCalledWith(
+      repoRoot,
+      expect.objectContaining({ number: 71 }),
+      [
+        expect.objectContaining({
+          area: "Newer suggestion",
+          priority: "high",
+        }),
+      ],
+      expect.objectContaining({
+        sourceComment: expect.objectContaining({ id: 802 }),
+      }),
+      workspace,
+      ["pnpm", "build"],
+      expect.any(Array)
+    );
+    expect(runCodex).toHaveBeenCalledWith(repoRoot, workspace);
+    expect(verifyBuild).toHaveBeenCalledWith(repoRoot, ["pnpm", "build"], workspace.outputLogPath);
+    expect(commitGeneratedChanges).not.toHaveBeenCalled();
+  });
+
   it("exits without Codex or workspace writes when no test suggestions are selected", async () => {
     const { forge } = createForge([
       createManagedComment(
@@ -229,6 +300,89 @@ describe("runPrFixTestsCommand", () => {
     expect(runCodex).not.toHaveBeenCalled();
     expect(verifyBuild).not.toHaveBeenCalled();
     expect(hasChanges).not.toHaveBeenCalled();
+    expect(commitGeneratedChanges).not.toHaveBeenCalled();
+    expect(promptForLine).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves generated changes uncommitted when the user declines the commit prompt", async () => {
+    const { forge } = createForge([
+      createManagedComment(
+        [
+          "<!-- git-ai-test-suggestions -->",
+          "## AI Test Suggestions",
+          "",
+          "### Suggested test areas",
+          "",
+          "#### Verify post-Codex workflow",
+          "- Priority: High",
+          "- Why it matters: Users may want to inspect changes before committing.",
+        ].join("\n")
+      ),
+    ]);
+    const promptForLine = vi.fn().mockResolvedValueOnce("1").mockResolvedValueOnce("n");
+    const runCodex = vi.fn();
+    const verifyBuild = vi.fn();
+    const hasChanges = vi.fn().mockReturnValue(true);
+    const commitGeneratedChanges = vi.fn();
+
+    await runPrFixTestsCommand({
+      prNumber: 71,
+      repoRoot,
+      buildCommand: ["pnpm", "build"],
+      forge,
+      ensureCleanWorkingTree: vi.fn(),
+      promptForLine,
+      runCodex,
+      verifyBuild,
+      hasChanges,
+      commitGeneratedChanges,
+    });
+
+    expect(runCodex).toHaveBeenCalledWith(repoRoot, workspace);
+    expect(verifyBuild).toHaveBeenCalledWith(repoRoot, ["pnpm", "build"], workspace.outputLogPath);
+    expect(hasChanges).toHaveBeenCalledWith(repoRoot);
+    expect(commitGeneratedChanges).not.toHaveBeenCalled();
+    expect(promptForLine).toHaveBeenNthCalledWith(2, "Commit fixes now? [Y/n]: ");
+  });
+
+  it("fails clearly when Codex completes without producing any file changes", async () => {
+    const { forge } = createForge([
+      createManagedComment(
+        [
+          "<!-- git-ai-test-suggestions -->",
+          "## AI Test Suggestions",
+          "",
+          "### Suggested test areas",
+          "",
+          "#### Verify post-Codex workflow",
+          "- Priority: High",
+          "- Why it matters: Empty Codex runs should fail before any commit prompt.",
+        ].join("\n")
+      ),
+    ]);
+    const promptForLine = vi.fn().mockResolvedValueOnce("1");
+    const runCodex = vi.fn();
+    const verifyBuild = vi.fn();
+    const hasChanges = vi.fn().mockReturnValue(false);
+    const commitGeneratedChanges = vi.fn();
+
+    await expect(
+      runPrFixTestsCommand({
+        prNumber: 71,
+        repoRoot,
+        buildCommand: ["pnpm", "build"],
+        forge,
+        ensureCleanWorkingTree: vi.fn(),
+        promptForLine,
+        runCodex,
+        verifyBuild,
+        hasChanges,
+        commitGeneratedChanges,
+      })
+    ).rejects.toThrow("Codex completed without producing any file changes to commit.");
+
+    expect(runCodex).toHaveBeenCalledWith(repoRoot, workspace);
+    expect(verifyBuild).toHaveBeenCalledWith(repoRoot, ["pnpm", "build"], workspace.outputLogPath);
     expect(commitGeneratedChanges).not.toHaveBeenCalled();
     expect(promptForLine).toHaveBeenCalledTimes(1);
   });
