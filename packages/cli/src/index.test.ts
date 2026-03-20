@@ -535,6 +535,16 @@ describe("CLI integration", () => {
     });
   });
 
+  it("parses pr fix-tests as a dedicated pr subcommand", async () => {
+    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    const { parsePrCommandArgs } = await loadCli();
+
+    expect(parsePrCommandArgs(["pr", "fix-tests", "74"])).toEqual({
+      action: "fix-tests",
+      prNumber: 74,
+    });
+  });
+
   it("parses repo-level test-backlog flags for the CLI", async () => {
     process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
     const { parseTestBacklogCommandArgs } = await import("./index");
@@ -1214,6 +1224,276 @@ describe("CLI integration", () => {
       ],
     });
     expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("runs pr fix-tests, writes run artifacts, verifies the build, and commits the result", async () => {
+    const beforeRuns = listRunDirectories();
+    let gitStatusCallCount = 0;
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          number: 91,
+          title: "Close the AI test suggestions implementation loop",
+          body: "Apply selected AI-generated test suggestions with Codex.",
+          html_url: "https://github.com/DevwareUK/git-ai/pull/91",
+          base: { ref: "main" },
+          head: { ref: "feat/pr-fix-tests" },
+        })
+      )
+      .mockResolvedValueOnce(
+        createFetchResponse([
+          {
+            id: 801,
+            body: [
+              "<!-- git-ai-test-suggestions -->",
+              "## AI Test Suggestions",
+              "",
+              "### Overview",
+              "The PR changes the CLI flow and needs focused integration coverage.",
+              "",
+              "### Suggested test areas",
+              "",
+              "#### Verify prompt generation for selected test suggestions",
+              "- Priority: High",
+              "- Why it matters: The Codex handoff should preserve the selected test context.",
+              "- Likely locations: `packages/cli/src/index.test.ts`, `packages/cli/src/workflows/pr-fix-tests/workspace.ts`",
+              "",
+              "#### Verify managed comment parsing failure cases",
+              "- Priority: Medium",
+              "- Why it matters: The command should fail clearly when the managed comment is malformed.",
+              "- Likely locations: `packages/cli/src/index.test.ts`",
+              "",
+              "### Edge cases",
+              "- The marker exists but the suggested test areas section is missing.",
+              "",
+              "### Likely places to add tests",
+              "- `packages/cli/src/index.test.ts`",
+            ].join("\n"),
+            html_url: "https://github.com/DevwareUK/git-ai/issues/91#issuecomment-801",
+            updated_at: "2026-03-19T10:00:00Z",
+            user: { login: "github-actions[bot]", type: "Bot" },
+          },
+        ])
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { run, spawnSync } = await loadCli({
+      readlineAnswers: ["2", "y"],
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          gitStatusCallCount += 1;
+          return gitStatusCallCount === 1 ? "" : " M packages/cli/src/index.test.ts\n";
+        }
+
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/git-ai.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "codex") {
+          return { status: 0 };
+        }
+
+        if (command === "pnpm" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "pnpm" && args[0] === "build") {
+          return { status: 0, stdout: "built\n", stderr: "" };
+        }
+
+        if (command === "git" && args[0] === "add") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "commit") {
+          return { status: 0 };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.argv = ["node", "git-ai", "pr", "fix-tests", "91"];
+
+    await run();
+
+    const createdRun = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
+    expect(createdRun).toBeDefined();
+
+    const runDirPath = resolve(REPO_ROOT, ".git-ai", "runs", createdRun as string);
+    const snapshotFilePath = resolve(runDirPath, "pr-test-suggestions.md");
+    const promptFilePath = resolve(runDirPath, "prompt.md");
+    const metadataFilePath = resolve(runDirPath, "metadata.json");
+    const outputLogPath = resolve(runDirPath, "output.log");
+    cleanupTargets.add(runDirPath);
+
+    expect(readFileSync(snapshotFilePath, "utf8")).toContain(
+      "# Pull Request Test Suggestions Fix Snapshot"
+    );
+    expect(readFileSync(snapshotFilePath, "utf8")).toContain(
+      "Suggestion 1: Verify managed comment parsing failure cases"
+    );
+    expect(readFileSync(snapshotFilePath, "utf8")).not.toContain(
+      "Verify prompt generation for selected test suggestions"
+    );
+    expect(readFileSync(promptFilePath, "utf8")).toContain(
+      "Read the pull request test suggestions fix snapshot"
+    );
+    expect(readFileSync(promptFilePath, "utf8")).toContain(
+      "implementing automated tests for the selected areas"
+    );
+    expect(readFileSync(outputLogPath, "utf8")).toContain("# git-ai pr fix-tests run log");
+    expect(JSON.parse(readFileSync(metadataFilePath, "utf8"))).toMatchObject({
+      prNumber: 91,
+      prTitle: "Close the AI test suggestions implementation loop",
+      sourceComment: {
+        id: 801,
+        url: "https://github.com/DevwareUK/git-ai/issues/91#issuecomment-801",
+      },
+      selectedSuggestions: [
+        {
+          area: "Verify managed comment parsing failure cases",
+          priority: "medium",
+          likelyLocations: ["packages/cli/src/index.test.ts"],
+        },
+      ],
+      edgeCases: ["The marker exists but the suggested test areas section is missing."],
+      likelyLocations: ["packages/cli/src/index.test.ts"],
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(spawnSync).toHaveBeenCalledWith(
+      "git",
+      ["commit", "-m", "test: address AI test suggestions for PR #91"],
+      expect.any(Object)
+    );
+  });
+
+  it("fails pr fix-tests clearly when no managed AI test suggestions comment exists", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          number: 92,
+          title: "No managed AI test suggestions comment",
+          body: "",
+          html_url: "https://github.com/DevwareUK/git-ai/pull/92",
+          base: { ref: "main" },
+          head: { ref: "feat/no-managed-test-comment" },
+        })
+      )
+      .mockResolvedValueOnce(
+        createFetchResponse([
+          {
+            id: 802,
+            body: "Human discussion without the managed marker.",
+            html_url: "https://github.com/DevwareUK/git-ai/issues/92#issuecomment-802",
+            updated_at: "2026-03-19T10:30:00Z",
+            user: { login: "reviewer-a", type: "User" },
+          },
+        ])
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { run } = await loadCli({
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          return "";
+        }
+
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/git-ai.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.argv = ["node", "git-ai", "pr", "fix-tests", "92"];
+
+    await expect(run()).rejects.toThrow(
+      "No managed AI test suggestions comment was found for PR #92."
+    );
+  });
+
+  it("fails pr fix-tests clearly when the managed AI test suggestions comment cannot be parsed", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          number: 93,
+          title: "Malformed managed AI test suggestions comment",
+          body: "",
+          html_url: "https://github.com/DevwareUK/git-ai/pull/93",
+          base: { ref: "main" },
+          head: { ref: "feat/malformed-managed-test-comment" },
+        })
+      )
+      .mockResolvedValueOnce(
+        createFetchResponse([
+          {
+            id: 803,
+            body: [
+              "<!-- git-ai-test-suggestions -->",
+              "## AI Test Suggestions",
+              "",
+              "### Suggested test areas",
+              "",
+              "#### Missing Why Field",
+              "- Priority: High",
+            ].join("\n"),
+            html_url: "https://github.com/DevwareUK/git-ai/issues/93#issuecomment-803",
+            updated_at: "2026-03-19T11:00:00Z",
+            user: { login: "github-actions[bot]", type: "Bot" },
+          },
+        ])
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { run } = await loadCli({
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          return "";
+        }
+
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/git-ai.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.argv = ["node", "git-ai", "pr", "fix-tests", "93"];
+
+    await expect(run()).rejects.toThrow(
+      'Failed to parse the managed AI test suggestions comment for PR #93. Suggestion "Missing Why Field" is missing a Why it matters field.'
+    );
   });
 
   it("fails pr fix-comments clearly when no actionable review comments remain after filtering", async () => {

@@ -9,6 +9,7 @@ Build the CLI from this monorepo once, link it globally, then use it inside any 
 - generate issue-resolution plans
 - run issue-to-PR workflows with AI
 - apply selected pull request review comments with Codex
+- implement selected AI pull request test suggestions with Codex
 - analyze backlog opportunities for testing and product work
 
 The repository also includes GitHub Actions for pull request review, PR assistance, and test suggestions.
@@ -62,7 +63,7 @@ git-ai test-backlog --top 5
 
 You only need extra tooling for advanced workflows:
 
-- `codex` on `PATH` for full local `git-ai issue <number>` runs and `git-ai pr fix-comments <pr-number>`
+- `codex` on `PATH` for full local `git-ai issue <number>` runs, `git-ai pr fix-comments <pr-number>`, and `git-ai pr fix-tests <pr-number>`
 - `gh`, `GH_TOKEN`, or `GITHUB_TOKEN` for GitHub-backed issue and pull request flows
 
 `git-ai` resolves the active repository from your current Git working tree at runtime. It loads `.env` and `.git-ai/config.json` from that repository root, not from the CLI build location.
@@ -74,6 +75,7 @@ You only need extra tooling for advanced workflows:
 - `git-ai review`: review the current diff or a branch comparison
 - `git-ai issue ...`: draft issues, generate issue plans, and run issue-to-PR flows
 - `git-ai pr fix-comments <pr-number>`: fix selected PR review comments with Codex
+- `git-ai pr fix-tests <pr-number>`: implement selected AI PR test suggestions with Codex
 - `git-ai test-backlog`: find high-value automated testing gaps
 - `git-ai feature-backlog`: find high-value feature opportunities
 
@@ -129,6 +131,16 @@ Use this when the PR branch is already checked out locally and you want `git-ai`
 
 Nearby comments on the same file are grouped into optional review tasks, non-trivial reply comments are kept as thread context, and the generated `.git-ai/runs/.../pr-review-comments.md` snapshot includes linked issue context plus local file excerpts when available.
 
+### Fix pull request test suggestions
+
+```bash
+git-ai pr fix-tests 88
+```
+
+Use this when the PR branch is already checked out locally and you want `git-ai` to fetch the managed AI Test Suggestions comment, let you choose which structured test suggestions to implement, open Codex with a focused test-oriented prompt, run the configured build command, and optionally commit the result.
+
+The command parses the managed `<!-- git-ai-test-suggestions -->` PR comment conservatively, keeps the selected suggestion areas plus likely file locations in `.git-ai/runs/.../pr-test-suggestions.md`, and fails clearly if the managed comment is missing or malformed.
+
 ### Repository backlog analysis
 
 ```bash
@@ -180,7 +192,7 @@ Supported fields:
 
 - `aiContext.excludePaths`: repository-relative glob patterns excluded from AI diff and repository context. These exclusions apply across `git-ai commit`, `git-ai diff`, `git-ai review`, issue-to-PR flows, and repository backlog scans. Bare filename globs like `*.map` match by basename anywhere in the repository. Defaults: `["**/node_modules/**", "**/vendor/**", "**/dist/**", "**/build/**", "*.map"]`.
 - `baseBranch`: default pull request base branch for `git-ai issue <number>`. Default: `main`.
-- `buildCommand`: command run after Codex exits during full local `git-ai issue <number>` and `git-ai pr fix-comments <pr-number>` flows. Default: `["pnpm", "build"]`.
+- `buildCommand`: command run after Codex exits during full local `git-ai issue <number>`, `git-ai pr fix-comments <pr-number>`, and `git-ai pr fix-tests <pr-number>` flows. Default: `["pnpm", "build"]`.
 - `forge.type`: forge integration. Use `"github"` for GitHub-backed issue and PR flows or `"none"` to disable forge-backed issue and PR features for the repository.
 
 ### `.git-ai/`
@@ -269,6 +281,7 @@ Usage:
 
 ```bash
 git-ai pr fix-comments <pr-number>
+git-ai pr fix-tests <pr-number>
 ```
 
 Available subcommands:
@@ -276,16 +289,20 @@ Available subcommands:
 | Command | What it does |
 | --- | --- |
 | `git-ai pr fix-comments <pr-number>` | Fetches pull request metadata and review comments from the configured forge, filters out obviously non-actionable comments, groups nearby threads into selectable review tasks, preserves non-trivial replies as thread context, writes richer `.git-ai/` run artifacts, opens an interactive Codex session, runs the configured build command, and optionally commits the resulting fixes. |
+| `git-ai pr fix-tests <pr-number>` | Fetches pull request metadata and PR issue comments from the configured forge, finds the managed AI Test Suggestions comment, parses structured suggestion areas into selectable tasks, writes focused `.git-ai/` run artifacts, opens an interactive Codex session, runs the configured build command, and optionally commits the resulting test changes. |
 
 Important behavior:
 
 - `git-ai pr fix-comments <pr-number>` requires a clean working tree before it starts
+- `git-ai pr fix-tests <pr-number>` requires a clean working tree before it starts
 - local PR comment-fix runs require the `codex` CLI on `PATH`
-- PR comment-fix runs execute the configured `buildCommand`, defaulting to `pnpm build`
+- local PR test-fix runs require the `codex` CLI on `PATH`
+- PR comment-fix and test-fix runs execute the configured `buildCommand`, defaulting to `pnpm build`
 - the command expects the relevant PR branch to already be checked out locally before Codex starts editing
 - the interactive selector accepts numbered thread choices and, when available, grouped task choices like `g1`; `all` still selects every individual thread
+- `git-ai pr fix-tests <pr-number>` accepts `all`, `none`, or a comma-separated suggestion list like `1,2`
 - when `forge.type` is `github`, PR fetching uses `gh pr view` when available, otherwise the GitHub API
-- when `forge.type` is `github`, GitHub API access for PR metadata and review comments uses `GH_TOKEN` or `GITHUB_TOKEN` when present
+- when `forge.type` is `github`, GitHub API access for PR metadata, review comments, and PR issue comments uses `GH_TOKEN` or `GITHUB_TOKEN` when present
 - when `forge.type` is `none`, pull request workflows are disabled for the repository
 
 ### `git-ai review`

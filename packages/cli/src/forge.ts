@@ -14,6 +14,16 @@ export type IssuePlanComment = {
   updatedAt: string;
 };
 
+export type RepositoryComment = {
+  id: number;
+  body: string;
+  url: string;
+  createdAt: string;
+  updatedAt: string;
+  author: string;
+  isBot: boolean;
+};
+
 export type PullRequestDetails = {
   number: number;
   title: string;
@@ -62,6 +72,7 @@ export interface RepositoryForge {
   fetchIssueDetails(issueNumber: number): Promise<IssueDetails>;
   fetchIssuePlanComment(issueNumber: number): Promise<IssuePlanComment | undefined>;
   fetchPullRequestDetails(prNumber: number): Promise<PullRequestDetails>;
+  fetchPullRequestIssueComments(prNumber: number): Promise<RepositoryComment[]>;
   fetchPullRequestReviewComments(prNumber: number): Promise<PullRequestReviewComment[]>;
   createIssuePlanComment(issueNumber: number, body: string): Promise<IssuePlanComment>;
   createDraftIssue(title: string, body: string): Promise<string>;
@@ -93,6 +104,12 @@ class NoopRepositoryForge implements RepositoryForge {
   }
 
   async fetchPullRequestDetails(): Promise<PullRequestDetails> {
+    throw new Error(
+      "Repository forge support is disabled by .git-ai/config.json. Configure `forge.type` to enable pull request workflows."
+    );
+  }
+
+  async fetchPullRequestIssueComments(): Promise<RepositoryComment[]> {
     throw new Error(
       "Repository forge support is disabled by .git-ai/config.json. Configure `forge.type` to enable pull request workflows."
     );

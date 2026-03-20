@@ -6,6 +6,7 @@ import type {
   IssueDetails,
   IssuePlanComment,
   PullRequestDetails,
+  RepositoryComment,
   PullRequestReviewComment,
   RepositoryForge,
 } from "./forge";
@@ -159,7 +160,7 @@ async function listIssueComments(
   owner: string,
   repo: string,
   issueNumber: number
-): Promise<IssuePlanComment[]> {
+): Promise<RepositoryComment[]> {
   const token = tryResolveGitHubApiToken();
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
@@ -185,7 +186,9 @@ async function listIssueComments(
     id?: number;
     body?: string | null;
     html_url?: string;
+    created_at?: string;
     updated_at?: string;
+    user?: { login?: string; type?: string };
   }>;
 
   return payload
@@ -194,7 +197,10 @@ async function listIssueComments(
       id: comment.id as number,
       body: comment.body as string,
       url: comment.html_url as string,
+      createdAt: (comment.created_at ?? comment.updated_at) as string,
       updatedAt: comment.updated_at as string,
+      author: comment.user?.login ?? "unknown",
+      isBot: comment.user?.type === "Bot",
     }));
 }
 
@@ -568,6 +574,11 @@ class GitHubRepositoryForge implements RepositoryForge {
     }
 
     return fetchPullRequestWithApi(owner, repo, prNumber);
+  }
+
+  async fetchPullRequestIssueComments(prNumber: number): Promise<RepositoryComment[]> {
+    const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
+    return listIssueComments(owner, repo, prNumber);
   }
 
   async fetchPullRequestReviewComments(prNumber: number): Promise<PullRequestReviewComment[]> {

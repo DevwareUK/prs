@@ -34,6 +34,7 @@ import {
 import { resolveRuntimeRepoRoot } from "./repo-root";
 import { formatRunTimestamp, toRepoRelativePath } from "./run-artifacts";
 import { runPrFixCommentsCommand } from "./workflows/pr-fix-comments/run";
+import { runPrFixTestsCommand } from "./workflows/pr-fix-tests/run";
 
 type IssueWorkspace = {
   issueDir: string;
@@ -1528,7 +1529,23 @@ async function runPrCommand(): Promise<void> {
   const prCommand = parsePrCommandArgs(getCliArgs());
   const repositoryConfig = getRepositoryConfig(repoRoot);
 
-  await runPrFixCommentsCommand({
+  if (prCommand.action === "fix-comments") {
+    await runPrFixCommentsCommand({
+      prNumber: prCommand.prNumber,
+      repoRoot,
+      buildCommand: repositoryConfig.buildCommand,
+      forge: getRepositoryForge(repoRoot),
+      ensureCleanWorkingTree,
+      promptForLine,
+      runCodex,
+      verifyBuild,
+      hasChanges,
+      commitGeneratedChanges,
+    });
+    return;
+  }
+
+  await runPrFixTestsCommand({
     prNumber: prCommand.prNumber,
     repoRoot,
     buildCommand: repositoryConfig.buildCommand,

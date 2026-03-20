@@ -1,11 +1,12 @@
 export type PrCommandOptions = {
-  action: "fix-comments";
+  action: "fix-comments" | "fix-tests";
   prNumber: number;
 };
 
 export const PR_USAGE = [
   "Usage:",
   "  git-ai pr fix-comments <pr-number>",
+  "  git-ai pr fix-tests <pr-number>",
 ].join("\n");
 
 export function parsePrCommandArgs(
@@ -15,7 +16,7 @@ export function parsePrCommandArgs(
   const prArgs = args.slice(1);
   const subcommand = prArgs[0];
 
-  if (subcommand !== "fix-comments") {
+  if (subcommand !== "fix-comments" && subcommand !== "fix-tests") {
     throw new Error(`Unknown pr subcommand "${subcommand ?? ""}". ${PR_USAGE}`);
   }
 
@@ -25,7 +26,7 @@ export function parsePrCommandArgs(
   }
 
   return {
-    action: "fix-comments",
+    action: subcommand,
     prNumber: parseIssueNumber(prArgs[1]),
   };
 }
