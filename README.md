@@ -4,6 +4,7 @@
 
 Build the CLI from this monorepo once, link it globally, then use it inside any target repository to:
 
+- configure repository-local `git-ai` defaults with a guided setup flow
 - review changes like a senior engineer
 - turn rough ideas into structured issues
 - generate issue-resolution plans
@@ -44,12 +45,20 @@ OPENAI_MODEL=gpt-4o-mini
 OPENAI_BASE_URL=https://api.openai.com/v1
 ```
 
+Then run the guided repository setup:
+
+```bash
+cd /path/to/your-repo
+git-ai setup
+```
+
+`git-ai setup` detects the repository root, suggests repo-aware defaults, writes `.git-ai/config.json`, ensures `.git-ai/` is gitignored, and can create or update a managed `AGENTS.md` guidance section.
+
 ### First successful run
 
 Move into that target repository and try the two fastest workflows:
 
 ```bash
-cd /path/to/your-repo
 git-ai review
 git-ai issue draft
 ```
@@ -72,6 +81,7 @@ You only need extra tooling for advanced workflows:
 
 - `git-ai commit`: generate a commit message from staged changes
 - `git-ai diff`: summarize `git diff HEAD`
+- `git-ai setup`: guided repository onboarding for `git-ai`
 - `git-ai review`: review the current diff or a branch comparison
 - `git-ai issue ...`: draft issues, generate issue plans, and run issue-to-PR flows
 - `git-ai pr fix-comments <pr-number>`: fix selected PR review comments with Codex
@@ -166,7 +176,7 @@ OPENAI_BASE_URL=https://api.openai.com/v1
 
 ### `.git-ai/config.json`
 
-Optional repository-specific defaults live in `.git-ai/config.json`:
+Optional repository-specific defaults live in `.git-ai/config.json`. `git-ai setup` can generate or update this file for you:
 
 ```json
 {
@@ -197,7 +207,7 @@ Supported fields:
 
 ### `.git-ai/`
 
-`.git-ai/` is repository-local working state used by issue and backlog workflows. It is intentionally gitignored and should not be committed.
+`.git-ai/` is repository-local working state used by issue and backlog workflows. It is intentionally gitignored and should not be committed. `git-ai setup` will add `.git-ai/` to `.gitignore` when needed.
 
 Think of `.git-ai/` as the working memory for issue, planning, and backlog flows.
 
@@ -236,6 +246,16 @@ Requirements:
 - the repository must already have at least one commit
 - there must be changes in `git diff HEAD`
 - `OPENAI_API_KEY` must be set
+
+### `git-ai setup`
+
+```bash
+git-ai setup
+```
+
+Runs a guided repository setup flow for the current Git repository. The command inspects the repo, suggests defaults for `baseBranch`, `forge.type`, `buildCommand`, and extra `aiContext.excludePaths`, writes `.git-ai/config.json`, ensures `.git-ai/` is gitignored, and can create or update a managed `AGENTS.md` section with repo-specific guidance.
+
+The setup flow still expects you to create `.env` yourself because it cannot safely write secrets like `OPENAI_API_KEY`.
 
 ### `git-ai issue`
 

@@ -33,8 +33,11 @@ import {
 } from "./forge";
 import { resolveRuntimeRepoRoot } from "./repo-root";
 import { formatRunTimestamp, toRepoRelativePath } from "./run-artifacts";
+import { parseSetupCommandArgs, runSetupCommand } from "./setup";
 import { runPrFixCommentsCommand } from "./workflows/pr-fix-comments/run";
 import { runPrFixTestsCommand } from "./workflows/pr-fix-tests/run";
+
+export { parseSetupCommandArgs };
 
 type IssueWorkspace = {
   issueDir: string;
@@ -2113,6 +2116,7 @@ export async function run(): Promise<void> {
   if (
     command !== "commit" &&
     command !== "diff" &&
+    command !== "setup" &&
     command !== "issue" &&
     command !== "pr" &&
     command !== "review" &&
@@ -2120,7 +2124,7 @@ export async function run(): Promise<void> {
     command !== "feature-backlog"
   ) {
     throw new Error(
-      `Unknown command: ${command}. Supported commands: "commit", "diff", "issue", "pr", "review", "test-backlog", "feature-backlog".`
+      `Unknown command: ${command}. Supported commands: "commit", "diff", "setup", "issue", "pr", "review", "test-backlog", "feature-backlog".`
     );
   }
 
@@ -2134,6 +2138,15 @@ export async function run(): Promise<void> {
 
   if (command === "issue") {
     await runIssueCommand();
+    return;
+  }
+
+  if (command === "setup") {
+    parseSetupCommandArgs(args);
+    await runSetupCommand({
+      repoRoot: getDefaultRepoRoot(),
+      promptForLine,
+    });
     return;
   }
 

@@ -346,6 +346,7 @@ async function loadCli(options: {
   issueResolutionPlanResult?: ReturnType<typeof createIssueResolutionPlanResult>;
   prReviewResult?: ReturnType<typeof createPRReviewResult>;
   readlineAnswers?: string[];
+  runtimeRepoRoot?: string;
   execFileSyncImpl?: (command: string, args: string[]) => string;
   spawnSyncImpl?: (
     command: string,
@@ -384,6 +385,7 @@ async function loadCli(options: {
   if (options.prReviewResult) {
     generatePRReview.mockResolvedValue(options.prReviewResult);
   }
+  const runtimeRepoRoot = options.runtimeRepoRoot ?? REPO_ROOT;
 
   const execFileSync = vi.fn((command: string, args: string[]) => {
     if (
@@ -392,7 +394,7 @@ async function loadCli(options: {
       args[2] === "rev-parse" &&
       args[3] === "--show-toplevel"
     ) {
-      return `${REPO_ROOT}\n`;
+      return `${runtimeRepoRoot}\n`;
     }
 
     if (options.execFileSyncImpl) {
@@ -422,6 +424,9 @@ async function loadCli(options: {
   }));
 
   vi.doMock("@git-ai/core", () => ({
+    DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS,
+    DEFAULT_REPOSITORY_BASE_BRANCH: "main",
+    DEFAULT_REPOSITORY_BUILD_COMMAND: ["pnpm", "build"],
     analyzeFeatureBacklog,
     analyzeTestBacklog,
     filterRepositoryPaths,
@@ -473,6 +478,7 @@ async function loadCli(options: {
     parseIssueCommandArgs: module.parseIssueCommandArgs,
     parsePrCommandArgs: module.parsePrCommandArgs,
     parseReviewCommandArgs: module.parseReviewCommandArgs,
+    parseSetupCommandArgs: module.parseSetupCommandArgs,
     analyzeFeatureBacklog,
     analyzeTestBacklog,
     generateCommitMessage,
@@ -620,6 +626,15 @@ describe("CLI integration", () => {
       format: "json",
       issueNumber: 50,
     });
+  });
+
+  it("rejects unexpected setup arguments", async () => {
+    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    const { parseSetupCommandArgs } = await loadCli();
+
+    expect(() => parseSetupCommandArgs(["setup", "--force"])).toThrow(
+      'Unknown setup option "--force". Usage:\n  git-ai setup'
+    );
   });
 
   it("filters excluded paths from commit diffs", async () => {
@@ -1822,6 +1837,168 @@ describe("CLI integration", () => {
     expect(stdout.output()).toContain(
       "- Draft issue title: Add guided issue templates for feature requests and bug reports"
     );
+  });
+
+  it("runs setup with repo-aware defaults and writes config, gitignore, and AGENTS guidance", async () => {
+    const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-setup-node-"));
+    cleanupTargets.add(repoRoot);
+    mkdirSync(resolve(repoRoot, ".github", "workflows"), { recursive: true });
+    mkdirSync(resolve(repoRoot, "coverage"), { recursive: true });
+    writeFileSync(resolve(repoRoot, "package.json"), JSON.stringify({
+      name: "fixture-node-repo",
+      scripts: {
+        build: "tsup",
+        test: "vitest",
+      },
+    }, null, 2));
+    writeFileSync(resolve(repoRoot, "pnpm-lock.yaml"), "");
+    writeFileSync(resolve(repoRoot, "tsconfig.json"), "{}\n");
+    writeFileSync(resolve(repoRoot, ".gitignore"), "node_modules/\n");
+
+    const { run } = await loadCli({
+      runtimeRepoRoot: repoRoot,
+      readlineAnswers: ["", "", "", "", ""],
+      execFileSyncImpl: (command, args) => {
+        if (
+          command === "git" &&
+          args[0] === "symbolic-ref" &&
+          args[1] === "refs/remotes/origin/HEAD"
+        ) {
+          return "refs/remotes/origin/main\n";
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "remote" &&
+          args[1] === "get-url" &&
+          args[2] === "origin"
+        ) {
+          return "git@github.com:acme/fixture-node-repo.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.argv = ["node", "git-ai", "setup"];
+
+    const messages: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
+      messages.push(String(message ?? ""));
+    });
+
+    await run();
+
+    expect(
+      JSON.parse(readFileSync(resolve(repoRoot, ".git-ai", "config.json"), "utf8"))
+    ).toEqual({
+      aiContext: {
+        excludePaths: ["**/coverage/**"],
+      },
+      baseBranch: "main",
+      buildCommand: ["pnpm", "build"],
+      forge: {
+        type: "github",
+      },
+    });
+    expect(readFileSync(resolve(repoRoot, ".gitignore"), "utf8")).toContain(".git-ai/\n");
+
+    const agentsContent = readFileSync(resolve(repoRoot, "AGENTS.md"), "utf8");
+    expect(agentsContent).toContain("<!-- git-ai:setup:start -->");
+    expect(agentsContent).toContain("Detected stack: TypeScript repository.");
+    expect(agentsContent).toContain("`pnpm build`");
+    expect(agentsContent).toContain("`github`");
+    expect(messages.join("\n")).toContain("Next step: create `.env`");
+  });
+
+  it("updates an existing AGENTS managed section during setup and keeps manual guidance", async () => {
+    const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-setup-drupal-"));
+    cleanupTargets.add(repoRoot);
+    mkdirSync(resolve(repoRoot, "web", "themes", "custom", "site", "css"), {
+      recursive: true,
+    });
+    mkdirSync(resolve(repoRoot, "web", "themes", "custom", "site", "js"), {
+      recursive: true,
+    });
+    mkdirSync(resolve(repoRoot, "web", "sites", "default", "files"), {
+      recursive: true,
+    });
+    writeFileSync(resolve(repoRoot, "composer.json"), JSON.stringify({
+      name: "acme/drupal-site",
+      scripts: {
+        test: ["phpunit"],
+      },
+    }, null, 2));
+    writeFileSync(resolve(repoRoot, ".gitignore"), ".git-ai/\n");
+    writeFileSync(
+      resolve(repoRoot, "AGENTS.md"),
+      [
+        "# Repository Notes",
+        "",
+        "Keep this manual guidance.",
+        "",
+        "<!-- git-ai:setup:start -->",
+        "Old managed setup guidance.",
+        "<!-- git-ai:setup:end -->",
+        "",
+      ].join("\n")
+    );
+
+    const { run } = await loadCli({
+      runtimeRepoRoot: repoRoot,
+      readlineAnswers: ["develop", "none", "", "", ""],
+      execFileSyncImpl: (command, args) => {
+        if (
+          command === "git" &&
+          args[0] === "symbolic-ref" &&
+          args[1] === "refs/remotes/origin/HEAD"
+        ) {
+          return "refs/remotes/origin/main\n";
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "remote" &&
+          args[1] === "get-url" &&
+          args[2] === "origin"
+        ) {
+          return "git@gitlab.com:acme/drupal-site.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.argv = ["node", "git-ai", "setup"];
+    await run();
+
+    expect(
+      JSON.parse(readFileSync(resolve(repoRoot, ".git-ai", "config.json"), "utf8"))
+    ).toEqual({
+      aiContext: {
+        excludePaths: [
+          "web/sites/default/files/**",
+          "web/themes/**/css/**",
+          "web/themes/**/js/**",
+        ],
+      },
+      baseBranch: "develop",
+      buildCommand: ["composer", "test"],
+      forge: {
+        type: "none",
+      },
+    });
+
+    const gitignoreContent = readFileSync(resolve(repoRoot, ".gitignore"), "utf8");
+    expect(gitignoreContent.match(/\.git-ai\//g) ?? []).toHaveLength(1);
+
+    const agentsContent = readFileSync(resolve(repoRoot, "AGENTS.md"), "utf8");
+    expect(agentsContent).toContain("# Repository Notes");
+    expect(agentsContent).toContain("Keep this manual guidance.");
+    expect(agentsContent).not.toContain("Old managed setup guidance.");
+    expect(agentsContent).toContain("Detected stack: Drupal/PHP repository.");
+    expect(agentsContent).toContain("`composer test`");
+    expect(agentsContent).toContain("`none`");
   });
 
   it("generates a local issue draft and saves it under .git-ai/issues", async () => {
