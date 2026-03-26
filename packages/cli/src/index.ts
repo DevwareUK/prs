@@ -17,7 +17,6 @@ import {
 import { OpenAIProvider } from "@git-ai/providers";
 import dotenv from "dotenv";
 import {
-  formatCommandForDisplay,
   loadResolvedRepositoryConfig,
 } from "./config";
 import {
@@ -46,6 +45,7 @@ type IssueWorkspace = {
   promptFilePath: string;
   metadataFilePath: string;
   outputLogPath: string;
+  finalMessageFilePath: string;
 };
 
 type IssueExecutionMode = "local" | "github-action";
@@ -979,6 +979,7 @@ function createIssueWorkspace(
     promptFilePath: resolve(runDir, "prompt.md"),
     metadataFilePath: resolve(runDir, "metadata.json"),
     outputLogPath: resolve(runDir, "output.log"),
+    finalMessageFilePath: resolve(runDir, "codex-final-message.md"),
   };
 }
 
@@ -1028,8 +1029,7 @@ function ensureBranchDoesNotExist(repoRoot: string, branchName: string): void {
 function buildCodexPrompt(
   repoRoot: string,
   workspace: IssueWorkspace,
-  mode: IssueExecutionMode,
-  buildCommand: string[]
+  mode: IssueExecutionMode
 ): string {
   const issueFile = toRepoRelativePath(repoRoot, workspace.issueFilePath);
   const runDir = toRepoRelativePath(repoRoot, workspace.runDir);
@@ -1053,7 +1053,8 @@ function buildCodexPrompt(
     "- keep code changes focused on the issue snapshot",
     "- follow existing architecture patterns",
     "- if the issue snapshot includes a resolution plan, treat it as the latest plan of record",
-    `- run \`${formatCommandForDisplay(buildCommand)}\` before finishing if code changes are made`,
+    "- do not run build, test, commit, push, or pull request commands; git-ai will handle execution after you exit",
+    "- finish with a concise final summary and then exit cleanly",
     "- do not modify `.git-ai/` unless needed for local workflow artifacts",
     "- do not commit `.git-ai/` files",
   ].join("\n");
@@ -1066,11 +1067,10 @@ function writeIssueWorkspaceFiles(
   planComment: IssuePlanComment | undefined,
   branchName: string,
   workspace: IssueWorkspace,
-  mode: IssueExecutionMode,
-  buildCommand: string[]
+  mode: IssueExecutionMode
 ): void {
   const createdAt = new Date().toISOString();
-  const prompt = buildCodexPrompt(repoRoot, workspace, mode, buildCommand);
+  const prompt = buildCodexPrompt(repoRoot, workspace, mode);
 
   writeFileSync(
     workspace.issueFilePath,
@@ -1093,12 +1093,14 @@ function writeIssueWorkspaceFiles(
         issueFile: toRepoRelativePath(repoRoot, workspace.issueFilePath),
         promptFile: toRepoRelativePath(repoRoot, workspace.promptFilePath),
         outputLog: toRepoRelativePath(repoRoot, workspace.outputLogPath),
+        finalMessageFile: toRepoRelativePath(repoRoot, workspace.finalMessageFilePath),
       },
       null,
       2
     )}\n`,
     "utf8"
   );
+  writeFileSync(workspace.finalMessageFilePath, "", "utf8");
   writeFileSync(
     workspace.outputLogPath,
     [
@@ -1107,6 +1109,7 @@ function writeIssueWorkspaceFiles(
       `Created: ${createdAt}`,
       `Issue snapshot: ${toRepoRelativePath(repoRoot, workspace.issueFilePath)}`,
       `Prompt file: ${toRepoRelativePath(repoRoot, workspace.promptFilePath)}`,
+      `Final message file: ${toRepoRelativePath(repoRoot, workspace.finalMessageFilePath)}`,
       "",
     ].join("\n"),
     "utf8"
@@ -1142,6 +1145,10 @@ function emitIssuePrepareOutputs(repoRoot: string, context: IssueRunContext): vo
     toRepoRelativePath(repoRoot, context.workspace.metadataFilePath)
   );
   writeGitHubOutput("output_log", toRepoRelativePath(repoRoot, context.workspace.outputLogPath));
+  writeGitHubOutput(
+    "final_message_file",
+    toRepoRelativePath(repoRoot, context.workspace.finalMessageFilePath)
+  );
   writeGitHubOutput("run_dir", toRepoRelativePath(repoRoot, context.workspace.runDir));
   writeGitHubOutput("mode", context.mode);
 }
@@ -1201,32 +1208,38 @@ function runTrackedCommand(
 
 function runCodex(
   repoRoot: string,
-  workspace: { promptFilePath: string; outputLogPath: string }
+  workspace: {
+    promptFilePath: string;
+    outputLogPath: string;
+    finalMessageFilePath: string;
+  }
 ): void {
   if (!canRunCommand("codex")) {
     throw new Error(
-      "The `codex` CLI is not available on PATH. Install it before running interactive git-ai Codex workflows."
+      "The `codex` CLI is not available on PATH. Install it before running git-ai Codex workflows."
     );
   }
 
   const args = [
+    "exec",
     "--sandbox",
     "workspace-write",
-    "--ask-for-approval",
-    "on-request",
     "--cd",
     repoRoot,
+    "--output-last-message",
+    workspace.finalMessageFilePath,
     `Read and follow the instructions in ${toRepoRelativePath(
       repoRoot,
       workspace.promptFilePath
     )}.`,
   ];
 
+  writeFileSync(workspace.finalMessageFilePath, "", "utf8");
   appendRunLog(
     workspace.outputLogPath,
     "codex",
     args,
-    "[interactive Codex session opened in current terminal]",
+    "[non-interactive Codex execution started]",
     ""
   );
 
@@ -1237,13 +1250,20 @@ function runCodex(
 
   if (result.error) {
     throw new Error(
-      `Failed to start the interactive Codex session. ${result.error.message}`
+      `Failed to start the Codex run. ${result.error.message}`
     );
   }
 
   if (result.status !== 0) {
-    throw new Error(
-      "The interactive Codex session did not complete successfully."
+    throw new Error("The Codex run did not complete successfully.");
+  }
+
+  const finalMessage = readFileSync(workspace.finalMessageFilePath, "utf8").trim();
+  if (finalMessage) {
+    appendFileSync(
+      workspace.outputLogPath,
+      ["## Codex final message", "", finalMessage, ""].join("\n"),
+      "utf8"
     );
   }
 }
@@ -1990,8 +2010,7 @@ async function prepareIssueRun(
     planComment,
     branchName,
     workspace,
-    mode,
-    repositoryConfig.buildCommand
+    mode
   );
 
   console.log(`Creating branch ${branchName}...`);
@@ -2049,6 +2068,10 @@ async function runIssueCommand(): Promise<void> {
           promptFile: toRepoRelativePath(repoRoot, context.workspace.promptFilePath),
           metadataFile: toRepoRelativePath(repoRoot, context.workspace.metadataFilePath),
           outputLog: toRepoRelativePath(repoRoot, context.workspace.outputLogPath),
+          finalMessageFile: toRepoRelativePath(
+            repoRoot,
+            context.workspace.finalMessageFilePath
+          ),
           runDir: toRepoRelativePath(repoRoot, context.workspace.runDir),
           mode: context.mode,
         },
@@ -2074,10 +2097,15 @@ async function runIssueCommand(): Promise<void> {
   const repositoryConfig = getRepositoryConfig(repoRoot);
   const forge = getRepositoryForge(repoRoot);
 
-  console.log("Opening an interactive Codex session in this terminal...");
-  console.log("Complete the issue work in Codex.");
-  console.log("When Codex exits, git-ai will resume with build and commit steps.");
+  console.log("Running Codex non-interactively for this issue...");
+  console.log("Codex will print a final summary, exit cleanly, and then git-ai will resume.");
   runCodex(repoRoot, context.workspace);
+  console.log(
+    `Codex phase completed. Final summary saved to ${toRepoRelativePath(
+      repoRoot,
+      context.workspace.finalMessageFilePath
+    )}.`
+  );
 
   console.log("Verifying build...");
   verifyBuild(repoRoot, repositoryConfig.buildCommand, context.workspace.outputLogPath);

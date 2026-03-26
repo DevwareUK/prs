@@ -6,6 +6,7 @@ export type PullRequestFixWorkspace = {
   promptFilePath: string;
   metadataFilePath: string;
   outputLogPath: string;
+  finalMessageFilePath: string;
 };
 
 export type PullRequestReviewThread = {

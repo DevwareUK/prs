@@ -106,6 +106,7 @@ describe("pr-fix-tests workspace", () => {
       snapshotFile: string;
       promptFile: string;
       outputLog: string;
+      finalMessageFile: string;
       runDir: string;
     };
     const outputLog = readFileSync(workspace.outputLogPath, "utf8");
@@ -122,7 +123,10 @@ describe("pr-fix-tests workspace", () => {
     );
     expect(prompt).toContain("Use `.git-ai/runs/");
     expect(prompt).toContain("- keep code changes focused on implementing automated tests");
-    expect(prompt).toContain("- run `pnpm build` before finishing if code changes are made");
+    expect(prompt).toContain(
+      "- do not run build, test, commit, push, or pull request commands; git-ai will handle execution after you exit"
+    );
+    expect(prompt).toContain("- finish with a concise final summary and then exit cleanly");
 
     expect(metadata.prNumber).toBe(71);
     expect(metadata.linkedIssues).toEqual([
@@ -151,14 +155,19 @@ describe("pr-fix-tests workspace", () => {
     expect(metadata.snapshotFile).toMatch(/\.git-ai\/runs\/.+\/pr-test-suggestions\.md$/);
     expect(metadata.promptFile).toMatch(/\.git-ai\/runs\/.+\/prompt\.md$/);
     expect(metadata.outputLog).toMatch(/\.git-ai\/runs\/.+\/output\.log$/);
+    expect(metadata.finalMessageFile).toMatch(
+      /\.git-ai\/runs\/.+\/codex-final-message\.md$/
+    );
     expect(metadata.runDir).toMatch(/\.git-ai\/runs\/.+-pr-71-fix-tests$/);
+    expect(readFileSync(workspace.finalMessageFilePath, "utf8")).toBe("");
 
     expect(outputLog).toContain("# git-ai pr fix-tests run log");
     expect(outputLog).toContain("Snapshot file: .git-ai/runs/");
     expect(outputLog).toContain("Prompt file: .git-ai/runs/");
+    expect(outputLog).toContain("Final message file: .git-ai/runs/");
   });
 
-  it("formats the configured build command in the generated Codex prompt", () => {
+  it("instructs Codex to exit cleanly and leave execution to git-ai", () => {
     const repoRoot = createTempRepoRoot();
     const workspace = createPullRequestFixTestsWorkspace(repoRoot, 88);
 
@@ -202,7 +211,10 @@ describe("pr-fix-tests workspace", () => {
     );
 
     expect(readFileSync(workspace.promptFilePath, "utf8")).toContain(
-      '- run `pnpm exec vitest --project "cli smoke"` before finishing if code changes are made'
+      "do not run build, test, commit, push, or pull request commands"
+    );
+    expect(readFileSync(workspace.promptFilePath, "utf8")).toContain(
+      "finish with a concise final summary and then exit cleanly"
     );
   });
 });

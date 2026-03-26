@@ -6,6 +6,7 @@ export type PullRequestFixTestsWorkspace = {
   promptFilePath: string;
   metadataFilePath: string;
   outputLogPath: string;
+  finalMessageFilePath: string;
 };
 
 export type PullRequestLinkedIssueContext = IssueDetails & {
