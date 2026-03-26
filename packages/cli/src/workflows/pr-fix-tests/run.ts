@@ -24,10 +24,7 @@ type RunPrFixTestsCommandOptions = {
   promptForLine(prompt: string): Promise<string>;
   runCodex(
     repoRoot: string,
-    workspace: Pick<
-      PullRequestFixTestsWorkspace,
-      "promptFilePath" | "outputLogPath" | "finalMessageFilePath"
-    >
+    workspace: Pick<PullRequestFixTestsWorkspace, "promptFilePath" | "outputLogPath">
   ): void;
   verifyBuild(repoRoot: string, buildCommand: string[], outputLogPath: string): void;
   hasChanges(repoRoot: string): boolean;
@@ -120,9 +117,10 @@ export async function runPrFixTestsCommand(
     linkedIssues
   );
 
-  console.log("Running Codex non-interactively for the selected test suggestions...");
+  console.log("Opening an interactive Codex session in this terminal...");
+  console.log("Complete the selected automated test changes in Codex.");
+  console.log("When Codex exits, git-ai will resume with build and commit steps.");
   options.runCodex(options.repoRoot, workspace);
-  console.log("Codex phase completed. Resuming build and commit steps.");
 
   console.log("Verifying build...");
   options.verifyBuild(

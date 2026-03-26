@@ -116,7 +116,7 @@ Use `draft` to turn a feature idea into a structured issue. Use `plan` to genera
 git-ai issue 54
 ```
 
-This full local workflow fetches the configured issue, creates the working branch, writes `.git-ai/` run artifacts, runs Codex non-interactively, stores Codex's final summary in the run directory, runs the configured build command, commits the result, and opens a pull request when the configured forge supports it.
+This full local workflow fetches the configured issue, creates the working branch, writes `.git-ai/` run artifacts, opens Codex, runs the configured build command, commits the result, and opens a pull request when the configured forge supports it.
 
 If you need separate setup and completion steps:
 
@@ -137,7 +137,7 @@ git-ai issue prepare 54 --mode github-action
 git-ai pr fix-comments 88
 ```
 
-Use this when the PR branch is already checked out locally and you want `git-ai` to fetch the PR review comments, let you choose which actionable comments to address, run Codex non-interactively with a focused prompt, run the configured build command, and optionally commit the result.
+Use this when the PR branch is already checked out locally and you want `git-ai` to fetch the PR review comments, let you choose which actionable comments to address, open Codex with a focused prompt, run the configured build command, and optionally commit the result.
 
 Nearby comments on the same file are grouped into optional review tasks, non-trivial reply comments are kept as thread context, and the generated `.git-ai/runs/.../pr-review-comments.md` snapshot includes linked issue context plus local file excerpts when available.
 
@@ -147,7 +147,7 @@ Nearby comments on the same file are grouped into optional review tasks, non-tri
 git-ai pr fix-tests 88
 ```
 
-Use this when the PR branch is already checked out locally and you want `git-ai` to fetch the managed AI Test Suggestions comment, let you choose which structured test suggestions to implement, run Codex non-interactively with a focused test-oriented prompt, run the configured build command, and optionally commit the result.
+Use this when the PR branch is already checked out locally and you want `git-ai` to fetch the managed AI Test Suggestions comment, let you choose which structured test suggestions to implement, open Codex with a focused test-oriented prompt, run the configured build command, and optionally commit the result.
 
 The command parses the managed `<!-- git-ai-test-suggestions -->` PR comment conservatively, keeps the selected suggestion areas plus likely file locations in `.git-ai/runs/.../pr-test-suggestions.md`, and fails clearly if the managed comment is missing or malformed.
 
@@ -214,7 +214,7 @@ Think of `.git-ai/` as the working memory for issue, planning, and backlog flows
 Typical contents:
 
 - `.git-ai/issues/`: issue snapshots and generated drafts
-- `.git-ai/runs/`: run prompts, final Codex summaries, metadata, and logs for automated issue work and PR comment-fix runs
+- `.git-ai/runs/`: run prompts, metadata, and logs for automated issue work and PR comment-fix runs
 
 ## CLI command reference
 
@@ -273,10 +273,10 @@ Available subcommands:
 
 | Command | What it does |
 | --- | --- |
-| `git-ai issue <number>` | Full local issue-to-PR flow for the current Git repository. Fetches the configured forge issue, creates a branch, writes `.git-ai/` workspace files, runs Codex non-interactively, saves Codex's final summary under `.git-ai/runs/.../codex-final-message.md`, runs the configured build command, commits the result, and opens a PR if the configured forge supports it. |
+| `git-ai issue <number>` | Full local issue-to-PR flow for the current Git repository. Fetches the configured forge issue, creates a branch, writes `.git-ai/` workspace files, opens an interactive Codex session, runs the configured build command, commits the result, and opens a PR if the configured forge supports it. |
 | `git-ai issue draft` | Interactive issue drafting flow. Prompts for a feature idea, generates a Markdown issue draft with AI, optionally opens it in `$VISUAL` or `$EDITOR`, and can create the issue through the configured forge when GitHub support is enabled. |
 | `git-ai issue plan <number>` | Generates an issue resolution plan for the configured forge issue and posts it as a managed comment. If an editable plan comment already exists, the command reuses it instead of overwriting collaborator edits. |
-| `git-ai issue prepare <number>` | Prepares the issue branch and `.git-ai/` workspace artifacts, then prints machine-readable JSON describing the run, including the planned `codex-final-message.md` artifact path. |
+| `git-ai issue prepare <number>` | Prepares the issue branch and `.git-ai/` workspace artifacts, then prints machine-readable JSON describing the run. |
 | `git-ai issue prepare <number> --mode github-action` | Same preparation flow, but writes prompt instructions tailored for non-interactive GitHub Actions runs. |
 | `git-ai issue finalize <number>` | Commits generated changes with `feat: address issue #<number>`. |
 
@@ -285,7 +285,7 @@ Important behavior:
 - `git-ai issue` requires a clean working tree before it starts
 - `git-ai issue plan <number>` requires `OPENAI_API_KEY` the first time it generates a plan comment
 - local full issue runs require the `codex` CLI on `PATH`
-- full local issue runs execute the configured `buildCommand` after Codex exits cleanly, defaulting to `pnpm build`
+- full local issue runs execute the configured `buildCommand`, defaulting to `pnpm build`
 - PR creation uses the configured `baseBranch`, defaulting to `main`
 - GitHub-backed PR creation requires `gh` to be installed and authenticated
 - GitHub-backed issue plan comments require `GH_TOKEN` or `GITHUB_TOKEN`, or an authenticated `gh` session, when they are created
@@ -308,8 +308,8 @@ Available subcommands:
 
 | Command | What it does |
 | --- | --- |
-| `git-ai pr fix-comments <pr-number>` | Fetches pull request metadata and review comments from the configured forge, filters out obviously non-actionable comments, groups nearby threads into selectable review tasks, preserves non-trivial replies as thread context, writes richer `.git-ai/` run artifacts, runs Codex non-interactively, saves Codex's final summary under `.git-ai/runs/.../codex-final-message.md`, runs the configured build command, and optionally commits the resulting fixes. |
-| `git-ai pr fix-tests <pr-number>` | Fetches pull request metadata and PR issue comments from the configured forge, finds the managed AI Test Suggestions comment, parses structured suggestion areas into selectable tasks, writes focused `.git-ai/` run artifacts, runs Codex non-interactively, saves Codex's final summary under `.git-ai/runs/.../codex-final-message.md`, runs the configured build command, and optionally commits the resulting test changes. |
+| `git-ai pr fix-comments <pr-number>` | Fetches pull request metadata and review comments from the configured forge, filters out obviously non-actionable comments, groups nearby threads into selectable review tasks, preserves non-trivial replies as thread context, writes richer `.git-ai/` run artifacts, opens an interactive Codex session, runs the configured build command, and optionally commits the resulting fixes. |
+| `git-ai pr fix-tests <pr-number>` | Fetches pull request metadata and PR issue comments from the configured forge, finds the managed AI Test Suggestions comment, parses structured suggestion areas into selectable tasks, writes focused `.git-ai/` run artifacts, opens an interactive Codex session, runs the configured build command, and optionally commits the resulting test changes. |
 
 Important behavior:
 
@@ -318,7 +318,7 @@ Important behavior:
 - local PR comment-fix runs require the `codex` CLI on `PATH`
 - local PR test-fix runs require the `codex` CLI on `PATH`
 - PR comment-fix and test-fix runs execute the configured `buildCommand`, defaulting to `pnpm build`
-- the command expects the relevant PR branch to already be checked out locally before the Codex phase starts editing
+- the command expects the relevant PR branch to already be checked out locally before Codex starts editing
 - the interactive selector accepts numbered thread choices and, when available, grouped task choices like `g1`; `all` still selects every individual thread
 - `git-ai pr fix-tests <pr-number>` accepts `all`, `none`, or a comma-separated suggestion list like `1,2`
 - when `forge.type` is `github`, PR fetching uses `gh pr view` when available, otherwise the GitHub API

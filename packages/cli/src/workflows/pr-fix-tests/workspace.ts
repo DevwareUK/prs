@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { formatCommandForDisplay } from "../../config";
 import type { PullRequestDetails } from "../../forge";
 import { formatRunTimestamp, toRepoRelativePath } from "../../run-artifacts";
 import { formatPullRequestTestSuggestionsSnapshot } from "./snapshot";
@@ -29,13 +30,13 @@ export function createPullRequestFixTestsWorkspace(
     promptFilePath: resolve(runDir, "prompt.md"),
     metadataFilePath: resolve(runDir, "metadata.json"),
     outputLogPath: resolve(runDir, "output.log"),
-    finalMessageFilePath: resolve(runDir, "codex-final-message.md"),
   };
 }
 
 function buildPullRequestFixTestsCodexPrompt(
   repoRoot: string,
-  workspace: PullRequestFixTestsWorkspace
+  workspace: PullRequestFixTestsWorkspace,
+  buildCommand: string[]
 ): string {
   const snapshotFile = toRepoRelativePath(repoRoot, workspace.snapshotFilePath);
   const runDir = toRepoRelativePath(repoRoot, workspace.runDir);
@@ -52,8 +53,7 @@ function buildPullRequestFixTestsCodexPrompt(
     "- follow existing architecture and test patterns",
     "- preserve current behavior outside the selected testing scope",
     "- verify each selected test suggestion is addressed before finishing",
-    "- do not run build, test, commit, push, or pull request commands; git-ai will handle execution after you exit",
-    "- finish with a concise final summary and then exit cleanly",
+    `- run \`${formatCommandForDisplay(buildCommand)}\` before finishing if code changes are made`,
     "- do not modify `.git-ai/` unless needed for local workflow artifacts",
     "- do not commit `.git-ai/` files",
   ].join("\n");
@@ -65,11 +65,11 @@ export function writePullRequestFixTestsWorkspaceFiles(
   selectedSuggestions: PullRequestTestSuggestion[],
   suggestionsComment: PullRequestTestSuggestionsComment,
   workspace: PullRequestFixTestsWorkspace,
-  _buildCommand: string[],
+  buildCommand: string[],
   linkedIssues: PullRequestLinkedIssueContext[]
 ): void {
   const createdAt = new Date().toISOString();
-  const prompt = buildPullRequestFixTestsCodexPrompt(repoRoot, workspace);
+  const prompt = buildPullRequestFixTestsCodexPrompt(repoRoot, workspace, buildCommand);
 
   writeFileSync(
     workspace.snapshotFilePath,
@@ -100,7 +100,6 @@ export function writePullRequestFixTestsWorkspaceFiles(
         snapshotFile: toRepoRelativePath(repoRoot, workspace.snapshotFilePath),
         promptFile: toRepoRelativePath(repoRoot, workspace.promptFilePath),
         outputLog: toRepoRelativePath(repoRoot, workspace.outputLogPath),
-        finalMessageFile: toRepoRelativePath(repoRoot, workspace.finalMessageFilePath),
         runDir: toRepoRelativePath(repoRoot, workspace.runDir),
         linkedIssues: linkedIssues.map((issue) => ({
           number: issue.number,
@@ -122,7 +121,6 @@ export function writePullRequestFixTestsWorkspaceFiles(
     )}\n`,
     "utf8"
   );
-  writeFileSync(workspace.finalMessageFilePath, "", "utf8");
   writeFileSync(
     workspace.outputLogPath,
     [
@@ -131,7 +129,6 @@ export function writePullRequestFixTestsWorkspaceFiles(
       `Created: ${createdAt}`,
       `Snapshot file: ${toRepoRelativePath(repoRoot, workspace.snapshotFilePath)}`,
       `Prompt file: ${toRepoRelativePath(repoRoot, workspace.promptFilePath)}`,
-      `Final message file: ${toRepoRelativePath(repoRoot, workspace.finalMessageFilePath)}`,
       "",
     ].join("\n"),
     "utf8"

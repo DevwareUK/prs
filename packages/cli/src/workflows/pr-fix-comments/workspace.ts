@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { formatCommandForDisplay } from "../../config";
 import type { PullRequestDetails } from "../../forge";
 import { formatRunTimestamp, toRepoRelativePath } from "../../run-artifacts";
 import { getReviewCommentDisplayLine } from "./selection";
@@ -29,13 +30,13 @@ export function createPullRequestFixWorkspace(
     promptFilePath: resolve(runDir, "prompt.md"),
     metadataFilePath: resolve(runDir, "metadata.json"),
     outputLogPath: resolve(runDir, "output.log"),
-    finalMessageFilePath: resolve(runDir, "codex-final-message.md"),
   };
 }
 
 function buildPullRequestFixCodexPrompt(
   repoRoot: string,
-  workspace: PullRequestFixWorkspace
+  workspace: PullRequestFixWorkspace,
+  buildCommand: string[]
 ): string {
   const snapshotFile = toRepoRelativePath(repoRoot, workspace.snapshotFilePath);
   const runDir = toRepoRelativePath(repoRoot, workspace.runDir);
@@ -51,8 +52,7 @@ function buildPullRequestFixCodexPrompt(
     "- keep code changes focused on addressing the selected review tasks",
     "- follow existing architecture patterns",
     "- verify each selected review thread or grouped task is fully addressed before finishing",
-    "- do not run build, test, commit, push, or pull request commands; git-ai will handle execution after you exit",
-    "- finish with a concise final summary and then exit cleanly",
+    `- run \`${formatCommandForDisplay(buildCommand)}\` before finishing if code changes are made`,
     "- do not modify `.git-ai/` unless needed for local workflow artifacts",
     "- do not commit `.git-ai/` files",
   ].join("\n");
@@ -63,11 +63,11 @@ export function writePullRequestFixWorkspaceFiles(
   pullRequest: PullRequestDetails,
   tasks: PullRequestReviewTask[],
   workspace: PullRequestFixWorkspace,
-  _buildCommand: string[],
+  buildCommand: string[],
   linkedIssues: PullRequestLinkedIssueContext[]
 ): void {
   const createdAt = new Date().toISOString();
-  const prompt = buildPullRequestFixCodexPrompt(repoRoot, workspace);
+  const prompt = buildPullRequestFixCodexPrompt(repoRoot, workspace, buildCommand);
   const selectedComments = tasks.flatMap((task) => task.comments);
 
   writeFileSync(
@@ -89,7 +89,6 @@ export function writePullRequestFixWorkspaceFiles(
         snapshotFile: toRepoRelativePath(repoRoot, workspace.snapshotFilePath),
         promptFile: toRepoRelativePath(repoRoot, workspace.promptFilePath),
         outputLog: toRepoRelativePath(repoRoot, workspace.outputLogPath),
-        finalMessageFile: toRepoRelativePath(repoRoot, workspace.finalMessageFilePath),
         runDir: toRepoRelativePath(repoRoot, workspace.runDir),
         linkedIssues: linkedIssues.map((issue) => ({
           number: issue.number,
@@ -118,7 +117,6 @@ export function writePullRequestFixWorkspaceFiles(
     )}\n`,
     "utf8"
   );
-  writeFileSync(workspace.finalMessageFilePath, "", "utf8");
   writeFileSync(
     workspace.outputLogPath,
     [
@@ -127,7 +125,6 @@ export function writePullRequestFixWorkspaceFiles(
       `Created: ${createdAt}`,
       `Snapshot file: ${toRepoRelativePath(repoRoot, workspace.snapshotFilePath)}`,
       `Prompt file: ${toRepoRelativePath(repoRoot, workspace.promptFilePath)}`,
-      `Final message file: ${toRepoRelativePath(repoRoot, workspace.finalMessageFilePath)}`,
       "",
     ].join("\n"),
     "utf8"

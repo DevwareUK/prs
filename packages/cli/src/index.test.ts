@@ -2366,7 +2366,6 @@ describe("CLI integration", () => {
       promptFile: string;
       metadataFile: string;
       outputLog: string;
-      finalMessageFile: string;
       runDir: string;
       mode: string;
     };
@@ -2374,7 +2373,6 @@ describe("CLI integration", () => {
     const promptFilePath = resolve(REPO_ROOT, output.promptFile);
     const metadataFilePath = resolve(REPO_ROOT, output.metadataFile);
     const outputLogPath = resolve(REPO_ROOT, output.outputLog);
-    const finalMessageFilePath = resolve(REPO_ROOT, output.finalMessageFile);
     const runDirPath = resolve(REPO_ROOT, output.runDir);
 
     cleanupTargets.add(dirname(issueFilePath));
@@ -2393,19 +2391,9 @@ describe("CLI integration", () => {
       "if the issue snapshot includes a resolution plan, treat it as the latest plan of record"
     );
     expect(readFileSync(promptFilePath, "utf8")).toContain(
-      "do not run build, test, commit, push, or pull request commands"
-    );
-    expect(readFileSync(promptFilePath, "utf8")).toContain(
-      "finish with a concise final summary and then exit cleanly"
-    );
-    expect(readFileSync(promptFilePath, "utf8")).toContain(
       `Read the issue snapshot at \`${output.issueFile}\` before making changes.`
     );
     expect(readFileSync(outputLogPath, "utf8")).toContain("# git-ai issue run log");
-    expect(readFileSync(outputLogPath, "utf8")).toContain(
-      `Final message file: ${output.finalMessageFile}`
-    );
-    expect(readFileSync(finalMessageFilePath, "utf8")).toBe("");
     expect(JSON.parse(readFileSync(metadataFilePath, "utf8"))).toMatchObject({
       issueNumber,
       issueTitle,
@@ -2413,13 +2401,11 @@ describe("CLI integration", () => {
       issueFile: output.issueFile,
       promptFile: output.promptFile,
       outputLog: output.outputLog,
-      finalMessageFile: output.finalMessageFile,
       issuePlanCommentUrl:
         `https://github.com/DevwareUK/git-ai/issues/${issueNumber}#issuecomment-613`,
       mode: "github-action",
     });
     expect(readFileSync(githubOutputPath, "utf8")).toContain("branch_name<<");
-    expect(readFileSync(githubOutputPath, "utf8")).toContain("final_message_file<<");
     expect(readFileSync(githubOutputPath, "utf8")).toContain(output.branchName);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
@@ -2527,19 +2513,6 @@ describe("CLI integration", () => {
 
       process.argv = ["node", "git-ai", "issue", String(issueNumber)];
       await run();
-
-      const codexCall = spawnSync.mock.calls.find(([command, args]) => {
-        return command === "codex" && Array.isArray(args) && args[0] === "exec";
-      });
-      expect(codexCall).toBeDefined();
-      expect(codexCall?.[1]).toEqual(
-        expect.arrayContaining([
-          "exec",
-          "--sandbox",
-          "workspace-write",
-          "--output-last-message",
-        ])
-      );
 
       expect(spawnSync).toHaveBeenCalledWith(
         "npm",
