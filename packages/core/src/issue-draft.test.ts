@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generateIssueDraft } from "./issue-draft";
+import { generateIssueDraft, generateIssueDraftGuidance } from "./issue-draft";
 
 describe("generateIssueDraft", () => {
   it("accepts model output when constraints are null", async () => {
@@ -65,5 +65,40 @@ describe("generateIssueDraft", () => {
     );
 
     expect(result.constraints).toBeUndefined();
+  });
+
+  it("generates clarification guidance when the model requests more detail", async () => {
+    const result = await generateIssueDraftGuidance(
+      {
+        generateText: async () =>
+          JSON.stringify({
+            status: "clarify",
+            assistantSummary:
+              "The feature direction is clear, but the workflow and rollout boundaries still need definition.",
+            missingInformation: [
+              "Whether the guided issue flow should stop after local draft generation or also update GitHub Actions surfaces.",
+            ],
+            questions: [
+              "Should this first version be local CLI-only, or should it also update any GitHub Action entrypoints and docs in the same issue?",
+            ],
+          }),
+      },
+      {
+        featureIdea: "Turn issue draft into a guided issue-spec workflow.",
+        repositoryContext: "CLI lives in packages/cli and issue drafting logic lives in packages/core.",
+      }
+    );
+
+    expect(result).toEqual({
+      status: "clarify",
+      assistantSummary:
+        "The feature direction is clear, but the workflow and rollout boundaries still need definition.",
+      missingInformation: [
+        "Whether the guided issue flow should stop after local draft generation or also update GitHub Actions surfaces.",
+      ],
+      questions: [
+        "Should this first version be local CLI-only, or should it also update any GitHub Action entrypoints and docs in the same issue?",
+      ],
+    });
   });
 });

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { IssueDraftModelOutput, IssueDraftOutput } from "./issue-draft";
+import {
+  IssueDraftGuidanceOutput,
+  IssueDraftModelOutput,
+  IssueDraftOutput,
+} from "./issue-draft";
 
 function createIssueDraftPayload() {
   return {
@@ -33,5 +37,20 @@ describe("Issue draft schemas", () => {
     const parsed = IssueDraftOutput.parse(createIssueDraftPayload());
 
     expect(parsed.constraints).toBeUndefined();
+  });
+
+  it("accepts clarification guidance output", () => {
+    const parsed = IssueDraftGuidanceOutput.parse({
+      status: "clarify",
+      assistantSummary: "The rough idea is directionally clear, but the workflow scope is still ambiguous.",
+      missingInformation: [
+        "Whether the guided flow should keep the current issue markdown structure.",
+      ],
+      questions: [
+        "Should the guided flow preserve the current issue draft markdown sections or introduce new sections such as out-of-scope and technical considerations?",
+      ],
+    });
+
+    expect(parsed.status).toBe("clarify");
   });
 });
