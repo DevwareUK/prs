@@ -2544,6 +2544,80 @@ describe("CLI integration", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("writes local issue prompts that exit Codex immediately after /commit", async () => {
+    const issueNumber = 91235;
+    const issueTitle = "Local issue prompt exits after commit selection";
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          title: issueTitle,
+          body: "Ensure the local issue prompt does not require a separate /exit.",
+          html_url: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
+        })
+      )
+      .mockResolvedValueOnce(createFetchResponse([]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { run } = await loadCli({
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          return "";
+        }
+
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/git-ai.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        if (command === "git" && args[0] === "rev-parse") {
+          return { status: 1 };
+        }
+
+        if (command === "git" && args[0] === "checkout" && args[1] === "-b") {
+          return { status: 0 };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.argv = ["node", "git-ai", "issue", "prepare", String(issueNumber)];
+
+    const stdout = captureStdout();
+    await run();
+
+    const output = JSON.parse(stdout.output()) as {
+      promptFile: string;
+      runDir: string;
+      mode: string;
+    };
+    const promptFilePath = resolve(REPO_ROOT, output.promptFile);
+    const runDirPath = resolve(REPO_ROOT, output.runDir);
+
+    cleanupTargets.add(dirname(promptFilePath));
+    cleanupTargets.add(runDirPath);
+
+    expect(output.mode).toBe("local");
+    expect(readFileSync(promptFilePath, "utf8")).toContain(
+      '[2] Commit & create PR'
+    );
+    expect(readFileSync(promptFilePath, "utf8")).toContain(
+      'for `/commit`, write `{"action":"commit"}` and then exit Codex immediately so `git-ai` can resume the build, commit, and PR flow'
+    );
+    expect(readFileSync(promptFilePath, "utf8")).toContain(
+      'for `/exit`, write `{"action":"exit"}` and then exit Codex immediately'
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("skips build, commit, and PR creation when Codex exits a full issue run", async () => {
     const issueNumber = 145;
     const fetchMock = vi

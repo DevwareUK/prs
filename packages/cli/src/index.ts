@@ -1208,8 +1208,8 @@ function buildCodexPrompt(
             repoRoot,
             workspace.completionFilePath
           )}\` as JSON before you stop.`,
-          '- write `{"action":"commit"}` for `/commit`',
-          '- write `{"action":"exit"}` for `/exit`',
+          '- for `/commit`, write `{"action":"commit"}` and then exit Codex immediately so `git-ai` can resume the build, commit, and PR flow',
+          '- for `/exit`, write `{"action":"exit"}` and then exit Codex immediately',
           "- for `/continue`, keep working and do not write the final action file yet",
         ]
       : [];
