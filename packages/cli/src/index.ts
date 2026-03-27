@@ -5,6 +5,7 @@ import {
   appendFileSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   writeFileSync,
 } from "node:fs";
@@ -17,6 +18,7 @@ import {
   generateCommitMessage,
   generateDiffSummary,
   generateIssueDraft,
+  generateIssueDraftGuidance,
   generatePRReview,
   generateIssueResolutionPlan,
 } from "@git-ai/core";
@@ -113,6 +115,9 @@ type IssueRunContext = {
 };
 
 const ISSUE_PLAN_COMMENT_MARKER = "<!-- git-ai:issue-plan -->";
+const ISSUE_DRAFT_MAX_CONTEXT_CHARS = 4000;
+const ISSUE_DRAFT_MAX_CLARIFICATION_ROUNDS = 4;
+const ISSUE_DRAFT_MAX_WORKSPACE_ENTRIES = 8;
 
 const ISSUE_USAGE = [
   "Usage:",
@@ -964,6 +969,152 @@ function createIssueDraftFilePath(repoRoot: string): string {
   return resolve(issueDir, `issue-draft-${formatRunTimestamp()}.md`);
 }
 
+function truncateContext(value: string, maxChars = ISSUE_DRAFT_MAX_CONTEXT_CHARS): string {
+  const normalized = value.trim();
+  if (normalized.length <= maxChars) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, maxChars).trimEnd()}\n...(truncated)`;
+}
+
+function readOptionalContextFile(
+  repoRoot: string,
+  relativePath: string,
+  maxChars = ISSUE_DRAFT_MAX_CONTEXT_CHARS
+): string | undefined {
+  const filePath = resolve(repoRoot, relativePath);
+  if (!existsSync(filePath)) {
+    return undefined;
+  }
+
+  return truncateContext(readFileSync(filePath, "utf8"), maxChars);
+}
+
+function readPackageScriptSummary(filePath: string): string[] {
+  if (!existsSync(filePath)) {
+    return [];
+  }
+
+  try {
+    const rawPackage = JSON.parse(readFileSync(filePath, "utf8")) as {
+      scripts?: Record<string, string>;
+    };
+
+    return Object.keys(rawPackage.scripts ?? {}).sort();
+  } catch {
+    return [];
+  }
+}
+
+function listWorkspaceEntries(repoRoot: string, relativePath: string): string[] {
+  const directoryPath = resolve(repoRoot, relativePath);
+  if (!existsSync(directoryPath)) {
+    return [];
+  }
+
+  try {
+    return readdirSync(directoryPath, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort()
+      .slice(0, ISSUE_DRAFT_MAX_WORKSPACE_ENTRIES);
+  } catch {
+    return [];
+  }
+}
+
+function tryReadOriginUrl(repoRoot: string): string | undefined {
+  try {
+    return execFileSync("git", ["-C", repoRoot, "remote", "get-url", "origin"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+  } catch {
+    return undefined;
+  }
+}
+
+function formatWorkspaceScriptContext(
+  repoRoot: string,
+  relativePath: string,
+  entries: string[]
+): string[] {
+  const lines: string[] = [];
+
+  for (const entry of entries) {
+    const scriptNames = readPackageScriptSummary(
+      resolve(repoRoot, relativePath, entry, "package.json")
+    );
+    if (scriptNames.length === 0) {
+      continue;
+    }
+
+    lines.push(`- ${relativePath}/${entry}: ${scriptNames.join(", ")}`);
+  }
+
+  return lines;
+}
+
+function collectIssueDraftRepositoryContext(repoRoot: string): string {
+  const originUrl = tryReadOriginUrl(repoRoot);
+  const rootScripts = readPackageScriptSummary(resolve(repoRoot, "package.json"));
+  const packageEntries = listWorkspaceEntries(repoRoot, "packages");
+  const actionEntries = listWorkspaceEntries(repoRoot, "actions");
+  const workflowDir = resolve(repoRoot, ".github", "workflows");
+  const workflows = existsSync(workflowDir)
+    ? readdirSync(workflowDir)
+        .filter((entry) => entry.endsWith(".yml") || entry.endsWith(".yaml"))
+        .sort()
+        .slice(0, ISSUE_DRAFT_MAX_WORKSPACE_ENTRIES)
+    : [];
+  const sections = [
+    "Repository overview:",
+    `- Repository root: ${repoRoot}`,
+  ];
+
+  if (originUrl) {
+    sections.push(`- Origin remote: ${originUrl}`);
+  }
+
+  if (rootScripts.length > 0) {
+    sections.push(`- Root package scripts: ${rootScripts.join(", ")}`);
+  }
+
+  if (packageEntries.length > 0) {
+    sections.push(`- packages/: ${packageEntries.join(", ")}`);
+    sections.push("Package scripts:");
+    sections.push(...formatWorkspaceScriptContext(repoRoot, "packages", packageEntries));
+  }
+
+  if (actionEntries.length > 0) {
+    sections.push(`- actions/: ${actionEntries.join(", ")}`);
+    sections.push("Action package scripts:");
+    sections.push(...formatWorkspaceScriptContext(repoRoot, "actions", actionEntries));
+  }
+
+  if (workflows.length > 0) {
+    sections.push(`- GitHub workflows: ${workflows.join(", ")}`);
+  }
+
+  const readme = readOptionalContextFile(repoRoot, "README.md");
+  if (readme) {
+    sections.push("", "README.md excerpt:", readme);
+  }
+
+  const architecture = readOptionalContextFile(repoRoot, "ARCHITECTURE.md");
+  if (architecture) {
+    sections.push("", "ARCHITECTURE.md excerpt:", architecture);
+  }
+
+  const agents = readOptionalContextFile(repoRoot, "AGENTS.md");
+  if (agents) {
+    sections.push("", "AGENTS.md excerpt:", agents);
+  }
+
+  return sections.join("\n");
+}
+
 function createIssueWorkspace(
   repoRoot: string,
   issueNumber: number,
@@ -1438,6 +1589,11 @@ function parseIssueDraftDocument(content: string): { title: string; body: string
   };
 }
 
+type IssueDraftClarificationAnswer = {
+  question: string;
+  answer: string;
+};
+
 async function promptForLine(prompt: string): Promise<string> {
   const rl = createInterface({
     input: process.stdin,
@@ -1451,18 +1607,74 @@ async function promptForLine(prompt: string): Promise<string> {
   }
 }
 
+async function promptForRequiredLine(prompt: string): Promise<string> {
+  while (true) {
+    const answer = (await promptForLine(prompt)).trim();
+    if (answer) {
+      return answer;
+    }
+
+    console.log("A response is required.");
+  }
+}
+
+function formatIssueDraftTranscript(
+  answers: IssueDraftClarificationAnswer[]
+): string | undefined {
+  if (answers.length === 0) {
+    return undefined;
+  }
+
+  return answers.map((entry) => `Q: ${entry.question}\nA: ${entry.answer}`).join("\n\n");
+}
+
+async function collectIssueDraftClarifications(
+  provider: OpenAIProvider,
+  featureIdea: string,
+  additionalContext: string | undefined,
+  repositoryContext: string
+): Promise<IssueDraftClarificationAnswer[]> {
+  const answers: IssueDraftClarificationAnswer[] = [];
+
+  for (
+    let round = 0;
+    round < ISSUE_DRAFT_MAX_CLARIFICATION_ROUNDS;
+    round += 1
+  ) {
+    const guidance = await generateIssueDraftGuidance(provider, {
+      featureIdea,
+      additionalContext,
+      repositoryContext,
+      answers: [...answers],
+    });
+
+    if (guidance.status === "ready") {
+      if (guidance.assistantSummary) {
+        console.log(guidance.assistantSummary);
+      }
+      return answers;
+    }
+
+    console.log(guidance.assistantSummary);
+    for (const question of guidance.questions) {
+      const answer = await promptForRequiredLine(`${question} `);
+      answers.push({
+        question,
+        answer,
+      });
+    }
+  }
+
+  console.log("Proceeding with the current answers after the clarification limit.");
+  return answers;
+}
+
 function shouldCreateIssue(response: string): boolean {
   return ["y", "yes"].includes(response.trim().toLowerCase());
 }
 
 function openFileInEditor(filePath: string): void {
-  const editor = process.env.VISUAL?.trim() || process.env.EDITOR?.trim();
-  if (!editor) {
-    console.log(
-      `Draft saved to ${toRepoRelativePath(getDefaultRepoRoot(), filePath)}. Review and edit it manually before creating an issue.`
-    );
-    return;
-  }
+  const editor = process.env.VISUAL?.trim() || process.env.EDITOR?.trim() || "vim";
 
   console.log(`Opening draft in ${editor}...`);
   const result = spawnSync(`${editor} ${JSON.stringify(filePath)}`, {
@@ -1974,16 +2186,23 @@ async function runFeatureBacklogCommand(): Promise<void> {
 
 async function runIssueDraftCommand(): Promise<void> {
   const repoRoot = getDefaultRepoRoot();
-  const featureIdea = (await promptForLine("Feature idea: ")).trim();
-  if (!featureIdea) {
-    throw new Error("Feature idea is required.");
-  }
-
+  const featureIdea = await promptForRequiredLine("Rough idea: ");
   const additionalContext = (await promptForLine("Optional context: ")).trim();
+  console.log("Gathering repository context...");
+  const repositoryContext = collectIssueDraftRepositoryContext(repoRoot);
   const provider = createProvider();
+  const clarificationAnswers = await collectIssueDraftClarifications(
+    provider,
+    featureIdea,
+    additionalContext || undefined,
+    repositoryContext
+  );
+  console.log("Drafting issue...");
   const draft = await generateIssueDraft(provider, {
     featureIdea,
     additionalContext: additionalContext || undefined,
+    repositoryContext,
+    clarificationTranscript: formatIssueDraftTranscript(clarificationAnswers),
   });
 
   const draftFilePath = createIssueDraftFilePath(repoRoot);

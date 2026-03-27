@@ -180,6 +180,28 @@ function createIssueDraftResult() {
   };
 }
 
+function createIssueDraftGuidanceReadyResult() {
+  return {
+    status: "ready" as const,
+    assistantSummary:
+      "The issue is specific enough to draft with the current repository context.",
+  };
+}
+
+function createIssueDraftGuidanceClarifyResult() {
+  return {
+    status: "clarify" as const,
+    assistantSummary:
+      "The rough idea is clear, but the workflow boundaries still need one concrete decision.",
+    missingInformation: [
+      "Whether the first version should update the existing issue markdown structure or introduce new sections.",
+    ],
+    questions: [
+      "Should the guided flow keep the current markdown sections, or should it add sections like out of scope and technical considerations?",
+    ],
+  };
+}
+
 function createIssueResolutionPlanResult() {
   return {
     summary: "Create an editable plan comment and reuse it during issue runs.",
@@ -343,6 +365,10 @@ async function loadCli(options: {
   diffSummaryResult?: { summary: string; filesChanged?: string[]; notableChanges?: string[] };
   featureAnalysisResult?: ReturnType<typeof createFeatureBacklogAnalysis>;
   issueDraftResult?: ReturnType<typeof createIssueDraftResult>;
+  issueDraftGuidanceResults?: Array<
+    ReturnType<typeof createIssueDraftGuidanceReadyResult> |
+    ReturnType<typeof createIssueDraftGuidanceClarifyResult>
+  >;
   issueResolutionPlanResult?: ReturnType<typeof createIssueResolutionPlanResult>;
   prReviewResult?: ReturnType<typeof createPRReviewResult>;
   readlineAnswers?: string[];
@@ -368,6 +394,10 @@ async function loadCli(options: {
   const generateIssueDraft = vi.fn();
   if (options.issueDraftResult) {
     generateIssueDraft.mockResolvedValue(options.issueDraftResult);
+  }
+  const generateIssueDraftGuidance = vi.fn();
+  for (const result of options.issueDraftGuidanceResults ?? []) {
+    generateIssueDraftGuidance.mockResolvedValueOnce(result);
   }
   const generateIssueResolutionPlan = vi.fn();
   if (options.issueResolutionPlanResult) {
@@ -433,6 +463,7 @@ async function loadCli(options: {
     generateCommitMessage,
     generateDiffSummary,
     generateIssueDraft,
+    generateIssueDraftGuidance,
     generatePRReview,
     generateIssueResolutionPlan,
     resolveRepositoryConfig: vi.fn((config?: {
@@ -484,6 +515,7 @@ async function loadCli(options: {
     generateCommitMessage,
     generateDiffSummary,
     generateIssueDraft,
+    generateIssueDraftGuidance,
     generatePRReview,
     generateIssueResolutionPlan,
     execFileSync,
@@ -2008,8 +2040,9 @@ describe("CLI integration", () => {
   it("generates a local issue draft and saves it under .git-ai/issues", async () => {
     const beforeDrafts = listIssueDraftFiles();
     const issueDraft = createIssueDraftResult();
-    const { run, generateIssueDraft } = await loadCli({
+    const { run, generateIssueDraft, generateIssueDraftGuidance } = await loadCli({
       issueDraftResult: issueDraft,
+      issueDraftGuidanceResults: [createIssueDraftGuidanceReadyResult()],
       readlineAnswers: [
         "Combine PR description and review summary into a single PR assistant action.",
         "Should update the PR body rather than replacing it.",
@@ -2017,6 +2050,10 @@ describe("CLI integration", () => {
       spawnSyncImpl: (command, args) => {
         if (command === "gh" && args[0] === "--version") {
           return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        if (command.startsWith("vim ")) {
+          return { status: 0 };
         }
 
         throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
@@ -2028,9 +2065,17 @@ describe("CLI integration", () => {
 
     await run();
 
+    expect(generateIssueDraftGuidance).toHaveBeenCalledWith(expect.any(Object), {
+      featureIdea: "Combine PR description and review summary into a single PR assistant action.",
+      additionalContext: "Should update the PR body rather than replacing it.",
+      repositoryContext: expect.stringContaining("README.md excerpt:"),
+      answers: [],
+    });
     expect(generateIssueDraft).toHaveBeenCalledWith(expect.any(Object), {
       featureIdea: "Combine PR description and review summary into a single PR assistant action.",
       additionalContext: "Should update the PR body rather than replacing it.",
+      repositoryContext: expect.stringContaining("README.md excerpt:"),
+      clarificationTranscript: undefined,
     });
 
     const createdDraft = listIssueDraftFiles().find((entry) => !beforeDrafts.includes(entry));
@@ -2051,6 +2096,7 @@ describe("CLI integration", () => {
     const issueDraft = createIssueDraftResult();
     const { run, execFileSync } = await loadCli({
       issueDraftResult: issueDraft,
+      issueDraftGuidanceResults: [createIssueDraftGuidanceReadyResult()],
       readlineAnswers: ["Unify PR assistant outputs.", "", "y"],
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "remote") {
@@ -2069,6 +2115,10 @@ describe("CLI integration", () => {
         }
 
         if (command === "gh" && args[0] === "auth" && args[1] === "status") {
+          return { status: 0 };
+        }
+
+        if (command.startsWith("vim ")) {
           return { status: 0 };
         }
 
@@ -2101,6 +2151,71 @@ describe("CLI integration", () => {
     );
   });
 
+  it("asks iterative clarification questions before drafting when the issue is underspecified", async () => {
+    const beforeDrafts = listIssueDraftFiles();
+    const issueDraft = createIssueDraftResult();
+    const { run, generateIssueDraft, generateIssueDraftGuidance } = await loadCli({
+      issueDraftResult: issueDraft,
+      issueDraftGuidanceResults: [
+        createIssueDraftGuidanceClarifyResult(),
+        createIssueDraftGuidanceReadyResult(),
+      ],
+      readlineAnswers: [
+        "Turn issue draft into a guided specification workflow.",
+        "",
+        "Keep the current sections for now, but add technical considerations if the model has concrete ones.",
+      ],
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        if (command.startsWith("vim ")) {
+          return { status: 0 };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.env.OPENAI_API_KEY = "test-key";
+    process.argv = ["node", "git-ai", "issue", "draft"];
+
+    await run();
+
+    expect(generateIssueDraftGuidance).toHaveBeenNthCalledWith(1, expect.any(Object), {
+      featureIdea: "Turn issue draft into a guided specification workflow.",
+      additionalContext: undefined,
+      repositoryContext: expect.stringContaining("README.md excerpt:"),
+      answers: [],
+    });
+    expect(generateIssueDraftGuidance).toHaveBeenNthCalledWith(2, expect.any(Object), {
+      featureIdea: "Turn issue draft into a guided specification workflow.",
+      additionalContext: undefined,
+      repositoryContext: expect.stringContaining("README.md excerpt:"),
+      answers: [
+        {
+          question:
+            "Should the guided flow keep the current markdown sections, or should it add sections like out of scope and technical considerations?",
+          answer:
+            "Keep the current sections for now, but add technical considerations if the model has concrete ones.",
+        },
+      ],
+    });
+    expect(generateIssueDraft).toHaveBeenCalledWith(expect.any(Object), {
+      featureIdea: "Turn issue draft into a guided specification workflow.",
+      additionalContext: undefined,
+      repositoryContext: expect.stringContaining("README.md excerpt:"),
+      clarificationTranscript: expect.stringContaining(
+        "Keep the current sections for now, but add technical considerations if the model has concrete ones."
+      ),
+    });
+
+    const createdDraft = listIssueDraftFiles().find((entry) => !beforeDrafts.includes(entry));
+    expect(createdDraft).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "issues", createdDraft as string));
+  });
+
   it("creates a draft issue with a GitHub token when gh is unavailable", async () => {
     const beforeDrafts = listIssueDraftFiles();
     const issueDraft = createIssueDraftResult();
@@ -2115,6 +2230,7 @@ describe("CLI integration", () => {
 
     const { run } = await loadCli({
       issueDraftResult: issueDraft,
+      issueDraftGuidanceResults: [createIssueDraftGuidanceReadyResult()],
       readlineAnswers: ["Unify PR assistant outputs.", "", "y"],
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "remote") {
@@ -2126,6 +2242,10 @@ describe("CLI integration", () => {
       spawnSyncImpl: (command, args) => {
         if (command === "gh" && args[0] === "--version") {
           return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        if (command.startsWith("vim ")) {
+          return { status: 0 };
         }
 
         throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
@@ -2750,7 +2870,15 @@ describe("CLI integration", () => {
         const issueDraft = createIssueDraftResult();
         const { run } = await loadCli({
           issueDraftResult: issueDraft,
+          issueDraftGuidanceResults: [createIssueDraftGuidanceReadyResult()],
           readlineAnswers: ["Unify PR assistant outputs.", ""],
+          spawnSyncImpl: (command) => {
+            if (command.startsWith("vim ")) {
+              return { status: 0 };
+            }
+
+            throw new Error(`Unexpected spawnSync call: ${command}`);
+          },
         });
 
         process.env.OPENAI_API_KEY = "test-key";

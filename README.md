@@ -108,7 +108,7 @@ git-ai issue draft
 git-ai issue plan 54
 ```
 
-Use `draft` to turn a feature idea into a structured issue. Use `plan` to generate or refresh the managed issue-resolution plan comment for an existing GitHub issue.
+Use `draft` to turn a rough idea into a guided, repository-aware issue specification. The flow gathers repo context, asks targeted follow-up questions when needed, writes the draft under `.git-ai/issues/`, opens it in `$VISUAL`, `$EDITOR`, or `vim`, and only then offers optional issue creation. Use `plan` to generate or refresh the managed issue-resolution plan comment for an existing GitHub issue.
 
 ### Full issue-to-PR flow
 
@@ -276,7 +276,7 @@ Available subcommands:
 | Command | What it does |
 | --- | --- |
 | `git-ai issue <number>` | Full local issue-to-PR flow for the current Git repository. Fetches the configured forge issue, creates a branch, writes `.git-ai/` workspace files, opens an interactive Codex session, and then follows the final action chosen inside Codex. Commit runs the configured build command, creates the commit, and opens a PR if the configured forge supports it. Exit leaves the branch uncommitted and skips PR creation. |
-| `git-ai issue draft` | Interactive issue drafting flow. Prompts for a feature idea, generates a Markdown issue draft with AI, optionally opens it in `$VISUAL` or `$EDITOR`, and can create the issue through the configured forge when GitHub support is enabled. |
+| `git-ai issue draft` | Guided issue-specification flow. Prompts for a rough idea, gathers repository context, asks targeted follow-up questions until the issue is specific enough, writes a Markdown issue draft, opens it in `$VISUAL`, `$EDITOR`, or `vim`, and can create the issue through the configured forge when GitHub support is enabled. |
 | `git-ai issue plan <number>` | Generates an issue resolution plan for the configured forge issue and posts it as a managed comment. If an editable plan comment already exists, the command reuses it instead of overwriting collaborator edits. |
 | `git-ai issue prepare <number>` | Prepares the issue branch and `.git-ai/` workspace artifacts, then prints machine-readable JSON describing the run. |
 | `git-ai issue prepare <number> --mode github-action` | Same preparation flow, but writes prompt instructions tailored for non-interactive GitHub Actions runs. |
@@ -285,6 +285,7 @@ Available subcommands:
 Important behavior:
 
 - `git-ai issue` requires a clean working tree before it starts
+- `git-ai issue draft` always opens the generated draft in `$VISUAL`, `$EDITOR`, or `vim` before optional forge creation
 - `git-ai issue plan <number>` requires `OPENAI_API_KEY` the first time it generates a plan comment
 - local full issue runs require the `codex` CLI on `PATH`
 - full local issue runs execute the configured `buildCommand`, defaulting to `pnpm build`
