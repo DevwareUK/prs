@@ -116,9 +116,9 @@ Use `draft` to turn a feature idea into a structured issue. Use `plan` to genera
 git-ai issue 54
 ```
 
-This full local workflow fetches the configured issue, creates the working branch, writes `.git-ai/` run artifacts, opens Codex, runs the configured build command, commits the result, and opens a pull request when the configured forge supports it.
+This full local workflow fetches the configured issue, creates the working branch, writes `.git-ai/` run artifacts, opens Codex, and then follows the final action chosen inside Codex. Choosing commit runs the configured build command, commits the result, and opens a pull request when the configured forge supports it. Choosing exit leaves the branch and any generated changes uncommitted without opening a pull request.
 
-At the end of a successful local Codex run, the generated prompt now asks Codex to finish with an explicit done-state summary, including updated files, verification status, and next-step options for refining, committing, or exiting.
+At the end of a successful local Codex run, the generated prompt asks Codex to finish with an explicit done-state summary plus next-step options for refining, committing, or exiting. The outer `git-ai issue` flow now honors that final commit-or-exit choice instead of always auto-committing.
 
 If you need separate setup and completion steps:
 
@@ -275,7 +275,7 @@ Available subcommands:
 
 | Command | What it does |
 | --- | --- |
-| `git-ai issue <number>` | Full local issue-to-PR flow for the current Git repository. Fetches the configured forge issue, creates a branch, writes `.git-ai/` workspace files, opens an interactive Codex session, runs the configured build command, commits the result, and opens a PR if the configured forge supports it. |
+| `git-ai issue <number>` | Full local issue-to-PR flow for the current Git repository. Fetches the configured forge issue, creates a branch, writes `.git-ai/` workspace files, opens an interactive Codex session, and then follows the final action chosen inside Codex. Commit runs the configured build command, creates the commit, and opens a PR if the configured forge supports it. Exit leaves the branch uncommitted and skips PR creation. |
 | `git-ai issue draft` | Interactive issue drafting flow. Prompts for a feature idea, generates a Markdown issue draft with AI, optionally opens it in `$VISUAL` or `$EDITOR`, and can create the issue through the configured forge when GitHub support is enabled. |
 | `git-ai issue plan <number>` | Generates an issue resolution plan for the configured forge issue and posts it as a managed comment. If an editable plan comment already exists, the command reuses it instead of overwriting collaborator edits. |
 | `git-ai issue prepare <number>` | Prepares the issue branch and `.git-ai/` workspace artifacts, then prints machine-readable JSON describing the run. |
@@ -289,6 +289,7 @@ Important behavior:
 - local full issue runs require the `codex` CLI on `PATH`
 - full local issue runs execute the configured `buildCommand`, defaulting to `pnpm build`
 - local interactive Codex prompts end with an explicit done-state summary instead of silently stopping
+- for local full issue runs, choosing `Exit` inside Codex skips the automatic build, commit, and PR steps
 - PR creation uses the configured `baseBranch`, defaulting to `main`
 - GitHub-backed PR creation requires `gh` to be installed and authenticated
 - GitHub-backed issue plan comments require `GH_TOKEN` or `GITHUB_TOKEN`, or an authenticated `gh` session, when they are created
