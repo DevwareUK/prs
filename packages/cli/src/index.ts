@@ -20,6 +20,7 @@ import {
   formatCommandForDisplay,
   loadResolvedRepositoryConfig,
 } from "./config";
+import { buildCodexDoneStateInstructions } from "./codex-done-state";
 import {
   parsePrCommandArgs as parsePrCommandArgsImpl,
   type PrCommandOptions,
@@ -1040,6 +1041,13 @@ function buildCodexPrompt(
           "Do not wait for interactive user input.",
         ]
       : [];
+  const doneStateInstructions = buildCodexDoneStateInstructions({
+    mode: mode === "github-action" ? "non-interactive" : "interactive",
+    readyLabel:
+      mode === "github-action" ? "Ready for the next automation step" : "Ready to commit",
+    primaryActionLabel:
+      mode === "github-action" ? "Exit" : "Commit & create PR",
+  });
 
   return [
     "You are working in the current repository.",
@@ -1056,6 +1064,8 @@ function buildCodexPrompt(
     `- run \`${formatCommandForDisplay(buildCommand)}\` before finishing if code changes are made`,
     "- do not modify `.git-ai/` unless needed for local workflow artifacts",
     "- do not commit `.git-ai/` files",
+    "",
+    ...doneStateInstructions,
   ].join("\n");
 }
 

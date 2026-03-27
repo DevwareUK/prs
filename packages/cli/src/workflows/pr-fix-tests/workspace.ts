@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { buildCodexDoneStateInstructions } from "../../codex-done-state";
 import { formatCommandForDisplay } from "../../config";
 import type { PullRequestDetails } from "../../forge";
 import { formatRunTimestamp, toRepoRelativePath } from "../../run-artifacts";
@@ -40,6 +41,11 @@ function buildPullRequestFixTestsCodexPrompt(
 ): string {
   const snapshotFile = toRepoRelativePath(repoRoot, workspace.snapshotFilePath);
   const runDir = toRepoRelativePath(repoRoot, workspace.runDir);
+  const doneStateInstructions = buildCodexDoneStateInstructions({
+    mode: "interactive",
+    readyLabel: "Ready to commit",
+    primaryActionLabel: "Commit changes",
+  });
 
   return [
     "You are working in the current repository.",
@@ -56,6 +62,8 @@ function buildPullRequestFixTestsCodexPrompt(
     `- run \`${formatCommandForDisplay(buildCommand)}\` before finishing if code changes are made`,
     "- do not modify `.git-ai/` unless needed for local workflow artifacts",
     "- do not commit `.git-ai/` files",
+    "",
+    ...doneStateInstructions,
   ].join("\n");
 }
 

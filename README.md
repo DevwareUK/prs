@@ -118,6 +118,8 @@ git-ai issue 54
 
 This full local workflow fetches the configured issue, creates the working branch, writes `.git-ai/` run artifacts, opens Codex, runs the configured build command, commits the result, and opens a pull request when the configured forge supports it.
 
+At the end of a successful local Codex run, the generated prompt now asks Codex to finish with an explicit done-state summary, including updated files, verification status, and next-step options for refining, committing, or exiting.
+
 If you need separate setup and completion steps:
 
 ```bash
@@ -286,6 +288,7 @@ Important behavior:
 - `git-ai issue plan <number>` requires `OPENAI_API_KEY` the first time it generates a plan comment
 - local full issue runs require the `codex` CLI on `PATH`
 - full local issue runs execute the configured `buildCommand`, defaulting to `pnpm build`
+- local interactive Codex prompts end with an explicit done-state summary instead of silently stopping
 - PR creation uses the configured `baseBranch`, defaulting to `main`
 - GitHub-backed PR creation requires `gh` to be installed and authenticated
 - GitHub-backed issue plan comments require `GH_TOKEN` or `GITHUB_TOKEN`, or an authenticated `gh` session, when they are created
@@ -318,6 +321,7 @@ Important behavior:
 - local PR comment-fix runs require the `codex` CLI on `PATH`
 - local PR test-fix runs require the `codex` CLI on `PATH`
 - PR comment-fix and test-fix runs execute the configured `buildCommand`, defaulting to `pnpm build`
+- local interactive Codex prompts end with an explicit done-state summary and commit/exit options
 - the command expects the relevant PR branch to already be checked out locally before Codex starts editing
 - the interactive selector accepts numbered thread choices and, when available, grouped task choices like `g1`; `all` still selects every individual thread
 - `git-ai pr fix-tests <pr-number>` accepts `all`, `none`, or a comma-separated suggestion list like `1,2`

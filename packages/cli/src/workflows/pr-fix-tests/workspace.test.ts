@@ -123,6 +123,9 @@ describe("pr-fix-tests workspace", () => {
     expect(prompt).toContain("Use `.git-ai/runs/");
     expect(prompt).toContain("- keep code changes focused on implementing automated tests");
     expect(prompt).toContain("- run `pnpm build` before finishing if code changes are made");
+    expect(prompt).toContain("✅ Implementation complete");
+    expect(prompt).toContain("[2] Commit changes");
+    expect(prompt).toContain("treat `/continue`, `/commit`, and `/exit` as valid follow-up replies");
 
     expect(metadata.prNumber).toBe(71);
     expect(metadata.linkedIssues).toEqual([
@@ -203,6 +206,9 @@ describe("pr-fix-tests workspace", () => {
 
     expect(readFileSync(workspace.promptFilePath, "utf8")).toContain(
       '- run `pnpm exec vitest --project "cli smoke"` before finishing if code changes are made'
+    );
+    expect(readFileSync(workspace.promptFilePath, "utf8")).toContain(
+      "✅ Implementation complete"
     );
   });
 });

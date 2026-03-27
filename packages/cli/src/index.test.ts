@@ -1071,6 +1071,8 @@ describe("CLI integration", () => {
       "Read the pull request review fix snapshot"
     );
     expect(readFileSync(promptFilePath, "utf8")).toContain("keep code changes focused");
+    expect(readFileSync(promptFilePath, "utf8")).toContain("✅ Implementation complete");
+    expect(readFileSync(promptFilePath, "utf8")).toContain("[2] Commit changes");
     expect(readFileSync(outputLogPath, "utf8")).toContain("# git-ai pr fix-comments run log");
     expect(JSON.parse(readFileSync(metadataFilePath, "utf8"))).toMatchObject({
       prNumber: 88,
@@ -1369,6 +1371,8 @@ describe("CLI integration", () => {
     expect(readFileSync(promptFilePath, "utf8")).toContain(
       "implementing automated tests for the selected areas"
     );
+    expect(readFileSync(promptFilePath, "utf8")).toContain("✅ Implementation complete");
+    expect(readFileSync(promptFilePath, "utf8")).toContain("[2] Commit changes");
     expect(readFileSync(outputLogPath, "utf8")).toContain("# git-ai pr fix-tests run log");
     expect(JSON.parse(readFileSync(metadataFilePath, "utf8"))).toMatchObject({
       prNumber: 91,
@@ -2392,6 +2396,13 @@ describe("CLI integration", () => {
     );
     expect(readFileSync(promptFilePath, "utf8")).toContain(
       `Read the issue snapshot at \`${output.issueFile}\` before making changes.`
+    );
+    expect(readFileSync(promptFilePath, "utf8")).toContain("✅ Implementation complete");
+    expect(readFileSync(promptFilePath, "utf8")).toContain(
+      "Ready for the next automation step"
+    );
+    expect(readFileSync(promptFilePath, "utf8")).toContain(
+      "do not ask for input or wait for a reply after printing the done state"
     );
     expect(readFileSync(outputLogPath, "utf8")).toContain("# git-ai issue run log");
     expect(JSON.parse(readFileSync(metadataFilePath, "utf8"))).toMatchObject({
