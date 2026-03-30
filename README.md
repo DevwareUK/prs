@@ -72,7 +72,7 @@ git-ai test-backlog --top 5
 
 You only need extra tooling for advanced workflows:
 
-- `codex` on `PATH` for full local `git-ai issue <number>` runs, `git-ai pr fix-comments <pr-number>`, `git-ai pr fix-tests <pr-number>`, and richer repository inspection during `git-ai issue draft`
+- `codex` on `PATH` for `git-ai issue draft`, full local `git-ai issue <number>` runs, `git-ai pr fix-comments <pr-number>`, and `git-ai pr fix-tests <pr-number>`
 - `gh`, `GH_TOKEN`, or `GITHUB_TOKEN` for GitHub-backed issue and pull request flows
 
 `git-ai` resolves the active repository from your current Git working tree at runtime. It loads `.env` and `.git-ai/config.json` from that repository root, not from the CLI build location.
@@ -108,7 +108,7 @@ git-ai issue draft
 git-ai issue plan 54
 ```
 
-Use `draft` to turn a rough idea into a guided, repository-aware issue specification. The flow gathers a baseline repository summary, uses Codex to inspect relevant files when available, asks targeted follow-up questions when needed, writes the draft under `.git-ai/issues/`, opens it in `$VISUAL`, `$EDITOR`, or `vim`, and only then offers optional issue creation. Use `plan` to generate or refresh the managed issue-resolution plan comment for an existing GitHub issue.
+Use `draft` to hand a rough idea to an interactive Codex-led issue drafting flow. The CLI writes `.git-ai/` run artifacts, launches Codex so it can inspect the repository, ask only the follow-up questions it still needs, and write the draft under `.git-ai/issues/`, then opens the draft in `$VISUAL`, `$EDITOR`, or `vim` before offering optional issue creation. Use `plan` to generate or refresh the managed issue-resolution plan comment for an existing GitHub issue.
 
 ### Full issue-to-PR flow
 
@@ -276,7 +276,7 @@ Available subcommands:
 | Command | What it does |
 | --- | --- |
 | `git-ai issue <number>` | Full local issue-to-PR flow for the current Git repository. Fetches the configured forge issue, switches to the configured `baseBranch`, pulls the latest changes, creates the issue branch, writes `.git-ai/` workspace files, opens an interactive Codex session, and then follows the final action chosen inside Codex. Commit exits Codex, runs the configured build command, creates the commit, and opens a PR if the configured forge supports it. Exit leaves the branch uncommitted and skips PR creation. |
-| `git-ai issue draft` | Guided issue-specification flow. Prompts for a rough idea, gathers repository context from built-in repo summaries plus a targeted Codex inspection when available, asks targeted follow-up questions until the issue is specific enough, writes a Markdown issue draft, opens it in `$VISUAL`, `$EDITOR`, or `vim`, and can create the issue through the configured forge when GitHub support is enabled. |
+| `git-ai issue draft` | Codex-led interactive issue drafting flow. Prompts for a rough idea, creates `.git-ai/` draft-run artifacts, launches Codex so it can inspect the repository and ask targeted follow-up questions itself, expects Codex to write the Markdown draft under `.git-ai/issues/`, opens the reviewed draft in `$VISUAL`, `$EDITOR`, or `vim`, and can create the issue through the configured forge when GitHub support is enabled. |
 | `git-ai issue plan <number>` | Generates an issue resolution plan for the configured forge issue and posts it as a managed comment. If an editable plan comment already exists, the command reuses it instead of overwriting collaborator edits. |
 | `git-ai issue prepare <number>` | Switches to the configured `baseBranch`, pulls the latest changes, prepares the issue branch and `.git-ai/` workspace artifacts, and then prints machine-readable JSON describing the run. |
 | `git-ai issue prepare <number> --mode github-action` | Same preparation flow, but writes prompt instructions tailored for non-interactive GitHub Actions runs. |
@@ -286,7 +286,7 @@ Important behavior:
 
 - `git-ai issue` requires a clean working tree before it starts
 - `git-ai issue draft` always opens the generated draft in `$VISUAL`, `$EDITOR`, or `vim` before optional forge creation
-- `git-ai issue draft` uses `codex exec` for targeted repository inspection when `codex` is on `PATH`, and falls back to built-in repository summaries otherwise
+- `git-ai issue draft` requires the `codex` CLI on `PATH`
 - `git-ai issue plan <number>` requires `OPENAI_API_KEY` the first time it generates a plan comment
 - local full issue runs require the `codex` CLI on `PATH`
 - full local issue runs execute the configured `buildCommand`, defaulting to `pnpm build`

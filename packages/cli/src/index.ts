@@ -5,13 +5,10 @@ import {
   appendFileSync,
   existsSync,
   mkdirSync,
-  mkdtempSync,
   readdirSync,
   readFileSync,
-  rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import {
@@ -20,8 +17,6 @@ import {
   filterRepositoryPaths,
   generateCommitMessage,
   generateDiffSummary,
-  generateIssueDraft,
-  generateIssueDraftGuidance,
   generatePRReview,
   generateIssueResolutionPlan,
 } from "@git-ai/core";
@@ -63,6 +58,13 @@ type IssueWorkspace = {
 
 type IssueExecutionMode = "local" | "github-action";
 type IssueCompletionAction = "commit" | "exit";
+type IssueDraftWorkspace = {
+  runDir: string;
+  draftFilePath: string;
+  promptFilePath: string;
+  metadataFilePath: string;
+  outputLogPath: string;
+};
 
 type IssueCommandOptions =
   | {
@@ -74,7 +76,6 @@ type IssueCommandOptions =
       action: "draft";
     };
 
-type GeneratedIssueDraft = Awaited<ReturnType<typeof generateIssueDraft>>;
 type GeneratedIssueResolutionPlan = Awaited<
   ReturnType<typeof generateIssueResolutionPlan>
 >;
@@ -118,10 +119,6 @@ type IssueRunContext = {
 };
 
 const ISSUE_PLAN_COMMENT_MARKER = "<!-- git-ai:issue-plan -->";
-const ISSUE_DRAFT_MAX_CONTEXT_CHARS = 4000;
-const ISSUE_DRAFT_CODEX_SUMMARY_MAX_CHARS = 6000;
-const ISSUE_DRAFT_MAX_CLARIFICATION_ROUNDS = 4;
-const ISSUE_DRAFT_MAX_WORKSPACE_ENTRIES = 8;
 
 const ISSUE_USAGE = [
   "Usage:",
@@ -966,251 +963,96 @@ function createIssueBranchName(issueNumber: number, title: string): string {
   return `feat/issue-${issueNumber}-${slug}`;
 }
 
-function createIssueDraftFilePath(repoRoot: string): string {
+function createIssueDraftWorkspace(repoRoot: string): IssueDraftWorkspace {
+  const timestamp = formatRunTimestamp();
   const issueDir = resolve(repoRoot, ".git-ai", "issues");
+  const runDir = resolve(repoRoot, ".git-ai", "runs", `${timestamp}-issue-draft`);
+
   mkdirSync(issueDir, { recursive: true });
+  mkdirSync(runDir, { recursive: true });
 
-  return resolve(issueDir, `issue-draft-${formatRunTimestamp()}.md`);
+  return {
+    runDir,
+    draftFilePath: resolve(issueDir, `issue-draft-${timestamp}.md`),
+    promptFilePath: resolve(runDir, "prompt.md"),
+    metadataFilePath: resolve(runDir, "metadata.json"),
+    outputLogPath: resolve(runDir, "output.log"),
+  };
 }
 
-function truncateContext(value: string, maxChars = ISSUE_DRAFT_MAX_CONTEXT_CHARS): string {
-  const normalized = value.trim();
-  if (normalized.length <= maxChars) {
-    return normalized;
-  }
-
-  return `${normalized.slice(0, maxChars).trimEnd()}\n...(truncated)`;
-}
-
-function readOptionalContextFile(
+function buildIssueDraftCodexPrompt(
   repoRoot: string,
-  relativePath: string,
-  maxChars = ISSUE_DRAFT_MAX_CONTEXT_CHARS
-): string | undefined {
-  const filePath = resolve(repoRoot, relativePath);
-  if (!existsSync(filePath)) {
-    return undefined;
-  }
-
-  return truncateContext(readFileSync(filePath, "utf8"), maxChars);
-}
-
-function readPackageScriptSummary(filePath: string): string[] {
-  if (!existsSync(filePath)) {
-    return [];
-  }
-
-  try {
-    const rawPackage = JSON.parse(readFileSync(filePath, "utf8")) as {
-      scripts?: Record<string, string>;
-    };
-
-    return Object.keys(rawPackage.scripts ?? {}).sort();
-  } catch {
-    return [];
-  }
-}
-
-function listWorkspaceEntries(repoRoot: string, relativePath: string): string[] {
-  const directoryPath = resolve(repoRoot, relativePath);
-  if (!existsSync(directoryPath)) {
-    return [];
-  }
-
-  try {
-    return readdirSync(directoryPath, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name)
-      .sort()
-      .slice(0, ISSUE_DRAFT_MAX_WORKSPACE_ENTRIES);
-  } catch {
-    return [];
-  }
-}
-
-function tryReadOriginUrl(repoRoot: string): string | undefined {
-  try {
-    return execFileSync("git", ["-C", repoRoot, "remote", "get-url", "origin"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    }).trim();
-  } catch {
-    return undefined;
-  }
-}
-
-function formatWorkspaceScriptContext(
-  repoRoot: string,
-  relativePath: string,
-  entries: string[]
-): string[] {
-  const lines: string[] = [];
-
-  for (const entry of entries) {
-    const scriptNames = readPackageScriptSummary(
-      resolve(repoRoot, relativePath, entry, "package.json")
-    );
-    if (scriptNames.length === 0) {
-      continue;
-    }
-
-    lines.push(`- ${relativePath}/${entry}: ${scriptNames.join(", ")}`);
-  }
-
-  return lines;
-}
-
-function collectIssueDraftRepositoryContext(repoRoot: string): string {
-  const originUrl = tryReadOriginUrl(repoRoot);
-  const rootScripts = readPackageScriptSummary(resolve(repoRoot, "package.json"));
-  const packageEntries = listWorkspaceEntries(repoRoot, "packages");
-  const actionEntries = listWorkspaceEntries(repoRoot, "actions");
-  const workflowDir = resolve(repoRoot, ".github", "workflows");
-  const workflows = existsSync(workflowDir)
-    ? readdirSync(workflowDir)
-        .filter((entry) => entry.endsWith(".yml") || entry.endsWith(".yaml"))
-        .sort()
-        .slice(0, ISSUE_DRAFT_MAX_WORKSPACE_ENTRIES)
-    : [];
-  const sections = [
-    "Repository overview:",
-    `- Repository root: ${repoRoot}`,
-  ];
-
-  if (originUrl) {
-    sections.push(`- Origin remote: ${originUrl}`);
-  }
-
-  if (rootScripts.length > 0) {
-    sections.push(`- Root package scripts: ${rootScripts.join(", ")}`);
-  }
-
-  if (packageEntries.length > 0) {
-    sections.push(`- packages/: ${packageEntries.join(", ")}`);
-    sections.push("Package scripts:");
-    sections.push(...formatWorkspaceScriptContext(repoRoot, "packages", packageEntries));
-  }
-
-  if (actionEntries.length > 0) {
-    sections.push(`- actions/: ${actionEntries.join(", ")}`);
-    sections.push("Action package scripts:");
-    sections.push(...formatWorkspaceScriptContext(repoRoot, "actions", actionEntries));
-  }
-
-  if (workflows.length > 0) {
-    sections.push(`- GitHub workflows: ${workflows.join(", ")}`);
-  }
-
-  const readme = readOptionalContextFile(repoRoot, "README.md");
-  if (readme) {
-    sections.push("", "README.md excerpt:", readme);
-  }
-
-  const architecture = readOptionalContextFile(repoRoot, "ARCHITECTURE.md");
-  if (architecture) {
-    sections.push("", "ARCHITECTURE.md excerpt:", architecture);
-  }
-
-  const agents = readOptionalContextFile(repoRoot, "AGENTS.md");
-  if (agents) {
-    sections.push("", "AGENTS.md excerpt:", agents);
-  }
-
-  return sections.join("\n");
-}
-
-function buildIssueDraftRepositoryContextPrompt(
-  featureIdea: string,
-  baselineContext: string,
-  excludePaths: string[]
+  workspace: IssueDraftWorkspace,
+  featureIdea: string
 ): string {
-  const sections = [
-    "You are preparing repository-aware context for `git-ai issue draft`.",
-    "Inspect the repository only as needed for the feature idea below.",
-    "Use repository search and file reads to identify the most relevant implementation touchpoints.",
-    "Focus on concrete repository facts: related files, existing patterns, architecture notes, and constraints.",
-    "Avoid generated output, dependency directories, and the excluded paths when possible.",
-    "Do not ask clarifying questions and do not propose a full implementation plan.",
-    "Return plain text with these exact markdown headings:",
-    "## Relevant files",
-    "## Existing patterns",
-    "## Architecture notes",
-    "## Open questions",
+  const draftFile = toRepoRelativePath(repoRoot, workspace.draftFilePath);
+  const runDir = toRepoRelativePath(repoRoot, workspace.runDir);
+
+  return [
+    "You are working in the current repository.",
     "",
-    "Keep the response concise, repository-grounded, and specific to this idea.",
-    "Mention repo-relative paths and explain briefly why each one matters.",
+    "The user wants to turn a rough idea into an implementation-ready GitHub issue draft.",
     "",
-    "Feature idea:",
+    "Rough idea:",
     featureIdea,
-  ];
-
-  if (excludePaths.length > 0) {
-    sections.push("", "Repository context exclusions:");
-    for (const path of excludePaths) {
-      sections.push(`- ${path}`);
-    }
-  }
-
-  sections.push("", "Baseline repository context:", baselineContext);
-
-  return sections.join("\n");
+    "",
+    `Write the final Markdown issue draft to \`${draftFile}\`.`,
+    `Use \`${runDir}\` for run artifacts created by this workflow.`,
+    "",
+    "Instructions to Codex:",
+    "- inspect the repository only as needed to understand the idea and scope the work",
+    "- ask the user targeted clarifying questions when repository inspection does not answer an important implementation detail",
+    "- avoid asking questions that are already answerable from the codebase",
+    "- own the discovery, questioning, and drafting flow end to end",
+    "- keep the draft grounded in actual repository structure, existing patterns, and likely touchpoints",
+    "- write an implementation-ready Markdown issue draft with a top-level title heading and concrete sections such as summary, motivation, scope, requirements, and acceptance criteria when they add value",
+    "- write the completed draft to the provided draft path before exiting",
+    "- do not create the GitHub issue directly",
+    "- do not modify unrelated repository files",
+    "- do not modify `.git-ai/` except for the provided draft file and local workflow artifacts",
+    "",
+    "When the draft is complete and saved, stop.",
+  ].join("\n");
 }
 
-function buildRepositoryContext(
+function writeIssueDraftWorkspaceFiles(
   repoRoot: string,
   featureIdea: string,
-  excludePaths: string[]
-): string {
-  const baselineContext = collectIssueDraftRepositoryContext(repoRoot);
-  if (!canRunCommand("codex")) {
-    return baselineContext;
-  }
+  workspace: IssueDraftWorkspace
+): void {
+  const createdAt = new Date().toISOString();
+  const prompt = buildIssueDraftCodexPrompt(repoRoot, workspace, featureIdea);
 
-  const tempDir = mkdtempSync(resolve(tmpdir(), "git-ai-issue-draft-context-"));
-  const outputPath = resolve(tempDir, "codex-last-message.txt");
-
-  try {
-    const prompt = buildIssueDraftRepositoryContextPrompt(
-      featureIdea,
-      baselineContext,
-      excludePaths
-    );
-    const result = spawnSync(
-      "codex",
-      [
-        "exec",
-        "--sandbox",
-        "read-only",
-        "--cd",
-        repoRoot,
-        "--output-last-message",
-        outputPath,
-        prompt,
-      ],
+  writeFileSync(workspace.promptFilePath, `${prompt}\n`, "utf8");
+  writeFileSync(
+    workspace.metadataFilePath,
+    `${JSON.stringify(
       {
-        cwd: repoRoot,
-        encoding: "utf8",
-        maxBuffer: 10 * 1024 * 1024,
-        stdio: ["ignore", "pipe", "pipe"],
-      }
-    );
-
-    if (result.error || result.status !== 0 || !existsSync(outputPath)) {
-      return baselineContext;
-    }
-
-    const codexSummary = truncateContext(
-      readFileSync(outputPath, "utf8"),
-      ISSUE_DRAFT_CODEX_SUMMARY_MAX_CHARS
-    );
-    if (!codexSummary) {
-      return baselineContext;
-    }
-
-    return [baselineContext, "", "Repository-aware analysis:", codexSummary].join("\n");
-  } finally {
-    rmSync(tempDir, { recursive: true, force: true });
-  }
+        createdAt,
+        flow: "issue-draft",
+        featureIdea,
+        draftFile: toRepoRelativePath(repoRoot, workspace.draftFilePath),
+        promptFile: toRepoRelativePath(repoRoot, workspace.promptFilePath),
+        outputLog: toRepoRelativePath(repoRoot, workspace.outputLogPath),
+        runDir: toRepoRelativePath(repoRoot, workspace.runDir),
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+  writeFileSync(
+    workspace.outputLogPath,
+    [
+      "# git-ai issue draft run log",
+      "",
+      `Created: ${createdAt}`,
+      `Draft file: ${toRepoRelativePath(repoRoot, workspace.draftFilePath)}`,
+      `Prompt file: ${toRepoRelativePath(repoRoot, workspace.promptFilePath)}`,
+      "",
+    ].join("\n"),
+    "utf8"
+  );
 }
 
 function createIssueWorkspace(
@@ -1644,40 +1486,6 @@ function formatMarkdownList(items: string[]): string {
   return items.map((item) => `- ${item}`).join("\n");
 }
 
-function renderIssueDraftMarkdown(draft: GeneratedIssueDraft): string {
-  const lines = [
-    `# ${draft.title}`,
-    "",
-    "## Summary",
-    draft.summary,
-    "",
-    "## Motivation",
-    draft.motivation,
-    "",
-    "## Goal",
-    draft.goal,
-    "",
-    "## Proposed behavior",
-    formatMarkdownList(draft.proposedBehavior),
-    "",
-    "## Requirements",
-    formatMarkdownList(draft.requirements),
-  ];
-
-  if (draft.constraints && draft.constraints.length > 0) {
-    lines.push("", "## Constraints", formatMarkdownList(draft.constraints));
-  }
-
-  lines.push(
-    "",
-    "## Acceptance criteria",
-    formatMarkdownList(draft.acceptanceCriteria),
-    ""
-  );
-
-  return lines.join("\n");
-}
-
 function parseIssueDraftDocument(content: string): { title: string; body: string } {
   const lines = content.split(/\r?\n/);
   const titleLineIndex = lines.findIndex((line) => line.trim().length > 0);
@@ -1705,11 +1513,6 @@ function parseIssueDraftDocument(content: string): { title: string; body: string
   };
 }
 
-type IssueDraftClarificationAnswer = {
-  question: string;
-  answer: string;
-};
-
 async function promptForLine(prompt: string): Promise<string> {
   const rl = createInterface({
     input: process.stdin,
@@ -1734,59 +1537,9 @@ async function promptForRequiredLine(prompt: string): Promise<string> {
   }
 }
 
-function formatIssueDraftTranscript(
-  answers: IssueDraftClarificationAnswer[]
-): string | undefined {
-  if (answers.length === 0) {
-    return undefined;
-  }
-
-  return answers.map((entry) => `Q: ${entry.question}\nA: ${entry.answer}`).join("\n\n");
-}
-
-async function collectIssueDraftClarifications(
-  provider: OpenAIProvider,
-  featureIdea: string,
-  additionalContext: string | undefined,
-  repositoryContext: string
-): Promise<IssueDraftClarificationAnswer[]> {
-  const answers: IssueDraftClarificationAnswer[] = [];
-
-  for (
-    let round = 0;
-    round < ISSUE_DRAFT_MAX_CLARIFICATION_ROUNDS;
-    round += 1
-  ) {
-    const guidance = await generateIssueDraftGuidance(provider, {
-      featureIdea,
-      additionalContext,
-      repositoryContext,
-      answers: [...answers],
-    });
-
-    if (guidance.status === "ready") {
-      if (guidance.assistantSummary) {
-        console.log(guidance.assistantSummary);
-      }
-      return answers;
-    }
-
-    console.log(guidance.assistantSummary);
-    for (const question of guidance.questions) {
-      const answer = await promptForRequiredLine(`${question} `);
-      answers.push({
-        question,
-        answer,
-      });
-    }
-  }
-
-  console.log("Proceeding with the current answers after the clarification limit.");
-  return answers;
-}
-
 function shouldCreateIssue(response: string): boolean {
-  return ["y", "yes"].includes(response.trim().toLowerCase());
+  const normalized = response.trim().toLowerCase();
+  return normalized === "" || normalized === "y" || normalized === "yes";
 }
 
 function openFileInEditor(filePath: string): void {
@@ -2302,33 +2055,29 @@ async function runFeatureBacklogCommand(): Promise<void> {
 
 async function runIssueDraftCommand(): Promise<void> {
   const repoRoot = getDefaultRepoRoot();
-  const repositoryConfig = getRepositoryConfig(repoRoot);
   const featureIdea = await promptForRequiredLine("Rough idea: ");
-  const additionalContext = (await promptForLine("Optional context: ")).trim();
-  console.log("Gathering repository context...");
-  const repositoryContext = buildRepositoryContext(
-    repoRoot,
-    featureIdea,
-    repositoryConfig.aiContext.excludePaths
-  );
-  const provider = createProvider();
-  const clarificationAnswers = await collectIssueDraftClarifications(
-    provider,
-    featureIdea,
-    additionalContext || undefined,
-    repositoryContext
-  );
-  console.log("Drafting issue...");
-  const draft = await generateIssueDraft(provider, {
-    featureIdea,
-    additionalContext: additionalContext || undefined,
-    repositoryContext,
-    clarificationTranscript: formatIssueDraftTranscript(clarificationAnswers),
+  const workspace = createIssueDraftWorkspace(repoRoot);
+  writeIssueDraftWorkspaceFiles(repoRoot, featureIdea, workspace);
+
+  runCodex(repoRoot, {
+    promptFilePath: workspace.promptFilePath,
+    outputLogPath: workspace.outputLogPath,
   });
 
-  const draftFilePath = createIssueDraftFilePath(repoRoot);
-  writeFileSync(draftFilePath, renderIssueDraftMarkdown(draft), "utf8");
-  openFileInEditor(draftFilePath);
+  if (!existsSync(workspace.draftFilePath)) {
+    throw new Error(
+      `Codex did not write the issue draft to ${toRepoRelativePath(repoRoot, workspace.draftFilePath)}.`
+    );
+  }
+
+  const draftContents = readFileSync(workspace.draftFilePath, "utf8").trim();
+  if (!draftContents) {
+    throw new Error(
+      `Codex wrote an empty issue draft at ${toRepoRelativePath(repoRoot, workspace.draftFilePath)}.`
+    );
+  }
+
+  openFileInEditor(workspace.draftFilePath);
 
   const forge = getRepositoryForge(repoRoot);
   if (!forge.isAuthenticated()) {
@@ -2342,13 +2091,17 @@ async function runIssueDraftCommand(): Promise<void> {
     return;
   }
 
-  const createNow = await promptForLine("Create issue now? [y/N]: ");
+  const createNow = await promptForLine("Create this issue in GitHub? [Y/n]: ");
   if (!shouldCreateIssue(createNow)) {
-    console.log(`Draft kept at ${toRepoRelativePath(repoRoot, draftFilePath)}.`);
+    console.log(
+      `Draft kept at ${toRepoRelativePath(repoRoot, workspace.draftFilePath)}.`
+    );
     return;
   }
 
-  const reviewedDraft = parseIssueDraftDocument(readFileSync(draftFilePath, "utf8"));
+  const reviewedDraft = parseIssueDraftDocument(
+    readFileSync(workspace.draftFilePath, "utf8")
+  );
   const issueUrl = await forge.createDraftIssue(reviewedDraft.title, reviewedDraft.body);
   console.log(`Created issue: ${issueUrl}`);
 }

@@ -340,6 +340,32 @@ function listRunDirectories(): string[] {
   }
 }
 
+function readLatestRunMetadata(): {
+  runDir: string;
+  metadata: {
+    draftFile?: string;
+    promptFile?: string;
+    outputLog?: string;
+    runDir?: string;
+  };
+} {
+  const runDir = listRunDirectories().at(-1);
+  if (!runDir) {
+    throw new Error("Expected a run directory.");
+  }
+
+  const metadataPath = resolve(REPO_ROOT, ".git-ai", "runs", runDir, "metadata.json");
+  return {
+    runDir,
+    metadata: JSON.parse(readFileSync(metadataPath, "utf8")) as {
+      draftFile?: string;
+      promptFile?: string;
+      outputLog?: string;
+      runDir?: string;
+    },
+  };
+}
+
 function withRepositoryConfig(
   contents: string,
   callback: () => Promise<void>
@@ -2037,120 +2063,135 @@ describe("CLI integration", () => {
     expect(agentsContent).toContain("`none`");
   });
 
-  it("generates a local issue draft and saves it under .git-ai/issues", async () => {
+  it("launches a Codex-led issue draft workflow and saves the draft under .git-ai/issues", async () => {
     const beforeDrafts = listIssueDraftFiles();
-    const issueDraft = createIssueDraftResult();
+    const beforeRuns = listRunDirectories();
     let codexPrompt = "";
 
-    await withRepositoryConfig(
-      JSON.stringify({
-        aiContext: {
-          excludePaths: ["generated/**"],
-        },
-      }),
-      async () => {
-        const { run, generateIssueDraft, generateIssueDraftGuidance } = await loadCli({
-          issueDraftResult: issueDraft,
-          issueDraftGuidanceResults: [createIssueDraftGuidanceReadyResult()],
-          readlineAnswers: [
-            "Combine PR description and review summary into a single PR assistant action.",
-            "Should update the PR body rather than replacing it.",
-          ],
-          spawnSyncImpl: (command, args) => {
-            if (command === "codex" && args[0] === "--version") {
-              return { status: 0 };
-            }
+    const { run } = await loadCli({
+      readlineAnswers: [
+        "Combine PR description and review summary into a single PR assistant action.",
+      ],
+      spawnSyncImpl: (command, args) => {
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 0 };
+        }
 
-            if (command === "codex" && args[0] === "exec") {
-              codexPrompt = args[args.length - 1] ?? "";
-              const outputPathFlagIndex = args.indexOf("--output-last-message");
-              if (outputPathFlagIndex === -1) {
-                throw new Error("Expected codex exec to include --output-last-message");
-              }
+        if (command === "codex") {
+          const { metadata } = readLatestRunMetadata();
+          codexPrompt = readFileSync(
+            resolve(REPO_ROOT, metadata.promptFile as string),
+            "utf8"
+          );
+          writeFileSync(
+            resolve(REPO_ROOT, metadata.draftFile as string),
+            [
+              "# Merge PR description and review summary into one PR assistant action",
+              "",
+              "## Summary",
+              "Draft a single implementation path for combining the repository's PR description and review summary generation flows.",
+              "",
+              "## Requirements",
+              "- Reuse the existing PR assistant and body-merging patterns where possible.",
+              "- Preserve manual pull request body content outside the managed section.",
+              "",
+              "## Acceptance criteria",
+              "- Running the action updates a single managed PR assistant section.",
+              "- Existing non-managed PR body content is preserved.",
+              "",
+            ].join("\n"),
+            "utf8"
+          );
 
-              writeFileSync(
-                args[outputPathFlagIndex + 1],
-                [
-                  "## Relevant files",
-                  "- packages/cli/src/index.ts: owns the issue draft workflow and repository context collection.",
-                  "- README.md: documents the issue draft UX and command expectations.",
-                  "",
-                  "## Existing patterns",
-                  "- The CLI already builds lightweight repository context from package scripts and top-level docs before prompting the model.",
-                  "",
-                  "## Architecture notes",
-                  "- Issue drafting uses OpenAI for clarification and final draft generation, so repository inspection should enrich that prompt instead of replacing the CLI flow.",
-                  "",
-                  "## Open questions",
-                  "- Whether codex should remain optional when repository inspection is unavailable.",
-                ].join("\n"),
-                "utf8"
-              );
+          return { status: 0 };
+        }
 
-              return { status: 0, stdout: "", stderr: "" };
-            }
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh is unavailable") };
+        }
 
-            if (command === "gh" && args[0] === "--version") {
-              return { status: 1, error: new Error("gh is unavailable") };
-            }
+        if (command.startsWith("vim ")) {
+          return { status: 0 };
+        }
 
-            if (command.startsWith("vim ")) {
-              return { status: 0 };
-            }
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
 
-            throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
-          },
-        });
-
-        process.env.OPENAI_API_KEY = "test-key";
-        process.argv = ["node", "git-ai", "issue", "draft"];
-
-        await run();
-
-        expect(generateIssueDraftGuidance).toHaveBeenCalledWith(expect.any(Object), {
-          featureIdea:
-            "Combine PR description and review summary into a single PR assistant action.",
-          additionalContext: "Should update the PR body rather than replacing it.",
-          repositoryContext: expect.stringContaining("Repository-aware analysis:"),
-          answers: [],
-        });
-        expect(generateIssueDraft).toHaveBeenCalledWith(expect.any(Object), {
-          featureIdea:
-            "Combine PR description and review summary into a single PR assistant action.",
-          additionalContext: "Should update the PR body rather than replacing it.",
-          repositoryContext: expect.stringContaining(
-            "packages/cli/src/index.ts: owns the issue draft workflow"
-          ),
-          clarificationTranscript: undefined,
-        });
-      }
-    );
+    process.argv = ["node", "git-ai", "issue", "draft"];
+    await run();
 
     expect(codexPrompt).toContain(
       "Combine PR description and review summary into a single PR assistant action."
     );
-    expect(codexPrompt).toContain("generated/**");
+    expect(codexPrompt).toContain("ask the user targeted clarifying questions");
+    expect(codexPrompt).toContain(
+      "avoid asking questions that are already answerable from the codebase"
+    );
+    expect(codexPrompt).toContain("Write the final Markdown issue draft");
 
     const createdDraft = listIssueDraftFiles().find((entry) => !beforeDrafts.includes(entry));
     expect(createdDraft).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "issues", createdDraft as string));
 
-    const createdDraftPath = resolve(REPO_ROOT, ".git-ai", "issues", createdDraft as string);
-    cleanupTargets.add(createdDraftPath);
+    const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
+    expect(createdRunDir).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string));
 
-    const content = readFileSync(createdDraftPath, "utf8");
-    expect(content).toContain(`# ${issueDraft.title}`);
-    expect(content).toContain("## Summary");
-    expect(content).toContain("## Proposed behavior");
-    expect(content).toContain("- Do not overwrite non-managed PR body content.");
+    const metadata = JSON.parse(
+      readFileSync(
+        resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string, "metadata.json"),
+        "utf8"
+      )
+    ) as {
+      flow: string;
+      featureIdea: string;
+      draftFile: string;
+      promptFile: string;
+      runDir: string;
+    };
+    expect(metadata).toMatchObject({
+      flow: "issue-draft",
+      featureIdea:
+        "Combine PR description and review summary into a single PR assistant action.",
+      draftFile: `.git-ai/issues/${createdDraft}`,
+      promptFile: `.git-ai/runs/${createdRunDir}/prompt.md`,
+      runDir: `.git-ai/runs/${createdRunDir}`,
+    });
+
+    const content = readFileSync(
+      resolve(REPO_ROOT, ".git-ai", "issues", createdDraft as string),
+      "utf8"
+    );
+    expect(content).toContain("# Merge PR description and review summary into one PR assistant action");
+    expect(content).toContain("## Acceptance criteria");
+  });
+
+  it("requires the codex CLI for issue draft workflows", async () => {
+    const { run } = await loadCli({
+      readlineAnswers: ["Unify PR assistant outputs."],
+      spawnSyncImpl: (command, args) => {
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 1, error: new Error("codex is unavailable") };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.argv = ["node", "git-ai", "issue", "draft"];
+
+    await expect(run()).rejects.toThrow(
+      "The `codex` CLI is not available on PATH. Install it before running interactive git-ai Codex workflows."
+    );
   });
 
   it("creates a GitHub issue from the reviewed draft only after confirmation", async () => {
     const beforeDrafts = listIssueDraftFiles();
-    const issueDraft = createIssueDraftResult();
+    const beforeRuns = listRunDirectories();
+    const issueTitle = "Merge PR description and review summary into one PR assistant action";
     const { run, execFileSync } = await loadCli({
-      issueDraftResult: issueDraft,
-      issueDraftGuidanceResults: [createIssueDraftGuidanceReadyResult()],
-      readlineAnswers: ["Unify PR assistant outputs.", "", "y"],
+      readlineAnswers: ["Unify PR assistant outputs.", "y"],
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "remote") {
           return "git@github.com:DevwareUK/git-ai.git\n";
@@ -2164,7 +2205,18 @@ describe("CLI integration", () => {
       },
       spawnSyncImpl: (command, args) => {
         if (command === "codex" && args[0] === "--version") {
-          return { status: 1, error: new Error("codex is unavailable") };
+          return { status: 0 };
+        }
+
+        if (command === "codex") {
+          const { metadata } = readLatestRunMetadata();
+          writeFileSync(
+            resolve(REPO_ROOT, metadata.draftFile as string),
+            `# ${issueTitle}\n\n## Summary\nUnify the managed PR assistant outputs into one reviewed draft.\n`,
+            "utf8"
+          );
+
+          return { status: 0 };
         }
 
         if (command === "gh" && args[0] === "--version") {
@@ -2183,14 +2235,16 @@ describe("CLI integration", () => {
       },
     });
 
-    process.env.OPENAI_API_KEY = "test-key";
     process.argv = ["node", "git-ai", "issue", "draft"];
-
     await run();
 
     const createdDraft = listIssueDraftFiles().find((entry) => !beforeDrafts.includes(entry));
     expect(createdDraft).toBeDefined();
     cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "issues", createdDraft as string));
+
+    const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
+    expect(createdRunDir).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string));
 
     expect(execFileSync).toHaveBeenCalledWith(
       "gh",
@@ -2200,7 +2254,7 @@ describe("CLI integration", () => {
         "--repo",
         "DevwareUK/git-ai",
         "--title",
-        issueDraft.title,
+        issueTitle,
         "--body",
         expect.stringContaining("## Summary"),
       ],
@@ -2208,94 +2262,21 @@ describe("CLI integration", () => {
     );
   });
 
-  it("asks iterative clarification questions before drafting when the issue is underspecified", async () => {
-    const beforeDrafts = listIssueDraftFiles();
-    const issueDraft = createIssueDraftResult();
-    const { run, generateIssueDraft, generateIssueDraftGuidance } = await loadCli({
-      issueDraftResult: issueDraft,
-      issueDraftGuidanceResults: [
-        createIssueDraftGuidanceClarifyResult(),
-        createIssueDraftGuidanceReadyResult(),
-      ],
-      readlineAnswers: [
-        "Turn issue draft into a guided specification workflow.",
-        "",
-        "Keep the current sections for now, but add technical considerations if the model has concrete ones.",
-      ],
-      spawnSyncImpl: (command, args) => {
-        if (command === "codex" && args[0] === "--version") {
-          return { status: 1, error: new Error("codex is unavailable") };
-        }
-
-        if (command === "gh" && args[0] === "--version") {
-          return { status: 1, error: new Error("gh is unavailable") };
-        }
-
-        if (command.startsWith("vim ")) {
-          return { status: 0 };
-        }
-
-        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
-      },
-    });
-
-    process.env.OPENAI_API_KEY = "test-key";
-    process.argv = ["node", "git-ai", "issue", "draft"];
-
-    await run();
-
-    expect(generateIssueDraftGuidance).toHaveBeenNthCalledWith(1, expect.any(Object), {
-      featureIdea: "Turn issue draft into a guided specification workflow.",
-      additionalContext: undefined,
-      repositoryContext: expect.stringContaining("README.md excerpt:"),
-      answers: [],
-    });
-    expect(generateIssueDraftGuidance.mock.calls[0]?.[1]?.repositoryContext).not.toContain(
-      "Repository-aware analysis:"
-    );
-    expect(generateIssueDraftGuidance).toHaveBeenNthCalledWith(2, expect.any(Object), {
-      featureIdea: "Turn issue draft into a guided specification workflow.",
-      additionalContext: undefined,
-      repositoryContext: expect.stringContaining("README.md excerpt:"),
-      answers: [
-        {
-          question:
-            "Should the guided flow keep the current markdown sections, or should it add sections like out of scope and technical considerations?",
-          answer:
-            "Keep the current sections for now, but add technical considerations if the model has concrete ones.",
-        },
-      ],
-    });
-    expect(generateIssueDraft).toHaveBeenCalledWith(expect.any(Object), {
-      featureIdea: "Turn issue draft into a guided specification workflow.",
-      additionalContext: undefined,
-      repositoryContext: expect.stringContaining("README.md excerpt:"),
-      clarificationTranscript: expect.stringContaining(
-        "Keep the current sections for now, but add technical considerations if the model has concrete ones."
-      ),
-    });
-
-    const createdDraft = listIssueDraftFiles().find((entry) => !beforeDrafts.includes(entry));
-    expect(createdDraft).toBeDefined();
-    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "issues", createdDraft as string));
-  });
-
   it("creates a draft issue with a GitHub token when gh is unavailable", async () => {
     const beforeDrafts = listIssueDraftFiles();
-    const issueDraft = createIssueDraftResult();
+    const beforeRuns = listRunDirectories();
+    const issueTitle = "Merge PR description and review summary into one PR assistant action";
     const fetchMock = vi.fn().mockResolvedValueOnce(
       createFetchResponse({
         number: 109,
-        title: issueDraft.title,
+        title: issueTitle,
         html_url: "https://github.com/DevwareUK/git-ai/issues/109",
       })
     );
     vi.stubGlobal("fetch", fetchMock);
 
     const { run } = await loadCli({
-      issueDraftResult: issueDraft,
-      issueDraftGuidanceResults: [createIssueDraftGuidanceReadyResult()],
-      readlineAnswers: ["Unify PR assistant outputs.", "", "y"],
+      readlineAnswers: ["Unify PR assistant outputs.", "y"],
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "remote") {
           return "git@github.com:DevwareUK/git-ai.git\n";
@@ -2305,7 +2286,18 @@ describe("CLI integration", () => {
       },
       spawnSyncImpl: (command, args) => {
         if (command === "codex" && args[0] === "--version") {
-          return { status: 1, error: new Error("codex is unavailable") };
+          return { status: 0 };
+        }
+
+        if (command === "codex") {
+          const { metadata } = readLatestRunMetadata();
+          writeFileSync(
+            resolve(REPO_ROOT, metadata.draftFile as string),
+            `# ${issueTitle}\n\n## Summary\nUnify the managed PR assistant outputs into one reviewed draft.\n`,
+            "utf8"
+          );
+
+          return { status: 0 };
         }
 
         if (command === "gh" && args[0] === "--version") {
@@ -2320,7 +2312,6 @@ describe("CLI integration", () => {
       },
     });
 
-    process.env.OPENAI_API_KEY = "test-key";
     process.env.GH_TOKEN = "";
     process.env.GITHUB_TOKEN = "test-token";
     process.argv = ["node", "git-ai", "issue", "draft"];
@@ -2330,6 +2321,10 @@ describe("CLI integration", () => {
     const createdDraft = listIssueDraftFiles().find((entry) => !beforeDrafts.includes(entry));
     expect(createdDraft).toBeDefined();
     cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "issues", createdDraft as string));
+
+    const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
+    expect(createdRunDir).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string));
 
     expect(fetchMock).toHaveBeenCalledWith(
       "https://api.github.com/repos/DevwareUK/git-ai/issues",
@@ -2341,7 +2336,7 @@ describe("CLI integration", () => {
       })
     );
     expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
-      title: issueDraft.title,
+      title: issueTitle,
       body: expect.stringContaining("## Summary"),
       labels: [],
     });
@@ -3122,14 +3117,22 @@ describe("CLI integration", () => {
     await withRepositoryConfig(
       JSON.stringify({ forge: { type: "none" } }, null, 2),
       async () => {
-        const issueDraft = createIssueDraftResult();
         const { run } = await loadCli({
-          issueDraftResult: issueDraft,
-          issueDraftGuidanceResults: [createIssueDraftGuidanceReadyResult()],
-          readlineAnswers: ["Unify PR assistant outputs.", ""],
+          readlineAnswers: ["Unify PR assistant outputs."],
           spawnSyncImpl: (command, args) => {
             if (command === "codex" && args[0] === "--version") {
-              return { status: 1, error: new Error("codex is unavailable") };
+              return { status: 0 };
+            }
+
+            if (command === "codex") {
+              const { metadata } = readLatestRunMetadata();
+              writeFileSync(
+                resolve(REPO_ROOT, metadata.draftFile as string),
+                "# Unify PR assistant outputs.\n\n## Summary\nKeep a single managed PR assistant section.\n",
+                "utf8"
+              );
+
+              return { status: 0 };
             }
 
             if (command.startsWith("vim ")) {
@@ -3140,7 +3143,6 @@ describe("CLI integration", () => {
           },
         });
 
-        process.env.OPENAI_API_KEY = "test-key";
         process.argv = ["node", "git-ai", "issue", "draft"];
 
         const messages: string[] = [];
@@ -3148,6 +3150,12 @@ describe("CLI integration", () => {
           messages.push(String(message ?? ""));
         });
         await run();
+
+        const { runDir, metadata } = readLatestRunMetadata();
+        cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "runs", runDir));
+        if (metadata.draftFile) {
+          cleanupTargets.add(resolve(REPO_ROOT, metadata.draftFile));
+        }
 
         expect(messages.join("\n")).toContain(
           "Issue creation skipped because repository forge support is disabled by .git-ai/config.json."
