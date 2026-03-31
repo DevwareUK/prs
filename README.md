@@ -116,7 +116,7 @@ Use `draft` to hand a rough idea to an interactive Codex-led issue drafting flow
 git-ai issue 54
 ```
 
-This full local workflow fetches the configured issue, switches to the configured `baseBranch`, pulls the latest changes, creates the working branch, writes `.git-ai/` run artifacts, opens Codex, and resumes automatically when you exit the Codex session. After Codex returns control, `git-ai` runs the configured build command, previews the proposed commit message, lets you commit it as-is or edit it first, and then opens a pull request when the configured forge supports it.
+This full local workflow fetches the configured issue, switches to the configured `baseBranch`, pulls the latest changes, creates the working branch, writes `.git-ai/` run artifacts, opens Codex, and resumes automatically when you exit the Codex session. After Codex returns control, `git-ai` runs the configured build command, generates a proposed commit message from the completed diff, lets you commit it as-is or edit it first, and then generates a reviewer-ready PR title/body from the diff before opening a pull request when the configured forge supports it. The generated PR body includes both an issue-closing reference such as `Closes #54` and the managed PR assistant section markers used by the PR assistant automation.
 
 At the end of a successful local Codex run, the generated prompt asks Codex to finish with an explicit done-state summary, a short note about how to see the result in action or what was verified, and plain-language next steps. If you want more changes, keep talking to Codex. When you are satisfied and want `git-ai` to resume, type `/exit`.
 
@@ -275,12 +275,12 @@ Available subcommands:
 
 | Command | What it does |
 | --- | --- |
-| `git-ai issue <number>` | Full local issue-to-PR flow for the current Git repository. Fetches the configured forge issue, switches to the configured `baseBranch`, pulls the latest changes, creates the issue branch, writes `.git-ai/` workspace files, opens an interactive Codex session, runs the configured build command after Codex exits, previews the proposed commit message, and then either creates the commit and opens a PR or leaves the branch uncommitted. |
+| `git-ai issue <number>` | Full local issue-to-PR flow for the current Git repository. Fetches the configured forge issue, switches to the configured `baseBranch`, pulls the latest changes, creates the issue branch, writes `.git-ai/` workspace files, opens an interactive Codex session, runs the configured build command after Codex exits, generates a proposed commit message from the completed diff for review, and then either creates the commit plus an AI-authored PR title/body or leaves the branch uncommitted. Generated PR bodies include an issue-closing reference and the managed PR assistant section markers. |
 | `git-ai issue draft` | Codex-led interactive issue drafting flow. Prompts for a rough idea, creates `.git-ai/` draft-run artifacts, launches Codex so it can inspect the repository and ask targeted follow-up questions itself, expects Codex to write the Markdown draft under `.git-ai/issues/`, previews the draft in the terminal, and lets you create it as-is, modify it in `$VISUAL`, `$EDITOR`, or `vim`, or keep it on disk without creating the issue. |
 | `git-ai issue plan <number>` | Generates an issue resolution plan for the configured forge issue and posts it as a managed comment. If an editable plan comment already exists, the command reuses it instead of overwriting collaborator edits. |
 | `git-ai issue prepare <number>` | Switches to the configured `baseBranch`, pulls the latest changes, prepares the issue branch and `.git-ai/` workspace artifacts, and then prints machine-readable JSON describing the run. |
 | `git-ai issue prepare <number> --mode github-action` | Same preparation flow, but writes prompt instructions tailored for non-interactive GitHub Actions runs. |
-| `git-ai issue finalize <number>` | Previews the proposed `feat: address issue #<number>` commit message, lets you edit or skip it, and creates the commit only after confirmation. |
+| `git-ai issue finalize <number>` | Generates a proposed commit message from the current repository diff, lets you preview, edit, or skip it, and creates the commit only after confirmation. |
 
 Important behavior:
 

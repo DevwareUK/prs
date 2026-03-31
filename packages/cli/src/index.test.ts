@@ -396,6 +396,18 @@ async function loadCli(options: {
     ReturnType<typeof createIssueDraftGuidanceClarifyResult>
   >;
   issueResolutionPlanResult?: ReturnType<typeof createIssueResolutionPlanResult>;
+  prAssistantResult?: {
+    summary: string;
+    keyChanges: string[];
+    riskAreas: string[];
+    reviewerFocus: string[];
+  };
+  prDescriptionResult?: {
+    title: string;
+    body: string;
+    testingNotes?: string;
+    riskNotes?: string;
+  };
   prReviewResult?: ReturnType<typeof createPRReviewResult>;
   readlineAnswers?: string[];
   runtimeRepoRoot?: string;
@@ -430,13 +442,41 @@ async function loadCli(options: {
     generateIssueResolutionPlan.mockResolvedValue(options.issueResolutionPlanResult);
   }
   const generateCommitMessage = vi.fn();
-  if (options.commitMessageResult) {
-    generateCommitMessage.mockResolvedValue(options.commitMessageResult);
-  }
+  generateCommitMessage.mockResolvedValue(
+    options.commitMessageResult ?? {
+      title: "feat: update generated changes",
+    }
+  );
   const generateDiffSummary = vi.fn();
   if (options.diffSummaryResult) {
     generateDiffSummary.mockResolvedValue(options.diffSummaryResult);
   }
+  const generatePRAssistant = vi.fn();
+  generatePRAssistant.mockResolvedValue(
+    options.prAssistantResult ?? {
+      summary: "Adds reviewer-ready PR assistant content to issue-created pull requests.",
+      keyChanges: ["Generates a managed PR assistant section from the completed diff."],
+      riskAreas: [],
+      reviewerFocus: ["Confirm the generated PR body and assistant section match the diff."],
+    }
+  );
+  const generatePRDescription = vi.fn();
+  generatePRDescription.mockResolvedValue(
+    options.prDescriptionResult ?? {
+      title: "feat: improve issue workflow authoring",
+      body: [
+        "## Summary",
+        "Generate commit and PR authoring from the completed issue diff.",
+        "",
+        "## Changes",
+        "- Reuse the AI-backed commit message path for issue finalization.",
+        "- Generate a reviewer-ready PR body before opening the pull request.",
+        "",
+        "## Testing",
+        "- pnpm build",
+      ].join("\n"),
+    }
+  );
   const generatePRReview = vi.fn();
   if (options.prReviewResult) {
     generatePRReview.mockResolvedValue(options.prReviewResult);
@@ -479,19 +519,26 @@ async function loadCli(options: {
     close: vi.fn(),
   }));
 
-  vi.doMock("@git-ai/core", () => ({
+  vi.doMock("@git-ai/core", async () => {
+    const prAssistantBody = await import("../../core/src/pr-assistant-body");
+
+    return {
     DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS,
     DEFAULT_REPOSITORY_BASE_BRANCH: "main",
     DEFAULT_REPOSITORY_BUILD_COMMAND: ["pnpm", "build"],
     analyzeFeatureBacklog,
     analyzeTestBacklog,
+    buildPRAssistantSection: prAssistantBody.buildPRAssistantSection,
     filterRepositoryPaths,
     generateCommitMessage,
     generateDiffSummary,
     generateIssueDraft,
     generateIssueDraftGuidance,
     generatePRReview,
+    generatePRAssistant,
+    generatePRDescription,
     generateIssueResolutionPlan,
+    mergePRAssistantSection: prAssistantBody.mergePRAssistantSection,
     resolveRepositoryConfig: vi.fn((config?: {
       aiContext?: { excludePaths?: string[] };
       baseBranch?: string;
@@ -512,7 +559,8 @@ async function loadCli(options: {
         type: config?.forge?.type ?? "github",
       },
     })),
-  }));
+  };
+  });
   vi.doMock("@git-ai/contracts", () => ({
     RepositoryConfig: {
       parse: vi.fn((value?: unknown) => parseMockRepositoryConfig(value)),
@@ -542,6 +590,8 @@ async function loadCli(options: {
     generateDiffSummary,
     generateIssueDraft,
     generateIssueDraftGuidance,
+    generatePRAssistant,
+    generatePRDescription,
     generatePRReview,
     generateIssueResolutionPlan,
     execFileSync,
@@ -2951,12 +3001,34 @@ describe("CLI integration", () => {
       )
       .mockResolvedValueOnce(createFetchResponse([]));
     vi.stubGlobal("fetch", fetchMock);
+    process.env.OPENAI_API_KEY = "test-key";
 
     const { run, spawnSync } = await loadCli({
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "status") {
           gitStatusCallCount += 1;
           return gitStatusCallCount === 1 ? "" : " M packages/cli/src/index.ts\n";
+        }
+
+        if (command === "git" && args[0] === "diff" && args[1] === "--name-only") {
+          return "packages/cli/src/index.ts\n";
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "diff" &&
+          args[1] === "HEAD" &&
+          args[2] === "--" &&
+          args[3] === "packages/cli/src/index.ts"
+        ) {
+          return [
+            "diff --git a/packages/cli/src/index.ts b/packages/cli/src/index.ts",
+            "--- a/packages/cli/src/index.ts",
+            "+++ b/packages/cli/src/index.ts",
+            "@@ -1,1 +1,1 @@",
+            '-const prompt = "old";',
+            '+const prompt = "new";',
+          ].join("\n");
         }
 
         if (command === "git" && args[0] === "remote") {
@@ -3090,13 +3162,61 @@ describe("CLI integration", () => {
       )
       .mockResolvedValueOnce(createFetchResponse([]));
     vi.stubGlobal("fetch", fetchMock);
+    process.env.OPENAI_API_KEY = "test-key";
 
     try {
       const { run, spawnSync } = await loadCli({
+        prDescriptionResult: {
+          title: "refactor: use configured issue run defaults",
+          body: [
+            "## Summary",
+            "Use repository config defaults throughout the issue workflow.",
+            "",
+            "## Changes",
+            "- Read the configured base branch before preparing the issue branch.",
+            "- Use the configured build command before finalizing issue work.",
+            "",
+            "## Testing",
+            "- npm run verify",
+          ].join("\n"),
+        },
+        prAssistantResult: {
+          summary: "Keeps issue-created pull requests aligned with repository configuration.",
+          keyChanges: [
+            "Uses the configured base branch for issue preparation and PR creation.",
+            "Uses the configured build command before commit and PR steps.",
+          ],
+          riskAreas: [],
+          reviewerFocus: [
+            "Verify the workflow honors the configured base branch and build command.",
+          ],
+        },
         execFileSyncImpl: (command, args) => {
           if (command === "git" && args[0] === "status") {
             gitStatusCallCount += 1;
             return gitStatusCallCount === 1 ? "" : " M packages/cli/src/index.ts\n";
+          }
+
+          if (command === "git" && args[0] === "diff" && args[1] === "--name-only") {
+            return "packages/cli/src/index.ts\n";
+          }
+
+          if (
+            command === "git" &&
+            args[0] === "diff" &&
+            args[1] === "HEAD" &&
+            args[2] === "--" &&
+            args[3] === "packages/cli/src/index.ts"
+          ) {
+            return [
+              "diff --git a/packages/cli/src/index.ts b/packages/cli/src/index.ts",
+              "--- a/packages/cli/src/index.ts",
+              "+++ b/packages/cli/src/index.ts",
+              "@@ -1,1 +1,2 @@",
+              "-const config = defaultConfig;",
+              "+const config = loadConfig();",
+              '+const baseBranch = "develop";',
+            ].join("\n");
           }
 
           if (command === "git" && args[0] === "remote") {
@@ -3138,6 +3258,10 @@ describe("CLI integration", () => {
 
           if (command === "git" && args[0] === "checkout" && args[1] === "-b") {
             gitCommands.push(args);
+            return { status: 0 };
+          }
+
+          if (command === "codex" && args[0] === "--version") {
             return { status: 0 };
           }
 
@@ -3189,21 +3313,25 @@ describe("CLI integration", () => {
           encoding: "utf8",
         })
       );
-      expect(spawnSync).toHaveBeenCalledWith(
-        "gh",
-        [
-          "pr",
-          "create",
-          "--title",
-          "Fix: Use repository config in issue runs",
-          "--body",
-          `Closes #${issueNumber}`,
-          "--base",
-          "develop",
-        ],
-        expect.objectContaining({
-          encoding: "utf8",
-        })
+      const prCreateCall = spawnSync.mock.calls.find(
+        ([command, args]) =>
+          command === "gh" &&
+          Array.isArray(args) &&
+          args[0] === "pr" &&
+          args[1] === "create"
+      );
+      expect(prCreateCall).toBeDefined();
+      const prArgs = prCreateCall?.[1] as string[];
+      expect(prArgs[prArgs.indexOf("--title") + 1]).toBe(
+        "refactor: use configured issue run defaults"
+      );
+      expect(prArgs[prArgs.indexOf("--base") + 1]).toBe("develop");
+      expect(prArgs[prArgs.indexOf("--body") + 1]).toContain(`Closes #${issueNumber}`);
+      expect(prArgs[prArgs.indexOf("--body") + 1]).toContain(
+        "<!-- git-ai:pr-assistant:start -->"
+      );
+      expect(prArgs[prArgs.indexOf("--body") + 1]).toContain(
+        "### Reviewer focus"
       );
     } finally {
       if (hadOriginalConfig && originalConfig !== undefined) {
@@ -3413,11 +3541,37 @@ describe("CLI integration", () => {
   });
 
   it("lets issue finalize review and modify the proposed commit message before committing", async () => {
-    const { run, spawnSync } = await loadCli({
+    process.env.OPENAI_API_KEY = "test-key";
+    const { run, spawnSync, generateCommitMessage } = await loadCli({
+      commitMessageResult: {
+        title: "feat: propose issue finalize commit message",
+        body: "Generated from the current diff.",
+      },
       readlineAnswers: ["m", "y"],
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "status") {
           return " M packages/cli/src/index.ts\n";
+        }
+
+        if (command === "git" && args[0] === "diff" && args[1] === "--name-only") {
+          return "packages/cli/src/index.ts\n";
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "diff" &&
+          args[1] === "HEAD" &&
+          args[2] === "--" &&
+          args[3] === "packages/cli/src/index.ts"
+        ) {
+          return [
+            "diff --git a/packages/cli/src/index.ts b/packages/cli/src/index.ts",
+            "--- a/packages/cli/src/index.ts",
+            "+++ b/packages/cli/src/index.ts",
+            "@@ -1,1 +1,2 @@",
+            '-const state = "before";',
+            '+const state = "after";',
+          ].join("\n");
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -3463,14 +3617,40 @@ describe("CLI integration", () => {
       "feat: refine issue finalize commit message"
     );
     expect(stdout.output()).toContain("Proposed commit message");
+    expect(generateCommitMessage).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.stringContaining('diff --git a/packages/cli/src/index.ts b/packages/cli/src/index.ts')
+    );
   });
 
   it("leaves issue finalize changes uncommitted when the reviewed message is declined", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
     const { run, spawnSync } = await loadCli({
       readlineAnswers: ["n"],
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "status") {
           return " M packages/cli/src/index.ts\n";
+        }
+
+        if (command === "git" && args[0] === "diff" && args[1] === "--name-only") {
+          return "packages/cli/src/index.ts\n";
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "diff" &&
+          args[1] === "HEAD" &&
+          args[2] === "--" &&
+          args[3] === "packages/cli/src/index.ts"
+        ) {
+          return [
+            "diff --git a/packages/cli/src/index.ts b/packages/cli/src/index.ts",
+            "--- a/packages/cli/src/index.ts",
+            "+++ b/packages/cli/src/index.ts",
+            "@@ -1,1 +1,2 @@",
+            '-const state = "before";',
+            '+const state = "after";',
+          ].join("\n");
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -3508,9 +3688,10 @@ describe("CLI integration", () => {
   });
 
   it("fails issue finalize clearly when no generated changes exist", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
     const { run } = await loadCli({
       execFileSyncImpl: (command, args) => {
-        if (command === "git" && args[0] === "status") {
+        if (command === "git" && args[0] === "diff" && args[1] === "--name-only") {
           return "";
         }
 

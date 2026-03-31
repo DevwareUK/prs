@@ -693,7 +693,7 @@ class GitHubRepositoryForge implements RepositoryForge {
     };
   }
 
-  createPullRequest(input: CreatePullRequestInput): void {
+  async createPullRequest(input: CreatePullRequestInput): Promise<void> {
     runTrackedCommand(
       "git",
       ["push", "-u", "origin", input.branchName],
@@ -707,9 +707,9 @@ class GitHubRepositoryForge implements RepositoryForge {
         "pr",
         "create",
         "--title",
-        `Fix: ${input.issueTitle}`,
+        input.title,
         "--body",
-        `Closes #${input.issueNumber}`,
+        input.body,
         "--base",
         input.baseBranch,
       ],

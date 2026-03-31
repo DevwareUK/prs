@@ -6,7 +6,7 @@ var import_contracts = require("@git-ai/contracts");
 var import_core = require("@git-ai/core");
 var import_providers = require("@git-ai/providers");
 
-// src/body.ts
+// ../../packages/core/src/pr-assistant-body.ts
 var PR_ASSISTANT_START_MARKER = "<!-- git-ai:pr-assistant:start -->";
 var PR_ASSISTANT_END_MARKER = "<!-- git-ai:pr-assistant:end -->";
 var PR_ASSISTANT_SECTION_PATTERN = new RegExp(

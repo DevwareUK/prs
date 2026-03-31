@@ -60,9 +60,9 @@ export type CreatedIssueRecord = {
 
 export interface CreatePullRequestInput {
   branchName: string;
-  issueNumber: number;
-  issueTitle: string;
   baseBranch: string;
+  title: string;
+  body: string;
   outputLogPath: string;
 }
 
@@ -81,7 +81,7 @@ export interface RepositoryForge {
     body: string,
     labels: string[]
   ): Promise<CreatedIssueRecord>;
-  createPullRequest(input: CreatePullRequestInput): void;
+  createPullRequest(input: CreatePullRequestInput): Promise<void>;
 }
 
 class NoopRepositoryForge implements RepositoryForge {
@@ -139,7 +139,7 @@ class NoopRepositoryForge implements RepositoryForge {
     );
   }
 
-  createPullRequest(): void {
+  async createPullRequest(): Promise<void> {
     throw new Error(
       "Repository forge support is disabled by .git-ai/config.json. Configure `forge.type` to enable pull request creation."
     );

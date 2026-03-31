@@ -14,11 +14,15 @@ import { createInterface } from "node:readline/promises";
 import {
   analyzeFeatureBacklog,
   analyzeTestBacklog,
+  buildPRAssistantSection,
   filterRepositoryPaths,
   generateCommitMessage,
   generateDiffSummary,
   generatePRReview,
   generateIssueResolutionPlan,
+  generatePRAssistant,
+  generatePRDescription,
+  mergePRAssistantSection,
 } from "@git-ai/core";
 import { OpenAIProvider } from "@git-ai/providers";
 import dotenv from "dotenv";
@@ -120,6 +124,23 @@ type IssueRunContext = {
   branchName: string;
   workspace: IssueWorkspace;
   mode: IssueExecutionMode;
+};
+
+type FinalizeIssueRunResult =
+  | {
+      committed: false;
+    }
+  | {
+      committed: true;
+      diff: string;
+      commitMessage: ReviewedGeneratedText;
+    };
+
+type GeneratedIssuePullRequest = {
+  title: string;
+  body: string;
+  titleFilePath?: string;
+  bodyFilePath?: string;
 };
 
 const ISSUE_PLAN_COMMENT_MARKER = "<!-- git-ai:issue-plan -->";
@@ -315,6 +336,19 @@ function readHeadDiff(): string {
     "No changes found in git diff HEAD. Make a change before generating a diff summary.",
     "HEAD",
     "git diff HEAD requires at least one commit. Create an initial commit before generating a diff summary.",
+    {
+      excludePaths: getRepositoryConfig(repoRoot).aiContext.excludePaths,
+      repoRoot,
+    }
+  );
+}
+
+function readIssueWorkflowDiff(repoRoot: string): string {
+  return readGitDiff(
+    ["diff", "HEAD"],
+    "Codex completed without producing any file changes to commit.",
+    "HEAD",
+    "git diff HEAD requires at least one commit. Create an initial commit before finalizing issue work.",
     {
       excludePaths: getRepositoryConfig(repoRoot).aiContext.excludePaths,
       repoRoot,
@@ -1412,17 +1446,24 @@ function commitGeneratedChanges(
 }
 
 function printManualPrInstructions(
+  repoRoot: string,
   branchName: string,
-  issueNumber: number,
-  baseBranch: string
+  baseBranch: string,
+  prTitleFilePath: string,
+  prBodyFilePath: string
 ): void {
+  const titleFile = toRepoRelativePath(repoRoot, prTitleFilePath);
+  const bodyFile = toRepoRelativePath(repoRoot, prBodyFilePath);
+
   console.log("");
   console.log("GitHub CLI is unavailable or not authenticated.");
   console.log("To push and open a PR manually, run:");
   console.log(`  git push -u origin ${branchName}`);
   console.log(
-    `  gh pr create --title "Fix: <issue title>" --body "Closes #${issueNumber}" --base ${baseBranch}`
+    `  gh pr create --title "$(cat ${JSON.stringify(titleFile)})" --body-file ${JSON.stringify(bodyFile)} --base ${baseBranch}`
   );
+  console.log(`Generated PR title: ${titleFile}`);
+  console.log(`Generated PR body: ${bodyFile}`);
 }
 
 function formatCommitMessage(title: string, body?: string): string {
@@ -1514,6 +1555,86 @@ async function reviewCommitMessage(
     promptForLine,
     validate: validateCommitMessage,
   });
+}
+
+async function generateIssueCommitProposal(
+  repoRoot: string,
+  provider: OpenAIProvider
+): Promise<{ diff: string; initialMessage: string }> {
+  const diff = readIssueWorkflowDiff(repoRoot);
+  const result = await generateCommitMessage(provider, diff);
+
+  return {
+    diff,
+    initialMessage: formatCommitMessage(result.title, result.body),
+  };
+}
+
+function ensureIssueClosingReference(body: string, issueNumber: number): string {
+  const trimmedBody = body.trim();
+  if (new RegExp(`\\bcloses\\s+#${issueNumber}\\b`, "i").test(trimmedBody)) {
+    return trimmedBody;
+  }
+
+  return `${trimmedBody}\n\nCloses #${issueNumber}`;
+}
+
+function writeIssuePullRequestFiles(
+  runDir: string,
+  title: string,
+  body: string
+): Pick<GeneratedIssuePullRequest, "titleFilePath" | "bodyFilePath"> {
+  const titleFilePath = resolve(runDir, "pull-request-title.txt");
+  const bodyFilePath = resolve(runDir, "pull-request-body.md");
+
+  writeFileSync(titleFilePath, `${title.trim()}\n`, "utf8");
+  writeFileSync(bodyFilePath, `${body.trim()}\n`, "utf8");
+
+  return {
+    titleFilePath,
+    bodyFilePath,
+  };
+}
+
+async function generateIssuePullRequest(
+  provider: OpenAIProvider,
+  options: {
+    issueNumber: number;
+    issue: IssueDetails;
+    diff: string;
+    commitMessage: ReviewedGeneratedText;
+    runDir?: string;
+  }
+): Promise<GeneratedIssuePullRequest> {
+  const description = await generatePRDescription(provider, {
+    diff: options.diff,
+    issueTitle: options.issue.title,
+    issueBody: options.issue.body,
+  });
+  const assistant = await generatePRAssistant(provider, {
+    diff: options.diff,
+    prTitle: description.title,
+    prBody: description.body,
+    commitMessages: options.commitMessage.content.trim(),
+  });
+
+  const body = mergePRAssistantSection(
+    ensureIssueClosingReference(description.body, options.issueNumber),
+    buildPRAssistantSection(assistant)
+  );
+  const pullRequest: GeneratedIssuePullRequest = {
+    title: description.title,
+    body,
+  };
+
+  if (!options.runDir) {
+    return pullRequest;
+  }
+
+  return {
+    ...pullRequest,
+    ...writeIssuePullRequestFiles(options.runDir, pullRequest.title, pullRequest.body),
+  };
 }
 
 function toTitleCase(value: string): string {
@@ -2152,24 +2273,32 @@ async function prepareIssueRun(
 async function finalizeIssueRun(
   repoRoot: string,
   issueNumber: number,
+  provider: OpenAIProvider,
   runDir?: string
-): Promise<boolean> {
+): Promise<FinalizeIssueRunResult> {
+  const proposal = await generateIssueCommitProposal(repoRoot, provider);
   const reviewedCommitMessage = await reviewCommitMessage(
     repoRoot,
     issueNumber,
     "Commit generated changes with this message? [Y/n/m]: ",
-    `feat: address issue #${issueNumber}\n`,
+    proposal.initialMessage,
     runDir
   );
 
   if (!reviewedCommitMessage) {
     console.log("Leaving the generated changes uncommitted.");
-    return false;
+    return {
+      committed: false,
+    };
   }
 
   console.log("Committing generated changes...");
   commitGeneratedChanges(repoRoot, reviewedCommitMessage);
-  return true;
+  return {
+    committed: true,
+    diff: proposal.diff,
+    commitMessage: reviewedCommitMessage,
+  };
 }
 
 async function runIssueCommand(): Promise<void> {
@@ -2215,7 +2344,8 @@ async function runIssueCommand(): Promise<void> {
   }
 
   if (issueCommand.action === "finalize") {
-    await finalizeIssueRun(repoRoot, issueCommand.issueNumber);
+    const provider = createProvider();
+    await finalizeIssueRun(repoRoot, issueCommand.issueNumber, provider);
     return;
   }
 
@@ -2237,23 +2367,33 @@ async function runIssueCommand(): Promise<void> {
   console.log("Verifying build...");
   verifyBuild(repoRoot, repositoryConfig.buildCommand, context.workspace.outputLogPath);
 
-  const committed = await finalizeIssueRun(
+  const provider = createProvider();
+  const finalized = await finalizeIssueRun(
     repoRoot,
     context.issueNumber,
+    provider,
     context.workspace.runDir
   );
-  if (!committed) {
+  if (!finalized.committed) {
     console.log("Skipping pull request creation because no commit was created.");
     return;
   }
 
+  const pullRequest = await generateIssuePullRequest(provider, {
+    issueNumber: context.issueNumber,
+    issue: context.issue,
+    diff: finalized.diff,
+    commitMessage: finalized.commitMessage,
+    runDir: context.workspace.runDir,
+  });
+
   if (forge.isAuthenticated()) {
     console.log("Pushing branch and opening a pull request...");
-    forge.createPullRequest({
+    await forge.createPullRequest({
       branchName: context.branchName,
-      issueNumber: context.issueNumber,
-      issueTitle: context.issue.title,
       baseBranch: repositoryConfig.baseBranch,
+      title: pullRequest.title,
+      body: pullRequest.body,
       outputLogPath: context.workspace.outputLogPath,
     });
     return;
@@ -2261,9 +2401,11 @@ async function runIssueCommand(): Promise<void> {
 
   if (forge.type === "github") {
     printManualPrInstructions(
+      repoRoot,
       context.branchName,
-      context.issueNumber,
-      repositoryConfig.baseBranch
+      repositoryConfig.baseBranch,
+      pullRequest.titleFilePath ?? resolve(context.workspace.runDir, "pull-request-title.txt"),
+      pullRequest.bodyFilePath ?? resolve(context.workspace.runDir, "pull-request-body.md")
     );
     return;
   }

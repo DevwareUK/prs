@@ -5,6 +5,7 @@ export * from "./issue-draft";
 export * from "./issue-resolution-plan";
 export * from "./path-filter";
 export * from "./pr-assistant";
+export * from "./pr-assistant-body";
 export * from "./pr-description";
 export * from "./pr-review";
 export * from "./repository-config";
