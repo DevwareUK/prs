@@ -1,10 +1,18 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
+import { spawnSync } from "node:child_process";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   PullRequestDetails,
   RepositoryComment,
   RepositoryForge,
 } from "../../forge";
 import type { PullRequestFixTestsWorkspace } from "./types";
+
+vi.mock("node:child_process", () => ({
+  spawnSync: vi.fn(),
+}));
 
 vi.mock("./snapshot", () => ({
   fetchLinkedIssuesForPullRequest: vi.fn(),
@@ -75,22 +83,31 @@ function createForge(
 }
 
 describe("runPrFixTestsCommand", () => {
-  const repoRoot = "/repo";
+  const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-pr-fix-tests-"));
   const workspace: PullRequestFixTestsWorkspace = {
-    runDir: "/repo/.git-ai/runs/20260320T112935000Z-pr-71-fix-tests",
-    snapshotFilePath:
-      "/repo/.git-ai/runs/20260320T112935000Z-pr-71-fix-tests/pr-test-suggestions.md",
-    promptFilePath:
-      "/repo/.git-ai/runs/20260320T112935000Z-pr-71-fix-tests/prompt.md",
-    metadataFilePath:
-      "/repo/.git-ai/runs/20260320T112935000Z-pr-71-fix-tests/metadata.json",
-    outputLogPath:
-      "/repo/.git-ai/runs/20260320T112935000Z-pr-71-fix-tests/output.log",
+    runDir: resolve(repoRoot, ".git-ai/runs/20260320T112935000Z-pr-71-fix-tests"),
+    snapshotFilePath: resolve(
+      repoRoot,
+      ".git-ai/runs/20260320T112935000Z-pr-71-fix-tests/pr-test-suggestions.md"
+    ),
+    promptFilePath: resolve(
+      repoRoot,
+      ".git-ai/runs/20260320T112935000Z-pr-71-fix-tests/prompt.md"
+    ),
+    metadataFilePath: resolve(
+      repoRoot,
+      ".git-ai/runs/20260320T112935000Z-pr-71-fix-tests/metadata.json"
+    ),
+    outputLogPath: resolve(
+      repoRoot,
+      ".git-ai/runs/20260320T112935000Z-pr-71-fix-tests/output.log"
+    ),
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.mocked(spawnSync).mockReturnValue({ status: 0 } as never);
     vi.mocked(fetchLinkedIssuesForPullRequest).mockResolvedValue([
       {
         number: 70,
@@ -100,6 +117,10 @@ describe("runPrFixTestsCommand", () => {
       },
     ]);
     vi.mocked(createPullRequestFixTestsWorkspace).mockReturnValue(workspace);
+  });
+
+  afterAll(() => {
+    rmSync(repoRoot, { recursive: true, force: true });
   });
 
   it("fetches PR context, writes workspace files, runs Codex, verifies the build, and commits", async () => {
@@ -181,13 +202,19 @@ describe("runPrFixTestsCommand", () => {
     expect(hasChanges).toHaveBeenCalledWith(repoRoot);
     expect(commitGeneratedChanges).toHaveBeenCalledWith(
       repoRoot,
-      "test: address AI test suggestions for PR #71"
+      expect.objectContaining({
+        content: "test: address AI test suggestions for PR #71\n",
+        filePath: resolve(workspace.runDir, "commit-message.txt"),
+      })
     );
     expect(promptForLine).toHaveBeenNthCalledWith(
       1,
       "Select test suggestions to implement [all|none|1,2,...]: "
     );
-    expect(promptForLine).toHaveBeenNthCalledWith(2, "Commit fixes now? [Y/n]: ");
+    expect(promptForLine).toHaveBeenNthCalledWith(
+      2,
+      "Commit fixes with this message? [Y/n/m]: "
+    );
   });
 
   it("uses the newest managed AI test suggestions comment when multiple candidates exist", async () => {
@@ -342,7 +369,64 @@ describe("runPrFixTestsCommand", () => {
     expect(verifyBuild).toHaveBeenCalledWith(repoRoot, ["pnpm", "build"], workspace.outputLogPath);
     expect(hasChanges).toHaveBeenCalledWith(repoRoot);
     expect(commitGeneratedChanges).not.toHaveBeenCalled();
-    expect(promptForLine).toHaveBeenNthCalledWith(2, "Commit fixes now? [Y/n]: ");
+    expect(promptForLine).toHaveBeenNthCalledWith(
+      2,
+      "Commit fixes with this message? [Y/n/m]: "
+    );
+  });
+
+  it("lets the user modify the reviewed commit message before committing", async () => {
+    const { forge } = createForge([
+      createManagedComment(
+        [
+          "<!-- git-ai-test-suggestions -->",
+          "## AI Test Suggestions",
+          "",
+          "### Suggested test areas",
+          "",
+          "#### Verify post-Codex workflow",
+          "- Priority: High",
+          "- Why it matters: The reviewed commit message should be editable.",
+        ].join("\n")
+      ),
+    ]);
+    const promptForLine = vi.fn().mockResolvedValueOnce("1").mockResolvedValueOnce("m").mockResolvedValueOnce("y");
+    const runCodex = vi.fn();
+    const verifyBuild = vi.fn();
+    const hasChanges = vi.fn().mockReturnValue(true);
+    const commitGeneratedChanges = vi.fn();
+
+    vi.mocked(spawnSync).mockImplementation((command) => {
+      const [, quotedPath = ""] = String(command).match(/"([^"]+)"/) ?? [];
+      writeFileSync(
+        quotedPath,
+        "test: refine AI test suggestion commit message\n\nReviewed before commit.\n",
+        "utf8"
+      );
+      return { status: 0 } as never;
+    });
+
+    await runPrFixTestsCommand({
+      prNumber: 71,
+      repoRoot,
+      buildCommand: ["pnpm", "build"],
+      forge,
+      ensureCleanWorkingTree: vi.fn(),
+      promptForLine,
+      runCodex,
+      verifyBuild,
+      hasChanges,
+      commitGeneratedChanges,
+    });
+
+    expect(commitGeneratedChanges).toHaveBeenCalledWith(
+      repoRoot,
+      expect.objectContaining({
+        content: "test: refine AI test suggestion commit message\n\nReviewed before commit.\n",
+        filePath: resolve(workspace.runDir, "commit-message.txt"),
+      })
+    );
+    expect(spawnSync).toHaveBeenCalledTimes(1);
   });
 
   it("fails clearly when Codex completes without producing any file changes", async () => {

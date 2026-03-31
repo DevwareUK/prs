@@ -1153,7 +1153,7 @@ describe("CLI integration", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(spawnSync).toHaveBeenCalledWith(
       "git",
-      ["commit", "-m", "fix: address PR review comments for #88"],
+      ["commit", "-F", expect.stringContaining("commit-message.txt")],
       expect.any(Object)
     );
   });
@@ -1460,7 +1460,7 @@ describe("CLI integration", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(spawnSync).toHaveBeenCalledWith(
       "git",
-      ["commit", "-m", "test: address AI test suggestions for PR #91"],
+      ["commit", "-F", expect.stringContaining("commit-message.txt")],
       expect.any(Object)
     );
   });
@@ -2194,11 +2194,11 @@ describe("CLI integration", () => {
     );
   });
 
-  it("creates a GitHub issue from the reviewed draft only after confirmation", async () => {
+  it("previews the generated issue draft and creates it without opening an editor by default", async () => {
     const beforeDrafts = listIssueDraftFiles();
     const beforeRuns = listRunDirectories();
     const issueTitle = "Merge PR description and review summary into one PR assistant action";
-    const { run, execFileSync } = await loadCli({
+    const { run, execFileSync, spawnSync } = await loadCli({
       readlineAnswers: ["Unify PR assistant outputs.", "y"],
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "remote") {
@@ -2235,7 +2235,92 @@ describe("CLI integration", () => {
           return { status: 0 };
         }
 
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.argv = ["node", "git-ai", "issue", "draft"];
+    const stdout = captureStdout();
+    await run();
+
+    const createdDraft = listIssueDraftFiles().find((entry) => !beforeDrafts.includes(entry));
+    expect(createdDraft).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "issues", createdDraft as string));
+
+    const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
+    expect(createdRunDir).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string));
+
+    expect(execFileSync).toHaveBeenCalledWith(
+      "gh",
+      [
+        "issue",
+        "create",
+        "--repo",
+        "DevwareUK/git-ai",
+        "--title",
+        issueTitle,
+        "--body",
+        expect.stringContaining("## Summary"),
+      ],
+      expect.any(Object)
+    );
+    expect(stdout.output()).toContain("Generated issue draft");
+    expect(stdout.output()).toContain(`# ${issueTitle}`);
+    expect(
+      spawnSync.mock.calls.some(([command]) => String(command).startsWith("vim "))
+    ).toBe(false);
+  });
+
+  it("opens the issue draft in an editor only when modify is selected", async () => {
+    const beforeDrafts = listIssueDraftFiles();
+    const beforeRuns = listRunDirectories();
+    const initialTitle = "Merge PR description and review summary into one PR assistant action";
+    const updatedTitle = "Unify the PR assistant draft creation flow";
+    const { run, execFileSync, spawnSync } = await loadCli({
+      readlineAnswers: ["Unify PR assistant outputs.", "m", "y"],
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/git-ai.git\n";
+        }
+
+        if (command === "gh" && args[0] === "issue" && args[1] === "create") {
+          return "https://github.com/DevwareUK/git-ai/issues/100\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "codex") {
+          const { metadata } = readLatestRunMetadata();
+          writeFileSync(
+            resolve(REPO_ROOT, metadata.draftFile as string),
+            `# ${initialTitle}\n\n## Summary\nUnify the managed PR assistant outputs into one reviewed draft.\n`,
+            "utf8"
+          );
+
+          return { status: 0 };
+        }
+
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "gh" && args[0] === "auth" && args[1] === "status") {
+          return { status: 0 };
+        }
+
         if (command.startsWith("vim ")) {
+          const { metadata } = readLatestRunMetadata();
+          writeFileSync(
+            resolve(REPO_ROOT, metadata.draftFile as string),
+            `# ${updatedTitle}\n\n## Summary\nCreate one managed PR assistant artifact.\n`,
+            "utf8"
+          );
           return { status: 0 };
         }
 
@@ -2262,11 +2347,151 @@ describe("CLI integration", () => {
         "--repo",
         "DevwareUK/git-ai",
         "--title",
-        issueTitle,
+        updatedTitle,
         "--body",
         expect.stringContaining("## Summary"),
       ],
       expect.any(Object)
+    );
+    expect(
+      spawnSync.mock.calls.filter(([command]) => String(command).startsWith("vim "))
+    ).toHaveLength(1);
+  });
+
+  it("keeps the reviewed issue draft on disk when creation is declined", async () => {
+    const beforeDrafts = listIssueDraftFiles();
+    const beforeRuns = listRunDirectories();
+    const issueTitle = "Merge PR description and review summary into one PR assistant action";
+    const { run, execFileSync } = await loadCli({
+      readlineAnswers: ["Unify PR assistant outputs.", "n"],
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/git-ai.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "codex") {
+          const { metadata } = readLatestRunMetadata();
+          writeFileSync(
+            resolve(REPO_ROOT, metadata.draftFile as string),
+            `# ${issueTitle}\n\n## Summary\nUnify the managed PR assistant outputs into one reviewed draft.\n`,
+            "utf8"
+          );
+
+          return { status: 0 };
+        }
+
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "gh" && args[0] === "auth" && args[1] === "status") {
+          return { status: 0 };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.argv = ["node", "git-ai", "issue", "draft"];
+
+    const messages: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
+      messages.push(String(message ?? ""));
+    });
+    await run();
+
+    const createdDraft = listIssueDraftFiles().find((entry) => !beforeDrafts.includes(entry));
+    expect(createdDraft).toBeDefined();
+    const createdDraftPath = resolve(REPO_ROOT, ".git-ai", "issues", createdDraft as string);
+    cleanupTargets.add(createdDraftPath);
+
+    const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
+    expect(createdRunDir).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string));
+
+    expect(readFileSync(createdDraftPath, "utf8")).toContain(issueTitle);
+    expect(messages.join("\n")).toContain(`Draft kept at .git-ai/issues/${createdDraft}`);
+    expect(execFileSync).not.toHaveBeenCalledWith(
+      "gh",
+      expect.arrayContaining(["issue", "create"]),
+      expect.anything()
+    );
+  });
+
+  it("rejects empty modified issue drafts and lets the user cancel safely", async () => {
+    const beforeDrafts = listIssueDraftFiles();
+    const beforeRuns = listRunDirectories();
+    const { run, execFileSync } = await loadCli({
+      readlineAnswers: ["Unify PR assistant outputs.", "m", "n"],
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/git-ai.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "codex") {
+          const { metadata } = readLatestRunMetadata();
+          writeFileSync(
+            resolve(REPO_ROOT, metadata.draftFile as string),
+            "# Valid title\n\n## Summary\nStart with a valid draft.\n",
+            "utf8"
+          );
+
+          return { status: 0 };
+        }
+
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "gh" && args[0] === "auth" && args[1] === "status") {
+          return { status: 0 };
+        }
+
+        if (command.startsWith("vim ")) {
+          const { metadata } = readLatestRunMetadata();
+          writeFileSync(resolve(REPO_ROOT, metadata.draftFile as string), "", "utf8");
+          return { status: 0 };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.argv = ["node", "git-ai", "issue", "draft"];
+
+    const messages: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
+      messages.push(String(message ?? ""));
+    });
+    await run();
+
+    const createdDraft = listIssueDraftFiles().find((entry) => !beforeDrafts.includes(entry));
+    expect(createdDraft).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "issues", createdDraft as string));
+
+    const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
+    expect(createdRunDir).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string));
+
+    expect(messages.join("\n")).toContain("Issue draft cannot be empty.");
+    expect(execFileSync).not.toHaveBeenCalledWith(
+      "gh",
+      expect.arrayContaining(["issue", "create"]),
+      expect.anything()
     );
   });
 
@@ -2828,7 +3053,7 @@ describe("CLI integration", () => {
     );
     expect(spawnSync).toHaveBeenCalledWith(
       "git",
-      ["commit", "-m", "feat: address issue #145"],
+      ["commit", "-F", expect.stringContaining("commit-message.txt")],
       expect.any(Object)
     );
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -3159,10 +3384,6 @@ describe("CLI integration", () => {
               return { status: 0 };
             }
 
-            if (command.startsWith("vim ")) {
-              return { status: 0 };
-            }
-
             throw new Error(`Unexpected spawnSync call: ${command}`);
           },
         });
@@ -3170,6 +3391,7 @@ describe("CLI integration", () => {
         process.argv = ["node", "git-ai", "issue", "draft"];
 
         const messages: string[] = [];
+        const stdout = captureStdout();
         vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
           messages.push(String(message ?? ""));
         });
@@ -3184,8 +3406,105 @@ describe("CLI integration", () => {
         expect(messages.join("\n")).toContain(
           "Issue creation skipped because repository forge support is disabled by .git-ai/config.json."
         );
+        expect(stdout.output()).toContain("Generated issue draft");
+        expect(stdout.output()).toContain("# Unify PR assistant outputs.");
       }
     );
+  });
+
+  it("lets issue finalize review and modify the proposed commit message before committing", async () => {
+    const { run, spawnSync } = await loadCli({
+      readlineAnswers: ["m", "y"],
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          return " M packages/cli/src/index.ts\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command.startsWith("vim ")) {
+          const [, quotedPath = ""] = command.match(/"([^"]+)"/) ?? [];
+          writeFileSync(
+            quotedPath,
+            "feat: refine issue finalize commit message\n\nReviewed before commit.\n",
+            "utf8"
+          );
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "add") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "commit") {
+          return { status: 0 };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.argv = ["node", "git-ai", "issue", "finalize", "29"];
+    const stdout = captureStdout();
+
+    await run();
+
+    const commitCall = spawnSync.mock.calls.find(
+      ([command, args]) =>
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "commit"
+    );
+    expect(commitCall).toBeDefined();
+    const commitArgs = commitCall?.[1] as string[];
+    expect(commitArgs).toEqual(["commit", "-F", expect.stringContaining("commit-message.txt")]);
+    expect(readFileSync(commitArgs[2], "utf8")).toContain(
+      "feat: refine issue finalize commit message"
+    );
+    expect(stdout.output()).toContain("Proposed commit message");
+  });
+
+  it("leaves issue finalize changes uncommitted when the reviewed message is declined", async () => {
+    const { run, spawnSync } = await loadCli({
+      readlineAnswers: ["n"],
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          return " M packages/cli/src/index.ts\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "add") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "commit") {
+          return { status: 0 };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.argv = ["node", "git-ai", "issue", "finalize", "29"];
+
+    const messages: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
+      messages.push(String(message ?? ""));
+    });
+    await run();
+
+    expect(messages.join("\n")).toContain("Leaving the generated changes uncommitted.");
+    expect(
+      spawnSync.mock.calls.some(
+        ([command, args]) =>
+          command === "git" &&
+          Array.isArray(args) &&
+          args[0] === "commit"
+      )
+    ).toBe(false);
   });
 
   it("fails issue finalize clearly when no generated changes exist", async () => {

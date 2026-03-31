@@ -1,8 +1,14 @@
+import { resolve } from "node:path";
 import type {
   PullRequestDetails,
   PullRequestReviewComment,
   RepositoryForge,
 } from "../../forge";
+import {
+  reviewGeneratedText,
+  type ReviewedGeneratedText,
+  validateCommitMessage,
+} from "../../generated-text-review";
 import {
   buildPullRequestReviewTasks,
   buildPullRequestReviewThreads,
@@ -31,7 +37,7 @@ type RunPrFixCommentsCommandOptions = {
   ): void;
   verifyBuild(repoRoot: string, buildCommand: string[], outputLogPath: string): void;
   hasChanges(repoRoot: string): boolean;
-  commitGeneratedChanges(repoRoot: string, commitMessage: string): void;
+  commitGeneratedChanges(repoRoot: string, commitMessage: ReviewedGeneratedText): void;
 };
 
 function sortPullRequestReviewComments(
@@ -97,15 +103,6 @@ function printPullRequestReviewTasks(
       }
     }
   }
-}
-
-function shouldCommitGeneratedChanges(response: string): boolean {
-  const normalized = response.trim().toLowerCase();
-  if (!normalized) {
-    return true;
-  }
-
-  return ["y", "yes"].includes(normalized);
 }
 
 async function selectPullRequestReviewComments(
@@ -234,17 +231,21 @@ export async function runPrFixCommentsCommand(
     throw new Error("Codex completed without producing any file changes to commit.");
   }
 
-  const commitNow = shouldCommitGeneratedChanges(
-    await options.promptForLine("Commit fixes now? [Y/n]: ")
-  );
-  if (!commitNow) {
+  const reviewedCommitMessage = await reviewGeneratedText({
+    filePath: resolve(workspace.runDir, "commit-message.txt"),
+    initialContent: `fix: address PR review comments for #${pullRequest.number}\n`,
+    previewHeading: "Proposed commit message",
+    prompt: "Commit fixes with this message? [Y/n/m]: ",
+    emptyContentMessage: "Commit message cannot be empty.",
+    editorDescription: "commit message",
+    promptForLine: options.promptForLine,
+    validate: validateCommitMessage,
+  });
+  if (!reviewedCommitMessage) {
     console.log("Leaving the generated changes uncommitted.");
     return;
   }
 
   console.log("Committing generated changes...");
-  options.commitGeneratedChanges(
-    options.repoRoot,
-    `fix: address PR review comments for #${pullRequest.number}`
-  );
+  options.commitGeneratedChanges(options.repoRoot, reviewedCommitMessage);
 }

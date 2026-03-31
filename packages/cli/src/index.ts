@@ -38,6 +38,12 @@ import {
   type IssuePlanComment,
   type RepositoryForge,
 } from "./forge";
+import {
+  printGeneratedTextPreview,
+  reviewGeneratedText,
+  type ReviewedGeneratedText,
+  validateCommitMessage,
+} from "./generated-text-review";
 import { resolveRuntimeRepoRoot } from "./repo-root";
 import { formatRunTimestamp, toRepoRelativePath } from "./run-artifacts";
 import { parseSetupCommandArgs, runSetupCommand } from "./setup";
@@ -1388,7 +1394,10 @@ function verifyBuild(repoRoot: string, buildCommand: string[], outputLogPath: st
   );
 }
 
-function commitGeneratedChanges(repoRoot: string, commitMessage: string): void {
+function commitGeneratedChanges(
+  repoRoot: string,
+  commitMessage: ReviewedGeneratedText
+): void {
   if (!hasChanges(repoRoot)) {
     throw new Error("Codex completed without producing any file changes to commit.");
   }
@@ -1396,7 +1405,7 @@ function commitGeneratedChanges(repoRoot: string, commitMessage: string): void {
   runInteractiveCommand("git", ["add", "."], "Failed to stage the generated changes.", repoRoot);
   runInteractiveCommand(
     "git",
-    ["commit", "-m", commitMessage],
+    ["commit", "-F", commitMessage.filePath],
     "Failed to create the generated commit.",
     repoRoot
   );
@@ -1475,27 +1484,36 @@ async function promptForRequiredLine(prompt: string): Promise<string> {
   }
 }
 
-function shouldCreateIssue(response: string): boolean {
-  const normalized = response.trim().toLowerCase();
-  return normalized === "" || normalized === "y" || normalized === "yes";
+function createStandaloneIssueFinalizeRunDir(repoRoot: string, issueNumber: number): string {
+  const runDir = resolve(
+    repoRoot,
+    ".git-ai",
+    "runs",
+    `${formatRunTimestamp()}-issue-${issueNumber}-finalize`
+  );
+
+  mkdirSync(runDir, { recursive: true });
+  return runDir;
 }
 
-function openFileInEditor(filePath: string): void {
-  const editor = process.env.VISUAL?.trim() || process.env.EDITOR?.trim() || "vim";
-
-  console.log(`Opening draft in ${editor}...`);
-  const result = spawnSync(`${editor} ${JSON.stringify(filePath)}`, {
-    stdio: "inherit",
-    shell: true,
+async function reviewCommitMessage(
+  repoRoot: string,
+  issueNumber: number,
+  prompt: string,
+  initialMessage: string,
+  runDir?: string
+): Promise<ReviewedGeneratedText | null> {
+  const reviewRunDir = runDir ?? createStandaloneIssueFinalizeRunDir(repoRoot, issueNumber);
+  return reviewGeneratedText({
+    filePath: resolve(reviewRunDir, "commit-message.txt"),
+    initialContent: initialMessage,
+    previewHeading: "Proposed commit message",
+    prompt,
+    emptyContentMessage: "Commit message cannot be empty.",
+    editorDescription: "commit message",
+    promptForLine,
+    validate: validateCommitMessage,
   });
-
-  if (result.error) {
-    throw new Error(`Failed to open the draft in ${editor}. ${result.error.message}`);
-  }
-
-  if (result.status !== 0) {
-    throw new Error(`Editor command "${editor}" exited with status ${result.status}.`);
-  }
 }
 
 function toTitleCase(value: string): string {
@@ -2014,11 +2032,9 @@ async function runIssueDraftCommand(): Promise<void> {
       `Codex wrote an empty issue draft at ${toRepoRelativePath(repoRoot, workspace.draftFilePath)}.`
     );
   }
-
-  openFileInEditor(workspace.draftFilePath);
-
   const forge = getRepositoryForge(repoRoot);
   if (!forge.isAuthenticated()) {
+    printGeneratedTextPreview("Generated issue draft", draftContents);
     if (forge.type === "github") {
       console.log("Issue creation skipped because GitHub access is unavailable.");
     } else {
@@ -2029,18 +2045,28 @@ async function runIssueDraftCommand(): Promise<void> {
     return;
   }
 
-  const createNow = await promptForLine("Create this issue in GitHub? [Y/n]: ");
-  if (!shouldCreateIssue(createNow)) {
+  const reviewedDraft = await reviewGeneratedText({
+    filePath: workspace.draftFilePath,
+    initialContent: draftContents,
+    previewHeading: "Generated issue draft",
+    prompt: "Create this issue in GitHub? [Y/n/m]: ",
+    emptyContentMessage: "Issue draft cannot be empty.",
+    editorDescription: "issue draft",
+    promptForLine,
+    validate: (content) => {
+      parseIssueDraftDocument(content);
+    },
+  });
+
+  if (!reviewedDraft) {
     console.log(
       `Draft kept at ${toRepoRelativePath(repoRoot, workspace.draftFilePath)}.`
     );
     return;
   }
 
-  const reviewedDraft = parseIssueDraftDocument(
-    readFileSync(workspace.draftFilePath, "utf8")
-  );
-  const issueUrl = await forge.createDraftIssue(reviewedDraft.title, reviewedDraft.body);
+  const parsedDraft = parseIssueDraftDocument(reviewedDraft.content);
+  const issueUrl = await forge.createDraftIssue(parsedDraft.title, parsedDraft.body);
   console.log(`Created issue: ${issueUrl}`);
 }
 
@@ -2123,9 +2149,27 @@ async function prepareIssueRun(
   };
 }
 
-function finalizeIssueRun(repoRoot: string, issueNumber: number): void {
+async function finalizeIssueRun(
+  repoRoot: string,
+  issueNumber: number,
+  runDir?: string
+): Promise<boolean> {
+  const reviewedCommitMessage = await reviewCommitMessage(
+    repoRoot,
+    issueNumber,
+    "Commit generated changes with this message? [Y/n/m]: ",
+    `feat: address issue #${issueNumber}\n`,
+    runDir
+  );
+
+  if (!reviewedCommitMessage) {
+    console.log("Leaving the generated changes uncommitted.");
+    return false;
+  }
+
   console.log("Committing generated changes...");
-  commitGeneratedChanges(repoRoot, `feat: address issue #${issueNumber}`);
+  commitGeneratedChanges(repoRoot, reviewedCommitMessage);
+  return true;
 }
 
 async function runIssueCommand(): Promise<void> {
@@ -2171,7 +2215,7 @@ async function runIssueCommand(): Promise<void> {
   }
 
   if (issueCommand.action === "finalize") {
-    finalizeIssueRun(repoRoot, issueCommand.issueNumber);
+    await finalizeIssueRun(repoRoot, issueCommand.issueNumber);
     return;
   }
 
@@ -2193,7 +2237,15 @@ async function runIssueCommand(): Promise<void> {
   console.log("Verifying build...");
   verifyBuild(repoRoot, repositoryConfig.buildCommand, context.workspace.outputLogPath);
 
-  finalizeIssueRun(repoRoot, context.issueNumber);
+  const committed = await finalizeIssueRun(
+    repoRoot,
+    context.issueNumber,
+    context.workspace.runDir
+  );
+  if (!committed) {
+    console.log("Skipping pull request creation because no commit was created.");
+    return;
+  }
 
   if (forge.isAuthenticated()) {
     console.log("Pushing branch and opening a pull request...");

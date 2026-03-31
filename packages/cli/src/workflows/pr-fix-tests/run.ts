@@ -1,4 +1,10 @@
+import { resolve } from "node:path";
 import type { PullRequestDetails, RepositoryForge } from "../../forge";
+import {
+  reviewGeneratedText,
+  type ReviewedGeneratedText,
+  validateCommitMessage,
+} from "../../generated-text-review";
 import {
   findManagedTestSuggestionsComment,
   parseManagedTestSuggestionsComment,
@@ -28,17 +34,8 @@ type RunPrFixTestsCommandOptions = {
   ): void;
   verifyBuild(repoRoot: string, buildCommand: string[], outputLogPath: string): void;
   hasChanges(repoRoot: string): boolean;
-  commitGeneratedChanges(repoRoot: string, commitMessage: string): void;
+  commitGeneratedChanges(repoRoot: string, commitMessage: ReviewedGeneratedText): void;
 };
-
-function shouldCommitGeneratedChanges(response: string): boolean {
-  const normalized = response.trim().toLowerCase();
-  if (!normalized) {
-    return true;
-  }
-
-  return ["y", "yes"].includes(normalized);
-}
 
 async function selectPullRequestTestSuggestions(
   pullRequest: PullRequestDetails,
@@ -133,17 +130,21 @@ export async function runPrFixTestsCommand(
     throw new Error("Codex completed without producing any file changes to commit.");
   }
 
-  const commitNow = shouldCommitGeneratedChanges(
-    await options.promptForLine("Commit fixes now? [Y/n]: ")
-  );
-  if (!commitNow) {
+  const reviewedCommitMessage = await reviewGeneratedText({
+    filePath: resolve(workspace.runDir, "commit-message.txt"),
+    initialContent: `test: address AI test suggestions for PR #${pullRequest.number}\n`,
+    previewHeading: "Proposed commit message",
+    prompt: "Commit fixes with this message? [Y/n/m]: ",
+    emptyContentMessage: "Commit message cannot be empty.",
+    editorDescription: "commit message",
+    promptForLine: options.promptForLine,
+    validate: validateCommitMessage,
+  });
+  if (!reviewedCommitMessage) {
     console.log("Leaving the generated changes uncommitted.");
     return;
   }
 
   console.log("Committing generated changes...");
-  options.commitGeneratedChanges(
-    options.repoRoot,
-    `test: address AI test suggestions for PR #${pullRequest.number}`
-  );
+  options.commitGeneratedChanges(options.repoRoot, reviewedCommitMessage);
 }

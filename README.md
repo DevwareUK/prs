@@ -108,7 +108,7 @@ git-ai issue draft
 git-ai issue plan 54
 ```
 
-Use `draft` to hand a rough idea to an interactive Codex-led issue drafting flow. The CLI writes `.git-ai/` run artifacts, launches Codex so it can inspect the repository, ask only the follow-up questions it still needs, and write the draft under `.git-ai/issues/`, then opens the draft in `$VISUAL`, `$EDITOR`, or `vim` before offering optional issue creation. Use `plan` to generate or refresh the managed issue-resolution plan comment for an existing GitHub issue.
+Use `draft` to hand a rough idea to an interactive Codex-led issue drafting flow. The CLI writes `.git-ai/` run artifacts, launches Codex so it can inspect the repository, ask only the follow-up questions it still needs, and write the draft under `.git-ai/issues/`, then prints the draft in the terminal and lets you create it as-is, open it in `$VISUAL`, `$EDITOR`, or `vim` to modify it first, or keep the draft file on disk without creating the issue. Use `plan` to generate or refresh the managed issue-resolution plan comment for an existing GitHub issue.
 
 ### Full issue-to-PR flow
 
@@ -116,7 +116,7 @@ Use `draft` to hand a rough idea to an interactive Codex-led issue drafting flow
 git-ai issue 54
 ```
 
-This full local workflow fetches the configured issue, switches to the configured `baseBranch`, pulls the latest changes, creates the working branch, writes `.git-ai/` run artifacts, opens Codex, and resumes automatically when you exit the Codex session. After Codex returns control, `git-ai` runs the configured build command, commits the result, and opens a pull request when the configured forge supports it.
+This full local workflow fetches the configured issue, switches to the configured `baseBranch`, pulls the latest changes, creates the working branch, writes `.git-ai/` run artifacts, opens Codex, and resumes automatically when you exit the Codex session. After Codex returns control, `git-ai` runs the configured build command, previews the proposed commit message, lets you commit it as-is or edit it first, and then opens a pull request when the configured forge supports it.
 
 At the end of a successful local Codex run, the generated prompt asks Codex to finish with an explicit done-state summary, a short note about how to see the result in action or what was verified, and plain-language next steps. If you want more changes, keep talking to Codex. When you are satisfied and want `git-ai` to resume, type `/exit`.
 
@@ -139,7 +139,7 @@ git-ai issue prepare 54 --mode github-action
 git-ai pr fix-comments 88
 ```
 
-Use this when the PR branch is already checked out locally and you want `git-ai` to fetch the PR review comments, let you choose which actionable comments to address, open Codex with a focused prompt, run the configured build command, and optionally commit the result.
+Use this when the PR branch is already checked out locally and you want `git-ai` to fetch the PR review comments, let you choose which actionable comments to address, open Codex with a focused prompt, run the configured build command, and then review, edit, or skip the proposed commit message before committing the result.
 
 Nearby comments on the same file are grouped into optional review tasks, non-trivial reply comments are kept as thread context, and the generated `.git-ai/runs/.../pr-review-comments.md` snapshot includes linked issue context plus local file excerpts when available.
 
@@ -149,7 +149,7 @@ Nearby comments on the same file are grouped into optional review tasks, non-tri
 git-ai pr fix-tests 88
 ```
 
-Use this when the PR branch is already checked out locally and you want `git-ai` to fetch the managed AI Test Suggestions comment, let you choose which structured test suggestions to implement, open Codex with a focused test-oriented prompt, run the configured build command, and optionally commit the result.
+Use this when the PR branch is already checked out locally and you want `git-ai` to fetch the managed AI Test Suggestions comment, let you choose which structured test suggestions to implement, open Codex with a focused test-oriented prompt, run the configured build command, and then review, edit, or skip the proposed commit message before committing the result.
 
 The command parses the managed `<!-- git-ai-test-suggestions -->` PR comment conservatively, keeps the selected suggestion areas plus likely file locations in `.git-ai/runs/.../pr-test-suggestions.md`, and fails clearly if the managed comment is missing or malformed.
 
@@ -275,21 +275,22 @@ Available subcommands:
 
 | Command | What it does |
 | --- | --- |
-| `git-ai issue <number>` | Full local issue-to-PR flow for the current Git repository. Fetches the configured forge issue, switches to the configured `baseBranch`, pulls the latest changes, creates the issue branch, writes `.git-ai/` workspace files, opens an interactive Codex session, and then follows the final action chosen inside Codex. Commit exits Codex, runs the configured build command, creates the commit, and opens a PR if the configured forge supports it. Exit leaves the branch uncommitted and skips PR creation. |
-| `git-ai issue draft` | Codex-led interactive issue drafting flow. Prompts for a rough idea, creates `.git-ai/` draft-run artifacts, launches Codex so it can inspect the repository and ask targeted follow-up questions itself, expects Codex to write the Markdown draft under `.git-ai/issues/`, opens the reviewed draft in `$VISUAL`, `$EDITOR`, or `vim`, and can create the issue through the configured forge when GitHub support is enabled. |
+| `git-ai issue <number>` | Full local issue-to-PR flow for the current Git repository. Fetches the configured forge issue, switches to the configured `baseBranch`, pulls the latest changes, creates the issue branch, writes `.git-ai/` workspace files, opens an interactive Codex session, runs the configured build command after Codex exits, previews the proposed commit message, and then either creates the commit and opens a PR or leaves the branch uncommitted. |
+| `git-ai issue draft` | Codex-led interactive issue drafting flow. Prompts for a rough idea, creates `.git-ai/` draft-run artifacts, launches Codex so it can inspect the repository and ask targeted follow-up questions itself, expects Codex to write the Markdown draft under `.git-ai/issues/`, previews the draft in the terminal, and lets you create it as-is, modify it in `$VISUAL`, `$EDITOR`, or `vim`, or keep it on disk without creating the issue. |
 | `git-ai issue plan <number>` | Generates an issue resolution plan for the configured forge issue and posts it as a managed comment. If an editable plan comment already exists, the command reuses it instead of overwriting collaborator edits. |
 | `git-ai issue prepare <number>` | Switches to the configured `baseBranch`, pulls the latest changes, prepares the issue branch and `.git-ai/` workspace artifacts, and then prints machine-readable JSON describing the run. |
 | `git-ai issue prepare <number> --mode github-action` | Same preparation flow, but writes prompt instructions tailored for non-interactive GitHub Actions runs. |
-| `git-ai issue finalize <number>` | Commits generated changes with `feat: address issue #<number>`. |
+| `git-ai issue finalize <number>` | Previews the proposed `feat: address issue #<number>` commit message, lets you edit or skip it, and creates the commit only after confirmation. |
 
 Important behavior:
 
 - `git-ai issue` requires a clean working tree before it starts
-- `git-ai issue draft` always opens the generated draft in `$VISUAL`, `$EDITOR`, or `vim` before optional forge creation
+- `git-ai issue draft` previews the generated draft in the terminal and only opens `$VISUAL`, `$EDITOR`, or `vim` when you explicitly choose modify
 - `git-ai issue draft` requires the `codex` CLI on `PATH`
 - `git-ai issue plan <number>` requires `OPENAI_API_KEY` the first time it generates a plan comment
 - local full issue runs require the `codex` CLI on `PATH`
 - full local issue runs execute the configured `buildCommand`, defaulting to `pnpm build`
+- local full issue runs preview the proposed commit message and let you edit or skip it before committing
 - local interactive Codex prompts end with an explicit done-state summary, a short note about how to see the result or what was verified, and plain-language next steps
 - for local full issue runs, `git-ai` resumes the build, commit, and PR steps after you exit Codex
 - issue preparation checks out and pulls the configured `baseBranch`, defaulting to `main`
@@ -315,8 +316,8 @@ Available subcommands:
 
 | Command | What it does |
 | --- | --- |
-| `git-ai pr fix-comments <pr-number>` | Fetches pull request metadata and review comments from the configured forge, filters out obviously non-actionable comments, groups nearby threads into selectable review tasks, preserves non-trivial replies as thread context, writes richer `.git-ai/` run artifacts, opens an interactive Codex session, runs the configured build command, and optionally commits the resulting fixes. |
-| `git-ai pr fix-tests <pr-number>` | Fetches pull request metadata and PR issue comments from the configured forge, finds the managed AI Test Suggestions comment, parses structured suggestion areas into selectable tasks, writes focused `.git-ai/` run artifacts, opens an interactive Codex session, runs the configured build command, and optionally commits the resulting test changes. |
+| `git-ai pr fix-comments <pr-number>` | Fetches pull request metadata and review comments from the configured forge, filters out obviously non-actionable comments, groups nearby threads into selectable review tasks, preserves non-trivial replies as thread context, writes richer `.git-ai/` run artifacts, opens an interactive Codex session, runs the configured build command, and then previews a proposed commit message that you can edit, accept, or skip. |
+| `git-ai pr fix-tests <pr-number>` | Fetches pull request metadata and PR issue comments from the configured forge, finds the managed AI Test Suggestions comment, parses structured suggestion areas into selectable tasks, writes focused `.git-ai/` run artifacts, opens an interactive Codex session, runs the configured build command, and then previews a proposed commit message that you can edit, accept, or skip. |
 
 Important behavior:
 
