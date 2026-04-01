@@ -51,4 +51,44 @@ describe("resolveRepositoryConfig", () => {
       },
     });
   });
+
+  it("defaults the missing ai selection while preserving the configured one", () => {
+    expect(
+      resolveRepositoryConfig({
+        ai: {
+          runtime: {
+            type: "claude-code",
+          },
+        },
+      }).ai
+    ).toEqual({
+      runtime: {
+        type: "claude-code",
+      },
+      provider: {
+        type: DEFAULT_REPOSITORY_AI_PROVIDER_TYPE,
+      },
+    });
+
+    expect(
+      resolveRepositoryConfig({
+        ai: {
+          provider: {
+            type: "openai",
+            model: "gpt-5-mini",
+            baseUrl: "https://example.test/v1",
+          },
+        },
+      }).ai
+    ).toEqual({
+      runtime: {
+        type: DEFAULT_REPOSITORY_AI_RUNTIME_TYPE,
+      },
+      provider: {
+        type: "openai",
+        model: "gpt-5-mini",
+        baseUrl: "https://example.test/v1",
+      },
+    });
+  });
 });
