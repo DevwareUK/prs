@@ -3,8 +3,11 @@ description: "Generate PR-level AI test suggestions using OpenAI"
 
 inputs:
   diff:
-    description: "Unified git diff for the pull request"
-    required: true
+    description: "Unified git diff for the pull request. Required unless diff_file is provided."
+    required: false
+  diff_file:
+    description: "Path to a UTF-8 file containing the pull request diff. Preferred for large diffs."
+    required: false
   pr_title:
     description: "Optional pull request title"
     required: false

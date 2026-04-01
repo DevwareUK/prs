@@ -1,10 +1,53 @@
 "use strict";
 
 // src/index.ts
-var import_node_fs = require("fs");
+var import_node_fs2 = require("fs");
 var import_contracts = require("@git-ai/contracts");
 var import_core = require("@git-ai/core");
 var import_providers = require("@git-ai/providers");
+
+// ../shared/src/inputs.ts
+var import_node_fs = require("fs");
+function toEnvName(name) {
+  return `INPUT_${name.replace(/ /g, "_").toUpperCase()}`;
+}
+function normalizeInputValue(value) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : void 0;
+}
+function readFileInput(name, filePath) {
+  try {
+    return (0, import_node_fs.readFileSync)(filePath, "utf8");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to read ${name} at ${filePath}: ${message}`);
+  }
+}
+function getOptionalInput(name) {
+  return normalizeInputValue(process.env[toEnvName(name)]);
+}
+function getRequiredInput(name) {
+  const value = getOptionalInput(name);
+  if (!value) {
+    throw new Error(`Missing required input: ${name}`);
+  }
+  return value;
+}
+function getOptionalInlineOrFileInput(inputName, fileInputName) {
+  const filePath = getOptionalInput(fileInputName);
+  if (filePath) {
+    const value = readFileInput(fileInputName, filePath);
+    return value.trim() ? value : void 0;
+  }
+  return getOptionalInput(inputName);
+}
+function getRequiredInlineOrFileInput(inputName, fileInputName) {
+  const value = getOptionalInlineOrFileInput(inputName, fileInputName);
+  if (!value) {
+    throw new Error(`Missing required input: ${inputName} or ${fileInputName}`);
+  }
+  return value;
+}
 
 // ../../packages/core/src/pr-assistant-body.ts
 var PR_ASSISTANT_START_MARKER = "<!-- git-ai:pr-assistant:start -->";
@@ -71,19 +114,6 @@ ${managedSection}`;
 }
 
 // src/index.ts
-function getRequiredInput(name) {
-  const envName = `INPUT_${name.replace(/ /g, "_").toUpperCase()}`;
-  const value = process.env[envName]?.trim();
-  if (!value) {
-    throw new Error(`Missing required input: ${name}`);
-  }
-  return value;
-}
-function getOptionalInput(name) {
-  const envName = `INPUT_${name.replace(/ /g, "_").toUpperCase()}`;
-  const value = process.env[envName]?.trim();
-  return value ? value : void 0;
-}
 function setOutput(name, value) {
   const outputPath = process.env.GITHUB_OUTPUT;
   if (!outputPath) {
@@ -95,14 +125,14 @@ function setOutput(name, value) {
 ${value}
 ${delimiter}
 `;
-  (0, import_node_fs.appendFileSync)(outputPath, payload);
+  (0, import_node_fs2.appendFileSync)(outputPath, payload);
 }
 async function run() {
   const prBody = getOptionalInput("pr_body");
   const promptBody = stripManagedPRAssistantSection(prBody);
   const input = import_contracts.PRAssistantInput.parse({
-    diff: getRequiredInput("diff"),
-    commitMessages: getOptionalInput("commit_messages"),
+    diff: getRequiredInlineOrFileInput("diff", "diff_file"),
+    commitMessages: getOptionalInlineOrFileInput("commit_messages", "commit_messages_file"),
     prTitle: getOptionalInput("pr_title"),
     prBody: promptBody
   });

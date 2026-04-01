@@ -11,14 +11,18 @@ pnpm install
 pnpm build
 ```
 
-2. Run the action entry locally:
+2. Write the diff to a file and run the action entry locally:
 
 ```bash
-INPUT_DIFF="$(git diff -- . ':!pnpm-lock.yaml')" \
+git diff -- . ':!pnpm-lock.yaml' > /tmp/git-ai-test-suggestions.diff
+
+INPUT_DIFF_FILE="/tmp/git-ai-test-suggestions.diff" \
 INPUT_PR_TITLE="Example PR title" \
 INPUT_OPENAI_API_KEY="<your-key>" \
 INPUT_OPENAI_MODEL="gpt-4o-mini" \
 node actions/test-suggestions/dist/index.js
 ```
+
+`INPUT_DIFF` is still supported for smaller local runs, but `INPUT_DIFF_FILE` avoids shell and GitHub Actions argument-length limits.
 
 When `GITHUB_OUTPUT` is not set, outputs are printed to stdout as `summary=...` and `body=...`.

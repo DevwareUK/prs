@@ -46,11 +46,14 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          {
-            echo 'diff<<EOF'
-            GIT_AI_DISABLE_AUTO_RUN=1 node -e "const { readReviewDiffForAutomation } = require('./packages/cli/dist/index.js'); process.stdout.write(readReviewDiffForAutomation(process.env.BASE_SHA, process.env.HEAD_SHA));"
-            echo 'EOF'
-          } >> "$GITHUB_OUTPUT"
+          DIFF_FILE="$RUNNER_TEMP/git-ai-pr-assistant.diff"
+          GIT_AI_DISABLE_AUTO_RUN=1 node -e "const { readReviewDiffForAutomation } = require('./packages/cli/dist/index.js'); process.stdout.write(readReviewDiffForAutomation(process.env.BASE_SHA, process.env.HEAD_SHA));" > "$DIFF_FILE"
+          echo "diff_file=$DIFF_FILE" >> "$GITHUB_OUTPUT"
+          if [ -s "$DIFF_FILE" ]; then
+            echo "has_diff=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_diff=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Generate PR commit messages
         id: commits
@@ -58,23 +61,23 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          {
-            echo 'commit_messages<<EOF'
-            git log --reverse --format='%s%n%b%n---' "$BASE_SHA..$HEAD_SHA"
-            echo 'EOF'
-          } >> "$GITHUB_OUTPUT"
+          COMMIT_MESSAGES_FILE="$RUNNER_TEMP/git-ai-pr-assistant-commits.txt"
+          git log --reverse --format='%s%n%b%n---' "$BASE_SHA..$HEAD_SHA" > "$COMMIT_MESSAGES_FILE"
+          echo "commit_messages_file=$COMMIT_MESSAGES_FILE" >> "$GITHUB_OUTPUT"
 
       - name: Generate PR assistant section
         id: pr_assistant
+        if: ${{ steps.diff.outputs.has_diff == 'true' }}
         uses: ./actions/pr-assistant
         with:
-          diff: ${{ steps.diff.outputs.diff }}
-          commit_messages: ${{ steps.commits.outputs.commit_messages }}
+          diff_file: ${{ steps.diff.outputs.diff_file }}
+          commit_messages_file: ${{ steps.commits.outputs.commit_messages_file }}
           pr_title: ${{ github.event.pull_request.title }}
           pr_body: ${{ github.event.pull_request.body }}
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
 
       - name: Update PR body
+        if: ${{ steps.pr_assistant.outputs.body != '' }}
         uses: actions/github-script@v7
         env:
           BODY: ${{ steps.pr_assistant.outputs.body }}

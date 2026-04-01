@@ -2,21 +2,11 @@ import { appendFileSync } from "node:fs";
 import { PRReviewInput } from "@git-ai/contracts";
 import { generatePRReview } from "@git-ai/core";
 import { OpenAIProvider } from "@git-ai/providers";
-
-function getRequiredInput(name: string): string {
-  const envName = `INPUT_${name.replace(/ /g, "_").toUpperCase()}`;
-  const value = process.env[envName]?.trim();
-  if (!value) {
-    throw new Error(`Missing required input: ${name}`);
-  }
-  return value;
-}
-
-function getOptionalInput(name: string): string | undefined {
-  const envName = `INPUT_${name.replace(/ /g, "_").toUpperCase()}`;
-  const value = process.env[envName]?.trim();
-  return value ? value : undefined;
-}
+import {
+  getOptionalInput,
+  getRequiredInlineOrFileInput,
+  getRequiredInput,
+} from "../../shared/src/inputs";
 
 function setOutput(name: string, value: string): void {
   const outputPath = process.env.GITHUB_OUTPUT;
@@ -111,7 +101,7 @@ function buildCommentBody(
 async function run(): Promise<void> {
   const issueNumber = parseOptionalIssueNumber(getOptionalInput("issue_number"));
   const input = PRReviewInput.parse({
-    diff: getRequiredInput("diff"),
+    diff: getRequiredInlineOrFileInput("diff", "diff_file"),
     prTitle: getOptionalInput("pr_title"),
     prBody: getOptionalInput("pr_body"),
     issueNumber,

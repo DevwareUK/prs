@@ -3,25 +3,16 @@ import { PRAssistantInput } from "@git-ai/contracts";
 import { generatePRAssistant } from "@git-ai/core";
 import { OpenAIProvider } from "@git-ai/providers";
 import {
+  getOptionalInlineOrFileInput,
+  getOptionalInput,
+  getRequiredInlineOrFileInput,
+  getRequiredInput,
+} from "../../shared/src/inputs";
+import {
   buildPRAssistantSection,
   mergePRAssistantSection,
   stripManagedPRAssistantSection,
 } from "./body";
-
-function getRequiredInput(name: string): string {
-  const envName = `INPUT_${name.replace(/ /g, "_").toUpperCase()}`;
-  const value = process.env[envName]?.trim();
-  if (!value) {
-    throw new Error(`Missing required input: ${name}`);
-  }
-  return value;
-}
-
-function getOptionalInput(name: string): string | undefined {
-  const envName = `INPUT_${name.replace(/ /g, "_").toUpperCase()}`;
-  const value = process.env[envName]?.trim();
-  return value ? value : undefined;
-}
 
 function setOutput(name: string, value: string): void {
   const outputPath = process.env.GITHUB_OUTPUT;
@@ -40,8 +31,8 @@ async function run(): Promise<void> {
   const promptBody = stripManagedPRAssistantSection(prBody);
 
   const input = PRAssistantInput.parse({
-    diff: getRequiredInput("diff"),
-    commitMessages: getOptionalInput("commit_messages"),
+    diff: getRequiredInlineOrFileInput("diff", "diff_file"),
+    commitMessages: getOptionalInlineOrFileInput("commit_messages", "commit_messages_file"),
     prTitle: getOptionalInput("pr_title"),
     prBody: promptBody,
   });

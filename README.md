@@ -548,7 +548,9 @@ pnpm build
 Run locally:
 
 ```bash
-INPUT_DIFF="$(git diff --unified=3 -- . ':!pnpm-lock.yaml')" \
+git diff --unified=3 -- . ':!pnpm-lock.yaml' > /tmp/git-ai-pr-review.diff
+
+INPUT_DIFF_FILE="/tmp/git-ai-pr-review.diff" \
 INPUT_PR_TITLE="Example PR title" \
 INPUT_PR_BODY="Closes #50" \
 INPUT_ISSUE_NUMBER="50" \
@@ -562,7 +564,8 @@ node actions/pr-review/dist/index.js
 
 Inputs:
 
-- `INPUT_DIFF` required
+- `INPUT_DIFF` optional when `INPUT_DIFF_FILE` is set
+- `INPUT_DIFF_FILE` optional file path, preferred for large diffs
 - `INPUT_PR_TITLE` optional
 - `INPUT_PR_BODY` optional
 - `INPUT_ISSUE_NUMBER` optional
@@ -593,8 +596,11 @@ pnpm build
 Run locally:
 
 ```bash
-INPUT_DIFF="$(git diff -- . ':!pnpm-lock.yaml')" \
-INPUT_COMMIT_MESSAGES="$(git log --reverse --format='%s' HEAD~3..HEAD)" \
+git diff -- . ':!pnpm-lock.yaml' > /tmp/git-ai-pr-assistant.diff
+git log --reverse --format='%s%n%b%n---' HEAD~3..HEAD > /tmp/git-ai-pr-assistant-commits.txt
+
+INPUT_DIFF_FILE="/tmp/git-ai-pr-assistant.diff" \
+INPUT_COMMIT_MESSAGES_FILE="/tmp/git-ai-pr-assistant-commits.txt" \
 INPUT_PR_TITLE="Example PR title" \
 INPUT_PR_BODY="Human-authored PR notes" \
 INPUT_OPENAI_API_KEY="<your-key>" \
@@ -604,8 +610,10 @@ node actions/pr-assistant/dist/index.js
 
 Inputs:
 
-- `INPUT_DIFF` required
+- `INPUT_DIFF` optional when `INPUT_DIFF_FILE` is set
+- `INPUT_DIFF_FILE` optional file path, preferred for large diffs
 - `INPUT_COMMIT_MESSAGES` optional
+- `INPUT_COMMIT_MESSAGES_FILE` optional file path for commit messages
 - `INPUT_PR_TITLE` optional
 - `INPUT_PR_BODY` optional
 - `INPUT_OPENAI_API_KEY` required
@@ -631,7 +639,9 @@ pnpm build
 Run locally:
 
 ```bash
-INPUT_DIFF="$(git diff -- . ':!pnpm-lock.yaml')" \
+git diff -- . ':!pnpm-lock.yaml' > /tmp/git-ai-test-suggestions.diff
+
+INPUT_DIFF_FILE="/tmp/git-ai-test-suggestions.diff" \
 INPUT_PR_TITLE="Example PR title" \
 INPUT_OPENAI_API_KEY="<your-key>" \
 INPUT_OPENAI_MODEL="gpt-4o-mini" \
@@ -640,7 +650,8 @@ node actions/test-suggestions/dist/index.js
 
 Inputs:
 
-- `INPUT_DIFF` required
+- `INPUT_DIFF` optional when `INPUT_DIFF_FILE` is set
+- `INPUT_DIFF_FILE` optional file path, preferred for large diffs
 - `INPUT_PR_TITLE` optional
 - `INPUT_PR_BODY` optional
 - `INPUT_OPENAI_API_KEY` required
@@ -675,4 +686,4 @@ This repository includes these GitHub workflows:
 - `.github/workflows/issue-to-pr.yml`: manual issue-to-PR automation that prepares issue context, runs Codex in GitHub Actions, builds the repository, commits generated changes, and opens or reuses a PR
 - `.github/workflows/test-backlog.yml`: manual repository-wide test backlog scan with optional issue creation
 
-All three pull-request-triggered AI workflows generate their diff input through the built CLI helper, so `.git-ai/config.json` `aiContext.excludePaths` is honored in pull request automation as well.
+All three pull-request-triggered AI workflows generate their diff input through the built CLI helper and hand it to the local action through a temporary file, so `.git-ai/config.json` `aiContext.excludePaths` is honored in pull request automation without hitting GitHub Actions argument-length limits.

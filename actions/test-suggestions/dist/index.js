@@ -1,23 +1,55 @@
 "use strict";
 
 // src/index.ts
-var import_node_fs = require("fs");
+var import_node_fs2 = require("fs");
 var import_contracts = require("@git-ai/contracts");
 var import_core = require("@git-ai/core");
 var import_providers = require("@git-ai/providers");
+
+// ../shared/src/inputs.ts
+var import_node_fs = require("fs");
+function toEnvName(name) {
+  return `INPUT_${name.replace(/ /g, "_").toUpperCase()}`;
+}
+function normalizeInputValue(value) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : void 0;
+}
+function readFileInput(name, filePath) {
+  try {
+    return (0, import_node_fs.readFileSync)(filePath, "utf8");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to read ${name} at ${filePath}: ${message}`);
+  }
+}
+function getOptionalInput(name) {
+  return normalizeInputValue(process.env[toEnvName(name)]);
+}
 function getRequiredInput(name) {
-  const envName = `INPUT_${name.replace(/ /g, "_").toUpperCase()}`;
-  const value = process.env[envName]?.trim();
+  const value = getOptionalInput(name);
   if (!value) {
     throw new Error(`Missing required input: ${name}`);
   }
   return value;
 }
-function getOptionalInput(name) {
-  const envName = `INPUT_${name.replace(/ /g, "_").toUpperCase()}`;
-  const value = process.env[envName]?.trim();
-  return value ? value : void 0;
+function getOptionalInlineOrFileInput(inputName, fileInputName) {
+  const filePath = getOptionalInput(fileInputName);
+  if (filePath) {
+    const value = readFileInput(fileInputName, filePath);
+    return value.trim() ? value : void 0;
+  }
+  return getOptionalInput(inputName);
 }
+function getRequiredInlineOrFileInput(inputName, fileInputName) {
+  const value = getOptionalInlineOrFileInput(inputName, fileInputName);
+  if (!value) {
+    throw new Error(`Missing required input: ${inputName} or ${fileInputName}`);
+  }
+  return value;
+}
+
+// src/index.ts
 function setOutput(name, value) {
   const outputPath = process.env.GITHUB_OUTPUT;
   if (!outputPath) {
@@ -29,7 +61,7 @@ function setOutput(name, value) {
 ${value}
 ${delimiter}
 `;
-  (0, import_node_fs.appendFileSync)(outputPath, payload);
+  (0, import_node_fs2.appendFileSync)(outputPath, payload);
 }
 function toTitleCase(value) {
   return value.charAt(0).toUpperCase() + value.slice(1);
@@ -82,7 +114,7 @@ function buildCommentBody(suggestions) {
 }
 async function run() {
   const input = import_contracts.TestSuggestionsInput.parse({
-    diff: getRequiredInput("diff"),
+    diff: getRequiredInlineOrFileInput("diff", "diff_file"),
     prTitle: getOptionalInput("pr_title"),
     prBody: getOptionalInput("pr_body")
   });

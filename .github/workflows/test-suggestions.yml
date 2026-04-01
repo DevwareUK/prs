@@ -49,19 +49,22 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          {
-            echo 'diff<<EOF'
-            GIT_AI_DISABLE_AUTO_RUN=1 node -e "const { readReviewDiffForAutomation } = require('./packages/cli/dist/index.js'); process.stdout.write(readReviewDiffForAutomation(process.env.BASE_SHA, process.env.HEAD_SHA));"
-            echo 'EOF'
-          } >> "$GITHUB_OUTPUT"
+          DIFF_FILE="$RUNNER_TEMP/git-ai-test-suggestions.diff"
+          GIT_AI_DISABLE_AUTO_RUN=1 node -e "const { readReviewDiffForAutomation } = require('./packages/cli/dist/index.js'); process.stdout.write(readReviewDiffForAutomation(process.env.BASE_SHA, process.env.HEAD_SHA));" > "$DIFF_FILE"
+          echo "diff_file=$DIFF_FILE" >> "$GITHUB_OUTPUT"
+          if [ -s "$DIFF_FILE" ]; then
+            echo "has_diff=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_diff=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Generate test suggestions
         id: test_suggestions
-        if: ${{ steps.diff.outputs.diff != '' }}
+        if: ${{ steps.diff.outputs.has_diff == 'true' }}
         continue-on-error: true
         uses: ./actions/test-suggestions
         with:
-          diff: ${{ steps.diff.outputs.diff }}
+          diff_file: ${{ steps.diff.outputs.diff_file }}
           pr_title: ${{ github.event.pull_request.title }}
           pr_body: ${{ github.event.pull_request.body }}
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
