@@ -23,6 +23,7 @@ import {
   generatePRAssistant,
   generatePRDescription,
   mergePRAssistantSection,
+  StructuredGenerationError,
 } from "@git-ai/core";
 import { OpenAIProvider } from "@git-ai/providers";
 import dotenv from "dotenv";
@@ -1596,9 +1597,38 @@ function writeIssuePullRequestFiles(
   };
 }
 
+function writePRDescriptionFailureArtifact(
+  repoRoot: string,
+  runDir: string,
+  error: StructuredGenerationError
+): string {
+  const artifactPath = resolve(runDir, "pr-description-generation-error.json");
+
+  writeFileSync(
+    artifactPath,
+    `${JSON.stringify(
+      {
+        stage: "pr-description",
+        kind: error.kind,
+        message: error.message,
+        rawResponse: error.rawResponse,
+        parsedJson: error.parsedJson,
+        normalizedJson: error.normalizedJson,
+        validationIssues: error.validationIssues,
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+
+  return toRepoRelativePath(repoRoot, artifactPath);
+}
+
 async function generateIssuePullRequest(
   provider: OpenAIProvider,
   options: {
+    repoRoot: string;
     issueNumber: number;
     issue: IssueDetails;
     diff: string;
@@ -1606,11 +1636,31 @@ async function generateIssuePullRequest(
     runDir?: string;
   }
 ): Promise<GeneratedIssuePullRequest> {
-  const description = await generatePRDescription(provider, {
-    diff: options.diff,
-    issueTitle: options.issue.title,
-    issueBody: options.issue.body,
-  });
+  let description: Awaited<ReturnType<typeof generatePRDescription>>;
+  try {
+    description = await generatePRDescription(provider, {
+      diff: options.diff,
+      issueTitle: options.issue.title,
+      issueBody: options.issue.body,
+    });
+  } catch (error: unknown) {
+    if (error instanceof StructuredGenerationError) {
+      const artifactSuffix =
+        options.runDir !== undefined
+          ? ` Diagnostic artifact: ${writePRDescriptionFailureArtifact(
+              options.repoRoot,
+              options.runDir,
+              error
+            )}.`
+          : "";
+      throw new Error(
+        `Failed to generate PR description. ${error.message}${artifactSuffix}`
+      );
+    }
+
+    throw error;
+  }
+
   const assistant = await generatePRAssistant(provider, {
     diff: options.diff,
     prTitle: description.title,
@@ -2380,6 +2430,7 @@ async function runIssueCommand(): Promise<void> {
   }
 
   const pullRequest = await generateIssuePullRequest(provider, {
+    repoRoot,
     issueNumber: context.issueNumber,
     issue: context.issue,
     diff: finalized.diff,

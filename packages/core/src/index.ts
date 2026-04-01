@@ -10,5 +10,6 @@ export * from "./pr-description";
 export * from "./pr-review";
 export * from "./repository-config";
 export * from "./review-summary";
+export * from "./structured-generation-error";
 export * from "./test-backlog";
 export * from "./test-suggestions";

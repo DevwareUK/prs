@@ -477,6 +477,38 @@ async function loadCli(options: {
       ].join("\n"),
     }
   );
+  class StructuredGenerationError extends Error {
+    readonly kind: "json_parse" | "schema_validation";
+    readonly rawResponse: string;
+    readonly parsedJson?: unknown;
+    readonly normalizedJson?: unknown;
+    readonly validationIssues?: Array<{
+      path: string;
+      message: string;
+      code: string;
+    }>;
+
+    constructor(init: {
+      kind: "json_parse" | "schema_validation";
+      message: string;
+      rawResponse: string;
+      parsedJson?: unknown;
+      normalizedJson?: unknown;
+      validationIssues?: Array<{
+        path: string;
+        message: string;
+        code: string;
+      }>;
+    }) {
+      super(init.message);
+      this.name = "StructuredGenerationError";
+      this.kind = init.kind;
+      this.rawResponse = init.rawResponse;
+      this.parsedJson = init.parsedJson;
+      this.normalizedJson = init.normalizedJson;
+      this.validationIssues = init.validationIssues;
+    }
+  }
   const generatePRReview = vi.fn();
   if (options.prReviewResult) {
     generatePRReview.mockResolvedValue(options.prReviewResult);
@@ -539,6 +571,7 @@ async function loadCli(options: {
     generatePRDescription,
     generateIssueResolutionPlan,
     mergePRAssistantSection: prAssistantBody.mergePRAssistantSection,
+    StructuredGenerationError,
     resolveRepositoryConfig: vi.fn((config?: {
       aiContext?: { excludePaths?: string[] };
       baseBranch?: string;
@@ -594,6 +627,7 @@ async function loadCli(options: {
     generatePRDescription,
     generatePRReview,
     generateIssueResolutionPlan,
+    StructuredGenerationError,
     execFileSync,
     spawnSync,
     createInterface,
@@ -3127,6 +3161,207 @@ describe("CLI integration", () => {
       "git",
       ["commit", "-F", expect.stringContaining("commit-message.txt")],
       expect.any(Object)
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("writes a PR description diagnostic artifact during full issue runs when schema validation fails", async () => {
+    const beforeRuns = listRunDirectories();
+    const issueNumber = 147;
+    let gitStatusCallCount = 0;
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          title: "Persist PR description diagnostics in issue runs",
+          body: "The issue workflow should preserve failed PR description payloads locally.",
+          html_url: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
+        })
+      )
+      .mockResolvedValueOnce(createFetchResponse([]));
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.OPENAI_API_KEY = "test-key";
+
+    const { run, generatePRDescription, StructuredGenerationError, spawnSync } =
+      await loadCli({
+        execFileSyncImpl: (command, args) => {
+          if (command === "git" && args[0] === "status") {
+            gitStatusCallCount += 1;
+            return gitStatusCallCount === 1 ? "" : " M packages/cli/src/index.ts\n";
+          }
+
+          if (command === "git" && args[0] === "diff" && args[1] === "--name-only") {
+            return "packages/cli/src/index.ts\n";
+          }
+
+          if (
+            command === "git" &&
+            args[0] === "diff" &&
+            args[1] === "HEAD" &&
+            args[2] === "--" &&
+            args[3] === "packages/cli/src/index.ts"
+          ) {
+            return [
+              "diff --git a/packages/cli/src/index.ts b/packages/cli/src/index.ts",
+              "--- a/packages/cli/src/index.ts",
+              "+++ b/packages/cli/src/index.ts",
+              "@@ -1,1 +1,1 @@",
+              '-const state = "before";',
+              '+const state = "after";',
+            ].join("\n");
+          }
+
+          if (command === "git" && args[0] === "remote") {
+            return "git@github.com:DevwareUK/git-ai.git\n";
+          }
+
+          throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+        },
+        spawnSyncImpl: (command, args) => {
+          if (command === "gh" && args[0] === "--version") {
+            return { status: 0 };
+          }
+
+          if (command === "gh" && args[0] === "auth" && args[1] === "status") {
+            return { status: 0 };
+          }
+
+          if (command === "gh" && args[0] === "issue" && args[1] === "view") {
+            return {
+              status: 1,
+              error: new Error("force API fallback"),
+            };
+          }
+
+          if (command === "git" && args[0] === "rev-parse") {
+            return { status: 1 };
+          }
+
+          if (command === "git" && args[0] === "checkout" && args[1] === "main") {
+            return { status: 0 };
+          }
+
+          if (command === "git" && args[0] === "pull") {
+            return { status: 0 };
+          }
+
+          if (command === "git" && args[0] === "checkout" && args[1] === "-b") {
+            return { status: 0 };
+          }
+
+          if (command === "codex" && args[0] === "--version") {
+            return { status: 0 };
+          }
+
+          if (command === "codex") {
+            return { status: 0 };
+          }
+
+          if (command === "pnpm" && args[0] === "--version") {
+            return { status: 0 };
+          }
+
+          if (command === "pnpm" && args[0] === "build") {
+            return { status: 0, stdout: "built\n", stderr: "" };
+          }
+
+          if (command === "git" && args[0] === "add") {
+            return { status: 0 };
+          }
+
+          if (command === "git" && args[0] === "commit") {
+            return { status: 0 };
+          }
+
+          throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+        },
+      });
+
+    generatePRDescription.mockRejectedValue(
+      new StructuredGenerationError({
+        kind: "schema_validation",
+        message: [
+          "Model output failed PR description schema validation:",
+          "- body: Invalid input: expected string, received undefined",
+        ].join("\n"),
+        rawResponse: '{"title":"feat: broken"}',
+        parsedJson: {
+          title: "feat: broken",
+        },
+        normalizedJson: {
+          title: "feat: broken",
+        },
+        validationIssues: [
+          {
+            path: "body",
+            message: "Invalid input: expected string, received undefined",
+            code: "invalid_type",
+          },
+        ],
+      })
+    );
+
+    process.argv = ["node", "git-ai", "issue", String(issueNumber)];
+
+    let caughtError: unknown;
+    try {
+      await run();
+    } catch (error: unknown) {
+      caughtError = error;
+    }
+
+    expect(caughtError).toBeInstanceOf(Error);
+    const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
+    expect(createdRunDir).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string));
+
+    const artifactRelativePath = `.git-ai/runs/${createdRunDir}/pr-description-generation-error.json`;
+    expect((caughtError as Error).message).toContain(
+      `Failed to generate PR description. Model output failed PR description schema validation:`
+    );
+    expect((caughtError as Error).message).toContain(
+      `Diagnostic artifact: ${artifactRelativePath}.`
+    );
+
+    const artifact = JSON.parse(
+      readFileSync(resolve(REPO_ROOT, artifactRelativePath), "utf8")
+    ) as {
+      stage: string;
+      kind: string;
+      rawResponse: string;
+      parsedJson: Record<string, unknown>;
+      normalizedJson: Record<string, unknown>;
+      validationIssues: Array<{
+        path: string;
+        message: string;
+        code: string;
+      }>;
+    };
+
+    expect(artifact).toMatchObject({
+      stage: "pr-description",
+      kind: "schema_validation",
+      rawResponse: '{"title":"feat: broken"}',
+      parsedJson: {
+        title: "feat: broken",
+      },
+      normalizedJson: {
+        title: "feat: broken",
+      },
+      validationIssues: [
+        {
+          path: "body",
+          message: "Invalid input: expected string, received undefined",
+          code: "invalid_type",
+        },
+      ],
+    });
+    expect(spawnSync).toHaveBeenCalledWith(
+      "pnpm",
+      ["build"],
+      expect.objectContaining({
+        encoding: "utf8",
+      })
     );
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
