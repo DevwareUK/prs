@@ -31,3 +31,31 @@ export function getIssueSessionStateFilePath(
 ): string {
   return resolve(getIssueStateDir(repoRoot, issueNumber), "session.json");
 }
+
+function formatBatchKey(issueNumbers: number[]): string {
+  return `issues-${issueNumbers.join("-")}`;
+}
+
+export function getIssueBatchStateDir(repoRoot: string): string {
+  return resolve(repoRoot, ".git-ai", "batches");
+}
+
+export function getIssueBatchStateFilePath(
+  repoRoot: string,
+  issueNumbers: number[]
+): string {
+  return resolve(getIssueBatchStateDir(repoRoot), `${formatBatchKey(issueNumbers)}.json`);
+}
+
+export function getIssueBatchRunDir(
+  repoRoot: string,
+  issueNumbers: number[],
+  date = new Date()
+): string {
+  return resolve(
+    repoRoot,
+    ".git-ai",
+    "runs",
+    `${formatRunTimestamp(date)}-${formatBatchKey(issueNumbers)}`
+  );
+}

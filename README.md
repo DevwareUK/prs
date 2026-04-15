@@ -76,9 +76,10 @@ git-ai test-backlog --top 5
 
 You only need extra tooling for advanced workflows:
 
-- the configured interactive runtime on `PATH` for `git-ai issue draft`, full local `git-ai issue <number>` runs, `git-ai pr fix-comments <pr-number>`, and `git-ai pr fix-tests <pr-number>`
+- the configured interactive runtime on `PATH` for `git-ai issue draft`, local interactive `git-ai issue <number>` runs, `git-ai pr fix-comments <pr-number>`, and `git-ai pr fix-tests <pr-number>`
   default: `codex`
   `ai.runtime.type: "claude-code"`: `claude`
+- `codex` plus authenticated GitHub access for `git-ai issue <number> --mode unattended` and `git-ai issue batch ...`
 - `gh`, `GH_TOKEN`, or `GITHUB_TOKEN` for GitHub-backed issue and pull request flows
 
 `git-ai` resolves the active repository from your current Git working tree at runtime. It loads `.env` and `.git-ai/config.json` from that repository root, not from the CLI build location.
@@ -89,7 +90,7 @@ You only need extra tooling for advanced workflows:
 - `git-ai diff`: summarize `git diff HEAD`
 - `git-ai setup`: guided repository onboarding for `git-ai`
 - `git-ai review`: review the current diff or a branch comparison
-- `git-ai issue ...`: draft issues, generate issue plans, and run issue-to-PR flows
+- `git-ai issue ...`: draft issues, generate issue plans, run single-issue flows, and queue unattended issue batches
 - `git-ai pr fix-comments <pr-number>`: fix selected PR review comments with Codex
 - `git-ai pr fix-tests <pr-number>`: implement selected AI PR test suggestions with Codex
 - `git-ai test-backlog`: find high-value automated testing gaps
@@ -122,12 +123,27 @@ Use `draft` to hand a rough idea to the configured interactive runtime. The CLI 
 git-ai issue 54
 ```
 
-On the first local run for an issue, `git-ai issue 54` fetches the configured issue, switches to the configured `baseBranch`, pulls the latest changes, creates the working branch, writes `.git-ai/` run artifacts, and opens a new interactive Codex session. After Codex returns control, `git-ai` runs the configured build command, generates a proposed commit message from the completed diff, lets you commit it as-is or edit it first, and then generates a reviewer-ready PR title/body from the diff before opening a pull request when the configured forge supports it. The generated PR body includes both an issue-closing reference such as `Closes #54` and the managed PR assistant section markers used by the PR assistant automation.
-On the first local run for an issue, `git-ai issue 54` fetches the configured issue, switches to the configured `baseBranch`, pulls the latest changes, creates the working branch, writes `.git-ai/` run artifacts, and opens a new interactive runtime session. After the runtime returns control, `git-ai` runs the configured build command, generates a proposed commit message from the completed diff, lets you commit it as-is or edit it first, and then generates a reviewer-ready PR title/body from the diff before opening a pull request when the configured forge supports it. The generated PR body includes both an issue-closing reference such as `Closes #54` and the managed PR assistant section markers used by the PR assistant automation.
+By default, `git-ai issue 54` runs in interactive mode. On the first local run for an issue, it fetches the configured issue, switches to the configured `baseBranch`, pulls the latest changes, creates the working branch, writes `.git-ai/` run artifacts, and opens the configured interactive runtime session. After the runtime returns control, `git-ai` runs the configured build command, generates a proposed commit message from the completed diff, lets you commit it as-is or edit it first, and then generates a reviewer-ready PR title/body from the diff before opening a pull request when the configured forge supports it. The generated PR body includes both an issue-closing reference such as `Closes #54` and the managed PR assistant section markers used by the PR assistant automation.
 
 Later `git-ai issue 54` runs switch back to the saved issue branch and continue from the saved `.git-ai/` issue state. With the default `codex` runtime, `git-ai` also resumes the saved Codex session when it is still available. With `claude-code`, later runs reopen the saved branch and start a fresh Claude Code session against the current issue prompt. If the saved branch or tracked runtime session is no longer valid, the command fails with a recovery message that tells you which `.git-ai/issues/<number>/session.json` file to remove before starting a fresh issue run.
 
 At the end of a successful local runtime session, the generated prompt asks the agent to finish with an explicit done-state summary, a short note about how to see the result in action or what was verified, and plain-language next steps. If you want more changes, keep talking to the runtime. When you are satisfied and want `git-ai` to resume, type `/exit`.
+
+For unattended single-issue execution:
+
+```bash
+git-ai issue 54 --mode unattended
+```
+
+This path currently requires `ai.runtime.type: "codex"` plus authenticated GitHub access. It reuses the same per-issue branch and `.git-ai/issues/<number>/session.json` state as the interactive flow, but runs Codex through a non-interactive `exec` invocation, commits with the generated commit message automatically, and opens the pull request without prompting.
+
+For unattended multi-issue queues:
+
+```bash
+git-ai issue batch 54 55 60
+```
+
+`git-ai issue batch` defaults to `--mode unattended`, runs the listed issues sequentially, and creates separate issue runs for each issue rather than one shared Codex session. Batch progress is recorded separately under `.git-ai/batches/`, and rerunning the same ordered batch skips issues already marked completed in the batch tracker and resumes from the first incomplete issue.
 
 If you need separate setup and completion steps:
 
@@ -246,6 +262,7 @@ Think of `.git-ai/` as the working memory for issue, planning, and backlog flows
 
 Typical contents:
 
+- `.git-ai/batches/`: persistent batch queue state for `git-ai issue batch ...`
 - `.git-ai/issues/`: issue snapshots and generated drafts
 - `.git-ai/runs/`: run prompts, metadata, and logs for automated issue work and PR comment-fix runs
 
@@ -295,7 +312,8 @@ The setup flow still expects you to create `.env` yourself because it cannot saf
 Usage:
 
 ```bash
-git-ai issue <number>
+git-ai issue <number> [--mode <interactive|unattended>]
+git-ai issue batch <number> <number> [...number] [--mode unattended]
 git-ai issue draft
 git-ai issue plan <number>
 git-ai issue prepare <number> [--mode <local|github-action>]
@@ -306,7 +324,9 @@ Available subcommands:
 
 | Command | What it does |
 | --- | --- |
-| `git-ai issue <number>` | Full local issue-to-PR flow for the current Git repository. Fetches the configured forge issue, switches to the configured `baseBranch`, pulls the latest changes, creates the issue branch, writes `.git-ai/` workspace files, opens the configured interactive runtime, runs the configured build command after that runtime exits, generates a proposed commit message from the completed diff for review through the configured text provider, and then either creates the commit plus an AI-authored PR title/body or leaves the branch uncommitted. Generated PR bodies include an issue-closing reference and the managed PR assistant section markers. |
+| `git-ai issue <number>` | Full local issue-to-PR flow in interactive mode. Fetches the configured forge issue, switches to the configured `baseBranch`, pulls the latest changes, creates the issue branch, writes `.git-ai/` workspace files, opens the configured interactive runtime, runs the configured build command after that runtime exits, generates a proposed commit message from the completed diff for review, and then either creates the commit plus an AI-authored PR title/body or leaves the branch uncommitted. Generated PR bodies include an issue-closing reference and the managed PR assistant section markers. |
+| `git-ai issue <number> --mode unattended` | Full local issue-to-PR flow in unattended mode. Requires `ai.runtime.type` to be `codex`, reuses the same per-issue branch and session state as interactive runs, launches Codex non-interactively, commits with the generated commit message automatically, and then opens the pull request without prompting. |
+| `git-ai issue batch <number> <number> [...number]` | Sequential unattended issue queue. Defaults to `--mode unattended`, requires at least two unique issue numbers, runs each issue as its own independent unattended issue execution, stores batch progress separately under `.git-ai/batches/`, and stops immediately at the first incomplete issue so reruns can resume from there. |
 | `git-ai issue draft` | Interactive issue drafting flow. Prompts for a rough idea, creates `.git-ai/` draft-run artifacts, launches the configured runtime so it can inspect the repository and ask targeted follow-up questions itself, expects the runtime to write the Markdown draft under `.git-ai/issues/`, previews the draft in the terminal, and lets you create it as-is, modify it in `$VISUAL`, `$EDITOR`, or `vim`, or keep it on disk without creating the issue. |
 | `git-ai issue plan <number>` | Generates an issue resolution plan for the configured forge issue through the configured text provider and posts it as a managed comment. If an editable plan comment already exists, the command reuses it instead of overwriting collaborator edits. |
 | `git-ai issue prepare <number>` | Switches to the configured `baseBranch`, pulls the latest changes, prepares the issue branch and `.git-ai/` workspace artifacts, and then prints machine-readable JSON describing the run. |
@@ -316,6 +336,7 @@ Available subcommands:
 Important behavior:
 
 - `git-ai issue` requires a clean working tree before it starts
+- `git-ai issue batch ...` requires at least two unique issue numbers
 - `git-ai issue draft` previews the generated draft in the terminal and only opens `$VISUAL`, `$EDITOR`, or `vim` when you explicitly choose modify
 - `git-ai issue draft` requires the configured runtime CLI on `PATH`
 - `git-ai issue plan <number>` requires the configured provider to be usable, defaulting to `OPENAI_API_KEY`
@@ -324,6 +345,10 @@ Important behavior:
 - local full issue runs preview the proposed commit message and let you edit or skip it before committing
 - local interactive runtime prompts end with an explicit done-state summary, a short note about how to see the result or what was verified, and plain-language next steps
 - for local full issue runs, `git-ai` resumes the build, commit, and PR steps after you exit the runtime
+- unattended issue runs require `ai.runtime.type` to be `codex`
+- unattended single-issue and batch runs keep per-issue resume state in `.git-ai/issues/<number>/session.json`
+- unattended batch runs reject `--mode interactive`
+- unattended batch runs keep queue progress separately in `.git-ai/batches/` and skip issues already marked completed on later reruns of the same ordered batch
 - issue preparation checks out and pulls the configured `baseBranch`, defaulting to `main`
 - PR creation uses the configured `baseBranch`, defaulting to `main`
 - GitHub-backed PR creation requires `gh` to be installed and authenticated

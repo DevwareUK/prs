@@ -20,13 +20,17 @@ type RuntimeAvailability = {
   reason: string;
 };
 
-type RuntimeWorkspace = {
+export type RuntimeWorkspace = {
   promptFilePath: string;
   outputLogPath: string;
 };
 
 type RuntimeLaunchOptions = {
   resumeSessionId?: string;
+};
+
+type UnattendedRuntimeLaunchOptions = RuntimeLaunchOptions & {
+  outputLastMessageFilePath?: string;
 };
 
 type InteractiveRuntime = {
@@ -43,6 +47,11 @@ type InteractiveRuntime = {
     repoRoot: string,
     workspace: RuntimeWorkspace,
     options?: RuntimeLaunchOptions
+  ): InteractiveRuntimeLaunchResult;
+  launchUnattended?(
+    repoRoot: string,
+    workspace: RuntimeWorkspace,
+    options?: UnattendedRuntimeLaunchOptions
   ): InteractiveRuntimeLaunchResult;
 };
 
@@ -97,6 +106,43 @@ function runInteractiveCommand(
   if (result.status !== 0) {
     throw new Error(errorMessage);
   }
+}
+
+function runTrackedCommand(
+  command: string,
+  args: string[],
+  errorMessage: string,
+  outputLogPath: string,
+  cwd?: string
+): string {
+  const result = spawnSync(command, args, {
+    cwd,
+    encoding: "utf8",
+    maxBuffer: 10 * 1024 * 1024,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const stdout = result.stdout ?? "";
+  const stderr = result.stderr ?? "";
+
+  appendRunLog(outputLogPath, command, args, stdout, stderr);
+
+  if (stdout) {
+    process.stdout.write(stdout);
+  }
+
+  if (stderr) {
+    process.stderr.write(stderr);
+  }
+
+  if (result.error) {
+    throw new Error(`${errorMessage} ${result.error.message}`);
+  }
+
+  if (result.status !== 0) {
+    throw new Error(errorMessage);
+  }
+
+  return stdout;
 }
 
 function canRunCommand(command: string, args: string[] = ["--version"]): boolean {
@@ -229,10 +275,6 @@ function createCodexRuntime(): InteractiveRuntime {
           };
     },
     launch(repoRoot, workspace, options = {}) {
-      const prompt = `Read and follow the instructions in ${toRepoRelativePath(
-        repoRoot,
-        workspace.promptFilePath
-      )}.`;
       const args = options.resumeSessionId
         ? [
             "resume",
@@ -243,7 +285,6 @@ function createCodexRuntime(): InteractiveRuntime {
             CODEX_APPROVAL_POLICY,
             "--cd",
             repoRoot,
-            prompt,
           ]
         : [
             "--sandbox",
@@ -252,7 +293,10 @@ function createCodexRuntime(): InteractiveRuntime {
             CODEX_APPROVAL_POLICY,
             "--cd",
             repoRoot,
-            prompt,
+            `Read and follow the instructions in ${toRepoRelativePath(
+              repoRoot,
+              workspace.promptFilePath
+            )}.`,
           ];
       const startedAt = Date.now();
       const previousSessionFilePaths = new Set(
@@ -273,6 +317,75 @@ function createCodexRuntime(): InteractiveRuntime {
         "codex",
         args,
         "The interactive Codex session did not complete successfully.",
+        repoRoot
+      );
+
+      if (options.resumeSessionId) {
+        return {
+          invocation: "resume",
+          sessionId: options.resumeSessionId,
+        };
+      }
+
+      const sessionId = findNewCodexSessionId(
+        repoRoot,
+        previousSessionFilePaths,
+        startedAt
+      );
+      if (!sessionId) {
+        appendFileSync(
+          workspace.outputLogPath,
+          [
+            "Warning: git-ai could not determine the new Codex session id for future resume support.",
+            "",
+          ].join("\n"),
+          "utf8"
+        );
+      }
+
+      return {
+        invocation: "new",
+        sessionId,
+      };
+    },
+    launchUnattended(repoRoot, workspace, options = {}) {
+      const prompt = `Read and follow the instructions in ${toRepoRelativePath(
+        repoRoot,
+        workspace.promptFilePath
+      )}.`;
+      const startedAt = Date.now();
+      const previousSessionFilePaths = new Set(
+        options.resumeSessionId
+          ? []
+          : listCodexSessionRecords(repoRoot).map((record) => record.filePath)
+      );
+      const args = options.resumeSessionId
+        ? [
+            "exec",
+            "resume",
+            "--full-auto",
+            ...(options.outputLastMessageFilePath
+              ? ["--output-last-message", options.outputLastMessageFilePath]
+              : []),
+            options.resumeSessionId,
+            prompt,
+          ]
+        : [
+            "exec",
+            "--full-auto",
+            "--cd",
+            repoRoot,
+            ...(options.outputLastMessageFilePath
+              ? ["--output-last-message", options.outputLastMessageFilePath]
+              : []),
+            prompt,
+          ];
+
+      runTrackedCommand(
+        "codex",
+        args,
+        "The unattended Codex session did not complete successfully.",
+        workspace.outputLogPath,
         repoRoot
       );
 
@@ -410,6 +523,22 @@ export function getInteractiveRuntimeByType(
   runtimeType: InteractiveRuntimeType
 ): InteractiveRuntime {
   return createRuntimeRegistry()[runtimeType];
+}
+
+export function launchUnattendedRuntime(
+  runtimeType: InteractiveRuntimeType,
+  repoRoot: string,
+  workspace: RuntimeWorkspace,
+  options: UnattendedRuntimeLaunchOptions = {}
+): InteractiveRuntimeLaunchResult {
+  const runtime = getInteractiveRuntimeByType(runtimeType);
+  if (!runtime.launchUnattended) {
+    throw new Error(
+      `Runtime "${runtime.displayName}" does not support unattended issue runs.`
+    );
+  }
+
+  return runtime.launchUnattended(repoRoot, workspace, options);
 }
 
 export function findTrackedRuntimeSessionById(

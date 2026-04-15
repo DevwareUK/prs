@@ -2,6 +2,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import type {
   CreatePullRequestInput,
+  CreatedPullRequestRecord,
   CreatedIssueRecord,
   IssueDetails,
   IssuePlanComment,
@@ -127,7 +128,7 @@ function runTrackedCommand(
   errorMessage: string,
   outputLogPath: string,
   cwd?: string
-): void {
+): string {
   const result = spawnSync(command, args, {
     cwd,
     encoding: "utf8",
@@ -154,6 +155,8 @@ function runTrackedCommand(
   if (result.status !== 0) {
     throw new Error(errorMessage);
   }
+
+  return stdout;
 }
 
 async function listIssueComments(
@@ -693,7 +696,7 @@ class GitHubRepositoryForge implements RepositoryForge {
     };
   }
 
-  async createPullRequest(input: CreatePullRequestInput): Promise<void> {
+  async createPullRequest(input: CreatePullRequestInput): Promise<CreatedPullRequestRecord> {
     runTrackedCommand(
       "git",
       ["push", "-u", "origin", input.branchName],
@@ -701,7 +704,7 @@ class GitHubRepositoryForge implements RepositoryForge {
       input.outputLogPath,
       this.repoRoot
     );
-    runTrackedCommand(
+    const stdout = runTrackedCommand(
       "gh",
       [
         "pr",
@@ -717,6 +720,13 @@ class GitHubRepositoryForge implements RepositoryForge {
       input.outputLogPath,
       this.repoRoot
     );
+
+    return {
+      url: stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find((line) => /^https:\/\/github\.com\/.+\/pull\/\d+$/i.test(line)),
+    };
   }
 }
 

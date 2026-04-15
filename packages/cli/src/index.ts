@@ -8,7 +8,7 @@ import {
   readFileSync,
   writeFileSync,
 } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import {
   analyzeFeatureBacklog,
@@ -57,11 +57,15 @@ import { resolveRuntimeRepoRoot } from "./repo-root";
 import {
   findTrackedRuntimeSessionById,
   getInteractiveRuntimeByType,
+  launchUnattendedRuntime,
   selectInteractiveRuntime,
   type InteractiveRuntimeType,
 } from "./runtime";
 import {
   formatRunTimestamp,
+  getIssueBatchRunDir,
+  getIssueBatchStateDir,
+  getIssueBatchStateFilePath,
   getIssueSessionStateFilePath,
   getIssueStateDir,
   toRepoRelativePath,
@@ -81,7 +85,9 @@ type IssueWorkspace = {
   outputLogPath: string;
 };
 
-type IssueExecutionMode = "local" | "github-action";
+type IssueWorkspaceMode = "local" | "github-action" | "unattended";
+type IssueRunMode = "interactive" | "unattended";
+type IssuePrepareMode = "local" | "github-action";
 type IssueDraftWorkspace = {
   runDir: string;
   draftFilePath: string;
@@ -92,9 +98,24 @@ type IssueDraftWorkspace = {
 
 type IssueCommandOptions =
   | {
-      action: "run" | "prepare" | "finalize" | "plan";
+      action: "run";
       issueNumber: number;
-      mode: IssueExecutionMode;
+      mode: IssueRunMode;
+    }
+  | {
+      action: "batch";
+      issueNumbers: number[];
+      mode: "unattended";
+    }
+  | {
+      action: "prepare";
+      issueNumber: number;
+      mode: IssuePrepareMode;
+    }
+  | {
+      action: "finalize" | "plan";
+      issueNumber: number;
+      mode: "local";
     }
   | {
       action: "draft";
@@ -139,7 +160,7 @@ type IssueRunContext = {
   planComment?: IssuePlanComment;
   branchName: string;
   workspace: IssueWorkspace;
-  mode: IssueExecutionMode;
+  mode: IssueWorkspaceMode;
   runtime: {
     type: InteractiveRuntimeType;
     invocation: "new" | "resume";
@@ -159,6 +180,7 @@ type IssueSessionState = {
   sessionId?: string;
   sandboxMode?: string;
   approvalPolicy?: string;
+  executionMode?: "interactive" | "unattended";
   createdAt: string;
   updatedAt: string;
 };
@@ -180,11 +202,57 @@ type GeneratedIssuePullRequest = {
   bodyFilePath?: string;
 };
 
+type IssueBatchStatus = "pending" | "running" | "completed" | "failed";
+
+type IssueBatchAttempt = {
+  startedAt: string;
+  updatedAt: string;
+  status: IssueBatchStatus;
+  runDir?: string;
+  branchName?: string;
+  prUrl?: string;
+  error?: string;
+};
+
+type IssueBatchIssueState = {
+  issueNumber: number;
+  status: IssueBatchStatus;
+  runDir?: string;
+  branchName?: string;
+  prUrl?: string;
+  error?: string;
+  attempts: IssueBatchAttempt[];
+};
+
+type IssueBatchState = {
+  key: string;
+  issueNumbers: number[];
+  createdAt: string;
+  updatedAt: string;
+  latestRunDir: string;
+  stoppedIssueNumber?: number;
+  issues: IssueBatchIssueState[];
+};
+
+type IssueBatchWorkspace = {
+  runDir: string;
+  summaryFilePath: string;
+  metadataFilePath: string;
+  outputLogPath: string;
+};
+
+type UnattendedIssueRunResult = {
+  branchName: string;
+  runDir: string;
+  prUrl?: string;
+};
+
 const ISSUE_PLAN_COMMENT_MARKER = "<!-- git-ai:issue-plan -->";
 
 const ISSUE_USAGE = [
   "Usage:",
-  "  git-ai issue <number>",
+  "  git-ai issue <number> [--mode <interactive|unattended>]",
+  "  git-ai issue batch <number> <number> [...number] [--mode unattended]",
   "  git-ai issue draft",
   "  git-ai issue plan <number>",
   "  git-ai issue prepare <number> [--mode <local|github-action>]",
@@ -493,7 +561,7 @@ function hasChanges(repoRoot: string): boolean {
 function ensureCleanWorkingTree(repoRoot: string): void {
   if (hasChanges(repoRoot)) {
     throw new Error(
-      "Working tree is not clean. Commit or stash existing changes before running interactive git-ai workflows."
+      "Working tree is not clean. Commit or stash existing changes before running git-ai issue workflows."
     );
   }
 }
@@ -515,11 +583,7 @@ function parseIssueNumber(rawValue: string | undefined): number {
   return issueNumber;
 }
 
-function parseIssueMode(rawArgs: string[]): IssueExecutionMode {
-  if (rawArgs.length === 0) {
-    return "local";
-  }
-
+function parseIssueModeOption(rawArgs: string[]): string | undefined {
   let mode: string | undefined;
 
   for (let index = 0; index < rawArgs.length; index += 1) {
@@ -538,13 +602,91 @@ function parseIssueMode(rawArgs: string[]): IssueExecutionMode {
     throw new Error(`Unknown issue option "${rawArg}". ${ISSUE_USAGE}`);
   }
 
-  if (mode !== "local" && mode !== "github-action") {
+  return mode;
+}
+
+function parseIssueRunMode(rawArgs: string[]): IssueRunMode {
+  const mode = parseIssueModeOption(rawArgs);
+  if (mode === undefined) {
+    return "interactive";
+  }
+
+  if (mode !== "interactive" && mode !== "unattended") {
     throw new Error(
-      `Invalid issue mode "${mode ?? ""}". Expected "local" or "github-action".`
+      `Invalid issue mode "${mode}". Expected "interactive" or "unattended".`
     );
   }
 
   return mode;
+}
+
+function parseIssuePrepareMode(rawArgs: string[]): IssuePrepareMode {
+  const mode = parseIssueModeOption(rawArgs);
+  if (mode === undefined) {
+    return "local";
+  }
+
+  if (mode !== "local" && mode !== "github-action") {
+    throw new Error(
+      `Invalid issue mode "${mode}". Expected "local" or "github-action".`
+    );
+  }
+
+  return mode;
+}
+
+function parseIssueBatchArgs(rawArgs: string[]): {
+  issueNumbers: number[];
+  mode: "unattended";
+} {
+  const issueNumbers: number[] = [];
+  let mode: string | undefined;
+
+  for (let index = 0; index < rawArgs.length; index += 1) {
+    const rawArg = rawArgs[index];
+    if (rawArg === "--mode") {
+      mode = rawArgs[index + 1];
+      index += 1;
+      continue;
+    }
+
+    if (rawArg.startsWith("--mode=")) {
+      mode = rawArg.slice("--mode=".length);
+      continue;
+    }
+
+    if (rawArg.startsWith("--")) {
+      throw new Error(`Unknown issue option "${rawArg}". ${ISSUE_USAGE}`);
+    }
+
+    issueNumbers.push(parseIssueNumber(rawArg));
+  }
+
+  if (mode !== undefined && mode !== "unattended") {
+    if (mode === "interactive") {
+      throw new Error(
+        "Batch issue runs only support `--mode unattended`. Interactive batch mode is not supported."
+      );
+    }
+
+    throw new Error(`Invalid issue mode "${mode}". Expected "unattended".`);
+  }
+
+  const uniqueIssueNumbers = [...new Set(issueNumbers)];
+  if (uniqueIssueNumbers.length < 2) {
+    throw new Error(
+      `Batch issue runs require at least two issue numbers. ${ISSUE_USAGE}`
+    );
+  }
+
+  if (uniqueIssueNumbers.length !== issueNumbers.length) {
+    throw new Error("Batch issue runs do not support duplicate issue numbers.");
+  }
+
+  return {
+    issueNumbers,
+    mode: "unattended",
+  };
 }
 
 export function parseIssueCommandArgs(args: string[]): IssueCommandOptions {
@@ -561,11 +703,20 @@ export function parseIssueCommandArgs(args: string[]): IssueCommandOptions {
     };
   }
 
+  if (subcommand === "batch") {
+    const parsed = parseIssueBatchArgs(issueArgs.slice(1));
+    return {
+      action: "batch",
+      issueNumbers: parsed.issueNumbers,
+      mode: parsed.mode,
+    };
+  }
+
   if (subcommand === "prepare") {
     return {
       action: "prepare",
       issueNumber: parseIssueNumber(issueArgs[1]),
-      mode: parseIssueMode(issueArgs.slice(2)),
+      mode: parseIssuePrepareMode(issueArgs.slice(2)),
     };
   }
 
@@ -598,7 +749,7 @@ export function parseIssueCommandArgs(args: string[]): IssueCommandOptions {
   return {
     action: "run",
     issueNumber: parseIssueNumber(issueArgs[0]),
-    mode: parseIssueMode(issueArgs.slice(1)),
+    mode: parseIssueRunMode(issueArgs.slice(1)),
   };
 }
 
@@ -1129,7 +1280,8 @@ function loadIssueSessionState(
 
   const parsed = JSON.parse(readFileSync(stateFilePath, "utf8")) as Partial<IssueSessionState>;
   const runtimeType =
-    parsed.runtimeType === undefined && typeof parsed.sessionId === "string"
+    parsed.runtimeType === undefined &&
+    (typeof parsed.sessionId === "string" || parsed.executionMode === "unattended")
       ? "codex"
       : parsed.runtimeType;
   if (
@@ -1144,6 +1296,9 @@ function loadIssueSessionState(
     (parsed.sandboxMode !== undefined && typeof parsed.sandboxMode !== "string") ||
     (parsed.approvalPolicy !== undefined &&
       typeof parsed.approvalPolicy !== "string") ||
+    (parsed.executionMode !== undefined &&
+      parsed.executionMode !== "interactive" &&
+      parsed.executionMode !== "unattended") ||
     typeof parsed.createdAt !== "string" ||
     typeof parsed.updatedAt !== "string"
   ) {
@@ -1218,6 +1373,187 @@ function createIssueWorkspace(
     metadataFilePath: resolve(runDir, "metadata.json"),
     outputLogPath: resolve(runDir, "output.log"),
   };
+}
+
+function createIssueBatchKey(issueNumbers: number[]): string {
+  return `issues-${issueNumbers.join("-")}`;
+}
+
+function createIssueBatchWorkspace(
+  repoRoot: string,
+  issueNumbers: number[]
+): IssueBatchWorkspace {
+  const runDir = getIssueBatchRunDir(repoRoot, issueNumbers);
+  mkdirSync(runDir, { recursive: true });
+
+  return {
+    runDir,
+    summaryFilePath: resolve(runDir, "summary.md"),
+    metadataFilePath: resolve(runDir, "metadata.json"),
+    outputLogPath: resolve(runDir, "output.log"),
+  };
+}
+
+function createInitialIssueBatchState(
+  issueNumbers: number[],
+  workspace: IssueBatchWorkspace
+): IssueBatchState {
+  const now = new Date().toISOString();
+
+  return {
+    key: createIssueBatchKey(issueNumbers),
+    issueNumbers,
+    createdAt: now,
+    updatedAt: now,
+    latestRunDir: workspace.runDir,
+    issues: issueNumbers.map((issueNumber) => ({
+      issueNumber,
+      status: "pending",
+      attempts: [],
+    })),
+  };
+}
+
+function loadIssueBatchState(
+  repoRoot: string,
+  issueNumbers: number[]
+): IssueBatchState | undefined {
+  const stateFilePath = getIssueBatchStateFilePath(repoRoot, issueNumbers);
+  if (!existsSync(stateFilePath)) {
+    return undefined;
+  }
+
+  const parsed = JSON.parse(readFileSync(stateFilePath, "utf8")) as Partial<IssueBatchState>;
+  if (
+    parsed.key !== createIssueBatchKey(issueNumbers) ||
+    !Array.isArray(parsed.issueNumbers) ||
+    parsed.issueNumbers.length !== issueNumbers.length ||
+    parsed.issueNumbers.some((issueNumber, index) => issueNumber !== issueNumbers[index]) ||
+    typeof parsed.createdAt !== "string" ||
+    typeof parsed.updatedAt !== "string" ||
+    typeof parsed.latestRunDir !== "string" ||
+    !Array.isArray(parsed.issues)
+  ) {
+    throw new Error(
+      `Issue batch state at ${toRepoRelativePath(repoRoot, stateFilePath)} is malformed. Remove it and rerun the batch to start fresh.`
+    );
+  }
+
+  return parsed as IssueBatchState;
+}
+
+function writeIssueBatchState(
+  repoRoot: string,
+  issueNumbers: number[],
+  state: IssueBatchState
+): void {
+  mkdirSync(getIssueBatchStateDir(repoRoot), { recursive: true });
+  writeFileSync(
+    getIssueBatchStateFilePath(repoRoot, issueNumbers),
+    `${JSON.stringify(state, null, 2)}\n`,
+    "utf8"
+  );
+}
+
+function appendIssueBatchLog(workspace: IssueBatchWorkspace, message: string): void {
+  appendFileSync(workspace.outputLogPath, `${message}\n`, "utf8");
+}
+
+function formatIssueBatchSummary(
+  repoRoot: string,
+  state: IssueBatchState,
+  workspace: IssueBatchWorkspace
+): string {
+  const lines: string[] = [
+    "# Issue Batch Summary",
+    "",
+    `Batch key: ${state.key}`,
+    `Issues: ${state.issueNumbers.join(", ")}`,
+    `Created: ${state.createdAt}`,
+    `Updated: ${state.updatedAt}`,
+    `Batch run directory: ${toRepoRelativePath(repoRoot, workspace.runDir)}`,
+  ];
+
+  if (state.stoppedIssueNumber !== undefined) {
+    lines.push(`Stopped at issue: #${state.stoppedIssueNumber}`);
+  }
+
+  lines.push("", "## Issue status", "");
+
+  for (const issueState of state.issues) {
+    const details = [
+      `#${issueState.issueNumber}`,
+      issueState.status,
+      issueState.branchName ? `branch ${issueState.branchName}` : undefined,
+      issueState.runDir ? `run ${issueState.runDir}` : undefined,
+      issueState.prUrl ? `PR ${issueState.prUrl}` : undefined,
+    ]
+      .filter(Boolean)
+      .join(" | ");
+    lines.push(`- ${details}`);
+
+    if (issueState.error) {
+      lines.push(`  Error: ${issueState.error}`);
+    }
+
+    if (issueState.attempts.length > 0) {
+      const latestAttempt = issueState.attempts.at(-1);
+      if (latestAttempt) {
+        lines.push(
+          `  Latest attempt: ${latestAttempt.status} at ${latestAttempt.updatedAt}`
+        );
+      }
+    }
+  }
+
+  lines.push("");
+  return lines.join("\n");
+}
+
+function writeIssueBatchArtifacts(
+  repoRoot: string,
+  state: IssueBatchState,
+  workspace: IssueBatchWorkspace
+): void {
+  writeFileSync(
+    workspace.summaryFilePath,
+    formatIssueBatchSummary(repoRoot, state, workspace),
+    "utf8"
+  );
+  writeFileSync(
+    workspace.metadataFilePath,
+    `${JSON.stringify(
+      {
+        key: state.key,
+        createdAt: state.createdAt,
+        updatedAt: state.updatedAt,
+        issueNumbers: state.issueNumbers,
+        latestRunDir: toRepoRelativePath(repoRoot, workspace.runDir),
+        stoppedIssueNumber: state.stoppedIssueNumber,
+        issues: state.issues,
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+}
+
+function updateIssueBatchState(
+  repoRoot: string,
+  issueNumbers: number[],
+  state: IssueBatchState,
+  workspace: IssueBatchWorkspace,
+  updater: (currentState: IssueBatchState) => IssueBatchState
+): IssueBatchState {
+  const nextState = {
+    ...updater(state),
+    updatedAt: new Date().toISOString(),
+    latestRunDir: toRepoRelativePath(repoRoot, workspace.runDir),
+  };
+  writeIssueBatchState(repoRoot, issueNumbers, nextState);
+  writeIssueBatchArtifacts(repoRoot, nextState, workspace);
+  return nextState;
 }
 
 function formatIssueSnapshot(
@@ -1334,6 +1670,7 @@ function createIssueSessionState(
       getInteractiveRuntimeByType(context.runtime.type).metadata.sandboxMode,
     approvalPolicy:
       getInteractiveRuntimeByType(context.runtime.type).metadata.approvalPolicy,
+    executionMode: context.mode === "unattended" ? "unattended" : "interactive",
     createdAt,
     updatedAt: new Date().toISOString(),
   };
@@ -1350,7 +1687,7 @@ function persistIssueSessionState(
 function buildRuntimePrompt(
   repoRoot: string,
   workspace: IssueWorkspace,
-  mode: IssueExecutionMode,
+  mode: IssueWorkspaceMode,
   buildCommand: string[]
 ): string {
   const issueFile = toRepoRelativePath(repoRoot, workspace.issueFilePath);
@@ -1361,11 +1698,16 @@ function buildRuntimePrompt(
           "You are running inside a GitHub Actions workflow via the configured interactive coding runtime.",
           "Do not wait for interactive user input.",
         ]
+      : mode === "unattended"
+        ? [
+            "You are running inside an unattended local git-ai issue workflow via Codex.",
+            "Do not wait for interactive user input.",
+          ]
       : [];
   const doneStateInstructions = buildDoneStateInstructions({
-    mode: mode === "github-action" ? "non-interactive" : "interactive",
+    mode: mode === "local" ? "interactive" : "non-interactive",
     readyLabel:
-      mode === "github-action" ? "Ready for the next automation step" : "Ready to commit",
+      mode === "local" ? "Ready to commit" : "Ready for the next automation step",
   });
 
   return [
@@ -1395,7 +1737,7 @@ function writeIssueWorkspaceFiles(
   planComment: IssuePlanComment | undefined,
   branchName: string,
   workspace: IssueWorkspace,
-  mode: IssueExecutionMode,
+  mode: IssueWorkspaceMode,
   buildCommand: string[],
   runtimeType: InteractiveRuntimeType,
   runtimeInvocation: "new" | "resume",
@@ -1701,6 +2043,44 @@ async function generateIssueCommitProposal(
   return {
     diff,
     initialMessage: formatCommitMessage(result.title, result.body),
+  };
+}
+
+function createAutoAcceptedGeneratedText(
+  filePath: string,
+  content: string
+): ReviewedGeneratedText {
+  mkdirSync(dirname(filePath), { recursive: true });
+  writeFileSync(filePath, content, "utf8");
+  validateCommitMessage(content);
+
+  return {
+    content,
+    filePath,
+  };
+}
+
+async function finalizeIssueRunUnattended(
+  repoRoot: string,
+  issueNumber: number,
+  provider: AIProvider,
+  runDir: string
+): Promise<Extract<FinalizeIssueRunResult, { committed: true }>> {
+  const proposal = await generateIssueCommitProposal(repoRoot, provider);
+  const commitMessage = createAutoAcceptedGeneratedText(
+    resolve(runDir, "commit-message.txt"),
+    proposal.initialMessage
+  );
+
+  console.log(
+    `Committing generated changes for issue #${issueNumber} with the generated commit message...`
+  );
+  commitGeneratedChanges(repoRoot, commitMessage);
+
+  return {
+    committed: true,
+    diff: proposal.diff,
+    commitMessage,
   };
 }
 
@@ -2475,7 +2855,7 @@ async function runIssuePlanCommand(issueNumber: number): Promise<void> {
 
 async function prepareIssueRun(
   issueNumber: number,
-  mode: IssueExecutionMode,
+  mode: IssueWorkspaceMode,
   options: {
     allowResume?: boolean;
     runtimeType?: InteractiveRuntimeType;
@@ -2498,7 +2878,7 @@ async function prepareIssueRun(
   const planComment = await forge.fetchIssuePlanComment(issueNumber);
   const sessionStateFilePath = getIssueSessionStateFilePath(repoRoot, issueNumber);
   const existingSessionState =
-    options.allowResume && mode === "local"
+    options.allowResume && mode !== "github-action"
       ? loadIssueSessionState(repoRoot, issueNumber)
       : undefined;
 
@@ -2654,6 +3034,297 @@ async function finalizeIssueRun(
   };
 }
 
+function requireCodexForUnattendedIssueRuns(
+  repositoryConfig: ReturnType<typeof getRepositoryConfig>
+): void {
+  if (repositoryConfig.ai.runtime.type !== "codex") {
+    throw new Error(
+      'Unattended issue runs currently require `ai.runtime.type` to be "codex" in .git-ai/config.json.'
+    );
+  }
+
+  const runtime = getInteractiveRuntimeByType("codex");
+  const availability = runtime.checkAvailability();
+  if (!availability.available) {
+    throw new Error(
+      `Configured runtime "${runtime.displayName}" is unavailable because ${availability.reason}. Install the missing dependency before running unattended issue workflows.`
+    );
+  }
+}
+
+async function runUnattendedIssueCommand(
+  issueNumber: number,
+  options: {
+    onPrepared?(details: { branchName: string; runDir: string }): void;
+  } = {}
+): Promise<UnattendedIssueRunResult> {
+  const repoRoot = getDefaultRepoRoot();
+  const repositoryConfig = getRepositoryConfig(repoRoot);
+  requireCodexForUnattendedIssueRuns(repositoryConfig);
+
+  const forge = getRepositoryForge(repoRoot);
+  if (!forge.isAuthenticated()) {
+    throw new Error(
+      "Unattended issue runs require authenticated GitHub access so git-ai can open the pull request automatically."
+    );
+  }
+
+  const context = await prepareIssueRun(issueNumber, "unattended", {
+    allowResume: true,
+    runtimeType: "codex",
+  });
+  const runtime = getInteractiveRuntimeByType("codex");
+  const runDir = toRepoRelativePath(repoRoot, context.workspace.runDir);
+  options.onPrepared?.({
+    branchName: context.branchName,
+    runDir,
+  });
+
+  persistIssueSessionState(repoRoot, context, context.runtime.sessionId);
+  console.log(
+    context.runtime.invocation === "resume"
+      ? `Resuming unattended Codex issue execution for #${issueNumber}...`
+      : `Starting unattended Codex issue execution for #${issueNumber}...`
+  );
+
+  const runtimeLaunch = launchUnattendedRuntime("codex", repoRoot, context.workspace, {
+    resumeSessionId: context.runtime.sessionId,
+    outputLastMessageFilePath: resolve(
+      context.workspace.runDir,
+      "assistant-last-message.txt"
+    ),
+  });
+  persistIssueSessionState(repoRoot, context, runtimeLaunch.sessionId);
+  updateIssueWorkspaceMetadata(context.workspace, (currentMetadata) => ({
+    ...currentMetadata,
+    runtime: {
+      ...((currentMetadata.runtime as Record<string, unknown> | undefined) ?? {}),
+      type: runtime.type,
+      displayName: runtime.displayName,
+      command: runtime.metadata.command,
+      invocation: runtimeLaunch.invocation,
+      sessionId: runtimeLaunch.sessionId,
+      sandboxMode: runtime.metadata.sandboxMode,
+      approvalPolicy: runtime.metadata.approvalPolicy,
+    },
+  }));
+
+  console.log("Verifying build...");
+  verifyBuild(repoRoot, repositoryConfig.buildCommand, context.workspace.outputLogPath);
+
+  const { provider, providerType } = await createProvider(repoRoot);
+  const finalized = await finalizeIssueRunUnattended(
+    repoRoot,
+    context.issueNumber,
+    provider,
+    context.workspace.runDir
+  );
+  const pullRequest = await generateIssuePullRequest(provider, {
+    repoRoot,
+    issueNumber: context.issueNumber,
+    issue: context.issue,
+    diff: finalized.diff,
+    commitMessage: finalized.commitMessage,
+    runDir: context.workspace.runDir,
+  });
+  updateIssueWorkspaceMetadata(context.workspace, (currentMetadata) => ({
+    ...currentMetadata,
+    provider: {
+      type: providerType,
+    },
+  }));
+
+  console.log("Pushing branch and opening a pull request...");
+  const createdPullRequest = await forge.createPullRequest({
+    branchName: context.branchName,
+    baseBranch: repositoryConfig.baseBranch,
+    title: pullRequest.title,
+    body: pullRequest.body,
+    outputLogPath: context.workspace.outputLogPath,
+  });
+  updateIssueWorkspaceMetadata(context.workspace, (currentMetadata) => ({
+    ...currentMetadata,
+    pullRequest: {
+      title: pullRequest.title,
+      url: createdPullRequest.url,
+    },
+  }));
+
+  return {
+    branchName: context.branchName,
+    runDir,
+    prUrl: createdPullRequest.url,
+  };
+}
+
+async function runIssueBatchCommand(issueNumbers: number[]): Promise<void> {
+  const repoRoot = getDefaultRepoRoot();
+  const workspace = createIssueBatchWorkspace(repoRoot, issueNumbers);
+  let state =
+    loadIssueBatchState(repoRoot, issueNumbers) ??
+    createInitialIssueBatchState(issueNumbers, workspace);
+  state = updateIssueBatchState(repoRoot, issueNumbers, state, workspace, (currentState) => ({
+    ...currentState,
+    latestRunDir: toRepoRelativePath(repoRoot, workspace.runDir),
+  }));
+
+  for (let index = 0; index < issueNumbers.length; index += 1) {
+    const issueNumber = issueNumbers[index];
+    const issueState = state.issues.find((entry) => entry.issueNumber === issueNumber);
+    if (!issueState) {
+      throw new Error(`Missing batch state for issue #${issueNumber}.`);
+    }
+
+    if (issueState.status === "completed") {
+      const skipMessage = `[${index + 1}/${issueNumbers.length}] Skipping completed issue #${issueNumber}.`;
+      console.log(skipMessage);
+      appendIssueBatchLog(workspace, skipMessage);
+      continue;
+    }
+
+    const startMessage = `[${index + 1}/${issueNumbers.length}] Starting issue #${issueNumber}.`;
+    console.log(startMessage);
+    appendIssueBatchLog(workspace, startMessage);
+
+    try {
+      const result = await runUnattendedIssueCommand(issueNumber, {
+        onPrepared: ({ branchName, runDir }) => {
+          const now = new Date().toISOString();
+          state = updateIssueBatchState(
+            repoRoot,
+            issueNumbers,
+            state,
+            workspace,
+            (currentState) => ({
+              ...currentState,
+              stoppedIssueNumber: issueNumber,
+              issues: currentState.issues.map((entry) =>
+                entry.issueNumber !== issueNumber
+                  ? entry
+                  : {
+                      ...entry,
+                      status: "running",
+                      branchName,
+                      runDir,
+                      error: undefined,
+                      attempts: [
+                        ...entry.attempts,
+                        {
+                          startedAt: now,
+                          updatedAt: now,
+                          status: "running",
+                          branchName,
+                          runDir,
+                        },
+                      ],
+                    }
+              ),
+            })
+          );
+        },
+      });
+
+      const successMessage = result.prUrl
+        ? `[${index + 1}/${issueNumbers.length}] Completed issue #${issueNumber}: ${result.prUrl}`
+        : `[${index + 1}/${issueNumbers.length}] Completed issue #${issueNumber}.`;
+      console.log(successMessage);
+      appendIssueBatchLog(workspace, successMessage);
+      state = updateIssueBatchState(
+        repoRoot,
+        issueNumbers,
+        state,
+        workspace,
+        (currentState) => ({
+          ...currentState,
+          stoppedIssueNumber: undefined,
+          issues: currentState.issues.map((entry) =>
+            entry.issueNumber !== issueNumber
+              ? entry
+              : {
+                  ...entry,
+                  status: "completed",
+                  branchName: result.branchName,
+                  runDir: result.runDir,
+                  prUrl: result.prUrl,
+                  error: undefined,
+                  attempts:
+                    entry.attempts.length === 0
+                      ? [
+                          {
+                            startedAt: new Date().toISOString(),
+                            updatedAt: new Date().toISOString(),
+                            status: "completed",
+                            branchName: result.branchName,
+                            runDir: result.runDir,
+                            prUrl: result.prUrl,
+                          },
+                        ]
+                      : entry.attempts.map((attempt, attemptIndex) =>
+                          attemptIndex === entry.attempts.length - 1
+                            ? {
+                                ...attempt,
+                                updatedAt: new Date().toISOString(),
+                                status: "completed",
+                                branchName: result.branchName,
+                                runDir: result.runDir,
+                                prUrl: result.prUrl,
+                                error: undefined,
+                              }
+                            : attempt
+                        ),
+                }
+          ),
+        })
+      );
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      const failureMessage = `[${index + 1}/${issueNumbers.length}] Stopping batch at issue #${issueNumber}: ${message}`;
+      console.log(failureMessage);
+      appendIssueBatchLog(workspace, failureMessage);
+      state = updateIssueBatchState(
+        repoRoot,
+        issueNumbers,
+        state,
+        workspace,
+        (currentState) => ({
+          ...currentState,
+          stoppedIssueNumber: issueNumber,
+          issues: currentState.issues.map((entry) =>
+            entry.issueNumber !== issueNumber
+              ? entry
+              : {
+                  ...entry,
+                  status: "failed",
+                  error: message,
+                  attempts:
+                    entry.attempts.length === 0
+                      ? [
+                          {
+                            startedAt: new Date().toISOString(),
+                            updatedAt: new Date().toISOString(),
+                            status: "failed",
+                            error: message,
+                          },
+                        ]
+                      : entry.attempts.map((attempt, attemptIndex) =>
+                          attemptIndex === entry.attempts.length - 1
+                            ? {
+                                ...attempt,
+                                updatedAt: new Date().toISOString(),
+                                status: "failed",
+                                error: message,
+                              }
+                            : attempt
+                        ),
+                }
+          ),
+        })
+      );
+      throw error;
+    }
+  }
+}
+
 async function runIssueCommand(): Promise<void> {
   const repoRoot = getDefaultRepoRoot();
   const args = getCliArgs();
@@ -2666,6 +3337,11 @@ async function runIssueCommand(): Promise<void> {
 
   if (issueCommand.action === "plan") {
     await runIssuePlanCommand(issueCommand.issueNumber);
+    return;
+  }
+
+  if (issueCommand.action === "batch") {
+    await runIssueBatchCommand(issueCommand.issueNumbers);
     return;
   }
 
@@ -2703,10 +3379,9 @@ async function runIssueCommand(): Promise<void> {
     return;
   }
 
-  if (issueCommand.mode !== "local") {
-    throw new Error(
-      'Full issue runs only support local mode. Use `git-ai issue prepare <number> --mode github-action` in workflows.'
-    );
+  if (issueCommand.mode === "unattended") {
+    await runUnattendedIssueCommand(issueCommand.issueNumber);
+    return;
   }
 
   const repositoryConfig = getRepositoryConfig(repoRoot);
@@ -2715,7 +3390,7 @@ async function runIssueCommand(): Promise<void> {
       console.log(message);
     },
   });
-  const context = await prepareIssueRun(issueCommand.issueNumber, issueCommand.mode, {
+  const context = await prepareIssueRun(issueCommand.issueNumber, "local", {
     allowResume: true,
     runtimeType: selectedRuntime.type,
   });
@@ -2781,13 +3456,20 @@ async function runIssueCommand(): Promise<void> {
 
   if (forge.isAuthenticated()) {
     console.log("Pushing branch and opening a pull request...");
-    await forge.createPullRequest({
+    const createdPullRequest = await forge.createPullRequest({
       branchName: context.branchName,
       baseBranch: repositoryConfig.baseBranch,
       title: pullRequest.title,
       body: pullRequest.body,
       outputLogPath: context.workspace.outputLogPath,
     });
+    updateIssueWorkspaceMetadata(context.workspace, (currentMetadata) => ({
+      ...currentMetadata,
+      pullRequest: {
+        title: pullRequest.title,
+        url: createdPullRequest.url,
+      },
+    }));
     return;
   }
 

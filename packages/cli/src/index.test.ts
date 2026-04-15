@@ -404,6 +404,55 @@ function listRunDirectories(): string[] {
   }
 }
 
+function readIssueBatchState(issueNumbers: number[]): {
+  key: string;
+  latestRunDir: string;
+  stoppedIssueNumber?: number;
+  issues: Array<{
+    issueNumber: number;
+    status: string;
+    runDir?: string;
+    branchName?: string;
+    prUrl?: string;
+    error?: string;
+    attempts: Array<{
+      status: string;
+      runDir?: string;
+      branchName?: string;
+      prUrl?: string;
+      error?: string;
+    }>;
+  }>;
+} {
+  const statePath = resolve(
+    REPO_ROOT,
+    ".git-ai",
+    "batches",
+    `issues-${issueNumbers.join("-")}.json`
+  );
+
+  return JSON.parse(readFileSync(statePath, "utf8")) as {
+    key: string;
+    latestRunDir: string;
+    stoppedIssueNumber?: number;
+    issues: Array<{
+      issueNumber: number;
+      status: string;
+      runDir?: string;
+      branchName?: string;
+      prUrl?: string;
+      error?: string;
+      attempts: Array<{
+        status: string;
+        runDir?: string;
+        branchName?: string;
+        prUrl?: string;
+        error?: string;
+      }>;
+    }>;
+  };
+}
+
 function readLatestRunMetadata(): {
   runDir: string;
   metadata: {
@@ -848,6 +897,30 @@ describe("CLI integration", () => {
       issueNumber: 42,
       mode: "local",
     });
+  });
+
+  it("parses issue batch as an unattended issue subcommand", async () => {
+    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    const { parseIssueCommandArgs } = await loadCli();
+
+    expect(
+      parseIssueCommandArgs(["issue", "batch", "123", "124", "--mode", "unattended"])
+    ).toEqual({
+      action: "batch",
+      issueNumbers: [123, 124],
+      mode: "unattended",
+    });
+  });
+
+  it("rejects interactive batch issue mode", async () => {
+    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    const { parseIssueCommandArgs } = await loadCli();
+
+    expect(() =>
+      parseIssueCommandArgs(["issue", "batch", "123", "124", "--mode", "interactive"])
+    ).toThrow(
+      "Batch issue runs only support `--mode unattended`. Interactive batch mode is not supported."
+    );
   });
 
   it("parses pr fix-comments as a dedicated pr subcommand", async () => {
@@ -3285,6 +3358,417 @@ describe("CLI integration", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("runs issue batches sequentially, records batch progress, and resumes from the first incomplete issue", async () => {
+    const beforeRuns = listRunDirectories();
+    const issueNumbers = [123, 124];
+    const issueTitles = new Map([
+      [123, "Batch queue first issue"],
+      [124, "Batch queue second issue"],
+    ]);
+    const branchByIssue = new Map([
+      [123, "feat/issue-123-batch-queue-first-issue"],
+      [124, "feat/issue-124-batch-queue-second-issue"],
+    ]);
+    const batchStatePath = resolve(
+      REPO_ROOT,
+      ".git-ai",
+      "batches",
+      `issues-${issueNumbers.join("-")}.json`
+    );
+
+    for (const target of [
+      resolve(REPO_ROOT, ".git-ai", "issues", "123"),
+      resolve(REPO_ROOT, ".git-ai", "issues", "124"),
+      resolve(REPO_ROOT, ".git-ai", "issues", "123-batch-queue-first-issue"),
+      resolve(REPO_ROOT, ".git-ai", "issues", "124-batch-queue-second-issue"),
+      batchStatePath,
+    ]) {
+      rmSync(target, { recursive: true, force: true });
+      cleanupTargets.add(target);
+    }
+
+    const statusResponses = [
+      "",
+      " M packages/cli/src/index.ts\n",
+      "",
+      "",
+      " M packages/cli/src/index.ts\n",
+    ];
+    const branches = new Set<string>();
+    const codexIssues: number[] = [];
+    const codexAttempts = new Map<number, number>();
+    let activeIssueNumber: number | undefined;
+
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const url = String(input);
+      const issueMatch = url.match(/\/issues\/(\d+)$/);
+      if (issueMatch) {
+        const issueNumber = Number.parseInt(issueMatch[1] ?? "", 10);
+        return createFetchResponse({
+          title: issueTitles.get(issueNumber),
+          body: `Implement issue ${issueNumber} through unattended batch orchestration.`,
+          html_url: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
+        });
+      }
+
+      if (url.includes("/comments?")) {
+        return createFetchResponse([]);
+      }
+
+      throw new Error(`Unexpected fetch call: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { run } = await loadCli({
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          return statusResponses.shift() ?? "";
+        }
+
+        if (command === "git" && args[0] === "diff" && args[1] === "--name-only") {
+          return "packages/cli/src/index.ts\n";
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "diff" &&
+          args[1] === "HEAD" &&
+          args[2] === "--" &&
+          args[3] === "packages/cli/src/index.ts"
+        ) {
+          return [
+            "diff --git a/packages/cli/src/index.ts b/packages/cli/src/index.ts",
+            "--- a/packages/cli/src/index.ts",
+            "+++ b/packages/cli/src/index.ts",
+            "@@ -1,1 +1,1 @@",
+            '-const flow = "before";',
+            '+const flow = "after";',
+          ].join("\n");
+        }
+
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/git-ai.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "rev-parse") {
+          return { status: branches.has(args[2] as string) ? 0 : 1 };
+        }
+
+        if (command === "git" && args[0] === "checkout" && args[1] === "main") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "pull") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "checkout" && args[1] === "-b") {
+          const branchName = args[2] as string;
+          branches.add(branchName);
+          activeIssueNumber = Number.parseInt(branchName.match(/issue-(\d+)/)?.[1] ?? "", 10);
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "checkout" && typeof args[1] === "string") {
+          activeIssueNumber = Number.parseInt(args[1].match(/issue-(\d+)/)?.[1] ?? "", 10);
+          return { status: 0 };
+        }
+
+        if (command === "codex" && args[0] === "exec") {
+          const prompt = String(args.at(-1) ?? "");
+          const issueNumber = Number.parseInt(prompt.match(/issue-(\d+)/)?.[1] ?? "", 10);
+          codexIssues.push(issueNumber);
+          activeIssueNumber = issueNumber;
+          const attemptNumber = (codexAttempts.get(issueNumber) ?? 0) + 1;
+          codexAttempts.set(issueNumber, attemptNumber);
+
+          if (issueNumber === 124 && attemptNumber === 1) {
+            return { status: 1, error: new Error("agent failed") };
+          }
+
+          return { status: 0 };
+        }
+
+        if (command === "pnpm" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "pnpm" && args[0] === "build") {
+          return { status: 0, stdout: "built\n", stderr: "" };
+        }
+
+        if (command === "git" && (args[0] === "add" || args[0] === "commit" || args[0] === "push")) {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (command === "gh" && args[0] === "pr" && args[1] === "create") {
+          return {
+            status: 0,
+            stdout: `https://github.com/DevwareUK/git-ai/pull/${activeIssueNumber === 123 ? 701 : 702}\n`,
+            stderr: "",
+          };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.env.OPENAI_API_KEY = "test-key";
+    process.env.GITHUB_TOKEN = "test-token";
+    process.argv = ["node", "git-ai", "issue", "batch", "123", "124"];
+
+    await expect(run()).rejects.toThrow(
+      "The unattended Codex session did not complete successfully."
+    );
+
+    const failedBatchState = readIssueBatchState(issueNumbers);
+    cleanupTargets.add(batchStatePath);
+    cleanupTargets.add(resolve(REPO_ROOT, failedBatchState.latestRunDir));
+
+    expect(failedBatchState.stoppedIssueNumber).toBe(124);
+    expect(failedBatchState.issues).toMatchObject([
+      {
+        issueNumber: 123,
+        status: "completed",
+        branchName: branchByIssue.get(123),
+        prUrl: "https://github.com/DevwareUK/git-ai/pull/701",
+      },
+      {
+        issueNumber: 124,
+        status: "failed",
+        branchName: branchByIssue.get(124),
+        error: "The unattended Codex session did not complete successfully. agent failed",
+      },
+    ]);
+    expect(
+      readFileSync(resolve(REPO_ROOT, failedBatchState.latestRunDir, "summary.md"), "utf8")
+    ).toContain("Stopped at issue: #124");
+
+    process.argv = ["node", "git-ai", "issue", "batch", "123", "124"];
+    await run();
+
+    const completedBatchState = readIssueBatchState(issueNumbers);
+    cleanupTargets.add(resolve(REPO_ROOT, completedBatchState.latestRunDir));
+    for (const runDir of listRunDirectories().filter((entry) => !beforeRuns.includes(entry))) {
+      cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "runs", runDir));
+    }
+
+    expect(completedBatchState.stoppedIssueNumber).toBeUndefined();
+    expect(completedBatchState.issues).toMatchObject([
+      {
+        issueNumber: 123,
+        status: "completed",
+        prUrl: "https://github.com/DevwareUK/git-ai/pull/701",
+      },
+      {
+        issueNumber: 124,
+        status: "completed",
+        prUrl: "https://github.com/DevwareUK/git-ai/pull/702",
+      },
+    ]);
+    expect(codexIssues).toEqual([123, 124, 124]);
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
+  it("lets a batch-started unattended issue continue independently through the single-issue command", async () => {
+    const beforeRuns = listRunDirectories();
+    const issueTitles = new Map([
+      [223, "Independent batch queue first issue"],
+      [224, "Independent batch queue second issue"],
+    ]);
+    const branch224 = "feat/issue-224-independent-batch-queue-second-issue";
+    const batchStatePath = resolve(
+      REPO_ROOT,
+      ".git-ai",
+      "batches",
+      "issues-223-224.json"
+    );
+
+    for (const target of [
+      resolve(REPO_ROOT, ".git-ai", "issues", "223"),
+      resolve(REPO_ROOT, ".git-ai", "issues", "224"),
+      resolve(REPO_ROOT, ".git-ai", "issues", "223-independent-batch-queue-first-issue"),
+      resolve(REPO_ROOT, ".git-ai", "issues", "224-independent-batch-queue-second-issue"),
+      batchStatePath,
+    ]) {
+      rmSync(target, { recursive: true, force: true });
+      cleanupTargets.add(target);
+    }
+
+    const statusResponses = [
+      "",
+      " M packages/cli/src/index.ts\n",
+      "",
+      "",
+      " M packages/cli/src/index.ts\n",
+    ];
+    const branches = new Set<string>();
+    const gitCommands: string[][] = [];
+    const codexAttempts = new Map<number, number>();
+
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const url = String(input);
+      const issueMatch = url.match(/\/issues\/(\d+)$/);
+      if (issueMatch) {
+        const issueNumber = Number.parseInt(issueMatch[1] ?? "", 10);
+        return createFetchResponse({
+          title: issueTitles.get(issueNumber),
+          body: `Implement issue ${issueNumber} through unattended orchestration.`,
+          html_url: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
+        });
+      }
+
+      if (url.includes("/comments?")) {
+        return createFetchResponse([]);
+      }
+
+      throw new Error(`Unexpected fetch call: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { run } = await loadCli({
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          return statusResponses.shift() ?? "";
+        }
+
+        if (command === "git" && args[0] === "diff" && args[1] === "--name-only") {
+          return "packages/cli/src/index.ts\n";
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "diff" &&
+          args[1] === "HEAD" &&
+          args[2] === "--" &&
+          args[3] === "packages/cli/src/index.ts"
+        ) {
+          return [
+            "diff --git a/packages/cli/src/index.ts b/packages/cli/src/index.ts",
+            "--- a/packages/cli/src/index.ts",
+            "+++ b/packages/cli/src/index.ts",
+            "@@ -1,1 +1,1 @@",
+            '-const state = "before";',
+            '+const state = "after";',
+          ].join("\n");
+        }
+
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/git-ai.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "git") {
+          gitCommands.push(args as string[]);
+        }
+
+        if (command === "git" && args[0] === "rev-parse") {
+          return { status: branches.has(args[2] as string) ? 0 : 1 };
+        }
+
+        if (command === "git" && args[0] === "checkout" && args[1] === "main") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "pull") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "checkout" && args[1] === "-b") {
+          branches.add(args[2] as string);
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "checkout") {
+          return { status: 0 };
+        }
+
+        if (command === "codex" && args[0] === "exec") {
+          const prompt = String(args.at(-1) ?? "");
+          const issueNumber = Number.parseInt(prompt.match(/issue-(\d+)/)?.[1] ?? "", 10);
+          const attemptNumber = (codexAttempts.get(issueNumber) ?? 0) + 1;
+          codexAttempts.set(issueNumber, attemptNumber);
+
+          if (issueNumber === 224 && attemptNumber === 1) {
+            return { status: 1, error: new Error("agent failed") };
+          }
+
+          return { status: 0 };
+        }
+
+        if (command === "pnpm" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "pnpm" && args[0] === "build") {
+          return { status: 0, stdout: "built\n", stderr: "" };
+        }
+
+        if (command === "git" && (args[0] === "add" || args[0] === "commit" || args[0] === "push")) {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (command === "gh" && args[0] === "pr" && args[1] === "create") {
+          return {
+            status: 0,
+            stdout: `https://github.com/DevwareUK/git-ai/pull/${codexAttempts.get(224) === 2 ? 804 : 803}\n`,
+            stderr: "",
+          };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.env.OPENAI_API_KEY = "test-key";
+    process.env.GITHUB_TOKEN = "test-token";
+    process.argv = ["node", "git-ai", "issue", "batch", "223", "224"];
+
+    await expect(run()).rejects.toThrow(
+      "The unattended Codex session did not complete successfully."
+    );
+
+    const sessionStatePath = resolve(REPO_ROOT, ".git-ai", "issues", "224", "session.json");
+    cleanupTargets.add(sessionStatePath);
+    expect(existsSync(sessionStatePath)).toBe(true);
+
+    const rerunGitCommandIndex = gitCommands.length;
+    process.argv = ["node", "git-ai", "issue", "224", "--mode", "unattended"];
+    await run();
+
+    const rerunGitCommands = gitCommands.slice(rerunGitCommandIndex);
+    expect(rerunGitCommands).toContainEqual(["rev-parse", "--verify", branch224]);
+    expect(rerunGitCommands).toContainEqual(["checkout", branch224]);
+    expect(rerunGitCommands).not.toContainEqual(["checkout", "main"]);
+    expect(rerunGitCommands).not.toContainEqual(["pull"]);
+    expect(rerunGitCommands).not.toContainEqual(["checkout", "-b", branch224]);
+    expect(codexAttempts.get(224)).toBe(2);
+    for (const runDir of listRunDirectories().filter((entry) => !beforeRuns.includes(entry))) {
+      cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "runs", runDir));
+    }
+  });
+
   it("tracks the Codex session for a first full issue run", async () => {
     const beforeRuns = listRunDirectories();
     const issueNumber = 148;
@@ -3762,6 +4246,165 @@ describe("CLI integration", () => {
       expect.arrayContaining(["resume", "019d5002-0000-7111-8222-933344445555"]),
       expect.any(Object)
     );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("accepts legacy unattended issue session state without runtimeType", async () => {
+    const issueNumber = 151;
+    const branchName = "feat/issue-151-legacy-unattended-session-state";
+    const sessionStateDir = resolve(REPO_ROOT, ".git-ai", "issues", String(issueNumber));
+    const sessionStatePath = resolve(sessionStateDir, "session.json");
+    const issueWorkspaceDir = resolve(
+      REPO_ROOT,
+      ".git-ai",
+      "issues",
+      `${issueNumber}-legacy-unattended-session-state`
+    );
+    let gitStatusCallCount = 0;
+    const gitCommands: string[][] = [];
+
+    mkdirSync(sessionStateDir, { recursive: true });
+    writeFileSync(
+      sessionStatePath,
+      `${JSON.stringify(
+        {
+          issueNumber,
+          branchName,
+          issueDir: `.git-ai/issues/${issueNumber}-legacy-unattended-session-state`,
+          runDir: ".git-ai/runs/20260415T074750395Z-issue-151",
+          promptFile: ".git-ai/runs/20260415T074750395Z-issue-151/prompt.md",
+          outputLog: ".git-ai/runs/20260415T074750395Z-issue-151/output.log",
+          executionMode: "unattended",
+          sandboxMode: "workspace-write",
+          approvalPolicy: "on-request",
+          createdAt: "2026-04-15T07:47:50.464Z",
+          updatedAt: "2026-04-15T07:47:50.464Z",
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+    cleanupTargets.add(sessionStateDir);
+    cleanupTargets.add(issueWorkspaceDir);
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          title: "Legacy unattended session state",
+          body: "Resume unattended runs created before runtimeType was persisted.",
+          html_url: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
+        })
+      )
+      .mockResolvedValueOnce(createFetchResponse([]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { run } = await loadCli({
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          gitStatusCallCount += 1;
+          return gitStatusCallCount === 1 ? "" : " M packages/cli/src/index.ts\n";
+        }
+
+        if (command === "git" && args[0] === "diff" && args[1] === "--name-only") {
+          return "packages/cli/src/index.ts\n";
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "diff" &&
+          args[1] === "HEAD" &&
+          args[2] === "--" &&
+          args[3] === "packages/cli/src/index.ts"
+        ) {
+          return [
+            "diff --git a/packages/cli/src/index.ts b/packages/cli/src/index.ts",
+            "--- a/packages/cli/src/index.ts",
+            "+++ b/packages/cli/src/index.ts",
+            "@@ -1,1 +1,1 @@",
+            '-const mode = "before";',
+            '+const mode = "after";',
+          ].join("\n");
+        }
+
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/git-ai.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "git") {
+          gitCommands.push(args as string[]);
+        }
+
+        if (command === "git" && args[0] === "rev-parse") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "checkout" && args[1] === branchName) {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "checkout" && args[1] === "main") {
+          throw new Error("Legacy unattended resume should not switch to base branch.");
+        }
+
+        if (command === "git" && args[0] === "pull") {
+          throw new Error("Legacy unattended resume should not pull the base branch.");
+        }
+
+        if (command === "git" && args[0] === "checkout" && args[1] === "-b") {
+          throw new Error("Legacy unattended resume should not create a new branch.");
+        }
+
+        if (command === "codex" && args[0] === "exec") {
+          return { status: 0 };
+        }
+
+        if (command === "pnpm" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "pnpm" && args[0] === "build") {
+          return { status: 0, stdout: "built\n", stderr: "" };
+        }
+
+        if (command === "git" && (args[0] === "add" || args[0] === "commit" || args[0] === "push")) {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (command === "gh" && args[0] === "pr" && args[1] === "create") {
+          return {
+            status: 0,
+            stdout: "https://github.com/DevwareUK/git-ai/pull/851\n",
+            stderr: "",
+          };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.env.OPENAI_API_KEY = "test-key";
+    process.env.GITHUB_TOKEN = "test-token";
+    process.argv = ["node", "git-ai", "issue", String(issueNumber), "--mode", "unattended"];
+
+    await run();
+
+    expect(gitCommands).toContainEqual(["rev-parse", "--verify", branchName]);
+    expect(gitCommands).toContainEqual(["checkout", branchName]);
+    expect(gitCommands).not.toContainEqual(["checkout", "main"]);
+    expect(gitCommands).not.toContainEqual(["pull"]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 

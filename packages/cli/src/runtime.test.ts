@@ -1,6 +1,9 @@
 import { spawnSync } from "node:child_process";
+import { mkdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { selectInteractiveRuntime } from "./runtime";
+import { getInteractiveRuntimeByType, selectInteractiveRuntime } from "./runtime";
 
 vi.mock("node:child_process", () => ({
   spawnSync: vi.fn(),
@@ -70,5 +73,53 @@ describe("selectInteractiveRuntime", () => {
     ).toThrow(
       'Configured runtime "Claude Code" is unavailable because the `claude` CLI is not available on PATH. The default runtime "Codex" is also unavailable because the `codex` CLI is not available on PATH.'
     );
+  });
+
+  it("does not send the original issue prompt again when resuming a Codex session", () => {
+    const repoRoot = resolve(tmpdir(), "git-ai-runtime-resume-test");
+    const runDir = resolve(repoRoot, ".git-ai", "runs", "20260415T000000000Z-issue-1");
+    mkdirSync(runDir, { recursive: true });
+
+    vi.mocked(spawnSync).mockImplementation((command, args) => {
+      if (command === "codex") {
+        return { status: 0 } as never;
+      }
+
+      return { status: 1, error: new Error("unexpected") } as never;
+    });
+
+    const runtime = getInteractiveRuntimeByType("codex");
+    try {
+      runtime.launch(
+        repoRoot,
+        {
+          promptFilePath: resolve(runDir, "prompt.md"),
+          outputLogPath: resolve(runDir, "output.log"),
+        },
+        {
+          resumeSessionId: "019d5001-aaaa-7bbb-8ccc-ddddeeeeffff",
+        }
+      );
+
+      expect(spawnSync).toHaveBeenCalledWith(
+        "codex",
+        [
+          "resume",
+          "019d5001-aaaa-7bbb-8ccc-ddddeeeeffff",
+          "--sandbox",
+          "workspace-write",
+          "--ask-for-approval",
+          "on-request",
+          "--cd",
+          repoRoot,
+        ],
+        expect.objectContaining({
+          cwd: repoRoot,
+          stdio: "inherit",
+        })
+      );
+    } finally {
+      rmSync(repoRoot, { recursive: true, force: true });
+    }
   });
 });
