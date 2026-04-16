@@ -72,6 +72,7 @@ import {
 } from "./run-artifacts";
 import { parseSetupCommandArgs, runSetupCommand } from "./setup";
 import { runPrFixCommentsCommand } from "./workflows/pr-fix-comments/run";
+import { runPrPrepareReviewCommand } from "./workflows/pr-prepare-review/run";
 import { runPrFixTestsCommand } from "./workflows/pr-fix-tests/run";
 
 export { parseSetupCommandArgs };
@@ -2367,6 +2368,17 @@ async function runPrCommand(): Promise<void> {
   const repoRoot = getDefaultRepoRoot();
   const prCommand = parsePrCommandArgs(getCliArgs());
   const repositoryConfig = getRepositoryConfig(repoRoot);
+
+  if (prCommand.action === "prepare-review") {
+    await runPrPrepareReviewCommand({
+      prNumber: prCommand.prNumber,
+      repoRoot,
+      buildCommand: repositoryConfig.buildCommand,
+      forge: getRepositoryForge(repoRoot),
+      ensureCleanWorkingTree,
+    });
+    return;
+  }
 
   if (prCommand.action === "fix-comments") {
     await runPrFixCommentsCommand({

@@ -731,7 +731,10 @@ async function loadCli(options: {
     generatePRDescription,
     generateIssueResolutionPlan,
     mergePRAssistantSection: prAssistantBody.mergePRAssistantSection,
+    PR_ASSISTANT_END_MARKER: prAssistantBody.PR_ASSISTANT_END_MARKER,
+    PR_ASSISTANT_START_MARKER: prAssistantBody.PR_ASSISTANT_START_MARKER,
     StructuredGenerationError,
+    stripManagedPRAssistantSection: prAssistantBody.stripManagedPRAssistantSection,
     resolveRepositoryConfig: vi.fn((config?: {
       ai?: {
         runtime?: { type?: "codex" | "claude-code" };
@@ -940,6 +943,16 @@ describe("CLI integration", () => {
     expect(parsePrCommandArgs(["pr", "fix-tests", "74"])).toEqual({
       action: "fix-tests",
       prNumber: 74,
+    });
+  });
+
+  it("parses pr prepare-review as a dedicated pr subcommand", async () => {
+    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    const { parsePrCommandArgs } = await loadCli();
+
+    expect(parsePrCommandArgs(["pr", "prepare-review", "75"])).toEqual({
+      action: "prepare-review",
+      prNumber: 75,
     });
   });
 
@@ -1347,6 +1360,569 @@ describe("CLI integration", () => {
     expect(stdout.output()).toContain("README.md");
     expect(stdout.output()).toContain("## Linked issue");
     expect(stdout.output()).toContain("packages/cli/src/index.ts:412");
+  });
+
+  it("fails pr prepare-review clearly when repository forge support is disabled", async () => {
+    await withRepositoryConfig(
+      JSON.stringify(
+        {
+          forge: {
+            type: "none",
+          },
+        },
+        null,
+        2
+      ),
+      async () => {
+        const { run } = await loadCli();
+
+        process.argv = ["node", "git-ai", "pr", "prepare-review", "87"];
+
+        await expect(run()).rejects.toThrow(
+          "Repository forge support is disabled by .git-ai/config.json. Configure `forge.type` to enable pull request workflows."
+        );
+      }
+    );
+  });
+
+  it("runs pr prepare-review, reuses the linked issue branch and resumes a live Codex session", async () => {
+    const beforeRuns = listRunDirectories();
+    const issueNumber = 211;
+    const branchName = "feat/issue-211-review-setup";
+    const sessionId = "019d9001-aaaa-7bbb-8ccc-ddddeeeeffff";
+    const codexHome = createMockCodexHome();
+    const sessionStateDir = resolve(REPO_ROOT, ".git-ai", "issues", String(issueNumber));
+
+    writeMockCodexSession(codexHome, sessionId, REPO_ROOT, "2026-04-10T08:15:00.000Z");
+    mkdirSync(sessionStateDir, { recursive: true });
+    writeFileSync(
+      resolve(sessionStateDir, "session.json"),
+      `${JSON.stringify(
+        {
+          issueNumber,
+          runtimeType: "codex",
+          branchName,
+          issueDir: `.git-ai/issues/${issueNumber}-review-setup`,
+          runDir: ".git-ai/runs/20260410T081500000Z-issue-211",
+          promptFile: ".git-ai/runs/20260410T081500000Z-issue-211/prompt.md",
+          outputLog: ".git-ai/runs/20260410T081500000Z-issue-211/output.log",
+          sessionId,
+          sandboxMode: "workspace-write",
+          approvalPolicy: "on-request",
+          createdAt: "2026-04-10T08:15:00.000Z",
+          updatedAt: "2026-04-10T08:15:00.000Z",
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+    cleanupTargets.add(sessionStateDir);
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          number: 87,
+          title: "Prepare a review workspace",
+          body: [
+            "Fixes #211",
+            "",
+            "Set up a reviewer-ready local workspace for this pull request.",
+            "",
+            "<!-- git-ai:pr-assistant:start -->",
+            "## PR Assistant",
+            "",
+            "### Summary",
+            "Reuse linked issue state when available.",
+            "",
+            "### Reviewer focus",
+            "- Confirm the saved branch and session are reused when safe.",
+            "<!-- git-ai:pr-assistant:end -->",
+          ].join("\n"),
+          html_url: "https://github.com/DevwareUK/git-ai/pull/87",
+          base: { ref: "main" },
+          head: { ref: "feat/pr-review-workspace" },
+        })
+      )
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          title: "Add PR review workspace setup",
+          body: "Reuse saved issue state when preparing a local PR review.",
+          html_url: "https://github.com/DevwareUK/git-ai/issues/211",
+        })
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { run, spawnSync } = await loadCli({
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          return "";
+        }
+
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/git-ai.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "rev-parse" && args[2] === branchName) {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "checkout" && args[1] === branchName) {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (command === "codex" && args[0] === "exec" && args[1] === "resume") {
+          const createdRunDir = listRunDirectories().find(
+            (entry) => !beforeRuns.includes(entry)
+          );
+          if (!createdRunDir) {
+            throw new Error("Expected a prepare-review run directory before Codex resume.");
+          }
+
+          writeFileSync(
+            resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir, "review-brief.md"),
+            [
+              "# Review Brief",
+              "",
+              "## Reviewer Commands",
+              "- `pnpm build`",
+              "",
+              "## Focus Areas",
+              "- Confirm the linked issue branch and session were reused.",
+            ].join("\n"),
+            "utf8"
+          );
+
+          return { status: 0, stdout: "brief generated\n", stderr: "" };
+        }
+
+        if (command === "codex" && args[0] === "resume" && args[1] === sessionId) {
+          return { status: 0 };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.env.GITHUB_TOKEN = "test-token";
+    process.argv = ["node", "git-ai", "pr", "prepare-review", "87"];
+
+    await run();
+
+    const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
+    expect(createdRunDir).toBeDefined();
+
+    const runDirPath = resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string);
+    const snapshotFilePath = resolve(runDirPath, "pr-review-prepare.md");
+    const promptFilePath = resolve(runDirPath, "prompt.md");
+    const interactivePromptFilePath = resolve(runDirPath, "interactive-prompt.md");
+    const metadataFilePath = resolve(runDirPath, "metadata.json");
+    const outputLogPath = resolve(runDirPath, "output.log");
+    const reviewBriefPath = resolve(runDirPath, "review-brief.md");
+    cleanupTargets.add(runDirPath);
+
+    expect(readFileSync(snapshotFilePath, "utf8")).toContain(
+      "# Pull Request Review Preparation Snapshot"
+    );
+    expect(readFileSync(snapshotFilePath, "utf8")).toContain(
+      "## Managed PR Assistant Section"
+    );
+    expect(readFileSync(snapshotFilePath, "utf8")).toContain(
+      "Reuse saved issue state when preparing a local PR review."
+    );
+    expect(readFileSync(promptFilePath, "utf8")).toContain(
+      "Write the final Markdown review brief"
+    );
+    expect(readFileSync(interactivePromptFilePath, "utf8")).toContain(
+      "stay in this interactive session so the user can ask follow-up review questions or request fixes"
+    );
+    expect(readFileSync(promptFilePath, "utf8")).toContain(
+      "do not modify tracked repository files"
+    );
+    expect(readFileSync(promptFilePath, "utf8")).toContain("pnpm build");
+    expect(readFileSync(outputLogPath, "utf8")).toContain("# git-ai pr prepare-review run log");
+    expect(readFileSync(outputLogPath, "utf8")).toContain(`git checkout ${branchName}`);
+    expect(readFileSync(reviewBriefPath, "utf8")).toContain("## Reviewer Commands");
+    expect(JSON.parse(readFileSync(metadataFilePath, "utf8"))).toMatchObject({
+      flow: "pr-prepare-review",
+      prNumber: 87,
+      checkout: {
+        source: "issue-branch",
+        branchName,
+        linkedIssueNumber: 211,
+      },
+      runtime: {
+        type: "codex",
+        invocation: "resume",
+        sessionId,
+        linkedIssueNumber: 211,
+        warnings: [],
+      },
+      linkedIssues: [
+        {
+          number: 211,
+          savedBranch: branchName,
+          savedRuntimeType: "codex",
+          savedSessionId: sessionId,
+        },
+      ],
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(spawnSync).toHaveBeenCalledWith(
+      "codex",
+      expect.arrayContaining(["exec", "resume", "--full-auto", sessionId]),
+      expect.objectContaining({
+        cwd: REPO_ROOT,
+      })
+    );
+    expect(spawnSync).toHaveBeenCalledWith(
+      "codex",
+      expect.arrayContaining(["resume", sessionId, "--sandbox", "workspace-write"]),
+      expect.objectContaining({
+        cwd: REPO_ROOT,
+        stdio: "inherit",
+      })
+    );
+  });
+
+  it("falls back to a fresh Codex run when the linked issue session is stale", async () => {
+    const beforeRuns = listRunDirectories();
+    const issueNumber = 212;
+    const branchName = "feat/issue-212-review-setup";
+    const staleSessionId = "019d9002-0000-7111-8222-933344445555";
+    const sessionStateDir = resolve(REPO_ROOT, ".git-ai", "issues", String(issueNumber));
+
+    createMockCodexHome();
+    mkdirSync(sessionStateDir, { recursive: true });
+    writeFileSync(
+      resolve(sessionStateDir, "session.json"),
+      `${JSON.stringify(
+        {
+          issueNumber,
+          runtimeType: "codex",
+          branchName,
+          issueDir: `.git-ai/issues/${issueNumber}-review-setup`,
+          runDir: ".git-ai/runs/20260410T091500000Z-issue-212",
+          promptFile: ".git-ai/runs/20260410T091500000Z-issue-212/prompt.md",
+          outputLog: ".git-ai/runs/20260410T091500000Z-issue-212/output.log",
+          sessionId: staleSessionId,
+          sandboxMode: "workspace-write",
+          approvalPolicy: "on-request",
+          createdAt: "2026-04-10T09:15:00.000Z",
+          updatedAt: "2026-04-10T09:15:00.000Z",
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+    cleanupTargets.add(sessionStateDir);
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          number: 88,
+          title: "Prepare another review workspace",
+          body: "Fixes #212\n\nRegenerate the reviewer brief when the old session is gone.",
+          html_url: "https://github.com/DevwareUK/git-ai/pull/88",
+          base: { ref: "main" },
+          head: { ref: "feat/pr-review-workspace-stale" },
+        })
+      )
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          title: "Handle stale saved Codex sessions",
+          body: "Warn and fall back instead of failing the reviewer workflow.",
+          html_url: "https://github.com/DevwareUK/git-ai/issues/212",
+        })
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { run, spawnSync } = await loadCli({
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          return "";
+        }
+
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/git-ai.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "rev-parse" && args[2] === branchName) {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "checkout" && args[1] === branchName) {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (command === "codex" && args[0] === "exec" && args[1] === "--full-auto") {
+          const createdRunDir = listRunDirectories().find(
+            (entry) => !beforeRuns.includes(entry)
+          );
+          if (!createdRunDir) {
+            throw new Error("Expected a prepare-review run directory before fresh Codex run.");
+          }
+
+          writeFileSync(
+            resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir, "review-brief.md"),
+            [
+              "# Review Brief",
+              "",
+              "## Reviewer Commands",
+              "- `pnpm build`",
+            ].join("\n"),
+            "utf8"
+          );
+
+          return { status: 0, stdout: "brief generated\n", stderr: "" };
+        }
+
+        if (command === "codex" && args[0] === "--sandbox") {
+          return { status: 0 };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.env.GITHUB_TOKEN = "test-token";
+    process.argv = ["node", "git-ai", "pr", "prepare-review", "88"];
+
+    await run();
+
+    const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
+    expect(createdRunDir).toBeDefined();
+
+    const runDirPath = resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string);
+    const snapshotFilePath = resolve(runDirPath, "pr-review-prepare.md");
+    const interactivePromptFilePath = resolve(runDirPath, "interactive-prompt.md");
+    const metadataFilePath = resolve(runDirPath, "metadata.json");
+    const outputLogPath = resolve(runDirPath, "output.log");
+    cleanupTargets.add(runDirPath);
+
+    expect(readFileSync(snapshotFilePath, "utf8")).toContain("## Runtime Warnings");
+    expect(readFileSync(interactivePromptFilePath, "utf8")).toContain(
+      "Read the generated review brief"
+    );
+    expect(readFileSync(outputLogPath, "utf8")).toContain(
+      `Warning: Saved Codex session ${staleSessionId} for linked issue #212 is no longer available. Falling back to a fresh review brief generation run.`
+    );
+    expect(JSON.parse(readFileSync(metadataFilePath, "utf8"))).toMatchObject({
+      checkout: {
+        source: "issue-branch",
+        branchName,
+        linkedIssueNumber: 212,
+      },
+      runtime: {
+        invocation: "new",
+        linkedIssueNumber: 212,
+        warnings: [
+          `Saved Codex session ${staleSessionId} for linked issue #212 is no longer available. Falling back to a fresh review brief generation run.`,
+        ],
+      },
+    });
+    expect(spawnSync).not.toHaveBeenCalledWith(
+      "codex",
+      expect.arrayContaining(["exec", "resume", "--full-auto", staleSessionId]),
+      expect.any(Object)
+    );
+    expect(spawnSync).toHaveBeenCalledWith(
+      "codex",
+      expect.arrayContaining(["exec", "--full-auto", "--cd", REPO_ROOT]),
+      expect.objectContaining({
+        cwd: REPO_ROOT,
+      })
+    );
+    expect(spawnSync).toHaveBeenCalledWith(
+      "codex",
+      expect.arrayContaining([
+        "--sandbox",
+        "workspace-write",
+        "--ask-for-approval",
+        "on-request",
+        "--cd",
+        REPO_ROOT,
+      ]),
+      expect.objectContaining({
+        cwd: REPO_ROOT,
+        stdio: "inherit",
+      })
+    );
+  });
+
+  it("fetches a dedicated local review branch when no saved issue state or local head branch exists", async () => {
+    const beforeRuns = listRunDirectories();
+    const reviewBranchName = "review/pr-205-prepare-a-review-workspace";
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      createFetchResponse({
+        number: 205,
+        title: "Prepare a review workspace",
+        body: "Generate a local reviewer brief for this pull request.",
+        html_url: "https://github.com/DevwareUK/git-ai/pull/205",
+        base: { ref: "main" },
+        head: { ref: "feat/prepare-review-workspace" },
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { run, spawnSync } = await loadCli({
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          return "";
+        }
+
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/git-ai.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "rev-parse") {
+          return { status: 1, error: new Error("missing") };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "fetch" &&
+          args[1] === "origin" &&
+          args[2] === `pull/205/head:${reviewBranchName}`
+        ) {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (command === "git" && args[0] === "checkout" && args[1] === reviewBranchName) {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (command === "codex" && args[0] === "exec" && args[1] === "--full-auto") {
+          const createdRunDir = listRunDirectories().find(
+            (entry) => !beforeRuns.includes(entry)
+          );
+          if (!createdRunDir) {
+            throw new Error("Expected a prepare-review run directory before fresh Codex run.");
+          }
+
+          writeFileSync(
+            resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir, "review-brief.md"),
+            [
+              "# Review Brief",
+              "",
+              "## Reviewer Commands",
+              "- `pnpm build`",
+              "",
+              "## Focus Areas",
+              "- Review the fetched branch diff against `main`.",
+            ].join("\n"),
+            "utf8"
+          );
+
+          return { status: 0, stdout: "brief generated\n", stderr: "" };
+        }
+
+        if (command === "codex" && args[0] === "--sandbox") {
+          return { status: 0 };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.env.GITHUB_TOKEN = "test-token";
+    process.argv = ["node", "git-ai", "pr", "prepare-review", "205"];
+
+    await run();
+
+    const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
+    expect(createdRunDir).toBeDefined();
+
+    const runDirPath = resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string);
+    const snapshotFilePath = resolve(runDirPath, "pr-review-prepare.md");
+    const interactivePromptFilePath = resolve(runDirPath, "interactive-prompt.md");
+    const metadataFilePath = resolve(runDirPath, "metadata.json");
+    const outputLogPath = resolve(runDirPath, "output.log");
+    cleanupTargets.add(runDirPath);
+
+    expect(readFileSync(snapshotFilePath, "utf8")).toContain(
+      "Fetched PR head into dedicated local review branch"
+    );
+    expect(readFileSync(interactivePromptFilePath, "utf8")).toContain(
+      "Remain available for follow-up questions and requested fixes"
+    );
+    expect(readFileSync(outputLogPath, "utf8")).toContain(
+      `git fetch origin pull/205/head:${reviewBranchName}`
+    );
+    expect(readFileSync(outputLogPath, "utf8")).toContain(
+      `git checkout ${reviewBranchName}`
+    );
+    expect(JSON.parse(readFileSync(metadataFilePath, "utf8"))).toMatchObject({
+      prNumber: 205,
+      checkout: {
+        source: "fetched-review",
+        branchName: reviewBranchName,
+        headRefName: "feat/prepare-review-workspace",
+      },
+      runtime: {
+        invocation: "new",
+        warnings: [],
+      },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(spawnSync).toHaveBeenCalledWith(
+      "git",
+      ["fetch", "origin", `pull/205/head:${reviewBranchName}`],
+      expect.objectContaining({
+        cwd: REPO_ROOT,
+      })
+    );
+    expect(spawnSync).toHaveBeenCalledWith(
+      "codex",
+      expect.arrayContaining([
+        "--sandbox",
+        "workspace-write",
+        "--ask-for-approval",
+        "on-request",
+        "--cd",
+        REPO_ROOT,
+      ]),
+      expect.objectContaining({
+        cwd: REPO_ROOT,
+        stdio: "inherit",
+      })
+    );
   });
 
   it("runs pr fix-comments, writes run artifacts, verifies the build, and commits the result", async () => {
