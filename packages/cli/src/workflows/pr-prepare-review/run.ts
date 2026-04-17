@@ -1,9 +1,17 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync, appendFileSync } from "node:fs";
 import { resolve } from "node:path";
+import type { AIProvider } from "@git-ai/providers";
 import { formatCommandForDisplay } from "../../config";
 import type { RepositoryForge } from "../../forge";
-import { printGeneratedTextPreview } from "../../generated-text-review";
+import {
+  printGeneratedTextPreview,
+  type ReviewedGeneratedText,
+} from "../../generated-text-review";
+import {
+  finalizeRuntimeChanges,
+  generateDiffBasedCommitProposal,
+} from "../../runtime-change-review";
 import {
   findTrackedRuntimeSessionById,
   getInteractiveRuntimeByType,
@@ -35,6 +43,12 @@ type RunPrPrepareReviewCommandOptions = {
   buildCommand: string[];
   forge: RepositoryForge;
   ensureCleanWorkingTree(repoRoot: string): void;
+  promptForLine(prompt: string): Promise<string>;
+  hasChanges(repoRoot: string): boolean;
+  verifyBuild(repoRoot: string, buildCommand: string[], outputLogPath: string): void;
+  commitGeneratedChanges(repoRoot: string, commitMessage: ReviewedGeneratedText): void;
+  readDiff(repoRoot: string): string;
+  createProvider(repoRoot: string): Promise<{ provider: AIProvider }>;
 };
 
 function appendRunLog(
@@ -439,14 +453,44 @@ export async function runPrPrepareReviewCommand(
     interactiveRuntime.launch(options.repoRoot, interactiveWorkspace, {
       resumeSessionId: interactiveResumeSessionId,
     });
+  } else {
+    console.log(
+      "Opening a fresh interactive Codex session in this terminal because the generated session id could not be recovered..."
+    );
+    console.log(
+      "You can now ask follow-up review questions or request fixes before exiting Codex."
+    );
+    interactiveRuntime.launch(options.repoRoot, interactiveWorkspace);
+  }
+
+  if (!options.hasChanges(options.repoRoot)) {
+    console.log("Codex exited without producing any file changes to review or commit.");
     return;
   }
 
-  console.log(
-    "Opening a fresh interactive Codex session in this terminal because the generated session id could not be recovered..."
-  );
-  console.log(
-    "You can now ask follow-up review questions or request fixes before exiting Codex."
-  );
-  interactiveRuntime.launch(options.repoRoot, interactiveWorkspace);
+  await finalizeRuntimeChanges({
+    repoRoot: options.repoRoot,
+    runDir: workspace.runDir,
+    commitPrompt: "Commit generated changes with this message? [Y/n/m]: ",
+    promptForLine: options.promptForLine,
+    hasChanges: options.hasChanges,
+    commitGeneratedChanges: options.commitGeneratedChanges,
+    resolveInitialCommitMessage: async () => {
+      const { provider } = await options.createProvider(options.repoRoot);
+      const proposal = await generateDiffBasedCommitProposal(
+        options.repoRoot,
+        provider,
+        options.readDiff
+      );
+      return proposal.initialMessage;
+    },
+    noChangesMessage: "Codex exited without producing any file changes to review or commit.",
+    noChangesAction: "return",
+    verifyBuild: {
+      buildCommand: options.buildCommand,
+      outputLogPath: workspace.outputLogPath,
+      run: options.verifyBuild,
+    },
+    checkForChangesBeforeBuild: true,
+  });
 }

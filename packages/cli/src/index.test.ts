@@ -1385,7 +1385,7 @@ describe("CLI integration", () => {
     );
   });
 
-  it("runs pr prepare-review, reuses the linked issue branch and resumes a live Codex session", async () => {
+  it("runs pr prepare-review, reuses the linked issue branch, and exits cleanly when follow-up makes no changes", async () => {
     const beforeRuns = listRunDirectories();
     const issueNumber = 211;
     const branchName = "feat/issue-211-review-setup";
@@ -1454,7 +1454,7 @@ describe("CLI integration", () => {
       );
     vi.stubGlobal("fetch", fetchMock);
 
-    const { run, spawnSync } = await loadCli({
+    const { run, spawnSync, generateCommitMessage } = await loadCli({
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "status") {
           return "";
@@ -1518,6 +1518,10 @@ describe("CLI integration", () => {
 
     process.env.GITHUB_TOKEN = "test-token";
     process.argv = ["node", "git-ai", "pr", "prepare-review", "87"];
+    const messages: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
+      messages.push(String(message ?? ""));
+    });
 
     await run();
 
@@ -1595,6 +1599,17 @@ describe("CLI integration", () => {
         stdio: "inherit",
       })
     );
+    expect(messages.join("\n")).toContain(
+      "Codex exited without producing any file changes to review or commit."
+    );
+    expect(generateCommitMessage).not.toHaveBeenCalled();
+    expect(
+      spawnSync.mock.calls.some(
+        ([command, args]) =>
+          command === "pnpm" ||
+          (command === "git" && Array.isArray(args) && args[0] === "commit")
+      )
+    ).toBe(false);
   });
 
   it("falls back to a fresh Codex run when the linked issue session is stale", async () => {
@@ -1773,6 +1788,389 @@ describe("CLI integration", () => {
         stdio: "inherit",
       })
     );
+  });
+
+  it("runs pr prepare-review follow-up fixes through build verification and reviewed commit flow", async () => {
+    const beforeRuns = listRunDirectories();
+    const headBranchName = "feat/prepare-review-follow-up";
+    let gitStatusCallCount = 0;
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      createFetchResponse({
+        number: 206,
+        title: "Tighten prepare-review follow-up fixes",
+        body: "Keep the reviewer workflow open for follow-up fixes and commit review.",
+        html_url: "https://github.com/DevwareUK/git-ai/pull/206",
+        base: { ref: "main" },
+        head: { ref: headBranchName },
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    process.env.OPENAI_API_KEY = "test-key";
+    const { run, spawnSync, generateCommitMessage } = await loadCli({
+      commitMessageResult: {
+        title: "fix: review follow-up fixes for PR #206",
+        body: "Generated after the interactive prepare-review session.",
+      },
+      readlineAnswers: ["y"],
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          gitStatusCallCount += 1;
+          return gitStatusCallCount === 1
+            ? ""
+            : " M packages/cli/src/workflows/pr-prepare-review/run.ts\n";
+        }
+
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/git-ai.git\n";
+        }
+
+        if (command === "git" && args[0] === "diff" && args[1] === "--name-only") {
+          return "packages/cli/src/workflows/pr-prepare-review/run.ts\n";
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "diff" &&
+          args[1] === "HEAD" &&
+          args[2] === "--" &&
+          args[3] === "packages/cli/src/workflows/pr-prepare-review/run.ts"
+        ) {
+          return [
+            "diff --git a/packages/cli/src/workflows/pr-prepare-review/run.ts b/packages/cli/src/workflows/pr-prepare-review/run.ts",
+            "--- a/packages/cli/src/workflows/pr-prepare-review/run.ts",
+            "+++ b/packages/cli/src/workflows/pr-prepare-review/run.ts",
+            "@@ -1,1 +1,2 @@",
+            '-console.log(\"before\");',
+            '+console.log(\"after\");',
+          ].join("\n");
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "rev-parse" && args[2] === headBranchName) {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "checkout" && args[1] === headBranchName) {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (command === "codex" && args[0] === "exec" && args[1] === "--full-auto") {
+          const createdRunDir = listRunDirectories().find(
+            (entry) => !beforeRuns.includes(entry)
+          );
+          if (!createdRunDir) {
+            throw new Error("Expected a prepare-review run directory before fresh Codex run.");
+          }
+
+          writeFileSync(
+            resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir, "review-brief.md"),
+            ["# Review Brief", "", "## Reviewer Commands", "- `pnpm build`"].join("\n"),
+            "utf8"
+          );
+
+          return { status: 0, stdout: "brief generated\n", stderr: "" };
+        }
+
+        if (command === "codex" && args[0] === "--sandbox") {
+          return { status: 0 };
+        }
+
+        if (command === "pnpm" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "pnpm" && args[0] === "build") {
+          return { status: 0, stdout: "build ok\n", stderr: "" };
+        }
+
+        if (command === "git" && args[0] === "add") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "commit") {
+          return { status: 0 };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.env.GITHUB_TOKEN = "test-token";
+    process.argv = ["node", "git-ai", "pr", "prepare-review", "206"];
+    const stdout = captureStdout();
+
+    await run();
+
+    const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
+    expect(createdRunDir).toBeDefined();
+
+    const runDirPath = resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string);
+    const outputLogPath = resolve(runDirPath, "output.log");
+    cleanupTargets.add(runDirPath);
+
+    const commitCall = spawnSync.mock.calls.find(
+      ([command, args]) =>
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "commit"
+    );
+    expect(commitCall).toBeDefined();
+    const commitArgs = commitCall?.[1] as string[];
+    expect(commitArgs).toEqual(["commit", "-F", expect.stringContaining("commit-message.txt")]);
+    expect(readFileSync(commitArgs[2], "utf8")).toContain(
+      "fix: review follow-up fixes for PR #206"
+    );
+    expect(readFileSync(outputLogPath, "utf8")).toContain("$ pnpm build");
+    expect(stdout.output()).toContain("Proposed commit message");
+    expect(generateCommitMessage).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.stringContaining(
+        "diff --git a/packages/cli/src/workflows/pr-prepare-review/run.ts b/packages/cli/src/workflows/pr-prepare-review/run.ts"
+      )
+    );
+  });
+
+  it("leaves pr prepare-review follow-up changes uncommitted when the reviewed message is declined", async () => {
+    const beforeRuns = listRunDirectories();
+    const headBranchName = "feat/prepare-review-skip-commit";
+    let gitStatusCallCount = 0;
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      createFetchResponse({
+        number: 207,
+        title: "Skip prepare-review follow-up commit",
+        body: "Offer commit review after the follow-up session.",
+        html_url: "https://github.com/DevwareUK/git-ai/pull/207",
+        base: { ref: "main" },
+        head: { ref: headBranchName },
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    process.env.OPENAI_API_KEY = "test-key";
+    const { run, spawnSync } = await loadCli({
+      commitMessageResult: {
+        title: "fix: stage follow-up prepare-review changes",
+      },
+      readlineAnswers: ["n"],
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          gitStatusCallCount += 1;
+          return gitStatusCallCount === 1 ? "" : " M README.md\n";
+        }
+
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/git-ai.git\n";
+        }
+
+        if (command === "git" && args[0] === "diff" && args[1] === "--name-only") {
+          return "README.md\n";
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "diff" &&
+          args[1] === "HEAD" &&
+          args[2] === "--" &&
+          args[3] === "README.md"
+        ) {
+          return [
+            "diff --git a/README.md b/README.md",
+            "--- a/README.md",
+            "+++ b/README.md",
+            "@@ -1,1 +1,2 @@",
+            "-old",
+            "+new",
+          ].join("\n");
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "rev-parse" && args[2] === headBranchName) {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "checkout" && args[1] === headBranchName) {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (command === "codex" && args[0] === "exec" && args[1] === "--full-auto") {
+          const createdRunDir = listRunDirectories().find(
+            (entry) => !beforeRuns.includes(entry)
+          );
+          if (!createdRunDir) {
+            throw new Error("Expected a prepare-review run directory before fresh Codex run.");
+          }
+
+          writeFileSync(
+            resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir, "review-brief.md"),
+            ["# Review Brief", "", "## Reviewer Commands", "- `pnpm build`"].join("\n"),
+            "utf8"
+          );
+
+          return { status: 0, stdout: "brief generated\n", stderr: "" };
+        }
+
+        if (command === "codex" && args[0] === "--sandbox") {
+          return { status: 0 };
+        }
+
+        if (command === "pnpm" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "pnpm" && args[0] === "build") {
+          return { status: 0, stdout: "build ok\n", stderr: "" };
+        }
+
+        if (command === "git" && args[0] === "add") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "commit") {
+          return { status: 0 };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.env.GITHUB_TOKEN = "test-token";
+    process.argv = ["node", "git-ai", "pr", "prepare-review", "207"];
+
+    const messages: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
+      messages.push(String(message ?? ""));
+    });
+    await run();
+
+    expect(messages.join("\n")).toContain("Leaving the generated changes uncommitted.");
+    expect(
+      spawnSync.mock.calls.some(
+        ([command, args]) =>
+          command === "git" &&
+          Array.isArray(args) &&
+          args[0] === "commit"
+      )
+    ).toBe(false);
+  });
+
+  it("stops pr prepare-review before commit review when the follow-up build fails", async () => {
+    const beforeRuns = listRunDirectories();
+    const headBranchName = "feat/prepare-review-build-failure";
+    let gitStatusCallCount = 0;
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      createFetchResponse({
+        number: 208,
+        title: "Fail prepare-review follow-up build",
+        body: "Build verification must stop before commit creation.",
+        html_url: "https://github.com/DevwareUK/git-ai/pull/208",
+        base: { ref: "main" },
+        head: { ref: headBranchName },
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { run, spawnSync, generateCommitMessage } = await loadCli({
+      readlineAnswers: ["y"],
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          gitStatusCallCount += 1;
+          return gitStatusCallCount === 1 ? "" : " M README.md\n";
+        }
+
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/git-ai.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "rev-parse" && args[2] === headBranchName) {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "checkout" && args[1] === headBranchName) {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (command === "codex" && args[0] === "exec" && args[1] === "--full-auto") {
+          const createdRunDir = listRunDirectories().find(
+            (entry) => !beforeRuns.includes(entry)
+          );
+          if (!createdRunDir) {
+            throw new Error("Expected a prepare-review run directory before fresh Codex run.");
+          }
+
+          writeFileSync(
+            resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir, "review-brief.md"),
+            ["# Review Brief", "", "## Reviewer Commands", "- `pnpm build`"].join("\n"),
+            "utf8"
+          );
+
+          return { status: 0, stdout: "brief generated\n", stderr: "" };
+        }
+
+        if (command === "codex" && args[0] === "--sandbox") {
+          return { status: 0 };
+        }
+
+        if (command === "pnpm" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "pnpm" && args[0] === "build") {
+          return { status: 1, stdout: "", stderr: "build failed\n" };
+        }
+
+        if (command === "git" && args[0] === "commit") {
+          return { status: 0 };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.env.GITHUB_TOKEN = "test-token";
+    process.argv = ["node", "git-ai", "pr", "prepare-review", "208"];
+
+    await expect(run()).rejects.toThrow("Build failed. Changes were not committed.");
+    expect(generateCommitMessage).not.toHaveBeenCalled();
+    expect(
+      spawnSync.mock.calls.some(
+        ([command, args]) =>
+          command === "git" &&
+          Array.isArray(args) &&
+          args[0] === "commit"
+      )
+    ).toBe(false);
   });
 
   it("fetches a dedicated local review branch when no saved issue state or local head branch exists", async () => {

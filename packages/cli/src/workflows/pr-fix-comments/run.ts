@@ -1,14 +1,10 @@
-import { resolve } from "node:path";
 import type {
   PullRequestDetails,
   PullRequestReviewComment,
   RepositoryForge,
 } from "../../forge";
-import {
-  reviewGeneratedText,
-  type ReviewedGeneratedText,
-  validateCommitMessage,
-} from "../../generated-text-review";
+import type { ReviewedGeneratedText } from "../../generated-text-review";
+import { finalizeRuntimeChanges } from "../../runtime-change-review";
 import {
   buildPullRequestReviewTasks,
   buildPullRequestReviewThreads,
@@ -243,21 +239,15 @@ export async function runPrFixCommentsCommand(
     );
   }
 
-  const reviewedCommitMessage = await reviewGeneratedText({
-    filePath: resolve(workspace.runDir, "commit-message.txt"),
-    initialContent: `fix: address PR review comments for #${pullRequest.number}\n`,
-    previewHeading: "Proposed commit message",
-    prompt: "Commit fixes with this message? [Y/n/m]: ",
-    emptyContentMessage: "Commit message cannot be empty.",
-    editorDescription: "commit message",
+  await finalizeRuntimeChanges({
+    repoRoot: options.repoRoot,
+    runDir: workspace.runDir,
+    commitPrompt: "Commit fixes with this message? [Y/n/m]: ",
     promptForLine: options.promptForLine,
-    validate: validateCommitMessage,
+    hasChanges: options.hasChanges,
+    commitGeneratedChanges: options.commitGeneratedChanges,
+    resolveInitialCommitMessage: async () =>
+      `fix: address PR review comments for #${pullRequest.number}\n`,
+    noChangesMessage: `${runtime.displayName} completed without producing any file changes to commit.`,
   });
-  if (!reviewedCommitMessage) {
-    console.log("Leaving the generated changes uncommitted.");
-    return;
-  }
-
-  console.log("Committing generated changes...");
-  options.commitGeneratedChanges(options.repoRoot, reviewedCommitMessage);
 }
