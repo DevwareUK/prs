@@ -53,6 +53,10 @@ import {
   type ReviewedGeneratedText,
   validateCommitMessage,
 } from "./generated-text-review";
+import {
+  finalizeRuntimeChanges,
+  generateDiffBasedCommitProposal,
+} from "./runtime-change-review";
 import { resolveRuntimeRepoRoot } from "./repo-root";
 import {
   findTrackedRuntimeSessionById,
@@ -2014,39 +2018,6 @@ function createStandaloneIssueFinalizeRunDir(repoRoot: string, issueNumber: numb
   return runDir;
 }
 
-async function reviewCommitMessage(
-  repoRoot: string,
-  issueNumber: number,
-  prompt: string,
-  initialMessage: string,
-  runDir?: string
-): Promise<ReviewedGeneratedText | null> {
-  const reviewRunDir = runDir ?? createStandaloneIssueFinalizeRunDir(repoRoot, issueNumber);
-  return reviewGeneratedText({
-    filePath: resolve(reviewRunDir, "commit-message.txt"),
-    initialContent: initialMessage,
-    previewHeading: "Proposed commit message",
-    prompt,
-    emptyContentMessage: "Commit message cannot be empty.",
-    editorDescription: "commit message",
-    promptForLine,
-    validate: validateCommitMessage,
-  });
-}
-
-async function generateIssueCommitProposal(
-  repoRoot: string,
-  provider: AIProvider
-): Promise<{ diff: string; initialMessage: string }> {
-  const diff = readIssueWorkflowDiff(repoRoot);
-  const result = await generateCommitMessage(provider, diff);
-
-  return {
-    diff,
-    initialMessage: formatCommitMessage(result.title, result.body),
-  };
-}
-
 function createAutoAcceptedGeneratedText(
   filePath: string,
   content: string
@@ -2067,7 +2038,11 @@ async function finalizeIssueRunUnattended(
   provider: AIProvider,
   runDir: string
 ): Promise<Extract<FinalizeIssueRunResult, { committed: true }>> {
-  const proposal = await generateIssueCommitProposal(repoRoot, provider);
+  const proposal = await generateDiffBasedCommitProposal(
+    repoRoot,
+    provider,
+    readIssueWorkflowDiff
+  );
   const commitMessage = createAutoAcceptedGeneratedText(
     resolve(runDir, "commit-message.txt"),
     proposal.initialMessage
@@ -2376,6 +2351,12 @@ async function runPrCommand(): Promise<void> {
       buildCommand: repositoryConfig.buildCommand,
       forge: getRepositoryForge(repoRoot),
       ensureCleanWorkingTree,
+      promptForLine,
+      hasChanges,
+      verifyBuild,
+      commitGeneratedChanges,
+      readDiff: readIssueWorkflowDiff,
+      createProvider: async (providerRepoRoot) => createProvider(providerRepoRoot),
     });
     return;
   }
@@ -3021,28 +3002,32 @@ async function finalizeIssueRun(
   provider: AIProvider,
   runDir?: string
 ): Promise<FinalizeIssueRunResult> {
-  const proposal = await generateIssueCommitProposal(repoRoot, provider);
-  const reviewedCommitMessage = await reviewCommitMessage(
+  const proposal = await generateDiffBasedCommitProposal(
     repoRoot,
-    issueNumber,
-    "Commit generated changes with this message? [Y/n/m]: ",
-    proposal.initialMessage,
-    runDir
+    provider,
+    readIssueWorkflowDiff
   );
-
-  if (!reviewedCommitMessage) {
-    console.log("Leaving the generated changes uncommitted.");
+  const reviewRunDir = runDir ?? createStandaloneIssueFinalizeRunDir(repoRoot, issueNumber);
+  const finalized = await finalizeRuntimeChanges({
+    repoRoot,
+    runDir: reviewRunDir,
+    commitPrompt: "Commit generated changes with this message? [Y/n/m]: ",
+    promptForLine,
+    hasChanges,
+    commitGeneratedChanges,
+    resolveInitialCommitMessage: async () => proposal.initialMessage,
+    noChangesMessage: "The interactive runtime completed without producing any file changes to commit.",
+  });
+  if (!finalized.committed) {
     return {
       committed: false,
     };
   }
 
-  console.log("Committing generated changes...");
-  commitGeneratedChanges(repoRoot, reviewedCommitMessage);
   return {
     committed: true,
     diff: proposal.diff,
-    commitMessage: reviewedCommitMessage,
+    commitMessage: finalized.commitMessage,
   };
 }
 
