@@ -4,6 +4,7 @@ import { formatCommandForDisplay } from "../../config";
 import { formatRunTimestamp, toRepoRelativePath } from "../../run-artifacts";
 import { formatPullRequestPrepareReviewSnapshot } from "./snapshot";
 import type {
+  PullRequestPrepareReviewBaseSyncState,
   PullRequestPrepareReviewRuntimePlan,
   PullRequestPrepareReviewSnapshotInput,
   PullRequestPrepareReviewWorkspace,
@@ -26,6 +27,7 @@ export function createPullRequestPrepareReviewWorkspace(
     runDir,
     snapshotFilePath: resolve(runDir, "pr-review-prepare.md"),
     promptFilePath: resolve(runDir, "prompt.md"),
+    conflictPromptFilePath: resolve(runDir, "base-sync-conflict-prompt.md"),
     interactivePromptFilePath: resolve(runDir, "interactive-prompt.md"),
     metadataFilePath: resolve(runDir, "metadata.json"),
     outputLogPath: resolve(runDir, "output.log"),
@@ -57,6 +59,7 @@ function buildPullRequestPrepareReviewPrompt(
     "- base the brief on the checked-out repository state, the PR context in the snapshot, and the current diff against the PR base branch",
     "- use the pull request body, linked issues, and managed PR assistant content only as supporting context when they are relevant",
     "- include the checked-out branch and the checkout source that was already chosen for this review workspace",
+    "- include the final base-branch sync state so the reviewer can tell whether the branch already contained the latest base tip or was updated before the brief was generated",
     "- include whether the review brief generation reused an existing Codex session or started a fresh run",
     "- include concrete local commands the reviewer should run to install, build, start, or otherwise inspect the change locally",
     `- always include at least one concrete command; if no better reviewer-specific command is obvious, include \`${formatCommandForDisplay(
@@ -97,11 +100,42 @@ function buildPullRequestPrepareReviewInteractivePrompt(
     "Instructions to the coding agent:",
     "- stay in this interactive session so the user can ask follow-up review questions or request fixes",
     "- do not make code changes unless the user explicitly asks for them",
-    "- when asked review questions, ground your answers in the checked-out branch state, the review brief, and the current diff against the PR base branch",
+    "- when asked review questions, ground your answers in the checked-out branch state, the review brief, the recorded base-branch sync state in the snapshot, and the current diff against the PR base branch",
     "- if the user asks for fixes, keep changes focused on the requested review feedback and verify them appropriately before finishing",
     "- do not rewrite the review brief unless the user explicitly asks you to update it",
     "",
     "Remain available for follow-up questions and requested fixes until the user exits the session.",
+  ].join("\n");
+}
+
+function buildPullRequestPrepareReviewConflictPrompt(
+  repoRoot: string,
+  workspace: PullRequestPrepareReviewWorkspace,
+  input: {
+    branchName: string;
+    baseSync: PullRequestPrepareReviewBaseSyncState;
+  }
+): string {
+  const runDir = toRepoRelativePath(repoRoot, workspace.runDir);
+  const outputLogFile = toRepoRelativePath(repoRoot, workspace.outputLogPath);
+
+  return [
+    "You are working in the current repository.",
+    "A merge conflict happened while preparing a local pull request review workspace.",
+    "",
+    `Resolve the merge conflicts created while merging \`${input.baseSync.remoteRef}\` into the checked-out branch \`${input.branchName}\`.`,
+    `Use \`${runDir}\` for any local workflow artifacts created during this conflict-resolution session.`,
+    `The tracked git command log is stored at \`${outputLogFile}\`.`,
+    "",
+    "Instructions to the coding agent:",
+    "- focus on resolving the current merge conflicts cleanly in the checked-out repository state",
+    "- do not generate or update the review brief during this session",
+    "- inspect the current conflicted files and the merge context before editing",
+    "- complete the merge so the repository no longer has unresolved conflicts or an in-progress conflicted merge",
+    `- make sure the resulting branch includes the fetched base branch tip ${input.baseSync.baseTip}`,
+    "- if you cannot resolve the conflicts cleanly, stop without pretending the reviewer workspace is ready",
+    "",
+    "When the merge conflict resolution work is complete, stop.",
   ].join("\n");
 }
 
@@ -117,6 +151,7 @@ export function initializePullRequestPrepareReviewOutputLog(
       `Created: ${new Date().toISOString()}`,
       `Snapshot file: ${toRepoRelativePath(repoRoot, workspace.snapshotFilePath)}`,
       `Prompt file: ${toRepoRelativePath(repoRoot, workspace.promptFilePath)}`,
+      `Conflict prompt file: ${toRepoRelativePath(repoRoot, workspace.conflictPromptFilePath)}`,
       `Interactive prompt file: ${toRepoRelativePath(
         repoRoot,
         workspace.interactivePromptFilePath
@@ -158,6 +193,21 @@ export function writePullRequestPrepareReviewWorkspaceFiles(
   );
 }
 
+export function writePullRequestPrepareReviewConflictPrompt(
+  repoRoot: string,
+  workspace: PullRequestPrepareReviewWorkspace,
+  input: {
+    branchName: string;
+    baseSync: PullRequestPrepareReviewBaseSyncState;
+  }
+): void {
+  writeFileSync(
+    workspace.conflictPromptFilePath,
+    `${buildPullRequestPrepareReviewConflictPrompt(repoRoot, workspace, input)}\n`,
+    "utf8"
+  );
+}
+
 export function writePullRequestPrepareReviewMetadata(
   repoRoot: string,
   workspace: PullRequestPrepareReviewWorkspace,
@@ -177,6 +227,10 @@ export function writePullRequestPrepareReviewMetadata(
         headRefName: snapshotInput.pullRequest.headRefName,
         snapshotFile: toRepoRelativePath(repoRoot, workspace.snapshotFilePath),
         promptFile: toRepoRelativePath(repoRoot, workspace.promptFilePath),
+        conflictPromptFile: toRepoRelativePath(
+          repoRoot,
+          workspace.conflictPromptFilePath
+        ),
         interactivePromptFile: toRepoRelativePath(
           repoRoot,
           workspace.interactivePromptFilePath
@@ -195,6 +249,16 @@ export function writePullRequestPrepareReviewMetadata(
             snapshotInput.checkoutTarget.source === "fetched-review"
               ? snapshotInput.checkoutTarget.headRefName
               : undefined,
+        },
+        baseSync: {
+          baseRefName: snapshotInput.baseSync.baseRefName,
+          remoteRef: snapshotInput.baseSync.remoteRef,
+          baseTip: snapshotInput.baseSync.baseTip,
+          status: snapshotInput.baseSync.status,
+          conflictResolution: snapshotInput.baseSync.conflictResolution,
+          summary: snapshotInput.baseSync.summary,
+          warnings: snapshotInput.baseSync.warnings,
+          recoveryMessage: snapshotInput.baseSync.recoveryMessage,
         },
         runtime: {
           type: "codex",

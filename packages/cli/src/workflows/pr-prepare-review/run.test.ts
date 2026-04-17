@@ -98,6 +98,7 @@ function createWorkspace(repoRoot: string): PullRequestPrepareReviewWorkspace {
     runDir,
     snapshotFilePath: resolve(runDir, "pr-review-prepare.md"),
     promptFilePath: resolve(runDir, "prompt.md"),
+    conflictPromptFilePath: resolve(runDir, "base-sync-conflict-prompt.md"),
     interactivePromptFilePath: resolve(runDir, "interactive-prompt.md"),
     metadataFilePath: resolve(runDir, "metadata.json"),
     outputLogPath: resolve(runDir, "output.log"),
@@ -206,6 +207,48 @@ describe("runPrPrepareReviewCommand", () => {
         } as never;
       }
 
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "fetch" &&
+        args[1] === "origin" &&
+        args[2] === createPullRequest().baseRefName
+      ) {
+        return {
+          status: 0,
+          stdout: "",
+          stderr: "",
+        } as never;
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "rev-parse" &&
+        args[1] === `origin/${createPullRequest().baseRefName}`
+      ) {
+        return {
+          status: 0,
+          stdout: "abc123base\n",
+          stderr: "",
+        } as never;
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "merge-base" &&
+        args[1] === "--is-ancestor" &&
+        args[2] === "abc123base" &&
+        args[3] === "HEAD"
+      ) {
+        return {
+          status: 0,
+          stdout: "",
+          stderr: "",
+        } as never;
+      }
+
       throw new Error(`Unexpected spawnSync call: ${command} ${String(args)}`);
     });
 
@@ -229,6 +272,18 @@ describe("runPrPrepareReviewCommand", () => {
       resumeSessionId: undefined,
       outputLastMessageFilePath: workspace.assistantLastMessageFilePath,
     });
+    expect(writePullRequestPrepareReviewWorkspaceFiles).toHaveBeenCalledWith(
+      repoRoot,
+      workspace,
+      expect.objectContaining({
+        baseSync: expect.objectContaining({
+          status: "up-to-date",
+          remoteRef: "origin/main",
+          baseTip: "abc123base",
+        }),
+      }),
+      ["pnpm", "build"]
+    );
     expect(interactiveLaunch).toHaveBeenCalledWith(
       repoRoot,
       {

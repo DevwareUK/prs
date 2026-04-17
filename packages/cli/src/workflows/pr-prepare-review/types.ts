@@ -6,6 +6,7 @@ export type PullRequestPrepareReviewWorkspace = {
   runDir: string;
   snapshotFilePath: string;
   promptFilePath: string;
+  conflictPromptFilePath: string;
   interactivePromptFilePath: string;
   metadataFilePath: string;
   outputLogPath: string;
@@ -57,10 +58,22 @@ export type PullRequestPrepareReviewRuntimePlan = {
   warnings: string[];
 };
 
+export type PullRequestPrepareReviewBaseSyncState = {
+  baseRefName: string;
+  remoteRef: string;
+  baseTip: string;
+  status: "up-to-date" | "merged" | "blocked";
+  conflictResolution: "not-needed" | "required" | "unresolved";
+  summary: string;
+  warnings: string[];
+  recoveryMessage?: string;
+};
+
 export type PullRequestPrepareReviewSnapshotInput = {
   pullRequest: PullRequestDetails;
   linkedIssues: PullRequestPrepareReviewLinkedIssueState[];
   checkoutTarget: PullRequestPrepareReviewCheckoutTarget;
+  baseSync: PullRequestPrepareReviewBaseSyncState;
   runtimePlan: PullRequestPrepareReviewRuntimePlan;
   buildCommandDisplay: string;
 };

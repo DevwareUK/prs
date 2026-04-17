@@ -37,6 +37,22 @@ function formatCheckoutSource(
   return `Fetched PR head into dedicated local review branch from ${checkoutTarget.headRefName}`;
 }
 
+function formatBaseSyncStatus(
+  baseSync: PullRequestPrepareReviewSnapshotInput["baseSync"]
+): string {
+  if (baseSync.status === "up-to-date") {
+    return `Already contained the latest ${baseSync.remoteRef} tip ${baseSync.baseTip}`;
+  }
+
+  if (baseSync.status === "merged") {
+    return baseSync.conflictResolution === "required"
+      ? `Merged ${baseSync.remoteRef} tip ${baseSync.baseTip} after Codex resolved merge conflicts`
+      : `Merged the latest ${baseSync.remoteRef} tip ${baseSync.baseTip} into the checked-out branch`;
+  }
+
+  return `Blocked while syncing ${baseSync.remoteRef} tip ${baseSync.baseTip} into the checked-out branch`;
+}
+
 export function formatPullRequestPrepareReviewSnapshot(
   input: PullRequestPrepareReviewSnapshotInput
 ): string {
@@ -95,6 +111,9 @@ export function formatPullRequestPrepareReviewSnapshot(
     "",
     `- Checkout source: ${formatCheckoutSource(input.checkoutTarget)}`,
     `- Checked out branch: ${input.checkoutTarget.branchName}`,
+    `- Base branch sync: ${formatBaseSyncStatus(input.baseSync)}`,
+    `- Base branch sync summary: ${input.baseSync.summary}`,
+    `- Base branch conflict resolution: ${input.baseSync.conflictResolution}`,
     `- Runtime invocation: ${input.runtimePlan.invocation}`,
     `- Runtime session reuse: ${
       input.runtimePlan.sessionId
@@ -103,6 +122,15 @@ export function formatPullRequestPrepareReviewSnapshot(
     }`,
     `- Configured verification command: ${input.buildCommandDisplay}`
   );
+
+  if (input.baseSync.warnings.length > 0) {
+    lines.push("", "## Base Branch Sync Warnings", "");
+    lines.push(...input.baseSync.warnings.map((warning) => `- ${warning}`));
+  }
+
+  if (input.baseSync.recoveryMessage) {
+    lines.push("", "## Base Branch Sync Recovery", "", input.baseSync.recoveryMessage);
+  }
 
   if (input.runtimePlan.warnings.length > 0) {
     lines.push("", "## Runtime Warnings", "");

@@ -3,7 +3,7 @@ import { existsSync, readFileSync, writeFileSync, appendFileSync } from "node:fs
 import { resolve } from "node:path";
 import type { AIProvider } from "@git-ai/providers";
 import { formatCommandForDisplay } from "../../config";
-import type { RepositoryForge } from "../../forge";
+import type { PullRequestDetails, RepositoryForge } from "../../forge";
 import {
   printGeneratedTextPreview,
   type ReviewedGeneratedText,
@@ -23,6 +23,7 @@ import {
 } from "../../run-artifacts";
 import { fetchLinkedIssuesForPullRequest } from "./snapshot";
 import type {
+  PullRequestPrepareReviewBaseSyncState,
   PullRequestPrepareReviewCheckoutTarget,
   PullRequestPrepareReviewIssueSessionState,
   PullRequestPrepareReviewLinkedIssueState,
@@ -33,6 +34,7 @@ import {
   appendPullRequestPrepareReviewWarning,
   createPullRequestPrepareReviewWorkspace,
   initializePullRequestPrepareReviewOutputLog,
+  writePullRequestPrepareReviewConflictPrompt,
   writePullRequestPrepareReviewMetadata,
   writePullRequestPrepareReviewWorkspaceFiles,
 } from "./workspace";
@@ -50,6 +52,27 @@ type RunPrPrepareReviewCommandOptions = {
   readDiff(repoRoot: string): string;
   createProvider(repoRoot: string): Promise<{ provider: AIProvider }>;
 };
+
+type TrackedCommandOptions = {
+  echoOutput?: boolean;
+};
+
+type TrackedCommandResult = {
+  status: number | null;
+  error?: Error;
+  stdout: string;
+  stderr: string;
+};
+
+class PullRequestPrepareReviewBaseSyncError extends Error {
+  readonly baseSync: PullRequestPrepareReviewBaseSyncState;
+
+  constructor(message: string, baseSync: PullRequestPrepareReviewBaseSyncState) {
+    super(message);
+    this.name = "PullRequestPrepareReviewBaseSyncError";
+    this.baseSync = baseSync;
+  }
+}
 
 function appendRunLog(
   outputLogPath: string,
@@ -69,13 +92,13 @@ function appendRunLog(
   );
 }
 
-function runTrackedCommand(
+function runTrackedCommandAndCapture(
   repoRoot: string,
   workspace: PullRequestPrepareReviewWorkspace,
   command: string,
   args: string[],
-  errorMessage: string
-): string {
+  options: TrackedCommandOptions = {}
+): TrackedCommandResult {
   const result = spawnSync(command, args, {
     cwd: repoRoot,
     encoding: "utf8",
@@ -87,13 +110,38 @@ function runTrackedCommand(
 
   appendRunLog(workspace.outputLogPath, command, args, stdout, stderr);
 
-  if (stdout) {
+  if (options.echoOutput !== false && stdout) {
     process.stdout.write(stdout);
   }
 
-  if (stderr) {
+  if (options.echoOutput !== false && stderr) {
     process.stderr.write(stderr);
   }
+
+  return {
+    status: result.status,
+    error: result.error ?? undefined,
+    stdout,
+    stderr,
+  };
+}
+
+function runTrackedCommand(
+  repoRoot: string,
+  workspace: PullRequestPrepareReviewWorkspace,
+  command: string,
+  args: string[],
+  errorMessage: string,
+  options: TrackedCommandOptions = {}
+): string {
+  const result = runTrackedCommandAndCapture(
+    repoRoot,
+    workspace,
+    command,
+    args,
+    options
+  );
+  const stdout = result.stdout;
 
   if (result.error) {
     throw new Error(`${errorMessage} ${result.error.message}`);
@@ -104,6 +152,260 @@ function runTrackedCommand(
   }
 
   return stdout;
+}
+
+function resolveBaseSyncRemoteRef(baseRefName: string): string {
+  return `origin/${baseRefName}`;
+}
+
+function getBaseSyncTip(
+  repoRoot: string,
+  workspace: PullRequestPrepareReviewWorkspace,
+  remoteRef: string
+): string {
+  const baseTip = runTrackedCommand(
+    repoRoot,
+    workspace,
+    "git",
+    ["rev-parse", remoteRef],
+    `Failed to determine the fetched tip for "${remoteRef}".`,
+    { echoOutput: false }
+  ).trim();
+
+  if (!baseTip) {
+    throw new Error(`Failed to determine the fetched tip for "${remoteRef}".`);
+  }
+
+  return baseTip;
+}
+
+function branchContainsCommit(
+  repoRoot: string,
+  workspace: PullRequestPrepareReviewWorkspace,
+  commitish: string,
+  branchish: string
+): boolean {
+  const result = runTrackedCommandAndCapture(
+    repoRoot,
+    workspace,
+    "git",
+    ["merge-base", "--is-ancestor", commitish, branchish],
+    { echoOutput: false }
+  );
+
+  if (result.error) {
+    throw new Error(
+      `Failed to determine whether ${branchish} already contains ${commitish}. ${result.error.message}`
+    );
+  }
+
+  if (result.status === 0) {
+    return true;
+  }
+
+  if (result.status === 1) {
+    return false;
+  }
+
+  throw new Error(`Failed to determine whether ${branchish} already contains ${commitish}.`);
+}
+
+function isMergeInProgress(
+  repoRoot: string,
+  workspace: PullRequestPrepareReviewWorkspace
+): boolean {
+  const result = runTrackedCommandAndCapture(
+    repoRoot,
+    workspace,
+    "git",
+    ["rev-parse", "-q", "--verify", "MERGE_HEAD"],
+    { echoOutput: false }
+  );
+
+  if (result.error) {
+    throw new Error(`Failed to inspect merge state. ${result.error.message}`);
+  }
+
+  if (result.status === 0) {
+    return true;
+  }
+
+  if (result.status === 1) {
+    return false;
+  }
+
+  throw new Error("Failed to inspect merge state.");
+}
+
+function listUnmergedPaths(
+  repoRoot: string,
+  workspace: PullRequestPrepareReviewWorkspace
+): string[] {
+  const result = runTrackedCommandAndCapture(
+    repoRoot,
+    workspace,
+    "git",
+    ["diff", "--name-only", "--diff-filter=U"],
+    { echoOutput: false }
+  );
+
+  if (result.error) {
+    throw new Error(`Failed to inspect unresolved merge conflicts. ${result.error.message}`);
+  }
+
+  if (result.status !== 0) {
+    throw new Error("Failed to inspect unresolved merge conflicts.");
+  }
+
+  return result.stdout
+    .split(/\r?\n/)
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
+function synchronizePullRequestBaseBranch(
+  repoRoot: string,
+  workspace: PullRequestPrepareReviewWorkspace,
+  pullRequest: PullRequestDetails,
+  branchName: string
+): PullRequestPrepareReviewBaseSyncState {
+  const remoteRef = resolveBaseSyncRemoteRef(pullRequest.baseRefName);
+
+  console.log(`Fetching latest ${remoteRef}...`);
+  runTrackedCommand(
+    repoRoot,
+    workspace,
+    "git",
+    ["fetch", "origin", pullRequest.baseRefName],
+    `Failed to fetch the latest base branch "${pullRequest.baseRefName}" from origin.`
+  );
+
+  const baseTip = getBaseSyncTip(repoRoot, workspace, remoteRef);
+  if (branchContainsCommit(repoRoot, workspace, baseTip, "HEAD")) {
+    return {
+      baseRefName: pullRequest.baseRefName,
+      remoteRef,
+      baseTip,
+      status: "up-to-date",
+      conflictResolution: "not-needed",
+      summary: `Checked-out branch "${branchName}" already contained ${remoteRef} tip ${baseTip}.`,
+      warnings: [],
+    };
+  }
+
+  console.log(`Merging latest ${remoteRef} into ${branchName}...`);
+  const mergeResult = runTrackedCommandAndCapture(
+    repoRoot,
+    workspace,
+    "git",
+    ["merge", "--no-edit", "--no-ff", remoteRef]
+  );
+
+  if (mergeResult.error) {
+    throw new Error(
+      `Failed to merge latest base branch "${remoteRef}" into "${branchName}". ${mergeResult.error.message}`
+    );
+  }
+
+  if (mergeResult.status === 0) {
+    return {
+      baseRefName: pullRequest.baseRefName,
+      remoteRef,
+      baseTip,
+      status: "merged",
+      conflictResolution: "not-needed",
+      summary: `Merged ${remoteRef} tip ${baseTip} into "${branchName}" before generating the review brief.`,
+      warnings: [],
+    };
+  }
+
+  const mergeInProgress = isMergeInProgress(repoRoot, workspace);
+  const unmergedPaths = listUnmergedPaths(repoRoot, workspace);
+  if (!mergeInProgress && unmergedPaths.length === 0) {
+    throw new Error(
+      `Failed to merge latest base branch "${remoteRef}" into "${branchName}".`
+    );
+  }
+
+  const conflictWarning =
+    `Merging ${remoteRef} into "${branchName}" produced conflicts. Opening Codex to resolve them before generating the review brief.`;
+  console.log(conflictWarning);
+  appendPullRequestPrepareReviewWarning(workspace, conflictWarning);
+
+  const baseSyncForConflictPrompt: PullRequestPrepareReviewBaseSyncState = {
+    baseRefName: pullRequest.baseRefName,
+    remoteRef,
+    baseTip,
+    status: "blocked",
+    conflictResolution: "required",
+    summary: `Syncing "${branchName}" with ${remoteRef} tip ${baseTip} requires merge conflict resolution before review brief generation can continue.`,
+    warnings: [conflictWarning],
+  };
+  writePullRequestPrepareReviewConflictPrompt(repoRoot, workspace, {
+    branchName,
+    baseSync: baseSyncForConflictPrompt,
+  });
+
+  console.log(
+    "Resolve the merge conflicts in the interactive Codex session, then exit Codex to continue."
+  );
+  getInteractiveRuntimeByType("codex").launch(repoRoot, {
+    promptFilePath: workspace.conflictPromptFilePath,
+    outputLogPath: workspace.outputLogPath,
+  });
+
+  const mergeStillInProgress = isMergeInProgress(repoRoot, workspace);
+  const remainingUnmergedPaths = listUnmergedPaths(repoRoot, workspace);
+  const nowContainsBaseTip = branchContainsCommit(repoRoot, workspace, baseTip, "HEAD");
+  if (mergeStillInProgress || remainingUnmergedPaths.length > 0 || !nowContainsBaseTip) {
+    const recoveryParts: string[] = [];
+    if (remainingUnmergedPaths.length > 0) {
+      recoveryParts.push(
+        `Remaining conflicted files: ${remainingUnmergedPaths.join(", ")}.`
+      );
+    }
+    if (mergeStillInProgress) {
+      recoveryParts.push(`Finish the in-progress merge on "${branchName}".`);
+    }
+    if (!nowContainsBaseTip) {
+      recoveryParts.push(
+        `Make sure "${branchName}" contains ${remoteRef} tip ${baseTip}.`
+      );
+    }
+
+    const recoveryMessage = [
+      `Base-branch sync is still incomplete for "${branchName}".`,
+      ...recoveryParts,
+      `After fixing the branch state, rerun \`git-ai pr prepare-review ${pullRequest.number}\`.`,
+    ].join(" ");
+
+    appendPullRequestPrepareReviewWarning(workspace, recoveryMessage);
+    throw new PullRequestPrepareReviewBaseSyncError(recoveryMessage, {
+      baseRefName: pullRequest.baseRefName,
+      remoteRef,
+      baseTip,
+      status: "blocked",
+      conflictResolution: "unresolved",
+      summary: `Base-branch sync with ${remoteRef} tip ${baseTip} is still incomplete on "${branchName}".`,
+      warnings: [conflictWarning],
+      recoveryMessage,
+    });
+  }
+
+  const resolvedWarning =
+    `Codex resolved the merge conflicts while merging ${remoteRef} into "${branchName}". Continuing review brief generation on the synced branch.`;
+  console.log(resolvedWarning);
+  appendPullRequestPrepareReviewWarning(workspace, resolvedWarning);
+
+  return {
+    baseRefName: pullRequest.baseRefName,
+    remoteRef,
+    baseTip,
+    status: "merged",
+    conflictResolution: "required",
+    summary: `Merged ${remoteRef} tip ${baseTip} into "${branchName}" after Codex resolved the sync conflicts.`,
+    warnings: [conflictWarning, resolvedWarning],
+  };
 }
 
 function localBranchExists(repoRoot: string, branchName: string): boolean {
@@ -367,25 +669,63 @@ export async function runPrPrepareReviewCommand(
     pullRequest.number
   );
 
-  writePullRequestPrepareReviewWorkspaceFiles(
-    options.repoRoot,
-    workspace,
-    {
+  let baseSync: PullRequestPrepareReviewBaseSyncState;
+  try {
+    baseSync = synchronizePullRequestBaseBranch(
+      options.repoRoot,
+      workspace,
       pullRequest,
-      linkedIssues,
-      checkoutTarget,
-      runtimePlan,
-      buildCommandDisplay: formatCommandForDisplay(options.buildCommand),
-    },
-    options.buildCommand
-  );
-  writePullRequestPrepareReviewMetadata(options.repoRoot, workspace, {
+      checkoutTarget.branchName
+    );
+  } catch (error) {
+    if (error instanceof PullRequestPrepareReviewBaseSyncError) {
+      const blockedSnapshotInput = {
+        pullRequest,
+        linkedIssues,
+        checkoutTarget,
+        baseSync: error.baseSync,
+        runtimePlan,
+        buildCommandDisplay: formatCommandForDisplay(options.buildCommand),
+      };
+
+      writePullRequestPrepareReviewWorkspaceFiles(
+        options.repoRoot,
+        workspace,
+        blockedSnapshotInput,
+        options.buildCommand
+      );
+      writePullRequestPrepareReviewMetadata(
+        options.repoRoot,
+        workspace,
+        blockedSnapshotInput,
+        runtimePlan
+      );
+    }
+
+    throw error;
+  }
+
+  const snapshotInput = {
     pullRequest,
     linkedIssues,
     checkoutTarget,
+    baseSync,
     runtimePlan,
     buildCommandDisplay: formatCommandForDisplay(options.buildCommand),
-  }, runtimePlan);
+  };
+
+  writePullRequestPrepareReviewWorkspaceFiles(
+    options.repoRoot,
+    workspace,
+    snapshotInput,
+    options.buildCommand
+  );
+  writePullRequestPrepareReviewMetadata(
+    options.repoRoot,
+    workspace,
+    snapshotInput,
+    runtimePlan
+  );
 
   console.log(
     runtimePlan.invocation === "resume"
@@ -401,13 +741,15 @@ export async function runPrPrepareReviewCommand(
     invocation: runtimeLaunch.invocation,
     sessionId: runtimeLaunch.sessionId,
   };
-  writePullRequestPrepareReviewMetadata(options.repoRoot, workspace, {
-    pullRequest,
-    linkedIssues,
-    checkoutTarget,
-    runtimePlan: finalizedRuntimePlan,
-    buildCommandDisplay: formatCommandForDisplay(options.buildCommand),
-  }, finalizedRuntimePlan);
+  writePullRequestPrepareReviewMetadata(
+    options.repoRoot,
+    workspace,
+    {
+      ...snapshotInput,
+      runtimePlan: finalizedRuntimePlan,
+    },
+    finalizedRuntimePlan
+  );
 
   if (!existsSync(workspace.reviewBriefFilePath)) {
     throw new Error(
