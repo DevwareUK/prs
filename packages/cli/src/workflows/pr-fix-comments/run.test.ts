@@ -110,7 +110,27 @@ describe("runPrFixCommentsCommand", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(console, "log").mockImplementation(() => undefined);
-    vi.mocked(spawnSync).mockReturnValue({ status: 0 } as never);
+    vi.mocked(spawnSync).mockImplementation((command, args) => {
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "rev-parse" &&
+        args[1] === "origin/feat/pr-fix-comments"
+      ) {
+        return { status: 0, stdout: "head-tip-88\n", stderr: "" } as never;
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "rev-list" &&
+        args[3] === "origin/feat/pr-fix-comments...HEAD"
+      ) {
+        return { status: 0, stdout: "0 1\n", stderr: "" } as never;
+      }
+
+      return { status: 0, stdout: "", stderr: "" } as never;
+    });
     vi.mocked(fetchLinkedIssuesForPullRequest).mockResolvedValue([
       {
         number: 42,
@@ -190,6 +210,16 @@ describe("runPrFixCommentsCommand", () => {
         filePath: resolve(workspace.runDir, "commit-message.txt"),
       })
     );
+    expect(spawnSync).toHaveBeenCalledWith(
+      "git",
+      ["fetch", "origin", "feat/pr-fix-comments"],
+      expect.any(Object)
+    );
+    expect(spawnSync).toHaveBeenCalledWith(
+      "git",
+      ["push", "origin", "HEAD:feat/pr-fix-comments"],
+      expect.any(Object)
+    );
     expect(promptForLine).toHaveBeenNthCalledWith(
       1,
       "Select tasks to address [all|none|1,2,...]: "
@@ -232,6 +262,14 @@ describe("runPrFixCommentsCommand", () => {
     expect(verifyBuild).toHaveBeenCalledWith(repoRoot, ["pnpm", "build"], workspace.outputLogPath);
     expect(hasChanges).toHaveBeenCalledWith(repoRoot);
     expect(commitGeneratedChanges).not.toHaveBeenCalled();
+    expect(
+      vi.mocked(spawnSync).mock.calls.some(
+        ([command, args]) =>
+          command === "git" &&
+          Array.isArray(args) &&
+          (args[0] === "fetch" || args[0] === "push")
+      )
+    ).toBe(false);
   });
 
   it("lets the user modify the reviewed commit message before committing", async () => {
@@ -244,7 +282,27 @@ describe("runPrFixCommentsCommand", () => {
     const hasChanges = vi.fn().mockReturnValue(true);
     const commitGeneratedChanges = vi.fn();
 
-    vi.mocked(spawnSync).mockImplementation((command) => {
+    vi.mocked(spawnSync).mockImplementation((command, args) => {
+      if (command === "git") {
+        if (
+          Array.isArray(args) &&
+          args[0] === "rev-parse" &&
+          args[1] === "origin/feat/pr-fix-comments"
+        ) {
+          return { status: 0, stdout: "head-tip-88\n", stderr: "" } as never;
+        }
+
+        if (
+          Array.isArray(args) &&
+          args[0] === "rev-list" &&
+          args[3] === "origin/feat/pr-fix-comments...HEAD"
+        ) {
+          return { status: 0, stdout: "0 1\n", stderr: "" } as never;
+        }
+
+        return { status: 0, stdout: "", stderr: "" } as never;
+      }
+
       const [, quotedPath = ""] = String(command).match(/"([^"]+)"/) ?? [];
       writeFileSync(
         quotedPath,
@@ -279,6 +337,72 @@ describe("runPrFixCommentsCommand", () => {
         filePath: resolve(workspace.runDir, "commit-message.txt"),
       })
     );
-    expect(spawnSync).toHaveBeenCalledTimes(1);
+    expect(
+      vi.mocked(spawnSync).mock.calls.some(
+        ([command, args]) =>
+          command === "git" &&
+          Array.isArray(args) &&
+          args[0] === "push" &&
+          args[2] === "HEAD:feat/pr-fix-comments"
+      )
+    ).toBe(true);
+  });
+
+  it("fails clearly when the PR head branch cannot be fetched from origin before pushing", async () => {
+    const { forge } = createForge([
+      createReviewComment("Guard against an empty comment selection before starting Codex."),
+    ]);
+    const promptForLine = vi.fn().mockResolvedValueOnce("1").mockResolvedValueOnce("y");
+    const launch = vi.fn();
+    const verifyBuild = vi.fn();
+    const hasChanges = vi.fn().mockReturnValue(true);
+    const commitGeneratedChanges = vi.fn();
+
+    vi.mocked(spawnSync).mockImplementation((command, args) => {
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "fetch" &&
+        args[2] === "feat/pr-fix-comments"
+      ) {
+        return { status: 1, stdout: "", stderr: "fatal: couldn't find remote ref\n" } as never;
+      }
+
+      return { status: 0, stdout: "", stderr: "" } as never;
+    });
+
+    await expect(
+      runPrFixCommentsCommand({
+        prNumber: 88,
+        repoRoot,
+        buildCommand: ["pnpm", "build"],
+        runtime: {
+          resolve: () => ({
+            displayName: "Codex",
+            launch,
+          }),
+        },
+        forge,
+        ensureCleanWorkingTree: vi.fn(),
+        promptForLine,
+        verifyBuild,
+        hasChanges,
+        commitGeneratedChanges,
+      })
+    ).rejects.toThrow(
+      'Failed to fetch PR head branch "feat/pr-fix-comments" from origin before pushing reviewed updates. This workflow only pushes PR branches that are available as origin/feat/pr-fix-comments. Local commits were kept.'
+    );
+
+    expect(commitGeneratedChanges).toHaveBeenCalledWith(
+      repoRoot,
+      expect.objectContaining({
+        content: "fix: address PR review comments for #88\n",
+      })
+    );
+    expect(spawnSync).not.toHaveBeenCalledWith(
+      "git",
+      ["push", "origin", "HEAD:feat/pr-fix-comments"],
+      expect.any(Object)
+    );
   });
 });

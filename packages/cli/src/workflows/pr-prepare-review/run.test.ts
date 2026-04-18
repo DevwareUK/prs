@@ -1161,7 +1161,7 @@ describe("runPrPrepareReviewCommand", () => {
     await expect(
       runPrPrepareReviewCommand(createDefaultCommandOptions(repoRoot, forge))
     ).rejects.toThrow(
-      `Failed to push reviewed updates to origin/${createPullRequest().headRefName}.`
+      `Failed to push reviewed updates to origin/${createPullRequest().headRefName}. Local commits were kept.`
     );
   });
 

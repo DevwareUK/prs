@@ -1,6 +1,7 @@
 import type { PullRequestDetails, RepositoryForge } from "../../forge";
 import type { ReviewedGeneratedText } from "../../generated-text-review";
 import { finalizeRuntimeChanges } from "../../runtime-change-review";
+import { pushReviewedPullRequestUpdates } from "../pull-request-reviewed-updates";
 import {
   findManagedTestSuggestionsComment,
   parseManagedTestSuggestionsComment,
@@ -140,7 +141,7 @@ export async function runPrFixTestsCommand(
     );
   }
 
-  await finalizeRuntimeChanges({
+  const finalizeResult = await finalizeRuntimeChanges({
     repoRoot: options.repoRoot,
     runDir: workspace.runDir,
     commitPrompt: "Commit fixes with this message? [Y/n/m]: ",
@@ -151,4 +152,14 @@ export async function runPrFixTestsCommand(
       `test: address AI test suggestions for PR #${pullRequest.number}\n`,
     noChangesMessage: `${runtime.displayName} completed without producing any file changes to commit.`,
   });
+
+  if (!finalizeResult.committed) {
+    return;
+  }
+
+  pushReviewedPullRequestUpdates(
+    options.repoRoot,
+    workspace.outputLogPath,
+    pullRequest.headRefName
+  );
 }

@@ -2178,6 +2178,42 @@ describe("CLI integration", () => {
           return { status: 0 };
         }
 
+        if (
+          command === "git" &&
+          args[0] === "fetch" &&
+          args[1] === "origin" &&
+          args[2] === "feat/pr-fix-comments"
+        ) {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "rev-parse" &&
+          args[1] === "origin/feat/pr-fix-comments"
+        ) {
+          return { status: 0, stdout: "head-tip-88\n", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "rev-list" &&
+          args[1] === "--left-right" &&
+          args[2] === "--count" &&
+          args[3] === "origin/feat/pr-fix-comments...HEAD"
+        ) {
+          return { status: 0, stdout: "0 1\n", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "push" &&
+          args[1] === "origin" &&
+          args[2] === "HEAD:feat/pr-fix-comments"
+        ) {
+          return { status: 0, stdout: "pushed\n", stderr: "" };
+        }
+
         throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
       },
     });
@@ -2298,6 +2334,42 @@ describe("CLI integration", () => {
 
         if (command === "git" && args[0] === "commit") {
           return { status: 0 };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "fetch" &&
+          args[1] === "origin" &&
+          args[2] === "feat/pr-fix-comments"
+        ) {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "rev-parse" &&
+          args[1] === "origin/feat/pr-fix-comments"
+        ) {
+          return { status: 0, stdout: "head-tip-88\n", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "rev-list" &&
+          args[1] === "--left-right" &&
+          args[2] === "--count" &&
+          args[3] === "origin/feat/pr-fix-comments...HEAD"
+        ) {
+          return { status: 0, stdout: "0 1\n", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "push" &&
+          args[1] === "origin" &&
+          args[2] === "HEAD:feat/pr-fix-comments"
+        ) {
+          return { status: 0, stdout: "pushed\n", stderr: "" };
         }
 
         throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
@@ -3035,6 +3107,42 @@ describe("CLI integration", () => {
           return { status: 0 };
         }
 
+        if (
+          command === "git" &&
+          args[0] === "fetch" &&
+          args[1] === "origin" &&
+          args[2] === "feat/pr-fix-comments"
+        ) {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "rev-parse" &&
+          args[1] === "origin/feat/pr-fix-comments"
+        ) {
+          return { status: 0, stdout: "head-tip-88\n", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "rev-list" &&
+          args[1] === "--left-right" &&
+          args[2] === "--count" &&
+          args[3] === "origin/feat/pr-fix-comments...HEAD"
+        ) {
+          return { status: 0, stdout: "0 1\n", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "push" &&
+          args[1] === "origin" &&
+          args[2] === "HEAD:feat/pr-fix-comments"
+        ) {
+          return { status: 0, stdout: "pushed\n", stderr: "" };
+        }
+
         throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
       },
     });
@@ -3067,6 +3175,12 @@ describe("CLI integration", () => {
     expect(readFileSync(promptFilePath, "utf8")).not.toContain("[2] Commit changes");
     expect(readFileSync(promptFilePath, "utf8")).not.toContain("/commit");
     expect(readFileSync(outputLogPath, "utf8")).toContain("# git-ai pr fix-comments run log");
+    expect(readFileSync(outputLogPath, "utf8")).toContain(
+      "$ git fetch origin feat/pr-fix-comments"
+    );
+    expect(readFileSync(outputLogPath, "utf8")).toContain(
+      "$ git push origin HEAD:feat/pr-fix-comments"
+    );
     expect(JSON.parse(readFileSync(metadataFilePath, "utf8"))).toMatchObject({
       prNumber: 88,
       prTitle: "Tighten PR review comment fixing flow",
@@ -3085,6 +3199,11 @@ describe("CLI integration", () => {
     expect(spawnSync).toHaveBeenCalledWith(
       "git",
       ["commit", "-F", expect.stringContaining("commit-message.txt")],
+      expect.any(Object)
+    );
+    expect(spawnSync).toHaveBeenCalledWith(
+      "git",
+      ["push", "origin", "HEAD:feat/pr-fix-comments"],
       expect.any(Object)
     );
   });
@@ -3331,6 +3450,42 @@ describe("CLI integration", () => {
           return { status: 0 };
         }
 
+        if (
+          command === "git" &&
+          args[0] === "fetch" &&
+          args[1] === "origin" &&
+          args[2] === "feat/pr-fix-tests"
+        ) {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "rev-parse" &&
+          args[1] === "origin/feat/pr-fix-tests"
+        ) {
+          return { status: 0, stdout: "head-tip-91\n", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "rev-list" &&
+          args[1] === "--left-right" &&
+          args[2] === "--count" &&
+          args[3] === "origin/feat/pr-fix-tests...HEAD"
+        ) {
+          return { status: 0, stdout: "0 1\n", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "push" &&
+          args[1] === "origin" &&
+          args[2] === "HEAD:feat/pr-fix-tests"
+        ) {
+          return { status: 0, stdout: "pushed\n", stderr: "" };
+        }
+
         throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
       },
     });
@@ -3371,6 +3526,12 @@ describe("CLI integration", () => {
     expect(readFileSync(promptFilePath, "utf8")).not.toContain("[2] Commit changes");
     expect(readFileSync(promptFilePath, "utf8")).not.toContain("/commit");
     expect(readFileSync(outputLogPath, "utf8")).toContain("# git-ai pr fix-tests run log");
+    expect(readFileSync(outputLogPath, "utf8")).toContain(
+      "$ git fetch origin feat/pr-fix-tests"
+    );
+    expect(readFileSync(outputLogPath, "utf8")).toContain(
+      "$ git push origin HEAD:feat/pr-fix-tests"
+    );
     expect(JSON.parse(readFileSync(metadataFilePath, "utf8"))).toMatchObject({
       prNumber: 91,
       prTitle: "Close the AI test suggestions implementation loop",
@@ -3392,6 +3553,11 @@ describe("CLI integration", () => {
     expect(spawnSync).toHaveBeenCalledWith(
       "git",
       ["commit", "-F", expect.stringContaining("commit-message.txt")],
+      expect.any(Object)
+    );
+    expect(spawnSync).toHaveBeenCalledWith(
+      "git",
+      ["push", "origin", "HEAD:feat/pr-fix-tests"],
       expect.any(Object)
     );
   });

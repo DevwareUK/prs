@@ -107,7 +107,27 @@ describe("runPrFixTestsCommand", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(console, "log").mockImplementation(() => undefined);
-    vi.mocked(spawnSync).mockReturnValue({ status: 0 } as never);
+    vi.mocked(spawnSync).mockImplementation((command, args) => {
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "rev-parse" &&
+        args[1] === "origin/feat/pr-fix-tests"
+      ) {
+        return { status: 0, stdout: "head-tip-71\n", stderr: "" } as never;
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "rev-list" &&
+        args[3] === "origin/feat/pr-fix-tests...HEAD"
+      ) {
+        return { status: 0, stdout: "0 1\n", stderr: "" } as never;
+      }
+
+      return { status: 0, stdout: "", stderr: "" } as never;
+    });
     vi.mocked(fetchLinkedIssuesForPullRequest).mockResolvedValue([
       {
         number: 70,
@@ -211,6 +231,16 @@ describe("runPrFixTestsCommand", () => {
         content: "test: address AI test suggestions for PR #71\n",
         filePath: resolve(workspace.runDir, "commit-message.txt"),
       })
+    );
+    expect(spawnSync).toHaveBeenCalledWith(
+      "git",
+      ["fetch", "origin", "feat/pr-fix-tests"],
+      expect.any(Object)
+    );
+    expect(spawnSync).toHaveBeenCalledWith(
+      "git",
+      ["push", "origin", "HEAD:feat/pr-fix-tests"],
+      expect.any(Object)
     );
     expect(promptForLine).toHaveBeenNthCalledWith(
       1,
@@ -389,6 +419,14 @@ describe("runPrFixTestsCommand", () => {
     expect(verifyBuild).toHaveBeenCalledWith(repoRoot, ["pnpm", "build"], workspace.outputLogPath);
     expect(hasChanges).toHaveBeenCalledWith(repoRoot);
     expect(commitGeneratedChanges).not.toHaveBeenCalled();
+    expect(
+      vi.mocked(spawnSync).mock.calls.some(
+        ([command, args]) =>
+          command === "git" &&
+          Array.isArray(args) &&
+          (args[0] === "fetch" || args[0] === "push")
+      )
+    ).toBe(false);
     expect(promptForLine).toHaveBeenNthCalledWith(
       2,
       "Commit fixes with this message? [Y/n/m]: "
@@ -416,7 +454,27 @@ describe("runPrFixTestsCommand", () => {
     const hasChanges = vi.fn().mockReturnValue(true);
     const commitGeneratedChanges = vi.fn();
 
-    vi.mocked(spawnSync).mockImplementation((command) => {
+    vi.mocked(spawnSync).mockImplementation((command, args) => {
+      if (command === "git") {
+        if (
+          Array.isArray(args) &&
+          args[0] === "rev-parse" &&
+          args[1] === "origin/feat/pr-fix-tests"
+        ) {
+          return { status: 0, stdout: "head-tip-71\n", stderr: "" } as never;
+        }
+
+        if (
+          Array.isArray(args) &&
+          args[0] === "rev-list" &&
+          args[3] === "origin/feat/pr-fix-tests...HEAD"
+        ) {
+          return { status: 0, stdout: "0 1\n", stderr: "" } as never;
+        }
+
+        return { status: 0, stdout: "", stderr: "" } as never;
+      }
+
       const [, quotedPath = ""] = String(command).match(/"([^"]+)"/) ?? [];
       writeFileSync(
         quotedPath,
@@ -451,7 +509,84 @@ describe("runPrFixTestsCommand", () => {
         filePath: resolve(workspace.runDir, "commit-message.txt"),
       })
     );
-    expect(spawnSync).toHaveBeenCalledTimes(1);
+    expect(
+      vi.mocked(spawnSync).mock.calls.some(
+        ([command, args]) =>
+          command === "git" &&
+          Array.isArray(args) &&
+          args[0] === "push" &&
+          args[2] === "HEAD:feat/pr-fix-tests"
+      )
+    ).toBe(true);
+  });
+
+  it("keeps the reviewed local commit when the PR head branch diverged on origin", async () => {
+    const { forge } = createForge([
+      createManagedComment(
+        [
+          "<!-- git-ai-test-suggestions -->",
+          "## AI Test Suggestions",
+          "",
+          "### Suggested test areas",
+          "",
+          "#### Verify post-Codex workflow",
+          "- Priority: High",
+          "- Why it matters: Diverged PR branches must not be auto-pushed.",
+        ].join("\n")
+      ),
+    ]);
+    const promptForLine = vi.fn().mockResolvedValueOnce("1").mockResolvedValueOnce("y");
+    const launch = vi.fn();
+    const verifyBuild = vi.fn();
+    const hasChanges = vi.fn().mockReturnValue(true);
+    const commitGeneratedChanges = vi.fn();
+
+    vi.mocked(spawnSync).mockImplementation((command, args) => {
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "rev-list" &&
+        args[3] === "origin/feat/pr-fix-tests...HEAD"
+      ) {
+        return { status: 0, stdout: "1 1\n", stderr: "" } as never;
+      }
+
+      return { status: 0, stdout: "", stderr: "" } as never;
+    });
+
+    await expect(
+      runPrFixTestsCommand({
+        prNumber: 71,
+        repoRoot,
+        buildCommand: ["pnpm", "build"],
+        runtime: {
+          resolve: () => ({
+            displayName: "Codex",
+            launch,
+          }),
+        },
+        forge,
+        ensureCleanWorkingTree: vi.fn(),
+        promptForLine,
+        verifyBuild,
+        hasChanges,
+        commitGeneratedChanges,
+      })
+    ).rejects.toThrow(
+      'Cannot push reviewed updates to "feat/pr-fix-tests" because HEAD diverged from origin/feat/pr-fix-tests (1 ahead, 1 behind). Local commits were kept.'
+    );
+
+    expect(commitGeneratedChanges).toHaveBeenCalledWith(
+      repoRoot,
+      expect.objectContaining({
+        content: "test: address AI test suggestions for PR #71\n",
+      })
+    );
+    expect(spawnSync).not.toHaveBeenCalledWith(
+      "git",
+      ["push", "origin", "HEAD:feat/pr-fix-tests"],
+      expect.any(Object)
+    );
   });
 
   it("fails clearly when the selected runtime completes without producing any file changes", async () => {

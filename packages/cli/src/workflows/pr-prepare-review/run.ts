@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync, appendFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { AIProvider } from "@git-ai/providers";
 import { formatCommandForDisplay } from "../../config";
@@ -38,6 +38,13 @@ import {
   writePullRequestPrepareReviewMetadata,
   writePullRequestPrepareReviewWorkspaceFiles,
 } from "./workspace";
+import { pushReviewedPullRequestUpdates } from "../pull-request-reviewed-updates";
+import {
+  runTrackedCommand as runTrackedCommandBase,
+  runTrackedCommandAndCapture as runTrackedCommandAndCaptureBase,
+  type TrackedCommandOptions,
+  type TrackedCommandResult,
+} from "../tracked-command";
 
 type RunPrPrepareReviewCommandOptions = {
   prNumber: number;
@@ -53,17 +60,6 @@ type RunPrPrepareReviewCommandOptions = {
   createProvider(repoRoot: string): Promise<{ provider: AIProvider }>;
 };
 
-type TrackedCommandOptions = {
-  echoOutput?: boolean;
-};
-
-type TrackedCommandResult = {
-  status: number | null;
-  error?: Error;
-  stdout: string;
-  stderr: string;
-};
-
 class PullRequestPrepareReviewBaseSyncError extends Error {
   readonly baseSync: PullRequestPrepareReviewBaseSyncState;
 
@@ -74,24 +70,6 @@ class PullRequestPrepareReviewBaseSyncError extends Error {
   }
 }
 
-function appendRunLog(
-  outputLogPath: string,
-  command: string,
-  args: string[],
-  stdout: string,
-  stderr: string
-): void {
-  const renderedCommand = [command, ...args]
-    .map((value) => (value.includes(" ") ? JSON.stringify(value) : value))
-    .join(" ");
-
-  appendFileSync(
-    outputLogPath,
-    [`$ ${renderedCommand}`, stdout, stderr, ""].join("\n"),
-    "utf8"
-  );
-}
-
 function runTrackedCommandAndCapture(
   repoRoot: string,
   workspace: PullRequestPrepareReviewWorkspace,
@@ -99,31 +77,13 @@ function runTrackedCommandAndCapture(
   args: string[],
   options: TrackedCommandOptions = {}
 ): TrackedCommandResult {
-  const result = spawnSync(command, args, {
-    cwd: repoRoot,
-    encoding: "utf8",
-    maxBuffer: 10 * 1024 * 1024,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  const stdout = result.stdout ?? "";
-  const stderr = result.stderr ?? "";
-
-  appendRunLog(workspace.outputLogPath, command, args, stdout, stderr);
-
-  if (options.echoOutput !== false && stdout) {
-    process.stdout.write(stdout);
-  }
-
-  if (options.echoOutput !== false && stderr) {
-    process.stderr.write(stderr);
-  }
-
-  return {
-    status: result.status,
-    error: result.error ?? undefined,
-    stdout,
-    stderr,
-  };
+  return runTrackedCommandAndCaptureBase(
+    repoRoot,
+    workspace.outputLogPath,
+    command,
+    args,
+    options
+  );
 }
 
 function runTrackedCommand(
@@ -134,32 +94,18 @@ function runTrackedCommand(
   errorMessage: string,
   options: TrackedCommandOptions = {}
 ): string {
-  const result = runTrackedCommandAndCapture(
+  return runTrackedCommandBase(
     repoRoot,
-    workspace,
+    workspace.outputLogPath,
     command,
     args,
+    errorMessage,
     options
   );
-  const stdout = result.stdout;
-
-  if (result.error) {
-    throw new Error(`${errorMessage} ${result.error.message}`);
-  }
-
-  if (result.status !== 0) {
-    throw new Error(errorMessage);
-  }
-
-  return stdout;
 }
 
 function resolveBaseSyncRemoteRef(baseRefName: string): string {
   return `origin/${baseRefName}`;
-}
-
-function resolvePullRequestHeadRemoteRef(headRefName: string): string {
-  return `origin/${headRefName}`;
 }
 
 function getBaseSyncTip(
@@ -265,102 +211,6 @@ function listUnmergedPaths(
     .split(/\r?\n/)
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
-}
-
-function getAheadBehindCounts(
-  repoRoot: string,
-  workspace: PullRequestPrepareReviewWorkspace,
-  remoteRef: string
-): { ahead: number; behind: number } {
-  const counts = runTrackedCommand(
-    repoRoot,
-    workspace,
-    "git",
-    ["rev-list", "--left-right", "--count", `${remoteRef}...HEAD`],
-    `Failed to compare HEAD with "${remoteRef}".`,
-    { echoOutput: false }
-  ).trim();
-
-  const [behindRaw, aheadRaw] = counts.split(/\s+/);
-  const behind = Number.parseInt(behindRaw ?? "", 10);
-  const ahead = Number.parseInt(aheadRaw ?? "", 10);
-
-  if (!Number.isInteger(behind) || !Number.isInteger(ahead)) {
-    throw new Error(`Failed to compare HEAD with "${remoteRef}".`);
-  }
-
-  return {
-    ahead,
-    behind,
-  };
-}
-
-function pushReviewedPullRequestUpdates(
-  repoRoot: string,
-  workspace: PullRequestPrepareReviewWorkspace,
-  pullRequest: PullRequestDetails
-): void {
-  const remoteRef = resolvePullRequestHeadRemoteRef(pullRequest.headRefName);
-
-  console.log(`Fetching latest ${remoteRef} before checking push status...`);
-  const fetchResult = runTrackedCommandAndCapture(
-    repoRoot,
-    workspace,
-    "git",
-    ["fetch", "origin", pullRequest.headRefName]
-  );
-
-  if (fetchResult.error) {
-    throw new Error(
-      `Failed to fetch PR head branch "${pullRequest.headRefName}" from origin before pushing reviewed updates. ${fetchResult.error.message}`
-    );
-  }
-
-  if (fetchResult.status !== 0) {
-    throw new Error(
-      `Failed to fetch PR head branch "${pullRequest.headRefName}" from origin before pushing reviewed updates. This workflow currently only pushes PR branches that are available as ${remoteRef}.`
-    );
-  }
-
-  runTrackedCommand(
-    repoRoot,
-    workspace,
-    "git",
-    ["rev-parse", remoteRef],
-    `Failed to resolve "${remoteRef}" after fetching the PR head branch.`,
-    { echoOutput: false }
-  );
-
-  const { ahead, behind } = getAheadBehindCounts(repoRoot, workspace, remoteRef);
-  if (ahead === 0) {
-    return;
-  }
-
-  if (behind > 0) {
-    throw new Error(
-      `Cannot push reviewed updates to "${pullRequest.headRefName}" because HEAD diverged from ${remoteRef} (${ahead} ahead, ${behind} behind). Local commits were kept.`
-    );
-  }
-
-  console.log(`Pushing reviewed updates to origin/${pullRequest.headRefName}...`);
-  const pushResult = runTrackedCommandAndCapture(
-    repoRoot,
-    workspace,
-    "git",
-    ["push", "origin", `HEAD:${pullRequest.headRefName}`]
-  );
-
-  if (pushResult.error) {
-    throw new Error(
-      `Failed to push reviewed updates to origin/${pullRequest.headRefName}. ${pushResult.error.message}`
-    );
-  }
-
-  if (pushResult.status !== 0) {
-    throw new Error(
-      `Failed to push reviewed updates to origin/${pullRequest.headRefName}.`
-    );
-  }
 }
 
 function synchronizePullRequestBaseBranch(
@@ -912,7 +762,11 @@ export async function runPrPrepareReviewCommand(
       return;
     }
 
-    pushReviewedPullRequestUpdates(options.repoRoot, workspace, pullRequest);
+    pushReviewedPullRequestUpdates(
+      options.repoRoot,
+      workspace.outputLogPath,
+      pullRequest.headRefName
+    );
   };
 
   if (!options.hasChanges(options.repoRoot)) {
