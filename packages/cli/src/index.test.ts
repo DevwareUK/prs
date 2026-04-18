@@ -1483,6 +1483,24 @@ describe("CLI integration", () => {
           return { status: 0, stdout: "", stderr: "" };
         }
 
+        if (command === "git" && args[0] === "fetch" && args[1] === "origin" && args[2] === "main") {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (command === "git" && args[0] === "rev-parse" && args[1] === "origin/main") {
+          return { status: 0, stdout: "base-tip-87\n", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "merge-base" &&
+          args[1] === "--is-ancestor" &&
+          args[2] === "base-tip-87" &&
+          args[3] === "HEAD"
+        ) {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
         if (command === "codex" && args[0] === "exec" && args[1] === "resume") {
           const createdRunDir = listRunDirectories().find(
             (entry) => !beforeRuns.includes(entry)
@@ -1557,8 +1575,12 @@ describe("CLI integration", () => {
     );
     expect(readFileSync(promptFilePath, "utf8")).toContain("pnpm build");
     expect(readFileSync(outputLogPath, "utf8")).toContain("# git-ai pr prepare-review run log");
+    expect(readFileSync(outputLogPath, "utf8")).toContain("git fetch origin main");
     expect(readFileSync(outputLogPath, "utf8")).toContain(`git checkout ${branchName}`);
     expect(readFileSync(reviewBriefPath, "utf8")).toContain("## Reviewer Commands");
+    expect(readFileSync(snapshotFilePath, "utf8")).toContain(
+      "Already contained the latest origin/main tip base-tip-87"
+    );
     expect(JSON.parse(readFileSync(metadataFilePath, "utf8"))).toMatchObject({
       flow: "pr-prepare-review",
       prNumber: 87,
@@ -1566,6 +1588,12 @@ describe("CLI integration", () => {
         source: "issue-branch",
         branchName,
         linkedIssueNumber: 211,
+      },
+      baseSync: {
+        remoteRef: "origin/main",
+        baseTip: "base-tip-87",
+        status: "up-to-date",
+        conflictResolution: "not-needed",
       },
       runtime: {
         type: "codex",
@@ -1695,6 +1723,24 @@ describe("CLI integration", () => {
           return { status: 0, stdout: "", stderr: "" };
         }
 
+        if (command === "git" && args[0] === "fetch" && args[1] === "origin" && args[2] === "main") {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (command === "git" && args[0] === "rev-parse" && args[1] === "origin/main") {
+          return { status: 0, stdout: "base-tip-88\n", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "merge-base" &&
+          args[1] === "--is-ancestor" &&
+          args[2] === "base-tip-88" &&
+          args[3] === "HEAD"
+        ) {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
         if (command === "codex" && args[0] === "exec" && args[1] === "--full-auto") {
           const createdRunDir = listRunDirectories().find(
             (entry) => !beforeRuns.includes(entry)
@@ -1747,11 +1793,20 @@ describe("CLI integration", () => {
     expect(readFileSync(outputLogPath, "utf8")).toContain(
       `Warning: Saved Codex session ${staleSessionId} for linked issue #212 is no longer available. Falling back to a fresh review brief generation run.`
     );
+    expect(readFileSync(snapshotFilePath, "utf8")).toContain(
+      "Already contained the latest origin/main tip base-tip-88"
+    );
     expect(JSON.parse(readFileSync(metadataFilePath, "utf8"))).toMatchObject({
       checkout: {
         source: "issue-branch",
         branchName,
         linkedIssueNumber: 212,
+      },
+      baseSync: {
+        remoteRef: "origin/main",
+        baseTip: "base-tip-88",
+        status: "up-to-date",
+        conflictResolution: "not-needed",
       },
       runtime: {
         invocation: "new",
@@ -1862,6 +1917,24 @@ describe("CLI integration", () => {
         }
 
         if (command === "git" && args[0] === "checkout" && args[1] === headBranchName) {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (command === "git" && args[0] === "fetch" && args[1] === "origin" && args[2] === "main") {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (command === "git" && args[0] === "rev-parse" && args[1] === "origin/main") {
+          return { status: 0, stdout: "base-tip-206\n", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "merge-base" &&
+          args[1] === "--is-ancestor" &&
+          args[2] === "base-tip-206" &&
+          args[3] === "HEAD"
+        ) {
           return { status: 0, stdout: "", stderr: "" };
         }
 
@@ -2013,6 +2086,24 @@ describe("CLI integration", () => {
           return { status: 0, stdout: "", stderr: "" };
         }
 
+        if (command === "git" && args[0] === "fetch" && args[1] === "origin" && args[2] === "main") {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (command === "git" && args[0] === "rev-parse" && args[1] === "origin/main") {
+          return { status: 0, stdout: "base-tip-207\n", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "merge-base" &&
+          args[1] === "--is-ancestor" &&
+          args[2] === "base-tip-207" &&
+          args[3] === "HEAD"
+        ) {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
         if (command === "codex" && args[0] === "exec" && args[1] === "--full-auto") {
           const createdRunDir = listRunDirectories().find(
             (entry) => !beforeRuns.includes(entry)
@@ -2121,6 +2212,24 @@ describe("CLI integration", () => {
           return { status: 0, stdout: "", stderr: "" };
         }
 
+        if (command === "git" && args[0] === "fetch" && args[1] === "origin" && args[2] === "main") {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (command === "git" && args[0] === "rev-parse" && args[1] === "origin/main") {
+          return { status: 0, stdout: "base-tip-208\n", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "merge-base" &&
+          args[1] === "--is-ancestor" &&
+          args[2] === "base-tip-208" &&
+          args[3] === "HEAD"
+        ) {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
         if (command === "codex" && args[0] === "exec" && args[1] === "--full-auto") {
           const createdRunDir = listRunDirectories().find(
             (entry) => !beforeRuns.includes(entry)
@@ -2173,7 +2282,7 @@ describe("CLI integration", () => {
     ).toBe(false);
   });
 
-  it("fetches a dedicated local review branch when no saved issue state or local head branch exists", async () => {
+  it("fetches a dedicated local review branch and merges the latest base branch when no saved issue state or local head branch exists", async () => {
     const beforeRuns = listRunDirectories();
     const reviewBranchName = "review/pr-205-prepare-a-review-workspace";
     const fetchMock = vi.fn().mockResolvedValueOnce(
@@ -2209,7 +2318,11 @@ describe("CLI integration", () => {
           return { status: 0 };
         }
 
-        if (command === "git" && args[0] === "rev-parse") {
+        if (command === "git" && args[0] === "rev-parse" && args[1] === "origin/main") {
+          return { status: 0, stdout: "base-tip-205\n", stderr: "" };
+        }
+
+        if (command === "git" && args[0] === "rev-parse" && args[1] === "--verify") {
           return { status: 1, error: new Error("missing") };
         }
 
@@ -2222,8 +2335,32 @@ describe("CLI integration", () => {
           return { status: 0, stdout: "", stderr: "" };
         }
 
+        if (command === "git" && args[0] === "fetch" && args[1] === "origin" && args[2] === "main") {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
         if (command === "git" && args[0] === "checkout" && args[1] === reviewBranchName) {
           return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "merge-base" &&
+          args[1] === "--is-ancestor" &&
+          args[2] === "base-tip-205" &&
+          args[3] === "HEAD"
+        ) {
+          return { status: 1, stdout: "", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "merge" &&
+          args[1] === "--no-edit" &&
+          args[2] === "--no-ff" &&
+          args[3] === "origin/main"
+        ) {
+          return { status: 0, stdout: "Merge made by the 'ort' strategy.\n", stderr: "" };
         }
 
         if (command === "codex" && args[0] === "exec" && args[1] === "--full-auto") {
@@ -2277,6 +2414,9 @@ describe("CLI integration", () => {
     expect(readFileSync(snapshotFilePath, "utf8")).toContain(
       "Fetched PR head into dedicated local review branch"
     );
+    expect(readFileSync(snapshotFilePath, "utf8")).toContain(
+      'Merged the latest origin/main tip base-tip-205 into the checked-out branch'
+    );
     expect(readFileSync(interactivePromptFilePath, "utf8")).toContain(
       "Remain available for follow-up questions and requested fixes"
     );
@@ -2286,12 +2426,22 @@ describe("CLI integration", () => {
     expect(readFileSync(outputLogPath, "utf8")).toContain(
       `git checkout ${reviewBranchName}`
     );
+    expect(readFileSync(outputLogPath, "utf8")).toContain("git fetch origin main");
+    expect(readFileSync(outputLogPath, "utf8")).toContain(
+      "git merge --no-edit --no-ff origin/main"
+    );
     expect(JSON.parse(readFileSync(metadataFilePath, "utf8"))).toMatchObject({
       prNumber: 205,
       checkout: {
         source: "fetched-review",
         branchName: reviewBranchName,
         headRefName: "feat/prepare-review-workspace",
+      },
+      baseSync: {
+        remoteRef: "origin/main",
+        baseTip: "base-tip-205",
+        status: "merged",
+        conflictResolution: "not-needed",
       },
       runtime: {
         invocation: "new",
@@ -2302,6 +2452,13 @@ describe("CLI integration", () => {
     expect(spawnSync).toHaveBeenCalledWith(
       "git",
       ["fetch", "origin", `pull/205/head:${reviewBranchName}`],
+      expect.objectContaining({
+        cwd: REPO_ROOT,
+      })
+    );
+    expect(spawnSync).toHaveBeenCalledWith(
+      "git",
+      ["merge", "--no-edit", "--no-ff", "origin/main"],
       expect.objectContaining({
         cwd: REPO_ROOT,
       })
@@ -2320,6 +2477,335 @@ describe("CLI integration", () => {
         cwd: REPO_ROOT,
         stdio: "inherit",
       })
+    );
+  });
+
+  it("resolves base-branch merge conflicts before generating the review brief", async () => {
+    const beforeRuns = listRunDirectories();
+    const headBranchName = "feat/prepare-review-conflicts-resolved";
+    let mergeBaseCallCount = 0;
+    let mergeHeadCheckCount = 0;
+    let unmergedPathsCheckCount = 0;
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      createFetchResponse({
+        number: 209,
+        title: "Resolve prepare-review merge conflicts",
+        body: "Sync the reviewer branch with main before brief generation.",
+        html_url: "https://github.com/DevwareUK/git-ai/pull/209",
+        base: { ref: "main" },
+        head: { ref: headBranchName },
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { run, spawnSync } = await loadCli({
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          return "";
+        }
+
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/git-ai.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "rev-parse" && args[2] === headBranchName) {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "checkout" && args[1] === headBranchName) {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (command === "git" && args[0] === "fetch" && args[1] === "origin" && args[2] === "main") {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (command === "git" && args[0] === "rev-parse" && args[1] === "origin/main") {
+          return { status: 0, stdout: "base-tip-209\n", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "merge-base" &&
+          args[1] === "--is-ancestor" &&
+          args[2] === "base-tip-209" &&
+          args[3] === "HEAD"
+        ) {
+          mergeBaseCallCount += 1;
+          return { status: mergeBaseCallCount === 1 ? 1 : 0, stdout: "", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "merge" &&
+          args[1] === "--no-edit" &&
+          args[2] === "--no-ff" &&
+          args[3] === "origin/main"
+        ) {
+          return {
+            status: 1,
+            stdout: "Auto-merging README.md\n",
+            stderr: "CONFLICT (content): Merge conflict in README.md\n",
+          };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "rev-parse" &&
+          args[1] === "-q" &&
+          args[2] === "--verify" &&
+          args[3] === "MERGE_HEAD"
+        ) {
+          mergeHeadCheckCount += 1;
+          return {
+            status: mergeHeadCheckCount === 1 ? 0 : 1,
+            stdout: mergeHeadCheckCount === 1 ? "merge-head\n" : "",
+            stderr: "",
+          };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "diff" &&
+          args[1] === "--name-only" &&
+          args[2] === "--diff-filter=U"
+        ) {
+          unmergedPathsCheckCount += 1;
+          return {
+            status: 0,
+            stdout: unmergedPathsCheckCount === 1 ? "README.md\n" : "",
+            stderr: "",
+          };
+        }
+
+        if (command === "codex" && args[0] === "exec" && args[1] === "--full-auto") {
+          const createdRunDir = listRunDirectories().find(
+            (entry) => !beforeRuns.includes(entry)
+          );
+          if (!createdRunDir) {
+            throw new Error("Expected a prepare-review run directory before fresh Codex run.");
+          }
+
+          writeFileSync(
+            resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir, "review-brief.md"),
+            [
+              "# Review Brief",
+              "",
+              "## Reviewer Commands",
+              "- `pnpm build`",
+              "",
+              "## Focus Areas",
+              "- Inspect the conflict resolution and merged base branch changes.",
+            ].join("\n"),
+            "utf8"
+          );
+
+          return { status: 0, stdout: "brief generated\n", stderr: "" };
+        }
+
+        if (command === "codex" && args[0] === "--sandbox") {
+          return { status: 0 };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.env.GITHUB_TOKEN = "test-token";
+    process.argv = ["node", "git-ai", "pr", "prepare-review", "209"];
+
+    await run();
+
+    const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
+    expect(createdRunDir).toBeDefined();
+
+    const runDirPath = resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string);
+    const conflictPromptFilePath = resolve(runDirPath, "base-sync-conflict-prompt.md");
+    const snapshotFilePath = resolve(runDirPath, "pr-review-prepare.md");
+    const metadataFilePath = resolve(runDirPath, "metadata.json");
+    const outputLogPath = resolve(runDirPath, "output.log");
+    cleanupTargets.add(runDirPath);
+
+    expect(readFileSync(conflictPromptFilePath, "utf8")).toContain(
+      "Resolve the merge conflicts created while merging `origin/main`"
+    );
+    expect(readFileSync(snapshotFilePath, "utf8")).toContain(
+      "after Codex resolved merge conflicts"
+    );
+    expect(readFileSync(outputLogPath, "utf8")).toContain(
+      'Warning: Merging origin/main into "feat/prepare-review-conflicts-resolved" produced conflicts.'
+    );
+    expect(readFileSync(outputLogPath, "utf8")).toContain(
+      'Warning: Codex resolved the merge conflicts while merging origin/main into "feat/prepare-review-conflicts-resolved".'
+    );
+    expect(JSON.parse(readFileSync(metadataFilePath, "utf8"))).toMatchObject({
+      baseSync: {
+        remoteRef: "origin/main",
+        baseTip: "base-tip-209",
+        status: "merged",
+        conflictResolution: "required",
+      },
+    });
+    expect(
+      spawnSync.mock.calls.some(
+        ([command, args]) =>
+          command === "codex" &&
+          Array.isArray(args) &&
+          args[0] === "--sandbox" &&
+          args.some(
+            (value) =>
+              typeof value === "string" && value.includes("base-sync-conflict-prompt.md")
+          )
+      )
+    ).toBe(true);
+  });
+
+  it("fails clearly when base-branch merge conflicts remain unresolved", async () => {
+    const beforeRuns = listRunDirectories();
+    const headBranchName = "feat/prepare-review-conflicts-unresolved";
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      createFetchResponse({
+        number: 210,
+        title: "Fail unresolved prepare-review merge conflicts",
+        body: "Stop review preparation until the base-branch merge is clean.",
+        html_url: "https://github.com/DevwareUK/git-ai/pull/210",
+        base: { ref: "main" },
+        head: { ref: headBranchName },
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { run, spawnSync } = await loadCli({
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          return "";
+        }
+
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/git-ai.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "rev-parse" && args[2] === headBranchName) {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "checkout" && args[1] === headBranchName) {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (command === "git" && args[0] === "fetch" && args[1] === "origin" && args[2] === "main") {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (command === "git" && args[0] === "rev-parse" && args[1] === "origin/main") {
+          return { status: 0, stdout: "base-tip-210\n", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "merge-base" &&
+          args[1] === "--is-ancestor" &&
+          args[2] === "base-tip-210" &&
+          args[3] === "HEAD"
+        ) {
+          return { status: 1, stdout: "", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "merge" &&
+          args[1] === "--no-edit" &&
+          args[2] === "--no-ff" &&
+          args[3] === "origin/main"
+        ) {
+          return {
+            status: 1,
+            stdout: "Auto-merging README.md\n",
+            stderr: "CONFLICT (content): Merge conflict in README.md\n",
+          };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "rev-parse" &&
+          args[1] === "-q" &&
+          args[2] === "--verify" &&
+          args[3] === "MERGE_HEAD"
+        ) {
+          return { status: 0, stdout: "merge-head\n", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "diff" &&
+          args[1] === "--name-only" &&
+          args[2] === "--diff-filter=U"
+        ) {
+          return { status: 0, stdout: "README.md\n", stderr: "" };
+        }
+
+        if (command === "codex" && args[0] === "--sandbox") {
+          return { status: 0 };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.env.GITHUB_TOKEN = "test-token";
+    process.argv = ["node", "git-ai", "pr", "prepare-review", "210"];
+
+    await expect(run()).rejects.toThrow(
+      'Base-branch sync is still incomplete for "feat/prepare-review-conflicts-unresolved".'
+    );
+
+    const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
+    expect(createdRunDir).toBeDefined();
+
+    const runDirPath = resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string);
+    const snapshotFilePath = resolve(runDirPath, "pr-review-prepare.md");
+    const metadataFilePath = resolve(runDirPath, "metadata.json");
+    const outputLogPath = resolve(runDirPath, "output.log");
+    cleanupTargets.add(runDirPath);
+
+    expect(readFileSync(snapshotFilePath, "utf8")).toContain("## Base Branch Sync Recovery");
+    expect(readFileSync(outputLogPath, "utf8")).toContain(
+      'Warning: Base-branch sync is still incomplete for "feat/prepare-review-conflicts-unresolved".'
+    );
+    expect(JSON.parse(readFileSync(metadataFilePath, "utf8"))).toMatchObject({
+      baseSync: {
+        remoteRef: "origin/main",
+        baseTip: "base-tip-210",
+        status: "blocked",
+        conflictResolution: "unresolved",
+      },
+    });
+    expect(spawnSync).not.toHaveBeenCalledWith(
+      "codex",
+      expect.arrayContaining(["exec", "--full-auto", "--cd", REPO_ROOT]),
+      expect.any(Object)
     );
   });
 

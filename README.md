@@ -79,7 +79,7 @@ You only need extra tooling for advanced workflows:
 - the configured interactive runtime on `PATH` for `git-ai issue draft`, local interactive `git-ai issue <number>` runs, `git-ai pr fix-comments <pr-number>`, and `git-ai pr fix-tests <pr-number>`
   default: `codex`
   `ai.runtime.type: "claude-code"`: `claude`
-- `codex` on `PATH` for `git-ai pr prepare-review <pr-number>`, which generates the review brief, leaves you in an interactive Codex session for follow-up questions or fixes, and then offers the same reviewed commit-message flow as other local fix workflows when that session makes changes
+- `codex` on `PATH` for `git-ai pr prepare-review <pr-number>`, which checks out a reviewer workspace, syncs it with the latest PR base branch, resolves merge conflicts in Codex when needed, generates the review brief, leaves you in an interactive Codex session for follow-up questions or fixes, and then offers the same reviewed commit-message flow as other local fix workflows when that session makes changes
 - `codex` plus authenticated GitHub access for `git-ai issue <number> --mode unattended` and `git-ai issue batch ...`
 - `gh`, `GH_TOKEN`, or `GITHUB_TOKEN` for GitHub-backed issue and pull request flows
 
@@ -92,7 +92,7 @@ You only need extra tooling for advanced workflows:
 - `git-ai setup`: guided repository onboarding for `git-ai`
 - `git-ai review`: review the current diff or a branch comparison
 - `git-ai issue ...`: draft issues, generate issue plans, run single-issue flows, and queue unattended issue batches
-- `git-ai pr prepare-review <pr-number>`: check out a reviewer-ready PR branch, generate a persisted local review brief, and optionally review a follow-up fix commit
+- `git-ai pr prepare-review <pr-number>`: check out a reviewer-ready PR branch, sync it with the latest PR base branch, generate a persisted local review brief, and optionally review a follow-up fix commit
 - `git-ai pr fix-comments <pr-number>`: fix selected PR review comments with Codex
 - `git-ai pr fix-tests <pr-number>`: implement selected AI PR test suggestions with Codex
 - `git-ai test-backlog`: find high-value automated testing gaps
@@ -375,7 +375,7 @@ Available subcommands:
 
 | Command | What it does |
 | --- | --- |
-| `git-ai pr prepare-review <pr-number>` | Fetches pull request metadata and linked issues, requires a clean working tree, checks out the best available local review branch for the PR, writes `.git-ai/` run artifacts, generates `review-brief.md`, prints the saved brief path plus a terminal preview, and then leaves you in an interactive Codex session on that branch for follow-up review questions or requested fixes. After that session exits, `git-ai` exits cleanly if nothing changed, or else runs the configured build command and offers the same reviewed commit-message flow used by the other local fix workflows. |
+| `git-ai pr prepare-review <pr-number>` | Fetches pull request metadata and linked issues, requires a clean working tree, checks out the best available local review branch for the PR, fetches the latest `origin/<base-branch>` tip, skips merging when the checked-out branch already contains that tip, otherwise merges the base branch into the review branch before brief generation, routes merge conflicts through an interactive Codex conflict-resolution session when needed, writes `.git-ai/` run artifacts, generates `review-brief.md`, prints the saved brief path plus a terminal preview, and then leaves you in an interactive Codex session on that branch for follow-up review questions or requested fixes. After that session exits, `git-ai` exits cleanly if nothing changed, or else runs the configured build command and offers the same reviewed commit-message flow used by the other local fix workflows. |
 | `git-ai pr fix-comments <pr-number>` | Fetches pull request metadata and review comments from the configured forge, filters out obviously non-actionable comments, groups nearby threads into selectable review tasks, preserves non-trivial replies as thread context, writes richer `.git-ai/` run artifacts, opens the configured interactive runtime, runs the configured build command, and then previews a proposed commit message that you can edit, accept, or skip. |
 | `git-ai pr fix-tests <pr-number>` | Fetches pull request metadata and PR issue comments from the configured forge, finds the managed AI Test Suggestions comment, parses structured suggestion areas into selectable tasks, writes focused `.git-ai/` run artifacts, opens the configured interactive runtime, runs the configured build command, and then previews a proposed commit message that you can edit, accept, or skip. |
 
@@ -387,6 +387,8 @@ Important behavior:
 - `git-ai pr prepare-review <pr-number>` requires `codex` on `PATH`
 - `git-ai pr prepare-review <pr-number>` reuses a linked issue branch when exactly one linked issue has saved local state and that branch still exists locally
 - otherwise `git-ai pr prepare-review <pr-number>` checks out the local PR head branch when it already exists, or fetches the PR head into a dedicated `review/pr-<pr-number>-<slug>` branch
+- after checkout, `git-ai pr prepare-review <pr-number>` fetches the latest `origin/<pr-base-branch>` tip and records whether the branch was already current or had to be merged with the latest base branch
+- if that base-branch merge conflicts, `git-ai pr prepare-review <pr-number>` opens a focused Codex conflict-resolution session and only continues to review-brief generation after the merge is fully resolved
 - `git-ai pr prepare-review <pr-number>` writes `prompt.md`, `metadata.json`, `output.log`, and `review-brief.md` under a timestamped `.git-ai/runs/` directory and may also write supporting workflow artifacts there
 - after generating the brief, `git-ai pr prepare-review <pr-number>` drops you into an interactive Codex shell so you can ask follow-up questions or request fixes before exiting Codex
 - after that interactive session exits, `git-ai pr prepare-review <pr-number>` exits without build or commit steps if nothing changed
