@@ -18,6 +18,7 @@ vi.mock("./workspace", () => ({
   appendPullRequestPrepareReviewWarning: vi.fn(),
   createPullRequestPrepareReviewWorkspace: vi.fn(),
   initializePullRequestPrepareReviewOutputLog: vi.fn(),
+  writePullRequestPrepareReviewConflictPrompt: vi.fn(),
   writePullRequestPrepareReviewMetadata: vi.fn(),
   writePullRequestPrepareReviewWorkspaceFiles: vi.fn(),
 }));
@@ -36,8 +37,10 @@ vi.mock("../../runtime-change-review", () => ({
 import { runPrPrepareReviewCommand } from "./run";
 import { fetchLinkedIssuesForPullRequest } from "./snapshot";
 import {
+  appendPullRequestPrepareReviewWarning,
   createPullRequestPrepareReviewWorkspace,
   initializePullRequestPrepareReviewOutputLog,
+  writePullRequestPrepareReviewConflictPrompt,
   writePullRequestPrepareReviewMetadata,
   writePullRequestPrepareReviewWorkspaceFiles,
 } from "./workspace";
@@ -116,11 +119,46 @@ afterEach(() => {
   cleanupTargets.clear();
 });
 
+function createCommandResult(
+  status: number,
+  output: { stdout?: string; stderr?: string } = {}
+) {
+  return {
+    status,
+    stdout: output.stdout ?? "",
+    stderr: output.stderr ?? "",
+  } as never;
+}
+
+function createDefaultCommandOptions(repoRoot: string, forge: RepositoryForge) {
+  return {
+    prNumber: 206,
+    repoRoot,
+    buildCommand: ["pnpm", "build"],
+    forge,
+    ensureCleanWorkingTree: vi.fn(),
+    promptForLine: vi.fn(),
+    hasChanges: vi.fn().mockReturnValue(false),
+    verifyBuild: vi.fn(),
+    commitGeneratedChanges: vi.fn(),
+    readDiff: vi.fn(),
+    createProvider: vi.fn(),
+  };
+}
+
+function getGitCommandArgs(): string[][] {
+  return vi
+    .mocked(spawnSync)
+    .mock.calls.filter(([command]) => command === "git")
+    .map(([, args]) => args as string[]);
+}
+
 describe("runPrPrepareReviewCommand", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
   });
 
   it("passes a diff-based commit proposal into runtime finalization after interactive follow-up changes", async () => {
@@ -318,6 +356,653 @@ describe("runPrPrepareReviewCommand", () => {
       repoRoot,
       provider,
       readDiff
+    );
+  });
+
+  it("skips merging when the checked-out branch already contains the fetched base tip", async () => {
+    const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-pr-prepare-review-"));
+    cleanupTargets.add(repoRoot);
+
+    const workspace = createWorkspace(repoRoot);
+    const { forge } = createForge();
+    const interactiveLaunch = vi.fn();
+
+    vi.mocked(fetchLinkedIssuesForPullRequest).mockResolvedValue([]);
+    vi.mocked(createPullRequestPrepareReviewWorkspace).mockReturnValue(workspace);
+    vi.mocked(initializePullRequestPrepareReviewOutputLog).mockImplementation(
+      () => undefined
+    );
+    vi.mocked(writePullRequestPrepareReviewWorkspaceFiles).mockImplementation(
+      () => undefined
+    );
+    vi.mocked(writePullRequestPrepareReviewMetadata).mockImplementation(() => undefined);
+    vi.mocked(getInteractiveRuntimeByType).mockReturnValue({
+      checkAvailability: () => ({ available: true }),
+      launch: interactiveLaunch,
+    });
+    vi.mocked(launchUnattendedRuntime).mockImplementation(
+      (_type, _repoRoot, suppliedWorkspace) => {
+        writeFileSync(
+          suppliedWorkspace.reviewBriefFilePath,
+          "# Reviewer focus\n\n- Inspect the synced review branch.\n",
+          "utf8"
+        );
+
+        return {
+          invocation: "new",
+          sessionId: "codex-session-up-to-date",
+        };
+      }
+    );
+    vi.mocked(spawnSync).mockImplementation((command, args) => {
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "-C" &&
+        args[1] === repoRoot &&
+        args[2] === "rev-parse" &&
+        args[3] === "--verify" &&
+        args[4] === createPullRequest().headRefName
+      ) {
+        return createCommandResult(0);
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "checkout" &&
+        args[1] === createPullRequest().headRefName
+      ) {
+        return createCommandResult(0);
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "fetch" &&
+        args[1] === "origin" &&
+        args[2] === createPullRequest().baseRefName
+      ) {
+        return createCommandResult(0);
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "rev-parse" &&
+        args[1] === `origin/${createPullRequest().baseRefName}`
+      ) {
+        return createCommandResult(0, { stdout: "abc123base\n" });
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "merge-base" &&
+        args[1] === "--is-ancestor" &&
+        args[2] === "abc123base" &&
+        args[3] === "HEAD"
+      ) {
+        return createCommandResult(0);
+      }
+
+      throw new Error(`Unexpected spawnSync call: ${command} ${String(args)}`);
+    });
+
+    await runPrPrepareReviewCommand(createDefaultCommandOptions(repoRoot, forge));
+
+    expect(getGitCommandArgs()).not.toContainEqual([
+      "merge",
+      "--no-edit",
+      "--no-ff",
+      "origin/main",
+    ]);
+    expect(writePullRequestPrepareReviewWorkspaceFiles).toHaveBeenCalledWith(
+      repoRoot,
+      workspace,
+      expect.objectContaining({
+        checkoutTarget: {
+          source: "local-head",
+          branchName: createPullRequest().headRefName,
+        },
+        baseSync: expect.objectContaining({
+          status: "up-to-date",
+          conflictResolution: "not-needed",
+          remoteRef: "origin/main",
+          baseTip: "abc123base",
+        }),
+      }),
+      ["pnpm", "build"]
+    );
+    expect(writePullRequestPrepareReviewMetadata).toHaveBeenCalledWith(
+      repoRoot,
+      workspace,
+      expect.objectContaining({
+        baseSync: expect.objectContaining({
+          status: "up-to-date",
+          summary: expect.stringContaining("already contained origin/main tip abc123base"),
+        }),
+      }),
+      expect.objectContaining({
+        invocation: "new",
+      })
+    );
+    expect(writePullRequestPrepareReviewConflictPrompt).not.toHaveBeenCalled();
+  });
+
+  it("creates a fetched review branch and merges the latest base tip before generating the brief", async () => {
+    const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-pr-prepare-review-"));
+    cleanupTargets.add(repoRoot);
+
+    const workspace = createWorkspace(repoRoot);
+    const { forge } = createForge();
+    const interactiveLaunch = vi.fn();
+    const fetchedBranchName = "review/pr-206-tighten-prepare-review-follow-up-fixes";
+
+    vi.mocked(fetchLinkedIssuesForPullRequest).mockResolvedValue([]);
+    vi.mocked(createPullRequestPrepareReviewWorkspace).mockReturnValue(workspace);
+    vi.mocked(initializePullRequestPrepareReviewOutputLog).mockImplementation(
+      () => undefined
+    );
+    vi.mocked(writePullRequestPrepareReviewWorkspaceFiles).mockImplementation(
+      () => undefined
+    );
+    vi.mocked(writePullRequestPrepareReviewMetadata).mockImplementation(() => undefined);
+    vi.mocked(getInteractiveRuntimeByType).mockReturnValue({
+      checkAvailability: () => ({ available: true }),
+      launch: interactiveLaunch,
+    });
+    vi.mocked(launchUnattendedRuntime).mockImplementation(
+      (_type, _repoRoot, suppliedWorkspace) => {
+        writeFileSync(
+          suppliedWorkspace.reviewBriefFilePath,
+          "# Reviewer focus\n\n- Inspect the merged base sync.\n",
+          "utf8"
+        );
+
+        return {
+          invocation: "new",
+          sessionId: "codex-session-merged",
+        };
+      }
+    );
+    vi.mocked(spawnSync).mockImplementation((command, args) => {
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "-C" &&
+        args[1] === repoRoot &&
+        args[2] === "rev-parse" &&
+        args[3] === "--verify" &&
+        args[4] === createPullRequest().headRefName
+      ) {
+        return createCommandResult(1);
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "-C" &&
+        args[1] === repoRoot &&
+        args[2] === "rev-parse" &&
+        args[3] === "--verify" &&
+        args[4] === fetchedBranchName
+      ) {
+        return createCommandResult(1);
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "fetch" &&
+        args[1] === "origin" &&
+        args[2] === `pull/206/head:${fetchedBranchName}`
+      ) {
+        return createCommandResult(0);
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "checkout" &&
+        args[1] === fetchedBranchName
+      ) {
+        return createCommandResult(0);
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "fetch" &&
+        args[1] === "origin" &&
+        args[2] === createPullRequest().baseRefName
+      ) {
+        return createCommandResult(0);
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "rev-parse" &&
+        args[1] === `origin/${createPullRequest().baseRefName}`
+      ) {
+        return createCommandResult(0, { stdout: "abc123base\n" });
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "merge-base" &&
+        args[1] === "--is-ancestor" &&
+        args[2] === "abc123base" &&
+        args[3] === "HEAD"
+      ) {
+        return createCommandResult(1);
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "merge" &&
+        args[1] === "--no-edit" &&
+        args[2] === "--no-ff" &&
+        args[3] === "origin/main"
+      ) {
+        return createCommandResult(0);
+      }
+
+      throw new Error(`Unexpected spawnSync call: ${command} ${String(args)}`);
+    });
+
+    await runPrPrepareReviewCommand(createDefaultCommandOptions(repoRoot, forge));
+
+    expect(getGitCommandArgs()).toEqual([
+      ["-C", repoRoot, "rev-parse", "--verify", createPullRequest().headRefName],
+      ["-C", repoRoot, "rev-parse", "--verify", fetchedBranchName],
+      ["fetch", "origin", `pull/206/head:${fetchedBranchName}`],
+      ["checkout", fetchedBranchName],
+      ["fetch", "origin", "main"],
+      ["rev-parse", "origin/main"],
+      ["merge-base", "--is-ancestor", "abc123base", "HEAD"],
+      ["merge", "--no-edit", "--no-ff", "origin/main"],
+    ]);
+    expect(writePullRequestPrepareReviewWorkspaceFiles).toHaveBeenCalledWith(
+      repoRoot,
+      workspace,
+      expect.objectContaining({
+        checkoutTarget: {
+          source: "fetched-review",
+          branchName: fetchedBranchName,
+          headRefName: createPullRequest().headRefName,
+        },
+        baseSync: expect.objectContaining({
+          status: "merged",
+          conflictResolution: "not-needed",
+          remoteRef: "origin/main",
+          baseTip: "abc123base",
+        }),
+      }),
+      ["pnpm", "build"]
+    );
+    expect(launchUnattendedRuntime).toHaveBeenCalledOnce();
+    expect(writePullRequestPrepareReviewConflictPrompt).not.toHaveBeenCalled();
+  });
+
+  it("opens a conflict-resolution Codex session and continues once the base sync is resolved", async () => {
+    const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-pr-prepare-review-"));
+    cleanupTargets.add(repoRoot);
+
+    const workspace = createWorkspace(repoRoot);
+    const { forge } = createForge();
+    const interactiveLaunch = vi.fn();
+    let mergeBaseChecks = 0;
+    let mergeHeadChecks = 0;
+    let unmergedDiffChecks = 0;
+
+    vi.mocked(fetchLinkedIssuesForPullRequest).mockResolvedValue([]);
+    vi.mocked(createPullRequestPrepareReviewWorkspace).mockReturnValue(workspace);
+    vi.mocked(initializePullRequestPrepareReviewOutputLog).mockImplementation(
+      () => undefined
+    );
+    vi.mocked(writePullRequestPrepareReviewWorkspaceFiles).mockImplementation(
+      () => undefined
+    );
+    vi.mocked(writePullRequestPrepareReviewMetadata).mockImplementation(() => undefined);
+    vi.mocked(getInteractiveRuntimeByType).mockReturnValue({
+      checkAvailability: () => ({ available: true }),
+      launch: interactiveLaunch,
+    });
+    vi.mocked(launchUnattendedRuntime).mockImplementation(
+      (_type, _repoRoot, suppliedWorkspace) => {
+        writeFileSync(
+          suppliedWorkspace.reviewBriefFilePath,
+          "# Reviewer focus\n\n- Inspect the resolved merge conflicts.\n",
+          "utf8"
+        );
+
+        return {
+          invocation: "new",
+          sessionId: "codex-session-resolved-conflicts",
+        };
+      }
+    );
+    vi.mocked(spawnSync).mockImplementation((command, args) => {
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "-C" &&
+        args[1] === repoRoot &&
+        args[2] === "rev-parse" &&
+        args[3] === "--verify" &&
+        args[4] === createPullRequest().headRefName
+      ) {
+        return createCommandResult(0);
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "checkout" &&
+        args[1] === createPullRequest().headRefName
+      ) {
+        return createCommandResult(0);
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "fetch" &&
+        args[1] === "origin" &&
+        args[2] === createPullRequest().baseRefName
+      ) {
+        return createCommandResult(0);
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "rev-parse" &&
+        args[1] === `origin/${createPullRequest().baseRefName}`
+      ) {
+        return createCommandResult(0, { stdout: "abc123base\n" });
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "merge-base" &&
+        args[1] === "--is-ancestor" &&
+        args[2] === "abc123base" &&
+        args[3] === "HEAD"
+      ) {
+        mergeBaseChecks += 1;
+        return createCommandResult(mergeBaseChecks === 1 ? 1 : 0);
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "merge" &&
+        args[1] === "--no-edit" &&
+        args[2] === "--no-ff" &&
+        args[3] === "origin/main"
+      ) {
+        return createCommandResult(1, { stderr: "CONFLICT (content): Merge conflict in src/conflict.ts\n" });
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "rev-parse" &&
+        args[1] === "-q" &&
+        args[2] === "--verify" &&
+        args[3] === "MERGE_HEAD"
+      ) {
+        mergeHeadChecks += 1;
+        return createCommandResult(mergeHeadChecks === 1 ? 0 : 1);
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "diff" &&
+        args[1] === "--name-only" &&
+        args[2] === "--diff-filter=U"
+      ) {
+        unmergedDiffChecks += 1;
+        return createCommandResult(0, {
+          stdout: unmergedDiffChecks === 1 ? "src/conflict.ts\n" : "",
+        });
+      }
+
+      throw new Error(`Unexpected spawnSync call: ${command} ${String(args)}`);
+    });
+
+    await runPrPrepareReviewCommand(createDefaultCommandOptions(repoRoot, forge));
+
+    expect(writePullRequestPrepareReviewConflictPrompt).toHaveBeenCalledWith(
+      repoRoot,
+      workspace,
+      expect.objectContaining({
+        branchName: createPullRequest().headRefName,
+        baseSync: expect.objectContaining({
+          status: "blocked",
+          conflictResolution: "required",
+          baseTip: "abc123base",
+        }),
+      })
+    );
+    expect(appendPullRequestPrepareReviewWarning).toHaveBeenNthCalledWith(
+      1,
+      workspace,
+      expect.stringContaining("produced conflicts")
+    );
+    expect(appendPullRequestPrepareReviewWarning).toHaveBeenNthCalledWith(
+      2,
+      workspace,
+      expect.stringContaining("Codex resolved the merge conflicts")
+    );
+    expect(interactiveLaunch).toHaveBeenNthCalledWith(
+      1,
+      repoRoot,
+      {
+        promptFilePath: workspace.conflictPromptFilePath,
+        outputLogPath: workspace.outputLogPath,
+      }
+    );
+    expect(interactiveLaunch).toHaveBeenNthCalledWith(
+      2,
+      repoRoot,
+      {
+        promptFilePath: workspace.interactivePromptFilePath,
+        outputLogPath: workspace.outputLogPath,
+      },
+      {
+        resumeSessionId: "codex-session-resolved-conflicts",
+      }
+    );
+    expect(writePullRequestPrepareReviewWorkspaceFiles).toHaveBeenCalledWith(
+      repoRoot,
+      workspace,
+      expect.objectContaining({
+        baseSync: expect.objectContaining({
+          status: "merged",
+          conflictResolution: "required",
+          warnings: [
+            expect.stringContaining("produced conflicts"),
+            expect.stringContaining("resolved the merge conflicts"),
+          ],
+        }),
+      }),
+      ["pnpm", "build"]
+    );
+  });
+
+  it("fails clearly and records blocked artifacts when merge conflicts remain unresolved", async () => {
+    const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-pr-prepare-review-"));
+    cleanupTargets.add(repoRoot);
+
+    const workspace = createWorkspace(repoRoot);
+    const { forge } = createForge();
+    const interactiveLaunch = vi.fn();
+    let mergeBaseChecks = 0;
+    let mergeHeadChecks = 0;
+    let unmergedDiffChecks = 0;
+
+    vi.mocked(fetchLinkedIssuesForPullRequest).mockResolvedValue([]);
+    vi.mocked(createPullRequestPrepareReviewWorkspace).mockReturnValue(workspace);
+    vi.mocked(initializePullRequestPrepareReviewOutputLog).mockImplementation(
+      () => undefined
+    );
+    vi.mocked(writePullRequestPrepareReviewWorkspaceFiles).mockImplementation(
+      () => undefined
+    );
+    vi.mocked(writePullRequestPrepareReviewMetadata).mockImplementation(() => undefined);
+    vi.mocked(getInteractiveRuntimeByType).mockReturnValue({
+      checkAvailability: () => ({ available: true }),
+      launch: interactiveLaunch,
+    });
+    vi.mocked(spawnSync).mockImplementation((command, args) => {
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "-C" &&
+        args[1] === repoRoot &&
+        args[2] === "rev-parse" &&
+        args[3] === "--verify" &&
+        args[4] === createPullRequest().headRefName
+      ) {
+        return createCommandResult(0);
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "checkout" &&
+        args[1] === createPullRequest().headRefName
+      ) {
+        return createCommandResult(0);
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "fetch" &&
+        args[1] === "origin" &&
+        args[2] === createPullRequest().baseRefName
+      ) {
+        return createCommandResult(0);
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "rev-parse" &&
+        args[1] === `origin/${createPullRequest().baseRefName}`
+      ) {
+        return createCommandResult(0, { stdout: "abc123base\n" });
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "merge-base" &&
+        args[1] === "--is-ancestor" &&
+        args[2] === "abc123base" &&
+        args[3] === "HEAD"
+      ) {
+        mergeBaseChecks += 1;
+        return createCommandResult(1);
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "merge" &&
+        args[1] === "--no-edit" &&
+        args[2] === "--no-ff" &&
+        args[3] === "origin/main"
+      ) {
+        return createCommandResult(1, { stderr: "CONFLICT (content): Merge conflict in src/conflict.ts\n" });
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "rev-parse" &&
+        args[1] === "-q" &&
+        args[2] === "--verify" &&
+        args[3] === "MERGE_HEAD"
+      ) {
+        mergeHeadChecks += 1;
+        return createCommandResult(0);
+      }
+
+      if (
+        command === "git" &&
+        Array.isArray(args) &&
+        args[0] === "diff" &&
+        args[1] === "--name-only" &&
+        args[2] === "--diff-filter=U"
+      ) {
+        unmergedDiffChecks += 1;
+        return createCommandResult(0, { stdout: "src/conflict.ts\n" });
+      }
+
+      throw new Error(`Unexpected spawnSync call: ${command} ${String(args)}`);
+    });
+
+    await expect(
+      runPrPrepareReviewCommand(createDefaultCommandOptions(repoRoot, forge))
+    ).rejects.toThrow(
+      'Base-branch sync is still incomplete for "feat/prepare-review-follow-up".'
+    );
+
+    expect(mergeBaseChecks).toBe(2);
+    expect(mergeHeadChecks).toBe(2);
+    expect(unmergedDiffChecks).toBe(2);
+    expect(interactiveLaunch).toHaveBeenCalledTimes(1);
+    expect(interactiveLaunch).toHaveBeenCalledWith(repoRoot, {
+      promptFilePath: workspace.conflictPromptFilePath,
+      outputLogPath: workspace.outputLogPath,
+    });
+    expect(launchUnattendedRuntime).not.toHaveBeenCalled();
+    expect(appendPullRequestPrepareReviewWarning).toHaveBeenNthCalledWith(
+      1,
+      workspace,
+      expect.stringContaining("produced conflicts")
+    );
+    expect(appendPullRequestPrepareReviewWarning).toHaveBeenNthCalledWith(
+      2,
+      workspace,
+      expect.stringContaining("Base-branch sync is still incomplete")
+    );
+    expect(writePullRequestPrepareReviewWorkspaceFiles).toHaveBeenCalledWith(
+      repoRoot,
+      workspace,
+      expect.objectContaining({
+        baseSync: expect.objectContaining({
+          status: "blocked",
+          conflictResolution: "unresolved",
+          recoveryMessage: expect.stringContaining(
+            "After fixing the branch state, rerun `git-ai pr prepare-review 206`."
+          ),
+        }),
+      }),
+      ["pnpm", "build"]
+    );
+    expect(writePullRequestPrepareReviewMetadata).toHaveBeenCalledWith(
+      repoRoot,
+      workspace,
+      expect.objectContaining({
+        baseSync: expect.objectContaining({
+          status: "blocked",
+          conflictResolution: "unresolved",
+        }),
+      }),
+      expect.objectContaining({
+        invocation: "new",
+      })
     );
   });
 });
