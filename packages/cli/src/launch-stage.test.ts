@@ -16,7 +16,7 @@ describe("formatLaunchStageNotice", () => {
 
     expect(notice).toContain("Requires issue access through the configured forge");
     expect(notice).toContain(
-      "creating a new managed plan comment also needs a usable text provider and GitHub authentication"
+      "creating or refreshing a managed plan comment also needs a usable text provider and GitHub authentication"
     );
   });
 

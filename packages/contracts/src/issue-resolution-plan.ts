@@ -5,6 +5,11 @@ const OptionalStringList = z
   .nullable()
   .optional();
 
+const RequiredStringList = (fieldName: string) =>
+  z
+    .array(z.string().trim().min(1, `${fieldName} items must be non-empty`))
+    .min(1, `${fieldName} must contain at least one item`);
+
 export const IssueResolutionPlanInput = z.object({
   issueNumber: z.number().int().positive().optional(),
   issueTitle: z.string().trim().min(1, "issueTitle must be non-empty"),
@@ -16,13 +21,12 @@ export type IssueResolutionPlanInputType = z.infer<typeof IssueResolutionPlanInp
 
 export const IssueResolutionPlanModelOutput = z.object({
   summary: z.string().trim().min(1, "summary must be non-empty"),
-  implementationSteps: z
-    .array(z.string().trim().min(1, "implementationSteps items must be non-empty"))
-    .min(1, "implementationSteps must contain at least one item"),
-  validationSteps: z
-    .array(z.string().trim().min(1, "validationSteps items must be non-empty"))
-    .min(1, "validationSteps must contain at least one item"),
-  risks: OptionalStringList,
+  acceptanceCriteria: RequiredStringList("acceptanceCriteria"),
+  likelyFiles: RequiredStringList("likelyFiles"),
+  implementationSteps: RequiredStringList("implementationSteps"),
+  testPlan: RequiredStringList("testPlan"),
+  risks: RequiredStringList("risks"),
+  doneDefinition: RequiredStringList("doneDefinition"),
   openQuestions: OptionalStringList,
 });
 
@@ -32,15 +36,12 @@ export type IssueResolutionPlanModelOutputType = z.infer<
 
 export const IssueResolutionPlanOutput = z.object({
   summary: z.string().trim().min(1, "summary must be non-empty"),
-  implementationSteps: z
-    .array(z.string().trim().min(1, "implementationSteps items must be non-empty"))
-    .min(1, "implementationSteps must contain at least one item"),
-  validationSteps: z
-    .array(z.string().trim().min(1, "validationSteps items must be non-empty"))
-    .min(1, "validationSteps must contain at least one item"),
-  risks: z
-    .array(z.string().trim().min(1, "risks items must be non-empty"))
-    .optional(),
+  acceptanceCriteria: RequiredStringList("acceptanceCriteria"),
+  likelyFiles: RequiredStringList("likelyFiles"),
+  implementationSteps: RequiredStringList("implementationSteps"),
+  testPlan: RequiredStringList("testPlan"),
+  risks: RequiredStringList("risks"),
+  doneDefinition: RequiredStringList("doneDefinition"),
   openQuestions: z
     .array(z.string().trim().min(1, "openQuestions items must be non-empty"))
     .optional(),

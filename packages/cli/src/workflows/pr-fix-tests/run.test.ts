@@ -124,6 +124,7 @@ function createForge(
       fetchPullRequestIssueComments,
       fetchPullRequestReviewComments: vi.fn(),
       createIssuePlanComment: vi.fn(),
+      updateIssuePlanComment: vi.fn(),
       createDraftIssue: vi.fn(),
       createOrReuseIssue: vi.fn(),
       createPullRequest: vi.fn(),

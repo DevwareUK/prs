@@ -129,9 +129,15 @@ type IssueCommandOptions =
       mode: IssuePrepareMode;
     }
   | {
-      action: "finalize" | "plan";
+      action: "finalize";
       issueNumber: number;
       mode: "local";
+    }
+  | {
+      action: "plan";
+      issueNumber: number;
+      mode: "local";
+      refresh: boolean;
     }
   | {
       action: "draft";
@@ -270,7 +276,7 @@ const ISSUE_USAGE = [
   "  git-ai issue <number> [--mode <interactive|unattended>]",
   "  git-ai issue batch <number> <number> [...number] [--mode unattended]",
   "  git-ai issue draft",
-  "  git-ai issue plan <number>",
+  "  git-ai issue plan <number> [--refresh]",
   "  git-ai issue prepare <number> [--mode <local|github-action>]",
   "  git-ai issue finalize <number>",
 ].join("\n");
@@ -308,7 +314,7 @@ const TOP_LEVEL_HELP = [
   "",
   "Advanced:",
   "  git-ai issue draft",
-  "  git-ai issue plan <number>",
+  "  git-ai issue plan <number> [--refresh]",
   "  git-ai issue <number> [--mode <interactive|unattended>]",
   "  git-ai issue prepare <number> [--mode <local|github-action>]",
   "  git-ai issue finalize <number>",
@@ -682,6 +688,21 @@ function parseIssuePrepareMode(rawArgs: string[]): IssuePrepareMode {
   return mode;
 }
 
+function parseIssuePlanOptions(rawArgs: string[]): { refresh: boolean } {
+  let refresh = false;
+
+  for (const rawArg of rawArgs) {
+    if (rawArg === "--refresh" || rawArg === "--update") {
+      refresh = true;
+      continue;
+    }
+
+    throw new Error(`Unknown issue option "${rawArg}". ${ISSUE_USAGE}`);
+  }
+
+  return { refresh };
+}
+
 function parseIssueBatchArgs(rawArgs: string[]): {
   issueNumbers: number[];
   mode: "unattended";
@@ -781,15 +802,13 @@ export function parseIssueCommandArgs(args: string[]): IssueCommandOptions {
   }
 
   if (subcommand === "plan") {
-    const optionArgs = issueArgs.slice(2);
-    if (optionArgs.length > 0) {
-      throw new Error(`Unknown issue option "${optionArgs[0]}". ${ISSUE_USAGE}`);
-    }
+    const parsedOptions = parseIssuePlanOptions(issueArgs.slice(2));
 
     return {
       action: "plan",
       issueNumber: parseIssueNumber(issueArgs[1]),
       mode: "local",
+      refresh: parsedOptions.refresh,
     };
   }
 
@@ -1222,16 +1241,21 @@ function renderIssueResolutionPlanComment(
     "### Summary",
     plan.summary,
     "",
+    "### Acceptance criteria",
+    formatMarkdownList(plan.acceptanceCriteria),
+    "",
+    "### Likely files",
+    formatMarkdownList(plan.likelyFiles),
+    "",
     "### Implementation steps",
     formatNumberedMarkdownList(plan.implementationSteps),
     "",
-    "### Validation",
-    formatMarkdownList(plan.validationSteps),
+    "### Test plan",
+    formatMarkdownList(plan.testPlan),
   ];
 
-  if (plan.risks && plan.risks.length > 0) {
-    lines.push("", "### Risks", formatMarkdownList(plan.risks));
-  }
+  lines.push("", "### Risks", formatMarkdownList(plan.risks));
+  lines.push("", "### Done definition", formatMarkdownList(plan.doneDefinition));
 
   if (plan.openQuestions && plan.openQuestions.length > 0) {
     lines.push("", "### Open questions", formatMarkdownList(plan.openQuestions));
@@ -2866,20 +2890,24 @@ async function runIssueDraftCommand(): Promise<void> {
   console.log(`Created issue: ${issueUrl}`);
 }
 
-async function runIssuePlanCommand(issueNumber: number): Promise<void> {
+async function runIssuePlanCommand(
+  issueNumber: number,
+  options: { refresh: boolean }
+): Promise<void> {
   const repoRoot = getDefaultRepoRoot();
   const forge = getRepositoryForge(repoRoot);
-  console.log(`Fetching issue #${issueNumber}...`);
-  const issue = await forge.fetchIssueDetails(issueNumber);
   const existingPlanComment = await forge.fetchIssuePlanComment(issueNumber);
 
-  if (existingPlanComment) {
+  if (existingPlanComment && !options.refresh) {
     console.log(
       `Using existing issue resolution plan comment: ${existingPlanComment.url}`
     );
+    console.log("Re-run with `--refresh` to regenerate the managed plan comment.");
     return;
   }
 
+  console.log(`Fetching issue #${issueNumber}...`);
+  const issue = await forge.fetchIssueDetails(issueNumber);
   const { provider } = await createProvider(repoRoot);
   const plan = await generateIssueResolutionPlan(provider, {
     issueNumber,
@@ -2887,11 +2915,18 @@ async function runIssuePlanCommand(issueNumber: number): Promise<void> {
     issueBody: issue.body,
     issueUrl: issue.url,
   });
-  const comment = await forge.createIssuePlanComment(
-    issueNumber,
-    renderIssueResolutionPlanComment(issueNumber, plan)
-  );
+  const renderedPlan = renderIssueResolutionPlanComment(issueNumber, plan);
 
+  if (existingPlanComment) {
+    const comment = await forge.updateIssuePlanComment(
+      existingPlanComment.id,
+      renderedPlan
+    );
+    console.log(`Refreshed issue resolution plan comment: ${comment.url}`);
+    return;
+  }
+
+  const comment = await forge.createIssuePlanComment(issueNumber, renderedPlan);
   console.log(`Created issue resolution plan comment: ${comment.url}`);
 }
 
@@ -3391,7 +3426,9 @@ async function runIssueCommand(): Promise<void> {
   }
 
   if (issueCommand.action === "plan") {
-    await runIssuePlanCommand(issueCommand.issueNumber);
+    await runIssuePlanCommand(issueCommand.issueNumber, {
+      refresh: issueCommand.refresh,
+    });
     return;
   }
 

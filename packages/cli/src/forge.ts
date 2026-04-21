@@ -79,6 +79,7 @@ export interface RepositoryForge {
   fetchPullRequestIssueComments(prNumber: number): Promise<RepositoryComment[]>;
   fetchPullRequestReviewComments(prNumber: number): Promise<PullRequestReviewComment[]>;
   createIssuePlanComment(issueNumber: number, body: string): Promise<IssuePlanComment>;
+  updateIssuePlanComment(commentId: number, body: string): Promise<IssuePlanComment>;
   createDraftIssue(title: string, body: string): Promise<string>;
   createOrReuseIssue(
     title: string,
@@ -126,6 +127,12 @@ class NoopRepositoryForge implements RepositoryForge {
   }
 
   async createIssuePlanComment(): Promise<IssuePlanComment> {
+    throw new Error(
+      "Repository forge support is disabled by .git-ai/config.json. Configure `forge.type` to enable issue workflows."
+    );
+  }
+
+  async updateIssuePlanComment(): Promise<IssuePlanComment> {
     throw new Error(
       "Repository forge support is disabled by .git-ai/config.json. Configure `forge.type` to enable issue workflows."
     );

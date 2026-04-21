@@ -49,7 +49,7 @@ These workflows remain supported and documented below, but they are separate fro
 Advanced workflows:
 
 - `git-ai issue draft`
-- `git-ai issue plan <number>`
+- `git-ai issue plan <number> [--refresh]`
 - `git-ai issue prepare <number>`
 - `git-ai issue finalize <number>`
 - `git-ai issue <number>`
@@ -149,7 +149,7 @@ Primary offer commands:
 Advanced commands:
 
 - `git-ai issue draft`: turn a rough idea into a structured issue draft
-- `git-ai issue plan <number>`: generate or refresh an issue-resolution plan comment
+- `git-ai issue plan <number> [--refresh]`: maintain an issue-resolution plan comment as secondary execution support
 - `git-ai issue <number>`: run the full local issue-to-PR workflow
 - `git-ai issue prepare <number>` and `git-ai issue finalize <number>`: split issue setup from local completion
 
@@ -215,7 +215,7 @@ Optional repository-specific defaults live in `.git-ai/config.json`. `git-ai set
 Supported fields:
 
 - `ai.runtime.type`: interactive runtime used by `git-ai issue draft`, local `git-ai issue <number>`, `git-ai pr fix-comments <pr-number>`, and `git-ai pr fix-tests <pr-number>`. Supported values: `"codex"` and `"claude-code"`. Default: `"codex"`.
-- `ai.provider.type`: structured text provider used by `git-ai commit`, `git-ai diff`, `git-ai review`, `git-ai issue plan <number>`, and commit/PR generation inside `git-ai issue <number>` and `git-ai issue finalize <number>`. Supported values: `"openai"` and `"bedrock-claude"`. Default: `"openai"`.
+- `ai.provider.type`: structured text provider used by `git-ai commit`, `git-ai diff`, `git-ai review`, `git-ai issue plan <number> [--refresh]`, and commit/PR generation inside `git-ai issue <number>` and `git-ai issue finalize <number>`. Supported values: `"openai"` and `"bedrock-claude"`. Default: `"openai"`.
 - `ai.provider.model`: optional for `"openai"`, required for `"bedrock-claude"`.
 - `ai.provider.baseUrl`: optional override for `"openai"`.
 - `ai.provider.region`: optional explicit AWS region for `"bedrock-claude"`. Falls back to `AWS_REGION` or `AWS_DEFAULT_REGION`.
@@ -293,7 +293,7 @@ Usage:
 git-ai issue <number> [--mode <interactive|unattended>]
 git-ai issue batch <number> <number> [...number] [--mode unattended]
 git-ai issue draft
-git-ai issue plan <number>
+git-ai issue plan <number> [--refresh]
 git-ai issue prepare <number> [--mode <local|github-action>]
 git-ai issue finalize <number>
 ```
@@ -306,14 +306,14 @@ Available subcommands:
 | `git-ai issue <number> --mode unattended` | Full local issue-to-PR flow in unattended mode. Requires `ai.runtime.type` to be `codex`, reuses the same per-issue branch and session state as interactive runs, launches Codex non-interactively, commits with the generated commit message automatically, pushes the issue branch through the pull-request creation path, and then opens the pull request without prompting. |
 | `git-ai issue batch <number> <number> [...number]` | Sequential unattended issue queue. Defaults to `--mode unattended`, requires at least two unique issue numbers, runs each issue as its own independent unattended issue execution, stores batch progress separately under `.git-ai/batches/`, and stops immediately at the first incomplete issue so reruns can resume from there. Each completed issue uses the same unattended issue-to-PR path, including pushing the branch before opening the pull request. |
 | `git-ai issue draft` | Interactive issue drafting flow. Prompts for a rough idea, creates `.git-ai/` draft-run artifacts, launches the configured runtime so it can inspect the repository and ask targeted follow-up questions itself, expects the runtime to write the Markdown draft under `.git-ai/issues/`, previews the draft in the terminal, and lets you create it as-is, modify it in `$VISUAL`, `$EDITOR`, or `vim`, or keep it on disk without creating the issue. |
-| `git-ai issue plan <number>` | Generates an issue resolution plan for the configured forge issue through the configured text provider and posts it as a managed comment. If an editable plan comment already exists, the command reuses it instead of overwriting collaborator edits. |
+| `git-ai issue plan <number> [--refresh]` | Secondary issue-execution support. By default it generates a managed issue resolution plan comment once and safely reuses the latest edited managed comment on later runs. Pass `--refresh` to regenerate the managed comment when the issue context has changed. Generated plans include acceptance criteria, likely files, implementation steps, test plan, risks, and a done definition. |
 | `git-ai issue prepare <number>` | Preflights the configured forge, verification command, and `baseBranch`, fast-forwards the configured base branch to `origin/<base-branch>`, prepares the issue branch and `.git-ai/` workspace artifacts, and then prints machine-readable JSON describing the run. |
 | `git-ai issue prepare <number> --mode github-action` | Same preparation flow, but writes prompt instructions tailored for non-interactive GitHub Actions runs. |
 | `git-ai issue finalize <number>` | Generates a proposed commit message from the current repository diff, lets you preview, edit, or skip it, and creates the commit only after confirmation. It does not push or open a pull request. |
 
 Important behavior:
 
-- `git-ai issue draft`, `git-ai issue plan <number>`, `git-ai issue prepare <number>`, `git-ai issue finalize <number>`, and full `git-ai issue <number>` runs print an advanced workflow notice before execution
+- `git-ai issue draft`, `git-ai issue plan <number> [--refresh]`, `git-ai issue prepare <number>`, `git-ai issue finalize <number>`, and full `git-ai issue <number>` runs print an advanced workflow notice before execution
 - `git-ai issue batch ...` prints a beta workflow notice before execution
 - `git-ai issue` requires a clean working tree before it starts
 - `git-ai issue <number>` and `git-ai issue prepare <number>` fail before checkout if the configured verification command cannot run from the repository root
@@ -321,7 +321,7 @@ Important behavior:
 - `git-ai issue batch ...` requires at least two unique issue numbers
 - `git-ai issue draft` previews the generated draft in the terminal and only opens `$VISUAL`, `$EDITOR`, or `vim` when you explicitly choose modify
 - `git-ai issue draft` requires an available interactive runtime CLI on `PATH`; if the configured non-default runtime is unavailable, `git-ai` falls back to `codex` when possible
-- `git-ai issue plan <number>` requires issue access through the configured forge, and creating a new managed plan comment also requires the configured provider plus GitHub authentication
+- `git-ai issue plan <number> [--refresh]` requires issue access through the configured forge; creating or refreshing a managed plan comment also requires the configured provider plus GitHub authentication
 - `git-ai issue finalize <number>` requires local file changes plus a usable configured provider so it can draft the proposed commit message
 - local full issue runs require an available interactive runtime CLI on `PATH`
 - local full issue runs require the configured provider for commit and PR text generation
@@ -336,7 +336,7 @@ Important behavior:
 - issue preparation checks out the configured `baseBranch` and fast-forwards it to `origin/<base-branch>`, defaulting to `main` only when no repository config is present
 - PR creation uses the configured `baseBranch`, defaulting to `main`
 - GitHub-backed PR creation requires `gh` to be installed and authenticated
-- GitHub-backed issue plan comments require `GH_TOKEN` or `GITHUB_TOKEN`, or an authenticated `gh` session, when they are created
+- GitHub-backed issue plan comments require `GH_TOKEN` or `GITHUB_TOKEN`, or an authenticated `gh` session, when they are created or refreshed
 - if an issue resolution plan comment exists, `git-ai issue prepare <number>` and full `git-ai issue <number>` runs copy the latest edited plan into the generated issue snapshot
 - when `forge.type` is `github`, issue fetching uses `gh issue view` when available, otherwise the GitHub API
 - when `forge.type` is `github`, GitHub API access for issue fetching, plan comments, or issue creation uses `GH_TOKEN` or `GITHUB_TOKEN` when present

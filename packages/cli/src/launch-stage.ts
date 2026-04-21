@@ -63,13 +63,13 @@ const LAUNCH_STAGE_NOTICE_DEFINITIONS: Record<
   },
   "issue-plan": {
     tier: "advanced",
-    command: "`git-ai issue plan <number>`",
+    command: "`git-ai issue plan <number> [--refresh]`",
     reason:
       "It prepares issue-plan comments for the wider issue-to-PR automation path rather than the primary review and fix loop.",
     recommendedFirst:
       "`git-ai review` first, then move into issue automation once the team trusts the narrower path.",
     constraints:
-      "Requires issue access through the configured forge; creating a new managed plan comment also needs a usable text provider and GitHub authentication.",
+      "Requires issue access through the configured forge; creating or refreshing a managed plan comment also needs a usable text provider and GitHub authentication.",
   },
   "issue-prepare": {
     tier: "advanced",

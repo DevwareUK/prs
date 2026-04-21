@@ -256,19 +256,30 @@ function createIssueDraftGuidanceClarifyResult() {
 function createIssueResolutionPlanResult() {
   return {
     summary: "Create an editable plan comment and reuse it during issue runs.",
+    acceptanceCriteria: [
+      "Users can explicitly refresh a managed issue plan comment when the issue changes.",
+    ],
+    likelyFiles: [
+      "packages/cli/src/index.ts",
+      "packages/cli/src/github.ts",
+      "README.md",
+    ],
     implementationSteps: [
       "Generate a structured plan from the GitHub issue title and body.",
       "Post the plan as a managed comment that collaborators can edit.",
     ],
-    validationSteps: [
+    testPlan: [
       "Verify the plan comment is created on the issue.",
       "Ensure later issue runs load the edited plan into the issue snapshot.",
     ],
     risks: [
       "Regenerating the plan should not overwrite a manually edited comment by default.",
     ],
+    doneDefinition: [
+      "The managed issue plan comment reflects the latest explicitly requested refresh.",
+    ],
     openQuestions: [
-      "Whether future flows should support explicit plan regeneration.",
+      "Whether future flows should diff the old and refreshed plan before applying it.",
     ],
   };
 }
@@ -1059,6 +1070,25 @@ describe("CLI integration", () => {
       action: "plan",
       issueNumber: 42,
       mode: "local",
+      refresh: false,
+    });
+  });
+
+  it("parses issue plan refresh aliases", async () => {
+    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    const { parseIssueCommandArgs } = await loadCli();
+
+    expect(parseIssueCommandArgs(["issue", "plan", "42", "--refresh"])).toEqual({
+      action: "plan",
+      issueNumber: 42,
+      mode: "local",
+      refresh: true,
+    });
+    expect(parseIssueCommandArgs(["issue", "plan", "42", "--update"])).toEqual({
+      action: "plan",
+      issueNumber: 42,
+      mode: "local",
+      refresh: true,
     });
   });
 
@@ -1252,7 +1282,7 @@ describe("CLI integration", () => {
 
         const output = stdout.output();
         expect(output).toContain("ADVANCED WORKFLOW NOTICE");
-        expect(output).toContain("`git-ai issue plan <number>`");
+        expect(output).toContain("`git-ai issue plan <number> [--refresh]`");
       }
     );
   });
@@ -5092,6 +5122,7 @@ describe("CLI integration", () => {
     const issueNumber = 42;
     const fetchMock = vi
       .fn()
+      .mockResolvedValueOnce(createFetchResponse([]))
       .mockResolvedValueOnce(
         createFetchResponse({
           title: "Add Command to Generate and Modify Issue Resolution Plan",
@@ -5099,7 +5130,6 @@ describe("CLI integration", () => {
           html_url: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
         })
       )
-      .mockResolvedValueOnce(createFetchResponse([]))
       .mockResolvedValueOnce(
         createFetchResponse({
           id: 501,
@@ -5159,19 +5189,24 @@ describe("CLI integration", () => {
     expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toMatchObject({
       body: expect.stringContaining(issuePlan.summary),
     });
+    expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toMatchObject({
+      body: expect.stringContaining("### Acceptance criteria"),
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toMatchObject({
+      body: expect.stringContaining("### Likely files"),
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toMatchObject({
+      body: expect.stringContaining("### Test plan"),
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toMatchObject({
+      body: expect.stringContaining("### Done definition"),
+    });
   });
 
   it("reuses an existing edited issue resolution plan comment", async () => {
     const issueNumber = 42;
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(
-        createFetchResponse({
-          title: "Add Command to Generate and Modify Issue Resolution Plan",
-          body: "Create a plan comment and reuse it in later issue runs.",
-          html_url: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
-        })
-      )
       .mockResolvedValueOnce(
         createFetchResponse([
           {
@@ -5212,7 +5247,92 @@ describe("CLI integration", () => {
     await run();
 
     expect(generateIssueResolutionPlan).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes an existing managed issue resolution plan comment when requested", async () => {
+    const issueNumber = 42;
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createFetchResponse([
+          {
+            id: 777,
+            body: [
+              "<!-- git-ai:issue-plan -->",
+              "## Issue Resolution Plan",
+              "",
+              "Edited on GitHub by a collaborator.",
+            ].join("\n"),
+            html_url:
+              `https://github.com/DevwareUK/git-ai/issues/${issueNumber}#issuecomment-777`,
+            updated_at: "2026-03-18T12:00:00Z",
+          },
+        ])
+      )
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          title: "Add Command to Generate and Modify Issue Resolution Plan",
+          body: "Create a plan comment and reuse it in later issue runs.",
+          html_url: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
+        })
+      )
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          id: 777,
+          body: "<!-- git-ai:issue-plan -->\n## Issue Resolution Plan",
+          html_url:
+            `https://github.com/DevwareUK/git-ai/issues/${issueNumber}#issuecomment-777`,
+          updated_at: "2026-03-18T12:05:00Z",
+        })
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const issuePlan = createIssueResolutionPlanResult();
+    const { run, generateIssueResolutionPlan } = await loadCli({
+      issueResolutionPlanResult: issuePlan,
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/git-ai.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.env.OPENAI_API_KEY = "test-key";
+    process.env.GH_TOKEN = "";
+    process.env.GITHUB_TOKEN = "test-token";
+    process.argv = ["node", "git-ai", "issue", "plan", String(issueNumber), "--refresh"];
+
+    await run();
+
+    expect(generateIssueResolutionPlan).toHaveBeenCalledWith(expect.any(Object), {
+      issueNumber,
+      issueTitle: "Add Command to Generate and Modify Issue Resolution Plan",
+      issueBody: "Create a plan comment and reuse it in later issue runs.",
+      issueUrl: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[2]?.[0]).toBe(
+      `https://api.github.com/repos/DevwareUK/git-ai/issues/comments/777`
+    );
+    expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({
+      method: "PATCH",
+      headers: expect.objectContaining({
+        Authorization: expect.stringMatching(/^Bearer /),
+      }),
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toMatchObject({
+      body: expect.stringContaining("### Done definition"),
+    });
   });
 
   it("prepares an issue run and writes automation artifacts", async () => {

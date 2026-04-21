@@ -108,6 +108,27 @@ function getGitHubApiToken(requiredMessage: string): string {
   return token;
 }
 
+function parseIssuePlanCommentPayload(
+  payload: {
+    id?: number;
+    body?: string | null;
+    html_url?: string;
+    updated_at?: string;
+  },
+  errorMessage: string
+): IssuePlanComment {
+  if (!payload.id || !payload.body || !payload.html_url || !payload.updated_at) {
+    throw new Error(errorMessage);
+  }
+
+  return {
+    id: payload.id,
+    body: payload.body,
+    url: payload.html_url,
+    updatedAt: payload.updated_at,
+  };
+}
+
 function appendRunLog(
   outputLogPath: string,
   command: string,
@@ -624,18 +645,51 @@ class GitHubRepositoryForge implements RepositoryForge {
       updated_at?: string;
     };
 
-    if (!payload.id || !payload.body || !payload.html_url || !payload.updated_at) {
+    return parseIssuePlanCommentPayload(
+      payload,
+      `GitHub issue plan comment creation for #${issueNumber} returned an incomplete payload.`
+    );
+  }
+
+  async updateIssuePlanComment(
+    commentId: number,
+    body: string
+  ): Promise<IssuePlanComment> {
+    const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
+    const token = getGitHubApiToken(
+      "Refreshing issue resolution plans requires GH_TOKEN or GITHUB_TOKEN to be set, or gh to be installed and authenticated."
+    );
+    const response = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/issues/comments/${commentId}`,
+      {
+        method: "PATCH",
+        headers: {
+          Accept: "application/vnd.github+json",
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "User-Agent": "git-ai-cli",
+        },
+        body: JSON.stringify({ body }),
+      }
+    );
+
+    if (!response.ok) {
       throw new Error(
-        `GitHub issue plan comment creation for #${issueNumber} returned an incomplete payload.`
+        `Failed to refresh the issue resolution plan comment ${commentId} (${response.status} ${response.statusText}).`
       );
     }
 
-    return {
-      id: payload.id,
-      body: payload.body,
-      url: payload.html_url,
-      updatedAt: payload.updated_at,
+    const payload = (await response.json()) as {
+      id?: number;
+      body?: string | null;
+      html_url?: string;
+      updated_at?: string;
     };
+
+    return parseIssuePlanCommentPayload(
+      payload,
+      `GitHub issue plan comment refresh for comment ${commentId} returned an incomplete payload.`
+    );
   }
 
   async createDraftIssue(title: string, body: string): Promise<string> {

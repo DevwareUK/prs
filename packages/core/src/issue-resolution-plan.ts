@@ -27,13 +27,20 @@ function buildPrompt(input: IssueResolutionPlanInputType): string {
     "Return strictly valid JSON in this exact shape:",
     "{",
     '  "summary": string,',
+    '  "acceptanceCriteria": string[],',
+    '  "likelyFiles": string[],',
     '  "implementationSteps": string[],',
-    '  "validationSteps": string[],',
-    '  "risks": string[] | null,',
+    '  "testPlan": string[],',
+    '  "risks": string[],',
+    '  "doneDefinition": string[],',
     '  "openQuestions": string[] | null',
     "}",
     "",
-    'Use "risks" only when there are concrete delivery risks or migration concerns; otherwise return null.',
+    'Make "acceptanceCriteria" concrete and checkable against the issue goal.',
+    'Make "likelyFiles" a list of likely repository-relative paths or code areas to inspect; use the most plausible targets from the issue context rather than placeholders.',
+    'Make "risks" explicit. If no major risk is evident, return a single item stating that no concrete delivery risks were identified from the current issue context.',
+    'Make "testPlan" the validation steps a contributor should run or perform before considering the work complete.',
+    'Make "doneDefinition" the conditions that should be true when the issue is actually finished.',
     'Use "openQuestions" only when the issue leaves important decisions unresolved; otherwise return null.',
     "Do not wrap JSON in markdown fences.",
     "",
@@ -52,6 +59,11 @@ function buildPrompt(input: IssueResolutionPlanInputType): string {
     "",
     "Issue body:",
     input.issueBody?.trim() || "(No issue body provided.)"
+  );
+
+  sections.push(
+    "",
+    "Every plan must cover acceptance criteria, likely files, test plan, risks, and a done definition."
   );
 
   return sections.join("\n");
@@ -77,7 +89,7 @@ export async function generateIssueResolutionPlan(
     validationErrorPrefix:
       "Model output failed issue resolution plan schema validation",
     normalizeParsedJson: (value) =>
-      normalizeNullableFields(value, ["risks", "openQuestions"]),
+      normalizeNullableFields(value, ["openQuestions"]),
   });
 
   return normalizeIssueResolutionPlanOutput(modelOutput);
