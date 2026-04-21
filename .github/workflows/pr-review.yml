@@ -165,62 +165,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const { readFileSync } = require("node:fs");
-
-            function collectAddedLines(diff) {
-              const addedLinesByPath = new Map();
-              let currentPath;
-              let newLine = 0;
-
-              for (const rawLine of diff.split(/\r?\n/)) {
-                if (rawLine.startsWith("+++ b/")) {
-                  currentPath = rawLine.slice(6);
-                  if (!addedLinesByPath.has(currentPath)) {
-                    addedLinesByPath.set(currentPath, new Set());
-                  }
-                  continue;
-                }
-
-                const hunkMatch = rawLine.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
-                if (hunkMatch) {
-                  newLine = Number.parseInt(hunkMatch[1], 10);
-                  continue;
-                }
-
-                if (!currentPath) {
-                  continue;
-                }
-
-                if (rawLine.startsWith("+") && !rawLine.startsWith("+++")) {
-                  addedLinesByPath.get(currentPath).add(newLine);
-                  newLine += 1;
-                  continue;
-                }
-
-                if (rawLine.startsWith("-") && !rawLine.startsWith("---")) {
-                  continue;
-                }
-
-                if (rawLine.startsWith(" ")) {
-                  newLine += 1;
-                }
-              }
-
-              return addedLinesByPath;
-            }
-
-            function formatBody(comment) {
-              const lines = [
-                `**${comment.severity.toUpperCase()} ${comment.category}**`,
-                "",
-                comment.body,
-              ];
-
-              if (comment.suggestion) {
-                lines.push("", `Suggestion: ${comment.suggestion}`);
-              }
-
-              return lines.join("\n");
-            }
+            const { buildGitHubPRReviewComments } = require("./packages/core/dist/index.js");
 
             const parsedComments = JSON.parse(process.env.COMMENTS_JSON || "[]");
             if (!Array.isArray(parsedComments) || parsedComments.length === 0) {
@@ -229,40 +174,7 @@ jobs:
 
             const diff =
               process.env.DIFF_FILE ? readFileSync(process.env.DIFF_FILE, "utf8") : "";
-            const addedLinesByPath = collectAddedLines(diff);
-            const dedupe = new Set();
-            const comments = [];
-
-            for (const comment of parsedComments) {
-              if (!comment || typeof comment !== "object") {
-                continue;
-              }
-
-              const path = typeof comment.path === "string" ? comment.path : "";
-              const line = typeof comment.line === "number" ? comment.line : Number.NaN;
-              if (!path || !Number.isInteger(line) || line <= 0) {
-                continue;
-              }
-
-              const addedLines = addedLinesByPath.get(path);
-              if (!addedLines?.has(line)) {
-                continue;
-              }
-
-              const body = formatBody(comment);
-              const key = `${path}:${line}:${body}`;
-              if (dedupe.has(key)) {
-                continue;
-              }
-
-              dedupe.add(key);
-              comments.push({
-                path,
-                line,
-                side: "RIGHT",
-                body,
-              });
-            }
+            const comments = buildGitHubPRReviewComments(parsedComments, diff);
 
             if (comments.length === 0) {
               return;
@@ -274,6 +186,6 @@ jobs:
               pull_number: context.payload.pull_request.number,
               commit_id: process.env.HEAD_SHA,
               event: "COMMENT",
-              body: "AI PR review generated inline comments for the current diff.",
+              body: "AI PR pre-review signal generated high-confidence inline comments on changed lines.",
               comments,
             });

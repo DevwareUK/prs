@@ -8,6 +8,7 @@ export * from "./pr-assistant";
 export * from "./pr-assistant-body";
 export * from "./pr-description";
 export * from "./pr-review";
+export * from "./pr-review-render";
 export * from "./repository-config";
 export * from "./review-summary";
 export * from "./structured-generation-error";

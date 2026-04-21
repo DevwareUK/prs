@@ -24,10 +24,10 @@ Start here if you are evaluating `git-ai` for a team:
 
 | Surface | Why it is part of the primary offer |
 | --- | --- |
-| `actions/pr-review` | Adds AI pull request review summaries, higher-level findings, and line-linked review comments in GitHub. |
+| `actions/pr-review` | Adds AI pull request pre-review signal, higher-level findings, and line-linked review comments in GitHub. |
 | `actions/pr-assistant` | Maintains a managed PR assistant section in the pull request body without overwriting unrelated manual content, using stable summary, risk, file, testing, rollout, and checklist headings. |
 | `actions/test-suggestions` | Posts practical test suggestions for the current pull request diff in GitHub. |
-| `git-ai review` | Runs a local senior-style diff review before or during a pull request. |
+| `git-ai review` | Runs a local senior-style diff pre-review before or during a pull request. |
 | `git-ai pr fix-comments <pr-number>` | Pulls selected GitHub review comments into a focused local fix flow. |
 | `git-ai pr fix-tests <pr-number>` | Pulls selected managed AI test suggestions into a focused local implementation flow. |
 | `git-ai test-backlog` | Finds the highest-value automated testing gaps in the repository. |
@@ -407,7 +407,7 @@ Flags:
 | --- | --- |
 | `--base <git-ref>` | Reviews the diff from `<git-ref>...HEAD` by default, or `<git-ref>...<head>` when `--head` is also provided. Without `--base`, `git-ai review` uses `git diff HEAD`. |
 | `--head <git-ref>` | Optional comparison head revision. Requires `--base`. |
-| `--format markdown` | Prints a readable Markdown review report. This is the default. |
+| `--format markdown` | Prints a readable Markdown pre-review signal for a human reviewer. This is the default. |
 | `--format json` | Prints the structured review payload, including higher-level findings and line-linked comments. |
 | `--issue-number <number>` | Fetches the linked issue from the configured forge and includes it as review context. |
 
@@ -425,7 +425,7 @@ Important behavior:
 - `git-ai review` requires the configured provider to be usable, defaulting to `OPENAI_API_KEY`
 - without `--base`, it reviews the current `git diff HEAD`
 - with `--issue-number`, the CLI fetches the issue title and body from the configured forge and grounds the review in that context
-- JSON output includes higher-level findings plus line-linked comment suggestions with file paths and right-side line numbers taken from the diff
+- JSON output includes higher-level findings plus line-linked comment suggestions with severity, confidence, affected file, why-this-matters context, optional suggested fixes, and right-side line numbers taken from the diff
 
 ### `git-ai test-backlog`
 
@@ -612,6 +612,8 @@ Outputs:
 - `findings_json`
 - `comments_json`
 
+The managed `body` output is written as pre-review signal for a human reviewer. `comments_json` carries severity, confidence, affected file, why-this-matters context, and optional suggested fixes for each candidate comment.
+
 When `GITHUB_OUTPUT` is not set, outputs are printed to stdout.
 
 #### PR assistant action
@@ -711,7 +713,7 @@ Vitest is the default repository test runner. Tests live alongside the packages 
 This repository includes these GitHub workflows:
 
 - `.github/workflows/test.yml`: builds the workspace and runs `pnpm test` on pushes to `main` and on pull requests
-- `.github/workflows/pr-review.yml`: generates an AI PR review summary, updates a managed PR comment, and posts filtered inline review comments against added lines
+- `.github/workflows/pr-review.yml`: generates an AI PR pre-review signal, updates a managed PR comment, and posts only high-confidence inline review comments on changed lines
 - `.github/workflows/pr-assistant.yml`: updates the pull request body with a managed PR assistant section
 - `.github/workflows/test-suggestions.yml`: creates or updates a managed PR comment with suggested automated test coverage
 - `.github/workflows/issue-to-pr.yml`: manual issue-to-PR automation that prepares issue context, runs Codex in GitHub Actions, builds the repository, commits generated changes, and opens or reuses a PR

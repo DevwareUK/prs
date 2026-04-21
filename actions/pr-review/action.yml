@@ -1,5 +1,5 @@
 name: "AI PR Review"
-description: "Generate an AI pull request review summary, higher-level findings, and line-linked review comments"
+description: "Generate an AI pull request pre-review signal with higher-level findings and line-linked review comments"
 
 inputs:
   diff:
@@ -39,13 +39,13 @@ inputs:
 
 outputs:
   summary:
-    description: "Generated PR review summary"
+    description: "Generated PR pre-review summary"
   body:
-    description: "Generated managed PR review comment body"
+    description: "Generated managed PR pre-review comment body"
   findings_json:
-    description: "JSON array of higher-level review findings"
+    description: "JSON array of higher-level pre-review findings"
   comments_json:
-    description: "JSON array of line-linked review comments"
+    description: "JSON array of line-linked review comments with severity, confidence, affected file, impact, and optional suggested fix"
 
 runs:
   using: "node20"

@@ -15,6 +15,7 @@ import {
   analyzeTestBacklog,
   buildPRAssistantSection,
   filterRepositoryPaths,
+  formatPRReviewMarkdown as formatCorePRReviewMarkdown,
   generateCommitMessage,
   generateDiffSummary,
   generatePRReview,
@@ -2298,61 +2299,6 @@ function formatDiffSummary(
   return sections.join("\n");
 }
 
-function formatPRReviewMarkdown(
-  review: Awaited<ReturnType<typeof generatePRReview>>,
-  issue?: IssueDetails,
-  issueNumber?: number
-): string {
-  const lines: string[] = [
-    "# AI PR Review",
-    "",
-    "## Summary",
-    review.summary,
-  ];
-
-  if (issue) {
-    lines.push(
-      "",
-      "## Linked issue",
-      `- ${issueNumber !== undefined ? `#${issueNumber}: ` : ""}[${issue.title}](${issue.url})`
-    );
-  }
-
-  if (review.findings.length > 0) {
-    lines.push("", "## Higher-level findings");
-
-    for (const finding of review.findings) {
-      lines.push(
-        `- ${finding.title} (${toTitleCase(finding.severity)} ${finding.category}): ${finding.body}`
-      );
-      if (finding.relatedPaths && finding.relatedPaths.length > 0) {
-        lines.push(`  Related paths: ${finding.relatedPaths.map((path) => `\`${path}\``).join(", ")}`);
-      }
-      if (finding.suggestion) {
-        lines.push(`  Suggestion: ${finding.suggestion}`);
-      }
-    }
-  }
-
-  lines.push("", "## Line-level findings");
-
-  if (review.comments.length === 0) {
-    lines.push("No actionable line-level review comments identified.");
-  } else {
-    for (const comment of review.comments) {
-      lines.push(
-        `- \`${comment.path}:${comment.line}\` (${toTitleCase(comment.severity)} ${comment.category}): ${comment.body}`
-      );
-      if (comment.suggestion) {
-        lines.push(`  Suggestion: ${comment.suggestion}`);
-      }
-    }
-  }
-
-  lines.push("");
-  return lines.join("\n");
-}
-
 async function createProvider(
   repoRoot = getDefaultRepoRoot()
 ): Promise<{
@@ -2429,7 +2375,13 @@ async function runReviewCommand(): Promise<void> {
     return;
   }
 
-  process.stdout.write(`${formatPRReviewMarkdown(result, issue, options.issueNumber)}\n`);
+  process.stdout.write(
+    `${formatCorePRReviewMarkdown(result, {
+      number: options.issueNumber,
+      title: issue?.title,
+      url: issue?.url,
+    })}\n`
+  );
 }
 
 async function runPrCommand(): Promise<void> {

@@ -230,10 +230,14 @@ function createPRReviewResult() {
       {
         title: "Quick start still leaves setup and daily usage mixed together",
         severity: "medium" as const,
+        confidence: "medium" as const,
         category: "usability" as const,
+        affectedFile: "README.md",
         body: "The onboarding path is better, but a new user still has to infer which commands are one-time setup versus normal operation.",
-        suggestion: "Split install/configuration from the first successful run in the README flow.",
-        relatedPaths: ["README.md"],
+        whyThisMatters:
+          "That ambiguity makes the first successful run harder than it needs to be.",
+        suggestedFix:
+          "Split install/configuration from the first successful run in the README flow.",
       },
     ],
     comments: [
@@ -241,9 +245,14 @@ function createPRReviewResult() {
         path: "packages/cli/src/index.ts",
         line: 412,
         severity: "high" as const,
+        confidence: "high" as const,
         category: "correctness" as const,
+        affectedFile: "packages/cli/src/index.ts",
         body: "This path assumes the issue number flag was populated and will blow up on malformed input.",
-        suggestion: "Validate the flag before using it so the CLI fails with a clear error.",
+        whyThisMatters:
+          "Malformed input should fail as a clear validation error, not a downstream crash.",
+        suggestedFix:
+          "Validate the flag before using it so the CLI fails with a clear error.",
       },
     ],
   };
@@ -811,6 +820,7 @@ async function loadCli(options: {
 
   vi.doMock("@git-ai/core", async () => {
     const prAssistantBody = await import("../../core/src/pr-assistant-body");
+    const prReviewRender = await import("../../core/src/pr-review-render");
 
     return {
     DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS,
@@ -820,6 +830,7 @@ async function loadCli(options: {
     analyzeTestBacklog,
     buildPRAssistantSection: prAssistantBody.buildPRAssistantSection,
     filterRepositoryPaths,
+    formatPRReviewMarkdown: prReviewRender.formatPRReviewMarkdown,
     generateCommitMessage,
     generateDiffSummary,
     generateIssueDraft,
@@ -1542,11 +1553,13 @@ describe("CLI integration", () => {
       issueBody: "Review pull requests line by line and use the linked issue as context.",
       issueUrl: "https://github.com/DevwareUK/git-ai/issues/50",
     });
-    expect(stdout.output()).toContain("# AI PR Review");
-    expect(stdout.output()).toContain("## Higher-level findings");
+    expect(stdout.output()).toContain("# AI PR Pre-Review Signal");
+    expect(stdout.output()).toContain("## Higher-level signals");
     expect(stdout.output()).toContain("README.md");
     expect(stdout.output()).toContain("## Linked issue");
     expect(stdout.output()).toContain("packages/cli/src/index.ts:412");
+    expect(stdout.output()).toContain("Confidence: High");
+    expect(stdout.output()).toContain("Why this matters: Malformed input should fail");
   });
 
   it("fails pr prepare-review clearly when repository forge support is disabled", async () => {

@@ -15,16 +15,18 @@ import {
 } from "./structured-generation";
 
 const PR_REVIEW_SYSTEM_PROMPT = [
-  "You are a senior software engineer reviewing a GitHub pull request.",
-  "Produce a concise overall review summary, a small set of high-signal inline review comments, and only when justified a very small set of higher-level findings.",
+  "You are a senior software engineer producing pre-review signal for another human reviewer on a GitHub pull request.",
+  "Produce a concise overall pre-review summary, a very small set of high-signal inline review comments, and only when justified a very small set of higher-level findings.",
   ...DIFF_GROUNDED_SYSTEM_PROMPT_LINES,
   "Use linked issue context when it is provided so you can check whether the change matches the requested behavior.",
   "Focus on correctness, maintainability, performance, security, and testing concerns.",
   "When the diff is documentation-heavy, review onboarding flow, setup accuracy, command correctness, and time-to-first-success with the same rigor as code.",
   "Higher-level findings must stay grounded in the diff and should highlight correctness, usability, onboarding, or issue-alignment gaps that are awkward to express as a single inline comment.",
   "Avoid style nits, formatting feedback, and speculative comments.",
-  "Only emit inline comments when the diff strongly supports an actionable concern.",
+  "Confidence must reflect how strongly the diff supports the concern.",
+  "Only emit inline comments when the diff strongly supports an actionable concern, and prefer zero inline comments over weak evidence.",
   "Each inline comment must point at a changed file path and a right-side line number from the diff.",
+  "The managed review output should read as pre-review signal, not as a reviewer replacement.",
   "Prefer zero comments or findings over weak comments.",
 ].join(" ");
 
@@ -175,17 +177,20 @@ function buildPrompt(input: PRReviewInputType): string {
 
   return buildDiffTaskPrompt({
     taskLine:
-      "Generate an AI pull request review from the provided diff.",
+      "Generate an AI pull request pre-review signal from the provided diff.",
     guidanceLines: [
-      'The "summary" should be a short paragraph describing the overall review outcome and how the change aligns with the diff context.',
-      'The "comments" array should contain 0 to 8 actionable inline comments.',
+      'The "summary" should be a short paragraph describing the overall pre-review outcome, the strongest evidence-backed concerns, and how the change aligns with the diff context.',
+      'The "comments" array should contain 0 to 6 actionable inline comments.',
       'The "findings" array should contain 0 to 3 actionable higher-level findings that are grounded in the diff but are not naturally tied to one changed line.',
       'Each comment must use a "path" that appears in the diff.',
       'Each comment "line" must be the right-side line number for an added or modified line in the diff.',
-      'Use "severity" to communicate review priority.',
+      'Use "severity" to communicate review priority and "confidence" to communicate how strongly the diff supports the concern.',
       'Use "category" to classify the concern.',
-      'The comment "body" should explain the specific concern and why it matters.',
-      'Include "suggestion" only when you can concisely describe a better implementation.',
+      'Use "affectedFile" to name the file a reviewer should inspect. For inline comments, set "affectedFile" to the same value as "path".',
+      'The "body" field should explain the specific concern without repeating labels.',
+      'The "whyThisMatters" field should explain the concrete impact or review risk.',
+      'Include "suggestedFix" only when you can concisely describe a justified improvement.',
+      'Reserve high confidence for concerns that are directly supported by the diff and would likely survive human review.',
       "When the linked issue context matters, mention requirement alignment in the summary or comments.",
       "Return an empty comments array when there are no strong line-level concerns.",
       "Return an empty findings array when there are no strong higher-level concerns.",
@@ -206,19 +211,24 @@ function buildPrompt(input: PRReviewInputType): string {
       '      "path": string,',
       '      "line": number,',
       '      "severity": "high" | "medium" | "low",',
+      '      "confidence": "high" | "medium" | "low",',
       '      "category": "bug" | "correctness" | "security" | "performance" | "maintainability" | "testing" | "documentation" | "usability",',
+      '      "affectedFile": string,',
       '      "body": string,',
-      '      "suggestion"?: string',
+      '      "whyThisMatters": string,',
+      '      "suggestedFix"?: string',
       "    }",
       "  ],",
       '  "findings": [',
       "    {",
       '      "title": string,',
       '      "severity": "high" | "medium" | "low",',
+      '      "confidence": "high" | "medium" | "low",',
       '      "category": "bug" | "correctness" | "security" | "performance" | "maintainability" | "testing" | "documentation" | "usability",',
+      '      "affectedFile": string,',
       '      "body": string,',
-      '      "suggestion"?: string,',
-      '      "relatedPaths"?: string[]',
+      '      "whyThisMatters": string,',
+      '      "suggestedFix"?: string',
       "    }",
       "  ]",
     ],
@@ -243,12 +253,12 @@ function normalizeModelOutput(value: unknown): unknown {
   const normalized = { ...(result as Record<string, unknown>) };
   if (Array.isArray(normalized.comments)) {
     normalized.comments = normalized.comments.map((comment) =>
-      normalizeNullableFields(comment, ["suggestion"])
+      normalizeNullableFields(comment, ["suggestedFix"])
     );
   }
   if (Array.isArray(normalized.findings)) {
     normalized.findings = normalized.findings.map((finding) =>
-      normalizeNullableFields(finding, ["suggestion", "relatedPaths"])
+      normalizeNullableFields(finding, ["suggestedFix"])
     );
   }
 

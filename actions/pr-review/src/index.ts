@@ -1,6 +1,6 @@
 import { appendFileSync } from "node:fs";
 import { PRReviewInput } from "@git-ai/contracts";
-import { generatePRReview } from "@git-ai/core";
+import { formatPRReviewMarkdown, generatePRReview } from "@git-ai/core";
 import { OpenAIProvider } from "@git-ai/providers";
 import {
   getOptionalInput,
@@ -18,10 +18,6 @@ function setOutput(name: string, value: string): void {
   const delimiter = `EOF_${name.toUpperCase()}`;
   const payload = `${name}<<${delimiter}\n${value}\n${delimiter}\n`;
   appendFileSync(outputPath, payload);
-}
-
-function toTitleCase(value: string): string {
-  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function parseOptionalIssueNumber(value: string | undefined): number | undefined {
@@ -49,53 +45,7 @@ function buildCommentBody(
     url?: string;
   }
 ): string {
-  const lines: string[] = [
-    "## AI PR Review",
-    "",
-    "### Summary",
-    review.summary,
-  ];
-
-  if (issue.title && issue.url) {
-    lines.push(
-      "",
-      "### Linked issue",
-      `- ${issue.number !== undefined ? `#${issue.number}: ` : ""}[${issue.title}](${issue.url})`
-    );
-  }
-
-  if (review.findings.length > 0) {
-    lines.push("", "### Higher-level findings");
-
-    for (const finding of review.findings) {
-      lines.push(
-        `- ${finding.title} (${toTitleCase(finding.severity)} ${finding.category}): ${finding.body}`
-      );
-      if (finding.relatedPaths && finding.relatedPaths.length > 0) {
-        lines.push(`  Related paths: ${finding.relatedPaths.map((path) => `\`${path}\``).join(", ")}`);
-      }
-      if (finding.suggestion) {
-        lines.push(`  Suggestion: ${finding.suggestion}`);
-      }
-    }
-  }
-
-  lines.push("", "### Line-level findings");
-
-  if (review.comments.length === 0) {
-    lines.push("- No actionable line-level concerns identified.");
-  } else {
-    for (const comment of review.comments) {
-      lines.push(
-        `- \`${comment.path}:${comment.line}\` (${toTitleCase(comment.severity)} ${comment.category}): ${comment.body}`
-      );
-      if (comment.suggestion) {
-        lines.push(`  Suggestion: ${comment.suggestion}`);
-      }
-    }
-  }
-
-  return lines.join("\n");
+  return formatPRReviewMarkdown(review, issue);
 }
 
 async function run(): Promise<void> {

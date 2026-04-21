@@ -1,6 +1,6 @@
 # pr-review action
 
-Generate an AI pull request review summary, higher-level findings, and line-linked review comments from a pull request diff via OpenAI.
+Generate an AI pull request pre-review signal, higher-level findings, and line-linked review comments from a pull request diff via OpenAI.
 
 ## Local test
 
@@ -29,5 +29,7 @@ node actions/pr-review/dist/index.js
 ```
 
 `INPUT_DIFF` is still supported for smaller local runs, but `INPUT_DIFF_FILE` avoids shell and GitHub Actions argument-length limits.
+
+The managed `body` output is positioned as pre-review signal for a human reviewer. `comments_json` includes severity, confidence, affected file, why-this-matters context, and an optional suggested fix for each line-linked comment candidate.
 
 When `GITHUB_OUTPUT` is not set, outputs are printed to stdout as `summary=...`, `body=...`, `findings_json=...`, and `comments_json=...`.

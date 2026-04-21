@@ -20,11 +20,14 @@ describe("generatePRReview", () => {
         {
           title: "Quick start still mixes install and first-run steps",
           severity: "medium",
+          confidence: "medium",
           category: "usability",
+          affectedFile: "README.md",
           body: "The diff improves structure, but first-time users still need to infer which steps are one-time setup versus ongoing usage.",
-          suggestion:
+          whyThisMatters:
+            "That ambiguity makes it harder for a new contributor to reach a first successful run.",
+          suggestedFix:
             "Separate installation, configuration, and first successful run into distinct subsections.",
-          relatedPaths: ["README.md"],
         },
       ],
     });
@@ -71,7 +74,7 @@ describe("generatePRReview", () => {
     });
 
     expect(review.findings).toHaveLength(1);
-    expect(review.findings[0]?.relatedPaths).toEqual(["README.md"]);
+    expect(review.findings[0]?.affectedFile).toEqual("README.md");
 
     const request = provider.generateText.mock.calls[0]?.[0];
     expect(request?.systemPrompt).toContain("documentation-heavy");
@@ -136,8 +139,11 @@ describe("generatePRReview", () => {
           path: "packages/core/src/pr-review.ts",
           line: 10,
           severity: "low",
+          confidence: "medium",
           category: "maintainability",
+          affectedFile: "packages/core/src/pr-review.ts",
           body: "The helper name is ambiguous for future callers.",
+          whyThisMatters: "The ambiguity will slow down the next edit in this area.",
         },
       ],
     });
@@ -160,6 +166,10 @@ describe("generatePRReview", () => {
     expect(request?.prompt).toContain(
       'The "findings" array should usually stay empty for code-heavy diffs'
     );
+    expect(request?.prompt).toContain('"confidence": "high" | "medium" | "low"');
+    expect(request?.prompt).toContain('"whyThisMatters": string');
+    expect(request?.prompt).toContain('"affectedFile": string');
+    expect(request?.prompt).toContain('"suggestedFix"?: string');
     expect(request?.prompt).not.toContain("This diff is documentation-heavy");
   });
 

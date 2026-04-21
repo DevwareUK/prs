@@ -10,26 +10,31 @@ describe("PRReviewOutput", () => {
           path: "packages/cli/src/index.ts",
           line: 42,
           severity: "high",
+          confidence: "high",
           category: "correctness",
+          affectedFile: "packages/cli/src/index.ts",
           body: "This branch skips the issue lookup when the flag is provided without a value.",
-          suggestion: "Fail fast when --issue-number is present without a numeric argument.",
+          whyThisMatters: "Malformed CLI input will produce a misleading runtime failure instead of a clear validation error.",
+          suggestedFix: "Fail fast when --issue-number is present without a numeric argument.",
         },
       ],
       findings: [
         {
           title: "Quick start still mixes install and first-run steps",
           severity: "medium",
+          confidence: "medium",
           category: "usability",
+          affectedFile: "README.md",
           body: "New users still need to infer which commands are one-time setup versus everyday usage.",
-          suggestion: "Split installation, configuration, and first successful run into separate subsections.",
-          relatedPaths: ["README.md"],
+          whyThisMatters: "That ambiguity increases setup mistakes and slows down a first successful run.",
+          suggestedFix: "Split installation, configuration, and first successful run into separate subsections.",
         },
       ],
     });
 
     expect(parsed.comments).toHaveLength(1);
     expect(parsed.comments[0]?.path).toBe("packages/cli/src/index.ts");
-    expect(parsed.findings[0]?.relatedPaths).toEqual(["README.md"]);
+    expect(parsed.findings[0]?.affectedFile).toBe("README.md");
   });
 
   it("defaults higher-level findings to an empty list when omitted", () => {
@@ -59,9 +64,11 @@ describe("PRReviewOutput", () => {
           {
             title: "  ",
             severity: "medium",
+            confidence: "medium",
             category: "usability",
+            affectedFile: "README.md",
             body: "This finding is malformed because the title is empty.",
-            relatedPaths: [],
+            whyThisMatters: "The report should reject findings without meaningful titles.",
           },
         ],
       })
@@ -77,26 +84,38 @@ describe("PRReviewOutput", () => {
           {
             title: "Finding 1",
             severity: "low",
+            confidence: "low",
             category: "documentation",
             body: "First finding.",
+            affectedFile: "README.md",
+            whyThisMatters: "First impact.",
           },
           {
             title: "Finding 2",
             severity: "low",
+            confidence: "low",
             category: "documentation",
             body: "Second finding.",
+            affectedFile: "README.md",
+            whyThisMatters: "Second impact.",
           },
           {
             title: "Finding 3",
             severity: "low",
+            confidence: "low",
             category: "documentation",
             body: "Third finding.",
+            affectedFile: "README.md",
+            whyThisMatters: "Third impact.",
           },
           {
             title: "Finding 4",
             severity: "low",
+            confidence: "low",
             category: "documentation",
             body: "Fourth finding.",
+            affectedFile: "README.md",
+            whyThisMatters: "Fourth impact.",
           },
         ],
       })
