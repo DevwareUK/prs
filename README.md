@@ -1,19 +1,60 @@
 # git-ai
 
-`git-ai` adds an AI engineering workflow layer on top of your Git repository.
+`git-ai` is a GitHub-first AI workflow layer for teams that want better pull request throughput before they trust broader repository automation.
 
-Build the CLI from this monorepo once, link it globally, then use it inside any target repository to:
+The primary offer is intentionally narrow:
 
-- configure repository-local `git-ai` defaults with a guided setup flow
-- review changes like a senior engineer
-- turn rough ideas into structured issues
-- generate issue-resolution plans
-- run issue-to-PR workflows with AI
-- apply selected pull request review comments with the configured interactive runtime
-- implement selected AI pull request test suggestions with the configured interactive runtime
-- analyze backlog opportunities for testing and product work
+- review pull requests with better context
+- update pull requests without overwriting human-written guidance
+- fix selected review feedback inside the live PR branch
+- surface missing tests before quality drifts
 
-The repository also includes GitHub Actions for pull request review, PR assistance, and test suggestions.
+Starting here gives a new team faster proof of value with lower runtime risk, fewer permissions, and less process change than full issue-to-PR automation on day one.
+
+Advanced issue-to-PR automation still exists, but it is not the recommended entry point for new teams because it asks for broader runtime trust, more GitHub permissions, and more process discipline on day one.
+
+GitHub-only by design:
+
+- `git-ai` currently targets GitHub repositories and GitHub pull request workflows on purpose
+- the launch goal is a strong GitHub offer first, not thin parity across every forge
+
+## Primary offer
+
+Start here if you are evaluating `git-ai` for a team:
+
+| Surface | Why it is part of the primary offer |
+| --- | --- |
+| `actions/pr-review` | Adds AI pull request review summaries, higher-level findings, and line-linked review comments in GitHub. |
+| `actions/pr-assistant` | Maintains a managed PR assistant section in the pull request body without overwriting unrelated manual content. |
+| `actions/test-suggestions` | Posts practical test suggestions for the current pull request diff in GitHub. |
+| `git-ai review` | Runs a local senior-style diff review before or during a pull request. |
+| `git-ai pr fix-comments <pr-number>` | Pulls selected GitHub review comments into a focused local fix flow. |
+| `git-ai pr fix-tests <pr-number>` | Pulls selected managed AI test suggestions into a focused local implementation flow. |
+| `git-ai test-backlog` | Finds the highest-value automated testing gaps in the repository. |
+
+## Recommended first three workflows
+
+These are the fastest paths to a useful first result:
+
+1. Review a pull request better: use `actions/pr-review` in GitHub or run `git-ai review --base origin/main` locally.
+2. Respond to live PR feedback: run `git-ai pr fix-comments <pr-number>` or `git-ai pr fix-tests <pr-number>` when the PR branch is checked out locally.
+3. Raise test confidence: use `actions/test-suggestions` on pull requests and `git-ai test-backlog --top 5` for repository-wide gaps.
+
+Add `actions/pr-assistant` when you also want managed PR-body updates that preserve human-written context.
+
+## Advanced and beta workflows
+
+These workflows remain supported and documented below, but they are separate from the launch-stage offer because they ask a new team to trust wider-scoped automation earlier:
+
+- `git-ai issue draft`
+- `git-ai issue plan <number>`
+- `git-ai issue prepare <number>`
+- `git-ai issue finalize <number>`
+- `git-ai issue <number>`
+- `git-ai issue batch <number> <number> [...number]`
+- `git-ai pr prepare-review <pr-number>`
+- `git-ai feature-backlog`
+- multi-provider and runtime-parity paths such as `bedrock-claude` and `claude-code`
 
 ## Quick start
 
@@ -58,23 +99,25 @@ git-ai setup
 
 `git-ai setup` detects the repository root, suggests repo-aware defaults, writes `.git-ai/config.json`, ensures `.git-ai/` is gitignored, and can create or update a managed `AGENTS.md` guidance section.
 
-### First successful run
+### First successful CLI runs
 
-Move into that target repository and try the two fastest workflows:
+Move into that target repository and try the two safest CLI workflows first:
 
 ```bash
 git-ai review
-git-ai issue draft
-```
-
-### Useful next commands
-
-```bash
-git-ai diff
 git-ai test-backlog --top 5
 ```
 
-You only need extra tooling for advanced workflows:
+If you already have a live GitHub pull request branch checked out locally, the next recommended workflows are:
+
+```bash
+git-ai pr fix-comments 88
+git-ai pr fix-tests 88
+```
+
+The matching GitHub automation surfaces are `actions/pr-review`, `actions/pr-assistant`, and `actions/test-suggestions`.
+
+You only need extra tooling for advanced or deeper local workflows:
 
 - the configured interactive runtime on `PATH` for `git-ai issue draft`, local interactive `git-ai issue <number>` runs, `git-ai pr fix-comments <pr-number>`, and `git-ai pr fix-tests <pr-number>`
   default: `codex`
@@ -85,109 +128,32 @@ You only need extra tooling for advanced workflows:
 
 `git-ai` resolves the active repository from your current Git working tree at runtime. It loads `.env` and `.git-ai/config.json` from that repository root, not from the CLI build location.
 
-## Commands at a glance
+## Command tiers
 
-- `git-ai commit`: generate a commit message from staged changes
-- `git-ai diff`: summarize `git diff HEAD`
-- `git-ai setup`: guided repository onboarding for `git-ai`
+Run `git-ai help` or `git-ai --help` for the same tiered overview in the terminal.
+
+Primary offer commands:
+
 - `git-ai review`: review the current diff or a branch comparison
-- `git-ai issue ...`: draft issues, generate issue plans, run single-issue flows, and queue unattended issue batches
-- `git-ai pr prepare-review <pr-number>`: check out a reviewer-ready PR branch, sync it with the latest PR base branch, generate a persisted local review brief, optionally review a follow-up fix commit, and push any new reviewed commits back to the PR branch
-- `git-ai pr fix-comments <pr-number>`: fix selected PR review comments with Codex, review the commit message, and push the reviewed commit when the PR branch is safely ahead
-- `git-ai pr fix-tests <pr-number>`: implement selected AI PR test suggestions with Codex, review the commit message, and push the reviewed commit when the PR branch is safely ahead
+- `git-ai pr fix-comments <pr-number>`: fix selected PR review comments with the configured interactive runtime
+- `git-ai pr fix-tests <pr-number>`: implement selected AI PR test suggestions with the configured interactive runtime
 - `git-ai test-backlog`: find high-value automated testing gaps
+
+Advanced and beta commands:
+
+- `git-ai issue draft`: turn a rough idea into a structured issue draft
+- `git-ai issue plan <number>`: generate or refresh an issue-resolution plan comment
+- `git-ai issue <number>`: run the full local issue-to-PR workflow
+- `git-ai issue batch ...`: queue unattended issue-to-PR runs
+- `git-ai issue prepare <number>` and `git-ai issue finalize <number>`: split issue setup from local completion
+- `git-ai pr prepare-review <pr-number>`: prepare a reviewer workspace and review brief before a live Codex session
 - `git-ai feature-backlog`: find high-value feature opportunities
 
-## Typical workflows
+Supporting commands:
 
-### Daily local usage
-
-```bash
-git-ai commit
-git-ai diff
-git-ai review --base origin/main
-```
-
-Use these when you want commit help, a high-level diff summary, or a PR-style review before opening a pull request.
-
-### Issue drafting and planning
-
-```bash
-git-ai issue draft
-git-ai issue plan 54
-```
-
-Use `draft` to hand a rough idea to the configured interactive runtime. The CLI writes `.git-ai/` run artifacts, launches the runtime so it can inspect the repository, ask only the follow-up questions it still needs, and write the draft under `.git-ai/issues/`, then prints the draft in the terminal and lets you create it as-is, open it in `$VISUAL`, `$EDITOR`, or `vim` to modify it first, or keep the draft file on disk without creating the issue. Use `plan` to generate or refresh the managed issue-resolution plan comment for an existing GitHub issue through the configured text-generation provider.
-
-### Full issue-to-PR flow
-
-```bash
-git-ai issue 54
-```
-
-By default, `git-ai issue 54` runs in interactive mode. On the first local run for an issue, it fetches the configured issue, switches to the configured `baseBranch`, pulls the latest changes, creates the working branch, writes `.git-ai/` run artifacts, and opens the configured interactive runtime session. After the runtime returns control, `git-ai` runs the configured build command, generates a proposed commit message from the completed diff, lets you commit it as-is or edit it first, and then generates a reviewer-ready PR title/body from the diff before opening a pull request when the configured forge supports it. The generated PR body includes both an issue-closing reference such as `Closes #54` and the managed PR assistant section markers used by the PR assistant automation.
-
-Later `git-ai issue 54` runs switch back to the saved issue branch and continue from the saved `.git-ai/` issue state. With the default `codex` runtime, `git-ai` also resumes the saved Codex session when it is still available. With `claude-code`, later runs reopen the saved branch and start a fresh Claude Code session against the current issue prompt. If the saved branch or tracked runtime session is no longer valid, the command fails with a recovery message that tells you which `.git-ai/issues/<number>/session.json` file to remove before starting a fresh issue run.
-
-At the end of a successful local runtime session, the generated prompt asks the agent to finish with an explicit done-state summary, a short note about how to see the result in action or what was verified, and plain-language next steps. If you want more changes, keep talking to the runtime. When you are satisfied and want `git-ai` to resume, type `/exit`.
-
-For unattended single-issue execution:
-
-```bash
-git-ai issue 54 --mode unattended
-```
-
-This path currently requires `ai.runtime.type: "codex"` plus authenticated GitHub access. It reuses the same per-issue branch and `.git-ai/issues/<number>/session.json` state as the interactive flow, but runs Codex through a non-interactive `exec` invocation, commits with the generated commit message automatically, and opens the pull request without prompting.
-
-For unattended multi-issue queues:
-
-```bash
-git-ai issue batch 54 55 60
-```
-
-`git-ai issue batch` defaults to `--mode unattended`, runs the listed issues sequentially, and creates separate issue runs for each issue rather than one shared Codex session. Batch progress is recorded separately under `.git-ai/batches/`, and rerunning the same ordered batch skips issues already marked completed in the batch tracker and resumes from the first incomplete issue.
-
-If you need separate setup and completion steps:
-
-```bash
-git-ai issue prepare 54
-git-ai issue finalize 54
-```
-
-For GitHub Actions runs:
-
-```bash
-git-ai issue prepare 54 --mode github-action
-```
-
-### Fix pull request review comments
-
-```bash
-git-ai pr fix-comments 88
-```
-
-Use this when the PR branch is already checked out locally and you want `git-ai` to fetch the PR review comments, let you choose which actionable comments to address, open the configured interactive runtime with a focused prompt, run the configured build command, and then review, edit, or skip the proposed commit message before committing the result.
-
-Nearby comments on the same file are grouped into optional review tasks, non-trivial reply comments are kept as thread context, and the generated `.git-ai/runs/.../pr-review-comments.md` snapshot includes linked issue context plus local file excerpts when available.
-
-### Fix pull request test suggestions
-
-```bash
-git-ai pr fix-tests 88
-```
-
-Use this when the PR branch is already checked out locally and you want `git-ai` to fetch the managed AI Test Suggestions comment, let you choose which structured test suggestions to implement, open the configured interactive runtime with a focused test-oriented prompt, run the configured build command, and then review, edit, or skip the proposed commit message before committing the result.
-
-The command parses the managed `<!-- git-ai-test-suggestions -->` PR comment conservatively, keeps the selected suggestion areas plus likely file locations in `.git-ai/runs/.../pr-test-suggestions.md`, and fails clearly if the managed comment is missing or malformed.
-
-### Repository backlog analysis
-
-```bash
-git-ai test-backlog --top 5
-git-ai feature-backlog . --top 5
-```
-
-Add `--create-issues` to create or reuse GitHub issues for the highest-priority findings when the repository uses the GitHub forge integration.
+- `git-ai setup`: guided repository onboarding for `git-ai`
+- `git-ai commit`: generate a commit message from staged changes
+- `git-ai diff`: summarize `git diff HEAD`
 
 ## Configuration
 

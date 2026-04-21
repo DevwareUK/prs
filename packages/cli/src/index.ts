@@ -284,6 +284,35 @@ const REVIEW_USAGE = [
   "                [--issue-number <number>]",
 ].join("\n");
 
+const TOP_LEVEL_HELP = [
+  "git-ai",
+  "",
+  "GitHub-first AI workflows for pull request review, follow-up fixes, and backlog discovery.",
+  "",
+  "Start here:",
+  "  git-ai review",
+  "  git-ai pr fix-comments <pr-number>",
+  "  git-ai pr fix-tests <pr-number>",
+  "  git-ai test-backlog [--top <count>]",
+  "",
+  "Advanced / beta:",
+  "  git-ai issue draft",
+  "  git-ai issue plan <number>",
+  "  git-ai issue <number> [--mode <interactive|unattended>]",
+  "  git-ai issue batch <number> <number> [...number] [--mode unattended]",
+  "  git-ai issue prepare <number> [--mode <local|github-action>]",
+  "  git-ai issue finalize <number>",
+  "  git-ai pr prepare-review <pr-number>",
+  "  git-ai feature-backlog [repo-path]",
+  "",
+  "Supporting commands:",
+  "  git-ai setup",
+  "  git-ai commit",
+  "  git-ai diff",
+  "",
+  "GitHub-only by design: forge-backed issue and pull request workflows currently target GitHub repositories.",
+].join("\n");
+
 function getCliArgs(): string[] {
   return process.argv.slice(2).filter((arg) => arg !== "--");
 }
@@ -3488,6 +3517,13 @@ async function runIssueCommand(): Promise<void> {
 
 export async function run(): Promise<void> {
   const args = getCliArgs();
+  const firstArg = args[0];
+
+  if (firstArg === "help" || firstArg === "--help" || firstArg === "-h") {
+    process.stdout.write(`${TOP_LEVEL_HELP}\n`);
+    return;
+  }
+
   const command = args[0] ?? "commit";
   if (
     command !== "commit" &&
@@ -3499,9 +3535,7 @@ export async function run(): Promise<void> {
     command !== "test-backlog" &&
     command !== "feature-backlog"
   ) {
-    throw new Error(
-      `Unknown command: ${command}. Supported commands: "commit", "diff", "setup", "issue", "pr", "review", "test-backlog", "feature-backlog".`
-    );
+    throw new Error(`Unknown command: ${command}.\n\n${TOP_LEVEL_HELP}`);
   }
 
   if (command === "commit") {

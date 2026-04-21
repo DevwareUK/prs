@@ -1033,6 +1033,31 @@ describe("CLI integration", () => {
     });
   });
 
+  it("prints launch-stage command tiers for top-level help", async () => {
+    const { run } = await loadCli();
+
+    process.argv = ["node", "git-ai", "--help"];
+
+    const stdout = captureStdout();
+    await run();
+
+    expect(stdout.output()).toContain("GitHub-first AI workflows");
+    expect(stdout.output()).toContain("Start here:");
+    expect(stdout.output()).toContain("git-ai pr fix-comments <pr-number>");
+    expect(stdout.output()).toContain("Advanced / beta:");
+    expect(stdout.output()).toContain("git-ai issue draft");
+  });
+
+  it("includes the same help overview in unknown-command errors", async () => {
+    const { run } = await loadCli();
+
+    process.argv = ["node", "git-ai", "unknown-command"];
+
+    await expect(run()).rejects.toThrow(
+      "Unknown command: unknown-command.\n\ngit-ai"
+    );
+  });
+
   it("rejects unexpected setup arguments", async () => {
     process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
     const { parseSetupCommandArgs } = await loadCli();
