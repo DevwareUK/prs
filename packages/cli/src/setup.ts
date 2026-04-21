@@ -809,6 +809,8 @@ function renderAgentsSection(
     AGENTS_SECTION_START,
     "## git-ai repository guidance",
     "",
+    "- Recommended launch path for new teams: GitHub forge, OpenAI provider, and Codex runtime first.",
+    "- Advanced customization remains available through `bedrock-claude` and `claude-code`, but some unattended and review-prep flows remain Codex-specific today.",
     `- Detected stack: ${inspection.stackLabel}.`,
     `- Default branch for issue and PR flows: \`${answers.baseBranch}\`.`,
     `- Verification command after interactive agent work: \`${formatCommandForDisplay(answers.buildCommand)}\`.`,
@@ -936,6 +938,14 @@ export async function runSetupCommand(options: {
 
   console.log("Guided repository setup for git-ai");
   console.log("");
+  console.log("Recommended launch path: GitHub forge, OpenAI provider, and Codex runtime.");
+  console.log(
+    "Advanced customization stays available through `bedrock-claude` and `claude-code`, but those paths are not the default launch recommendation."
+  );
+  console.log(
+    "Runtime/provider asymmetry to keep in mind: GitHub Actions in this repo are OpenAI-only today, and unattended issue runs plus `git-ai pr prepare-review` remain Codex-specific."
+  );
+  console.log("");
   logInspection(options.repoRoot, inspection);
 
   const answers = await collectSetupAnswers(
@@ -968,7 +978,12 @@ export async function runSetupCommand(options: {
 
   if (!fileExists(options.repoRoot, ".env")) {
     console.log("");
-    console.log("Next step: create `.env` in the repository root with `OPENAI_API_KEY`.");
-    console.log("Optional variables: `OPENAI_MODEL`, `OPENAI_BASE_URL`.");
+    console.log(
+      "Next step: create `.env` in the repository root with `OPENAI_API_KEY` for the recommended OpenAI launch path."
+    );
+    console.log("Optional OpenAI variables: `OPENAI_MODEL`, `OPENAI_BASE_URL`.");
+    console.log(
+      "Advanced customization: if you later switch the local CLI provider to `bedrock-claude`, also set AWS credentials plus `AWS_REGION` or `AWS_DEFAULT_REGION`."
+    );
   }
 }

@@ -2,6 +2,8 @@
 
 Generate a managed PR assistant section from a pull request diff via OpenAI and merge it into the existing PR body. The section uses a stable shape: summary, risk areas, files changed, testing notes, rollout concerns, and reviewer checklist.
 
+This GitHub Action is OpenAI-only today. Advanced local CLI provider and runtime customization such as `bedrock-claude` or `claude-code` does not change this action's input surface.
+
 ## Local test
 
 1. Install and build workspace packages:

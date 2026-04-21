@@ -2,6 +2,8 @@
 
 Generate an AI pull request pre-review signal, higher-level findings, and line-linked review comments from a pull request diff via OpenAI.
 
+This GitHub Action is OpenAI-only today. Advanced local CLI provider and runtime customization such as `bedrock-claude` or `claude-code` does not change this action's input surface.
+
 ## Local test
 
 1. Install and build workspace packages:

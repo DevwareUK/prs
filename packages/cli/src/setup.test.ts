@@ -145,9 +145,18 @@ describe("setup command", () => {
 
     const agentsContent = readFileSync(resolve(repoRoot, "AGENTS.md"), "utf8");
     expect(agentsContent).toContain("<!-- git-ai:setup:start -->");
+    expect(agentsContent).toContain(
+      "Recommended launch path for new teams: GitHub forge, OpenAI provider, and Codex runtime first."
+    );
     expect(agentsContent).toContain("Detected stack: TypeScript repository.");
     expect(agentsContent).toContain("`pnpm build`");
     expect(agentsContent).toContain("`github`");
+    expect(messages.join("\n")).toContain(
+      "Recommended launch path: GitHub forge, OpenAI provider, and Codex runtime."
+    );
+    expect(messages.join("\n")).toContain(
+      "GitHub Actions in this repo are OpenAI-only today, and unattended issue runs plus `git-ai pr prepare-review` remain Codex-specific."
+    );
     expect(messages.join("\n")).toContain("Next step: create `.env`");
   });
 
@@ -270,6 +279,9 @@ describe("setup command", () => {
     expect(agentsContent).toContain("# Repository Notes");
     expect(agentsContent).toContain("Keep this manual guidance.");
     expect(agentsContent).not.toContain("Old managed setup guidance.");
+    expect(agentsContent).toContain(
+      "Advanced customization remains available through `bedrock-claude` and `claude-code`"
+    );
     expect(agentsContent).toContain("`release`");
     expect(agentsContent).toContain("`pnpm build`");
     expect(agentsContent).toContain("`coverage/**`");

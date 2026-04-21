@@ -18,6 +18,14 @@ GitHub-only by design:
 - `git-ai` currently targets GitHub repositories and GitHub pull request workflows on purpose
 - the launch goal is a strong GitHub offer first, not thin parity across every forge
 
+Recommended launch path today:
+
+- forge: GitHub
+- structured-text provider: OpenAI
+- interactive runtime: Codex
+
+`bedrock-claude` and `claude-code` remain supported for advanced customization, but they are not the default first-offer path and some workflows remain intentionally asymmetric.
+
 ## Primary offer
 
 Start here if you are evaluating `git-ai` for a team:
@@ -72,8 +80,11 @@ Separate from the command tiers, multi-provider and runtime-parity paths such as
 
 - `git`
 - Node.js and `pnpm`
-- one configured AI provider:
-  `OPENAI_API_KEY` for the default OpenAI provider, or AWS credentials plus region for `bedrock-claude`
+- `OPENAI_API_KEY` for the recommended OpenAI provider path
+
+Advanced provider customization:
+
+- if you later switch the local CLI to `bedrock-claude`, also provide AWS credentials plus `AWS_REGION` or `AWS_DEFAULT_REGION`
 
 ### Install the CLI once
 
@@ -95,10 +106,9 @@ Create a `.env` file in the target repository:
 OPENAI_API_KEY=your_key_here
 OPENAI_MODEL=gpt-4o-mini
 OPENAI_BASE_URL=https://api.openai.com/v1
-AWS_REGION=eu-west-1
 ```
 
-`OPENAI_*` is used by the default `openai` provider. `AWS_REGION` or `AWS_DEFAULT_REGION` plus standard AWS credentials is used when `.git-ai/config.json` selects the `bedrock-claude` provider.
+`OPENAI_*` is used by the default `openai` provider and is the recommended first setup. If you later switch `.git-ai/config.json` to `bedrock-claude`, add `AWS_REGION` or `AWS_DEFAULT_REGION` plus standard AWS credentials at that point.
 
 Then run the guided repository setup:
 
@@ -108,6 +118,8 @@ git-ai setup
 ```
 
 `git-ai setup` detects the repository root, suggests repo-aware defaults for the base branch, verification command, forge, and extra AI exclusions, writes `.git-ai/config.json`, ensures `.git-ai/` is gitignored, and can create or update a managed `AGENTS.md` guidance section. When setup cannot determine a value confidently, it prints an explicit warning before asking you to confirm or replace the suggestion.
+
+The setup flow also makes the recommended launch path explicit: GitHub forge, OpenAI provider, and Codex runtime first. `bedrock-claude` and `claude-code` stay available as advanced customization paths after the default GitHub/OpenAI/Codex path is working.
 
 ### First successful CLI runs
 
@@ -138,6 +150,16 @@ You only need extra tooling for advanced or deeper local workflows:
 - `gh`, `GH_TOKEN`, or `GITHUB_TOKEN` for GitHub-backed issue and pull request flows
 
 `git-ai` resolves the active repository from your current Git working tree at runtime. It loads `.env` and `.git-ai/config.json` from that repository root, not from the CLI build location.
+
+### Runtime and provider asymmetry
+
+The launch path is not presented as full runtime or provider parity:
+
+- GitHub Actions in this repository are OpenAI-only today. They do not expose Bedrock Claude or runtime-selection inputs.
+- `git-ai pr prepare-review <pr-number>` always requires `codex` on `PATH` and keeps its merge-conflict and review-brief flow Codex-specific.
+- `git-ai issue <number> --mode unattended` and `git-ai issue batch ...` require `ai.runtime.type` to be `codex`.
+- Interactive local workflows such as `git-ai issue draft`, `git-ai issue <number>`, `git-ai pr fix-comments <pr-number>`, and `git-ai pr fix-tests <pr-number>` use the configured runtime, with fallback to Codex when a configured non-default runtime is unavailable.
+- Structured-text workflows such as `git-ai commit`, `git-ai diff`, `git-ai review`, and issue-plan / PR-text generation use the configured provider, defaulting to OpenAI and allowing `bedrock-claude` as an advanced option.
 
 ## Command tiers
 
@@ -179,10 +201,9 @@ Create `.env` in the target repository root:
 OPENAI_API_KEY=your_key_here
 OPENAI_MODEL=gpt-4o-mini
 OPENAI_BASE_URL=https://api.openai.com/v1
-AWS_REGION=eu-west-1
 ```
 
-`OPENAI_MODEL` and `OPENAI_BASE_URL` are optional. The CLI defaults to `gpt-4o-mini` and `https://api.openai.com/v1` when `ai.provider.type` is `openai`. `AWS_REGION` or `AWS_DEFAULT_REGION` is used when `ai.provider.type` is `bedrock-claude`, and AWS credentials are resolved through the standard AWS provider chain.
+`OPENAI_MODEL` and `OPENAI_BASE_URL` are optional. The CLI defaults to `gpt-4o-mini` and `https://api.openai.com/v1` when `ai.provider.type` is `openai`. If you switch to `bedrock-claude`, set `AWS_REGION` or `AWS_DEFAULT_REGION` and provide AWS credentials through the standard AWS provider chain.
 
 ### `.git-ai/config.json`
 
@@ -215,6 +236,8 @@ Optional repository-specific defaults live in `.git-ai/config.json`. `git-ai set
   }
 }
 ```
+
+Recommended first configuration: leave `ai.provider.type` unset so it defaults to `openai`, leave `ai.runtime.type` unset so it defaults to `codex`, and use `forge.type: "github"` for GitHub-backed issue and PR flows. Change provider or runtime settings only when you need a deeper customization path.
 
 Supported fields:
 
@@ -263,7 +286,7 @@ Generates a commit message from the staged diff.
 Requirements:
 
 - staged changes must exist
-- `OPENAI_API_KEY` must be set
+- the configured provider must be usable; with the default configuration that means `OPENAI_API_KEY`
 
 ### `git-ai diff`
 
@@ -277,7 +300,7 @@ Requirements:
 
 - the repository must already have at least one commit
 - there must be changes in `git diff HEAD`
-- `OPENAI_API_KEY` must be set
+- the configured provider must be usable; with the default configuration that means `OPENAI_API_KEY`
 
 ### `git-ai setup`
 
@@ -287,7 +310,7 @@ git-ai setup
 
 Runs a guided repository setup flow for the current Git repository. The command inspects the repo, suggests defaults for `baseBranch`, `forge.type`, `buildCommand`, and extra `aiContext.excludePaths`, prints the detection source for each suggestion, warns when it had to fall back because signals were missing or conflicting, writes `.git-ai/config.json`, ensures `.git-ai/` is gitignored, and can create or update a managed `AGENTS.md` section with repo-specific guidance.
 
-The setup flow still expects you to create `.env` yourself because it cannot safely write secrets like `OPENAI_API_KEY`.
+The setup flow still expects you to create `.env` yourself because it cannot safely write secrets like `OPENAI_API_KEY`. It also calls out the recommended GitHub/OpenAI/Codex launch path and points advanced users to `bedrock-claude` and `claude-code` as customization paths rather than parity guarantees.
 
 ### `git-ai issue`
 
@@ -427,7 +450,7 @@ GITHUB_TOKEN=... git-ai review --issue-number 50
 
 Important behavior:
 
-- `git-ai review` requires the configured provider to be usable, defaulting to `OPENAI_API_KEY`
+- `git-ai review` requires the configured provider to be usable; with the default configuration that means `OPENAI_API_KEY`
 - without `--base`, it reviews the current `git diff HEAD`
 - with `--issue-number`, the CLI fetches the issue title and body from the configured forge and grounds the review in that context
 - markdown output is optimized as a compact pre-review checklist that highlights only the top 3 to 5 reviewer-ready risks when the diff supports that many, and fewer when the diff is low risk

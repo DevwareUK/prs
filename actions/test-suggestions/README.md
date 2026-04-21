@@ -2,6 +2,8 @@
 
 Generate practical PR-level test suggestions from a pull request diff via OpenAI.
 
+This GitHub Action is OpenAI-only today. Advanced local CLI provider and runtime customization such as `bedrock-claude` or `claude-code` does not change this action's input surface.
+
 The generated markdown keeps each suggestion compact but implementation-ready by including the behavior covered, likely regression risk, suggested test type, protected paths, likely test locations, suggestion-specific edge cases when relevant, and a short implementation note that can be lifted into an issue or task.
 
 ## Local test
