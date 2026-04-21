@@ -395,6 +395,14 @@ function parseJsonPayloadFromOutput<T>(output: string): T {
   return JSON.parse(output.slice(jsonStart)) as T;
 }
 
+function isUnexpectedSpawnSyncCall(error: unknown): error is Error {
+  return error instanceof Error && error.message.startsWith("Unexpected spawnSync call:");
+}
+
+function syntheticGitRefTip(ref: string): string {
+  return `${ref.replace(/[^a-z0-9]+/gi, "-")}-tip`;
+}
+
 function listIssueDraftFiles(): string[] {
   try {
     return readdirSync(resolve(REPO_ROOT, ".git-ai", "issues"))
@@ -705,11 +713,86 @@ async function loadCli(options: {
   });
   const spawnSync = vi.fn((command: string, rawSecondArg?: unknown) => {
     const args = Array.isArray(rawSecondArg) ? rawSecondArg : [];
-    if (options.spawnSyncImpl) {
-      if (command === "git" && args[0] === "-C") {
-        return options.spawnSyncImpl(command, args.slice(2), rawSecondArg);
+    const normalizedArgs =
+      command === "git" && args[0] === "-C" ? args.slice(2) : args;
+    const invokeCustomSpawnSync = () =>
+      options.spawnSyncImpl?.(command, normalizedArgs, rawSecondArg);
+
+    if (
+      command !== "git" &&
+      command !== "gh" &&
+      command !== "codex" &&
+      normalizedArgs[0] === "--version"
+    ) {
+      try {
+        return invokeCustomSpawnSync() ?? { status: 0 };
+      } catch (error: unknown) {
+        if (!isUnexpectedSpawnSyncCall(error)) {
+          throw error;
+        }
+
+        return { status: 0, stdout: "", stderr: "" };
       }
-      return options.spawnSyncImpl(command, args, rawSecondArg);
+    }
+
+    if (
+      command === "git" &&
+      normalizedArgs[0] === "rev-parse" &&
+      normalizedArgs[1] === "--verify" &&
+      typeof normalizedArgs[2] === "string" &&
+      /^refs\/(heads|remotes)\//.test(normalizedArgs[2])
+    ) {
+      const requiresStdout = normalizedArgs[2].startsWith("refs/remotes/");
+      try {
+        const result = invokeCustomSpawnSync();
+        if (
+          result &&
+          (result.error ||
+            Boolean(result.stderr) ||
+            (result.status === 0 &&
+              (!requiresStdout || Boolean(result.stdout?.trim()))))
+        ) {
+          return result;
+        }
+      } catch (error: unknown) {
+        if (!isUnexpectedSpawnSyncCall(error)) {
+          throw error;
+        }
+      }
+
+      return {
+        status: 0,
+        stdout: `${syntheticGitRefTip(normalizedArgs[2])}\n`,
+        stderr: "",
+      };
+    }
+
+    if (options.spawnSyncImpl) {
+      try {
+        return invokeCustomSpawnSync();
+      } catch (error: unknown) {
+        if (
+          command === "git" &&
+          normalizedArgs[0] === "fetch" &&
+          normalizedArgs[1] === "origin" &&
+          typeof normalizedArgs[2] === "string" &&
+          isUnexpectedSpawnSyncCall(error)
+        ) {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          normalizedArgs[0] === "merge-base" &&
+          normalizedArgs[1] === "--is-ancestor" &&
+          normalizedArgs[3] === "HEAD" &&
+          isUnexpectedSpawnSyncCall(error)
+        ) {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        throw error;
+      }
     }
 
     return { status: 0 };
@@ -1585,7 +1668,12 @@ describe("CLI integration", () => {
           return { status: 0, stdout: "", stderr: "" };
         }
 
-        if (command === "git" && args[0] === "rev-parse" && args[1] === "origin/main") {
+        if (
+          command === "git" &&
+          args[0] === "rev-parse" &&
+          ((args[1] === "origin/main") ||
+            (args[1] === "--verify" && args[2] === "refs/remotes/origin/main"))
+        ) {
           return { status: 0, stdout: "base-tip-87\n", stderr: "" };
         }
 
@@ -1732,7 +1820,7 @@ describe("CLI integration", () => {
     expect(
       spawnSync.mock.calls.some(
         ([command, args]) =>
-          command === "pnpm" ||
+          (command === "pnpm" && Array.isArray(args) && args[0] === "build") ||
           (command === "git" &&
             Array.isArray(args) &&
             (args[0] === "commit" || args[0] === "push"))
@@ -1827,7 +1915,12 @@ describe("CLI integration", () => {
           return { status: 0, stdout: "", stderr: "" };
         }
 
-        if (command === "git" && args[0] === "rev-parse" && args[1] === "origin/main") {
+        if (
+          command === "git" &&
+          args[0] === "rev-parse" &&
+          ((args[1] === "origin/main") ||
+            (args[1] === "--verify" && args[2] === "refs/remotes/origin/main"))
+        ) {
           return { status: 0, stdout: "base-tip-88\n", stderr: "" };
         }
 
@@ -2024,7 +2117,12 @@ describe("CLI integration", () => {
           return { status: 0, stdout: "", stderr: "" };
         }
 
-        if (command === "git" && args[0] === "rev-parse" && args[1] === "origin/main") {
+        if (
+          command === "git" &&
+          args[0] === "rev-parse" &&
+          ((args[1] === "origin/main") ||
+            (args[1] === "--verify" && args[2] === "refs/remotes/origin/main"))
+        ) {
           return { status: 0, stdout: "base-tip-206\n", stderr: "" };
         }
 
@@ -2225,7 +2323,12 @@ describe("CLI integration", () => {
           return { status: 0, stdout: "", stderr: "" };
         }
 
-        if (command === "git" && args[0] === "rev-parse" && args[1] === "origin/main") {
+        if (
+          command === "git" &&
+          args[0] === "rev-parse" &&
+          ((args[1] === "origin/main") ||
+            (args[1] === "--verify" && args[2] === "refs/remotes/origin/main"))
+        ) {
           return { status: 0, stdout: "base-tip-207\n", stderr: "" };
         }
 
@@ -2387,7 +2490,12 @@ describe("CLI integration", () => {
           return { status: 0, stdout: "", stderr: "" };
         }
 
-        if (command === "git" && args[0] === "rev-parse" && args[1] === "origin/main") {
+        if (
+          command === "git" &&
+          args[0] === "rev-parse" &&
+          ((args[1] === "origin/main") ||
+            (args[1] === "--verify" && args[2] === "refs/remotes/origin/main"))
+        ) {
           return { status: 0, stdout: "base-tip-208\n", stderr: "" };
         }
 
@@ -2525,7 +2633,12 @@ describe("CLI integration", () => {
           return { status: 0 };
         }
 
-        if (command === "git" && args[0] === "rev-parse" && args[1] === "origin/main") {
+        if (
+          command === "git" &&
+          args[0] === "rev-parse" &&
+          ((args[1] === "origin/main") ||
+            (args[1] === "--verify" && args[2] === "refs/remotes/origin/main"))
+        ) {
           return { status: 0, stdout: "base-tip-205\n", stderr: "" };
         }
 
@@ -2792,7 +2905,12 @@ describe("CLI integration", () => {
           return { status: 0, stdout: "", stderr: "" };
         }
 
-        if (command === "git" && args[0] === "rev-parse" && args[1] === "origin/main") {
+        if (
+          command === "git" &&
+          args[0] === "rev-parse" &&
+          ((args[1] === "origin/main") ||
+            (args[1] === "--verify" && args[2] === "refs/remotes/origin/main"))
+        ) {
           return { status: 0, stdout: "base-tip-209\n", stderr: "" };
         }
 
@@ -3026,7 +3144,12 @@ describe("CLI integration", () => {
           return { status: 0, stdout: "", stderr: "" };
         }
 
-        if (command === "git" && args[0] === "rev-parse" && args[1] === "origin/main") {
+        if (
+          command === "git" &&
+          args[0] === "rev-parse" &&
+          ((args[1] === "origin/main") ||
+            (args[1] === "--verify" && args[2] === "refs/remotes/origin/main"))
+        ) {
           return { status: 0, stdout: "base-tip-210\n", stderr: "" };
         }
 
@@ -5037,12 +5160,53 @@ describe("CLI integration", () => {
           return { status: 1, error: new Error("gh is unavailable") };
         }
 
+        if (
+          command === "git" &&
+          args[0] === "rev-parse" &&
+          args[1] === "--verify" &&
+          args[2] === "refs/heads/main"
+        ) {
+          gitCommands.push(args);
+          return { status: 0, stdout: "main-local-tip\n", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "fetch" &&
+          args[1] === "origin" &&
+          args[2] === "main"
+        ) {
+          gitCommands.push(args);
+          return { status: 0 };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "rev-parse" &&
+          args[1] === "--verify" &&
+          args[2] === "refs/remotes/origin/main"
+        ) {
+          gitCommands.push(args);
+          return { status: 0, stdout: "main-remote-tip\n", stderr: "" };
+        }
+
         if (command === "git" && args[0] === "rev-parse") {
           gitCommands.push(args);
           return { status: 1 };
         }
 
         if (command === "git" && args[0] === "checkout" && args[1] === "main") {
+          gitCommands.push(args);
+          return { status: 0 };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "merge-base" &&
+          args[1] === "--is-ancestor" &&
+          args[2] === "main-remote-tip" &&
+          args[3] === "HEAD"
+        ) {
           gitCommands.push(args);
           return { status: 0 };
         }
@@ -5094,9 +5258,12 @@ describe("CLI integration", () => {
     cleanupTargets.add(runDirPath);
 
     expect(gitCommands).toEqual([
+      ["rev-parse", "--verify", "refs/heads/main"],
+      ["fetch", "origin", "main"],
+      ["rev-parse", "--verify", "refs/remotes/origin/main"],
       ["rev-parse", "--verify", "feat/issue-91234-cli-issue-prepare-integration-fixture"],
       ["checkout", "main"],
-      ["pull"],
+      ["merge-base", "--is-ancestor", "main-remote-tip", "HEAD"],
       ["checkout", "-b", "feat/issue-91234-cli-issue-prepare-integration-fixture"],
     ]);
     expect(output.branchName).toBe("feat/issue-91234-cli-issue-prepare-integration-fixture");
@@ -6757,12 +6924,53 @@ describe("CLI integration", () => {
             };
           }
 
+          if (
+            command === "git" &&
+            args[0] === "rev-parse" &&
+            args[1] === "--verify" &&
+            args[2] === "refs/heads/develop"
+          ) {
+            gitCommands.push(args);
+            return { status: 0, stdout: "develop-local-tip\n", stderr: "" };
+          }
+
+          if (
+            command === "git" &&
+            args[0] === "fetch" &&
+            args[1] === "origin" &&
+            args[2] === "develop"
+          ) {
+            gitCommands.push(args);
+            return { status: 0 };
+          }
+
+          if (
+            command === "git" &&
+            args[0] === "rev-parse" &&
+            args[1] === "--verify" &&
+            args[2] === "refs/remotes/origin/develop"
+          ) {
+            gitCommands.push(args);
+            return { status: 0, stdout: "develop-remote-tip\n", stderr: "" };
+          }
+
           if (command === "git" && args[0] === "rev-parse") {
             gitCommands.push(args);
             return { status: 1 };
           }
 
           if (command === "git" && args[0] === "checkout" && args[1] === "develop") {
+            gitCommands.push(args);
+            return { status: 0 };
+          }
+
+          if (
+            command === "git" &&
+            args[0] === "merge-base" &&
+            args[1] === "--is-ancestor" &&
+            args[2] === "develop-remote-tip" &&
+            args[3] === "HEAD"
+          ) {
             gitCommands.push(args);
             return { status: 0 };
           }
@@ -6817,9 +7025,12 @@ describe("CLI integration", () => {
       await run();
 
       expect(gitCommands).toEqual([
+        ["rev-parse", "--verify", "refs/heads/develop"],
+        ["fetch", "origin", "develop"],
+        ["rev-parse", "--verify", "refs/remotes/origin/develop"],
         ["rev-parse", "--verify", "feat/issue-144-use-repository-config-in-issue-runs"],
         ["checkout", "develop"],
-        ["pull"],
+        ["merge-base", "--is-ancestor", "develop-remote-tip", "HEAD"],
         ["checkout", "-b", "feat/issue-144-use-repository-config-in-issue-runs"],
       ]);
       expect(spawnSync).toHaveBeenCalledWith(
@@ -6858,7 +7069,7 @@ describe("CLI integration", () => {
     }
   });
 
-  it("fails issue preparation clearly when pulling the configured base branch fails", async () => {
+  it("fails issue preparation clearly when fast-forwarding the configured base branch fails", async () => {
     const issueNumber = 146;
     const fetchMock = vi
       .fn()
@@ -6889,6 +7100,33 @@ describe("CLI integration", () => {
           return { status: 1, error: new Error("gh is unavailable") };
         }
 
+        if (
+          command === "git" &&
+          args[0] === "rev-parse" &&
+          args[1] === "--verify" &&
+          args[2] === "refs/heads/main"
+        ) {
+          return { status: 0, stdout: "main-local-tip\n", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "fetch" &&
+          args[1] === "origin" &&
+          args[2] === "main"
+        ) {
+          return { status: 0 };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "rev-parse" &&
+          args[1] === "--verify" &&
+          args[2] === "refs/remotes/origin/main"
+        ) {
+          return { status: 0, stdout: "main-remote-tip\n", stderr: "" };
+        }
+
         if (command === "git" && args[0] === "rev-parse") {
           return { status: 1 };
         }
@@ -6897,12 +7135,27 @@ describe("CLI integration", () => {
           return { status: 0 };
         }
 
-        if (command === "git" && args[0] === "pull") {
+        if (
+          command === "git" &&
+          args[0] === "merge-base" &&
+          args[1] === "--is-ancestor" &&
+          args[2] === "main-remote-tip" &&
+          args[3] === "HEAD"
+        ) {
+          return { status: 1 };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "merge" &&
+          args[1] === "--ff-only" &&
+          args[2] === "origin/main"
+        ) {
           return { status: 1 };
         }
 
         if (command === "git" && args[0] === "checkout" && args[1] === "-b") {
-          throw new Error("Issue branch should not be created after a failed pull.");
+          throw new Error("Issue branch should not be created after a failed fast-forward.");
         }
 
         throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
@@ -6912,7 +7165,7 @@ describe("CLI integration", () => {
     process.argv = ["node", "git-ai", "issue", "prepare", String(issueNumber)];
 
     await expect(run()).rejects.toThrow(
-      'Failed to pull latest changes for base branch "main".'
+      'Failed to fast-forward base branch "main" to origin/main.'
     );
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
