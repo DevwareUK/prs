@@ -25,6 +25,13 @@ const AGENTS_SECTION_START = "<!-- git-ai:setup:start -->";
 const AGENTS_SECTION_END = "<!-- git-ai:setup:end -->";
 
 type ForgeType = "github" | "none";
+type PackageManagerType = "pnpm" | "yarn" | "npm";
+
+type DetectionResult<T> = {
+  value: T;
+  source: string;
+  warnings: string[];
+};
 
 type PackageJson = {
   packageManager?: string;
@@ -40,10 +47,13 @@ type RepositoryInspection = {
   summary: string;
   signals: string[];
   suggestedBaseBranch: string;
+  suggestedBaseBranchSource: string;
   suggestedBuildCommand: string[];
   suggestedBuildCommandSource: string;
+  suggestedForgeTypeSource: string;
   suggestedExcludePaths: string[];
   suggestedForgeType: ForgeType;
+  warnings: string[];
   stackLabel: string;
   hasGitHubWorkflows: boolean;
 };
@@ -93,26 +103,87 @@ function listDirectoryEntries(repoRoot: string, relativePath: string): string[] 
   }
 }
 
-function detectPackageManager(repoRoot: string, packageJson?: PackageJson): "pnpm" | "yarn" | "npm" {
-  const packageManager = packageJson?.packageManager?.trim();
-  if (packageManager?.startsWith("pnpm@") || fileExists(repoRoot, "pnpm-lock.yaml")) {
-    return "pnpm";
+function parsePackageManagerName(
+  packageManager: string | undefined
+): PackageManagerType | undefined {
+  const normalized = packageManager?.trim().split("@")[0];
+  if (normalized === "pnpm" || normalized === "yarn" || normalized === "npm") {
+    return normalized;
   }
 
-  if (packageManager?.startsWith("yarn@") || fileExists(repoRoot, "yarn.lock")) {
-    return "yarn";
-  }
-
-  return "npm";
+  return undefined;
 }
 
-function commandForScript(packageManager: "pnpm" | "yarn" | "npm", scriptName: string): string[] {
+function detectPackageManager(
+  repoRoot: string,
+  packageJson?: PackageJson
+): DetectionResult<PackageManagerType> {
+  const packageManagerField = parsePackageManagerName(packageJson?.packageManager);
+  const lockfileSignals = [
+    fileExists(repoRoot, "pnpm-lock.yaml") ? "pnpm" : undefined,
+    fileExists(repoRoot, "yarn.lock") ? "yarn" : undefined,
+    fileExists(repoRoot, "package-lock.json") || fileExists(repoRoot, "npm-shrinkwrap.json")
+      ? "npm"
+      : undefined,
+  ].filter((value): value is PackageManagerType => value !== undefined);
+
+  if (packageManagerField) {
+    const conflictingLockfiles = lockfileSignals.filter(
+      (lockfileManager) => lockfileManager !== packageManagerField
+    );
+    return {
+      value: packageManagerField,
+      source: `package.json packageManager field (${packageManagerField})`,
+      warnings:
+        conflictingLockfiles.length > 0
+          ? [
+              `Detected conflicting package-manager lockfiles (${conflictingLockfiles.join(", ")}). Using package.json packageManager field "${packageManagerField}" and asking you to confirm it.`,
+            ]
+          : [],
+    };
+  }
+
+  const uniqueLockfileSignals = uniqueStrings(lockfileSignals);
+  if (uniqueLockfileSignals.length === 1) {
+    const detected = uniqueLockfileSignals[0] as PackageManagerType;
+    return {
+      value: detected,
+      source: `${detected} lockfile`,
+      warnings: [],
+    };
+  }
+
+  if (uniqueLockfileSignals.length > 1) {
+    const detected = uniqueLockfileSignals.includes("npm")
+      ? "npm"
+      : (uniqueLockfileSignals[0] as PackageManagerType);
+    return {
+      value: detected,
+      source: `conflicting lockfiles (${uniqueLockfileSignals.join(", ")})`,
+      warnings: [
+        `Detected multiple package-manager lockfiles (${uniqueLockfileSignals.join(", ")}). Using "${detected}" as the initial suggestion and asking you to confirm it.`,
+      ],
+    };
+  }
+
+  return {
+    value: "npm",
+    source: "git-ai fallback",
+    warnings: [
+      "No package-manager signal was detected. Falling back to npm-style script suggestions until you confirm a command.",
+    ],
+  };
+}
+
+function commandForScript(packageManager: PackageManagerType, scriptName: string): string[] {
   if (packageManager === "yarn") {
     return ["yarn", scriptName];
   }
 
-  if (packageManager === "pnpm" && (scriptName === "build" || scriptName === "test")) {
-    return ["pnpm", scriptName];
+  if (packageManager === "pnpm") {
+    return scriptName === "build" || scriptName === "test"
+      ? ["pnpm", scriptName]
+      : ["pnpm", "run", scriptName];
   }
 
   if (scriptName === "test") {
@@ -136,6 +207,18 @@ function parseOriginDefaultBranch(rawValue: string): string | undefined {
   return parts[parts.length - 1] || undefined;
 }
 
+function collectLocalBranches(repoRoot: string): string[] {
+  const rawBranches = tryGitCommand(repoRoot, ["for-each-ref", "--format=%(refname:short)", "refs/heads"]);
+  if (!rawBranches) {
+    return [];
+  }
+
+  return rawBranches
+    .split(/\r?\n/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
 function tryGitCommand(repoRoot: string, args: string[]): string | undefined {
   try {
     return execFileSync("git", ["-C", repoRoot, ...args], {
@@ -148,41 +231,127 @@ function tryGitCommand(repoRoot: string, args: string[]): string | undefined {
   }
 }
 
-function detectBaseBranch(repoRoot: string, existingConfig?: RepositoryConfigType): string {
+function detectBaseBranch(
+  repoRoot: string,
+  existingConfig?: RepositoryConfigType
+): DetectionResult<string> {
   if (existingConfig?.baseBranch) {
-    return existingConfig.baseBranch;
+    return {
+      value: existingConfig.baseBranch,
+      source: "existing .git-ai/config.json",
+      warnings: [],
+    };
   }
 
   const originHead = tryGitCommand(repoRoot, ["symbolic-ref", "refs/remotes/origin/HEAD"]);
   const originBranch = originHead ? parseOriginDefaultBranch(originHead) : undefined;
   if (originBranch) {
-    return originBranch;
+    return {
+      value: originBranch,
+      source: "origin default branch",
+      warnings: [],
+    };
   }
 
+  const localBranches = collectLocalBranches(repoRoot);
+  const wellKnownBranches = localBranches.filter((branchName) =>
+    ["main", "master", "develop", "development", "trunk"].includes(branchName)
+  );
   const currentBranch = tryGitCommand(repoRoot, ["branch", "--show-current"]);
-  if (currentBranch) {
-    return currentBranch;
+  if (wellKnownBranches.length === 1) {
+    return {
+      value: wellKnownBranches[0] as string,
+      source: `local branch "${wellKnownBranches[0]}"`,
+      warnings: [
+        `Could not resolve origin's default branch. Falling back to the local "${wellKnownBranches[0]}" branch and asking you to confirm it.`,
+      ],
+    };
   }
 
-  return DEFAULT_REPOSITORY_BASE_BRANCH;
+  if (currentBranch && !wellKnownBranches.includes(currentBranch)) {
+    return {
+      value: currentBranch,
+      source: `current branch "${currentBranch}"`,
+      warnings: [
+        `Could not resolve origin's default branch. Falling back to the current branch "${currentBranch}" and asking you to confirm it.`,
+      ],
+    };
+  }
+
+  const conflicts = wellKnownBranches.length > 1 ? wellKnownBranches.join(", ") : undefined;
+  return {
+    value: DEFAULT_REPOSITORY_BASE_BRANCH,
+    source: conflicts ? `git-ai fallback after conflicting local branches (${conflicts})` : "git-ai fallback",
+    warnings: [
+      conflicts
+        ? `Could not resolve origin's default branch and found multiple plausible local base branches (${conflicts}). Starting from "${DEFAULT_REPOSITORY_BASE_BRANCH}" so you can choose the correct branch explicitly.`
+        : `Could not resolve origin's default branch and found no clear local base-branch signal. Falling back to "${DEFAULT_REPOSITORY_BASE_BRANCH}" until you confirm the right branch.`,
+    ],
+  };
 }
 
-function detectForgeType(repoRoot: string, existingConfig?: RepositoryConfigType): ForgeType {
+function detectForgeType(
+  repoRoot: string,
+  existingConfig?: RepositoryConfigType
+): DetectionResult<ForgeType> {
   const existingType = existingConfig?.forge?.type;
   if (existingType === "github" || existingType === "none") {
-    return existingType;
+    return {
+      value: existingType,
+      source: "existing .git-ai/config.json",
+      warnings: [],
+    };
   }
 
   const remoteUrl = tryGitCommand(repoRoot, ["remote", "get-url", "origin"]);
   if (remoteUrl && /github\.com[:/]/i.test(remoteUrl)) {
-    return "github";
+    const warnings: string[] = [];
+    if (!canUseGitHubForgeFromCurrentShell()) {
+      warnings.push(
+        "GitHub repository signals were detected, but neither an authenticated `gh` session nor `GH_TOKEN`/`GITHUB_TOKEN` is available in the current shell. GitHub-backed issue and PR flows will need auth before they can run."
+      );
+    }
+    return {
+      value: "github",
+      source: "GitHub origin remote",
+      warnings,
+    };
   }
 
   if (directoryExists(repoRoot, ".github")) {
-    return "github";
+    return {
+      value: "github",
+      source: ".github directory",
+      warnings: canUseGitHubForgeFromCurrentShell()
+        ? []
+        : [
+            "GitHub workflow files were detected, but GitHub auth is not available in the current shell yet. GitHub-backed issue and PR flows will need auth before they can run.",
+          ],
+    };
   }
 
-  return "none";
+  return {
+    value: "none",
+    source: "no GitHub repository signal detected",
+    warnings: [],
+  };
+}
+
+function canUseGitHubForgeFromCurrentShell(): boolean {
+  if (process.env.GH_TOKEN || process.env.GITHUB_TOKEN) {
+    return true;
+  }
+
+  try {
+    execFileSync("gh", ["auth", "status"], {
+      encoding: "utf8",
+      maxBuffer: 1024 * 1024,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function detectRepositoryShape(repoRoot: string, packageJson?: PackageJson, composerJson?: ComposerJson) {
@@ -252,11 +421,12 @@ function detectBuildCommand(
   existingConfig: RepositoryConfigType | undefined,
   packageJson: PackageJson | undefined,
   composerJson: ComposerJson | undefined
-): { command: string[]; source: string } {
+): DetectionResult<string[]> {
   if (existingConfig?.buildCommand) {
     return {
-      command: existingConfig.buildCommand,
+      value: existingConfig.buildCommand,
       source: "existing .git-ai/config.json",
+      warnings: [],
     };
   }
 
@@ -265,8 +435,9 @@ function detectBuildCommand(
   for (const scriptName of ["verify", "build", "test"]) {
     if (typeof scripts[scriptName] === "string" && scripts[scriptName].trim().length > 0) {
       return {
-        command: commandForScript(packageManager, scriptName),
-        source: `package.json script "${scriptName}"`,
+        value: commandForScript(packageManager.value, scriptName),
+        source: `package.json script "${scriptName}" via ${packageManager.source}`,
+        warnings: [...packageManager.warnings],
       };
     }
   }
@@ -275,29 +446,37 @@ function detectBuildCommand(
   for (const scriptName of ["verify", "build", "test"]) {
     if (composerScripts[scriptName] !== undefined) {
       return {
-        command: ["composer", scriptName],
+        value: ["composer", scriptName],
         source: `composer.json script "${scriptName}"`,
+        warnings: [],
       };
     }
   }
 
   if (fileExists(repoRoot, "vendor/bin/phpunit")) {
     return {
-      command: ["vendor/bin/phpunit"],
+      value: ["vendor/bin/phpunit"],
       source: "vendor/bin/phpunit",
+      warnings: [],
     };
   }
 
   if (fileExists(repoRoot, "phpunit.xml") || fileExists(repoRoot, "phpunit.xml.dist")) {
     return {
-      command: ["phpunit"],
+      value: ["phpunit"],
       source: "phpunit.xml",
+      warnings: [],
     };
   }
 
   return {
-    command: [...DEFAULT_REPOSITORY_BUILD_COMMAND],
-    source: "git-ai default",
+    value: [...DEFAULT_REPOSITORY_BUILD_COMMAND],
+    source: "git-ai fallback",
+    warnings: [
+      `No obvious verification or test command was detected. Falling back to \`${formatCommandForDisplay(
+        [...DEFAULT_REPOSITORY_BUILD_COMMAND]
+      )}\` until you confirm a repository-specific command.`,
+    ],
   };
 }
 
@@ -366,6 +545,8 @@ function inspectRepository(
   const composerJson = readJsonFile<ComposerJson>(resolve(repoRoot, "composer.json"));
   const shape = detectRepositoryShape(repoRoot, packageJson, composerJson);
   const buildCommand = detectBuildCommand(repoRoot, existingConfig, packageJson, composerJson);
+  const baseBranch = detectBaseBranch(repoRoot, existingConfig);
+  const forgeType = detectForgeType(repoRoot, existingConfig);
 
   const signals = [shape.stackLabel];
   if (shape.isMonorepo) {
@@ -381,14 +562,23 @@ function inspectRepository(
     signals.push("TypeScript config detected");
   }
 
+  const warnings = [
+    ...baseBranch.warnings,
+    ...buildCommand.warnings,
+    ...forgeType.warnings,
+  ];
+
   return {
     summary: `Detected ${shape.stackLabel}.`,
     signals,
-    suggestedBaseBranch: detectBaseBranch(repoRoot, existingConfig),
-    suggestedBuildCommand: buildCommand.command,
+    suggestedBaseBranch: baseBranch.value,
+    suggestedBaseBranchSource: baseBranch.source,
+    suggestedBuildCommand: buildCommand.value,
     suggestedBuildCommandSource: buildCommand.source,
+    suggestedForgeTypeSource: forgeType.source,
     suggestedExcludePaths: detectSuggestedExcludePaths(repoRoot, existingConfig),
-    suggestedForgeType: detectForgeType(repoRoot, existingConfig),
+    suggestedForgeType: forgeType.value,
+    warnings,
     stackLabel: shape.stackLabel,
     hasGitHubWorkflows: shape.hasGitHubWorkflows,
   };
@@ -678,13 +868,22 @@ function logInspection(repoRoot: string, inspection: RepositoryInspection): void
   console.log(inspection.summary);
   console.log(`Signals: ${inspection.signals.join("; ")}`);
   console.log(
+    `Suggested base branch: ${inspection.suggestedBaseBranch} (${inspection.suggestedBaseBranchSource})`
+  );
+  console.log(
     `Suggested verification command: ${formatCommandForDisplay(
       inspection.suggestedBuildCommand
     )} (${inspection.suggestedBuildCommandSource})`
   );
   console.log(
+    `Suggested forge integration: ${inspection.suggestedForgeType} (${inspection.suggestedForgeTypeSource})`
+  );
+  console.log(
     `Suggested extra AI context exclusions: ${renderList(inspection.suggestedExcludePaths)}`
   );
+  for (const warning of inspection.warnings) {
+    console.log(`Warning: ${warning}`);
+  }
   console.log("");
 }
 
@@ -754,6 +953,11 @@ export async function runSetupCommand(options: {
 
   console.log("");
   console.log(`Wrote ${getRepositoryConfigPath(options.repoRoot)}.`);
+  console.log(`Configured base branch: ${answers.baseBranch}`);
+  console.log(
+    `Configured verification command: ${formatCommandForDisplay(answers.buildCommand)}`
+  );
+  console.log(`Configured forge integration: ${answers.forgeType}`);
   console.log(
     gitignoreUpdated ? "Added `.git-ai/` to .gitignore." : "`.git-ai/` was already gitignored."
   );

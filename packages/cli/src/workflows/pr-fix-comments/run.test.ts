@@ -161,6 +161,7 @@ describe("runPrFixCommentsCommand", () => {
       prNumber: 88,
       repoRoot,
       buildCommand: ["pnpm", "build"],
+      ensureVerificationCommandAvailable: vi.fn(),
       runtime: {
         resolve: () => ({
           displayName: "Codex",
@@ -244,6 +245,7 @@ describe("runPrFixCommentsCommand", () => {
       prNumber: 88,
       repoRoot,
       buildCommand: ["pnpm", "build"],
+      ensureVerificationCommandAvailable: vi.fn(),
       runtime: {
         resolve: () => ({
           displayName: "Codex",
@@ -316,6 +318,7 @@ describe("runPrFixCommentsCommand", () => {
       prNumber: 88,
       repoRoot,
       buildCommand: ["pnpm", "build"],
+      ensureVerificationCommandAvailable: vi.fn(),
       runtime: {
         resolve: () => ({
           displayName: "Codex",
@@ -376,6 +379,7 @@ describe("runPrFixCommentsCommand", () => {
         prNumber: 88,
         repoRoot,
         buildCommand: ["pnpm", "build"],
+        ensureVerificationCommandAvailable: vi.fn(),
         runtime: {
           resolve: () => ({
             displayName: "Codex",

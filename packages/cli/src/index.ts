@@ -79,6 +79,12 @@ import {
   toRepoRelativePath,
 } from "./run-artifacts";
 import { parseSetupCommandArgs, runSetupCommand } from "./setup";
+import {
+  branchContainsCommit,
+  ensureVerificationCommandAvailable,
+  preflightIssueBaseBranch,
+  preflightRemoteBranch,
+} from "./workflow-preflights";
 import { runPrFixCommentsCommand } from "./workflows/pr-fix-comments/run";
 import { runPrPrepareReviewCommand } from "./workflows/pr-prepare-review/run";
 import { runPrFixTestsCommand } from "./workflows/pr-fix-tests/run";
@@ -1700,7 +1706,13 @@ function switchToExistingIssueBranch(repoRoot: string, branchName: string): void
   );
 }
 
-function syncIssueBaseBranch(repoRoot: string, baseBranch: string): void {
+function syncIssueBaseBranch(
+  repoRoot: string,
+  baseBranch: string,
+  preflight: { remoteRef: string; remoteTip: string }
+): void {
+  const { remoteRef, remoteTip } = preflight;
+
   console.log(`Switching to base branch ${baseBranch}...`);
   runInteractiveCommand(
     "git",
@@ -1709,11 +1721,16 @@ function syncIssueBaseBranch(repoRoot: string, baseBranch: string): void {
     repoRoot
   );
 
-  console.log(`Pulling latest changes for ${baseBranch}...`);
+  if (branchContainsCommit(repoRoot, remoteTip, "HEAD")) {
+    console.log(`Base branch ${baseBranch} already contains ${remoteRef} tip ${remoteTip}.`);
+    return;
+  }
+
+  console.log(`Fast-forwarding ${baseBranch} to ${remoteRef}...`);
   runInteractiveCommand(
     "git",
-    ["pull"],
-    `Failed to pull latest changes for base branch "${baseBranch}".`,
+    ["merge", "--ff-only", remoteRef],
+    `Failed to fast-forward base branch "${baseBranch}" to ${remoteRef}. Reconcile the local "${baseBranch}" branch with origin and rerun the issue workflow.`,
     repoRoot
   );
 }
@@ -1972,9 +1989,7 @@ function runTrackedCommand(
 }
 
 function verifyBuild(repoRoot: string, buildCommand: string[], outputLogPath: string): void {
-  if (!canRunCommand(buildCommand[0])) {
-    throw new Error(`The \`${buildCommand[0]}\` CLI is not available on PATH.`);
-  }
+  ensureVerificationCommandAvailable(repoRoot, buildCommand, "git-ai");
 
   runTrackedCommand(
     buildCommand[0],
@@ -2427,6 +2442,8 @@ async function runPrCommand(): Promise<void> {
       prNumber: prCommand.prNumber,
       repoRoot,
       buildCommand: repositoryConfig.buildCommand,
+      ensureVerificationCommandAvailable,
+      preflightBaseBranch: preflightRemoteBranch,
       forge: getRepositoryForge(repoRoot),
       ensureCleanWorkingTree,
       promptForLine,
@@ -2444,6 +2461,7 @@ async function runPrCommand(): Promise<void> {
       prNumber: prCommand.prNumber,
       repoRoot,
       buildCommand: repositoryConfig.buildCommand,
+      ensureVerificationCommandAvailable,
       runtime: {
         resolve: () => {
           const runtime = selectInteractiveRuntime(repositoryConfig.ai.runtime, {
@@ -2473,6 +2491,7 @@ async function runPrCommand(): Promise<void> {
     prNumber: prCommand.prNumber,
     repoRoot,
     buildCommand: repositoryConfig.buildCommand,
+    ensureVerificationCommandAvailable,
     runtime: {
       resolve: () => {
         const runtime = selectInteractiveRuntime(repositoryConfig.ai.runtime, {
@@ -2943,6 +2962,15 @@ async function prepareIssueRun(
       "Repository forge support is disabled by .git-ai/config.json. Configure `forge.type` to enable issue workflows."
     );
   }
+  ensureVerificationCommandAvailable(
+    repoRoot,
+    repositoryConfig.buildCommand,
+    "git-ai issue workflows"
+  );
+  const baseBranchPreflight = preflightIssueBaseBranch(
+    repoRoot,
+    repositoryConfig.baseBranch
+  );
   ensureCleanWorkingTree(repoRoot);
   console.log(`Fetching issue #${issueNumber}...`);
   const issue = await forge.fetchIssueDetails(issueNumber);
@@ -3036,7 +3064,7 @@ async function prepareIssueRun(
 
   const branchName = createIssueBranchName(issueNumber, issue.title);
   ensureBranchDoesNotExist(repoRoot, branchName);
-  syncIssueBaseBranch(repoRoot, repositoryConfig.baseBranch);
+  syncIssueBaseBranch(repoRoot, repositoryConfig.baseBranch, baseBranchPreflight);
   const workspace = createIssueWorkspace(repoRoot, issueNumber, issue);
   writeIssueWorkspaceFiles(
     repoRoot,

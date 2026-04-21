@@ -176,6 +176,7 @@ describe("runPrFixTestsCommand", () => {
       prNumber: 71,
       repoRoot,
       buildCommand: ["pnpm", "build"],
+      ensureVerificationCommandAvailable: vi.fn(),
       runtime: {
         resolve: () => ({
           displayName: "Codex",
@@ -293,6 +294,7 @@ describe("runPrFixTestsCommand", () => {
       prNumber: 71,
       repoRoot,
       buildCommand: ["pnpm", "build"],
+      ensureVerificationCommandAvailable: vi.fn(),
       runtime: {
         resolve: () => ({
           displayName: "Codex",
@@ -353,6 +355,7 @@ describe("runPrFixTestsCommand", () => {
       prNumber: 71,
       repoRoot,
       buildCommand: ["pnpm", "build"],
+      ensureVerificationCommandAvailable: vi.fn(),
       runtime: {
         resolve: () => ({
           displayName: "Codex",
@@ -401,6 +404,7 @@ describe("runPrFixTestsCommand", () => {
       prNumber: 71,
       repoRoot,
       buildCommand: ["pnpm", "build"],
+      ensureVerificationCommandAvailable: vi.fn(),
       runtime: {
         resolve: () => ({
           displayName: "Codex",
@@ -488,6 +492,7 @@ describe("runPrFixTestsCommand", () => {
       prNumber: 71,
       repoRoot,
       buildCommand: ["pnpm", "build"],
+      ensureVerificationCommandAvailable: vi.fn(),
       runtime: {
         resolve: () => ({
           displayName: "Codex",
@@ -559,6 +564,7 @@ describe("runPrFixTestsCommand", () => {
         prNumber: 71,
         repoRoot,
         buildCommand: ["pnpm", "build"],
+        ensureVerificationCommandAvailable: vi.fn(),
         runtime: {
           resolve: () => ({
             displayName: "Codex",
@@ -615,6 +621,7 @@ describe("runPrFixTestsCommand", () => {
         prNumber: 71,
         repoRoot,
         buildCommand: ["pnpm", "build"],
+        ensureVerificationCommandAvailable: vi.fn(),
         runtime: {
           resolve: () => ({
             displayName: "Codex",
@@ -644,6 +651,7 @@ describe("runPrFixTestsCommand", () => {
         prNumber: 71,
         repoRoot,
         buildCommand: ["pnpm", "build"],
+        ensureVerificationCommandAvailable: vi.fn(),
         runtime: {
           resolve: () => ({
             displayName: "Codex",
@@ -683,6 +691,7 @@ describe("runPrFixTestsCommand", () => {
         prNumber: 71,
         repoRoot,
         buildCommand: ["pnpm", "build"],
+        ensureVerificationCommandAvailable: vi.fn(),
         runtime: {
           resolve: () => ({
             displayName: "Codex",

@@ -1,6 +1,7 @@
 import type { PullRequestDetails, RepositoryForge } from "../../forge";
 import type { ReviewedGeneratedText } from "../../generated-text-review";
 import { finalizeRuntimeChanges } from "../../runtime-change-review";
+import { ensureVerificationCommandAvailable } from "../../workflow-preflights";
 import { pushReviewedPullRequestUpdates } from "../pull-request-reviewed-updates";
 import {
   findManagedTestSuggestionsComment,
@@ -22,6 +23,11 @@ type RunPrFixTestsCommandOptions = {
   prNumber: number;
   repoRoot: string;
   buildCommand: string[];
+  ensureVerificationCommandAvailable?(
+    repoRoot: string,
+    buildCommand: string[],
+    workflowLabel: string
+  ): void;
   runtime: {
     resolve(): {
       displayName: string;
@@ -68,6 +74,11 @@ export async function runPrFixTestsCommand(
   }
 
   options.ensureCleanWorkingTree(options.repoRoot);
+  (options.ensureVerificationCommandAvailable ?? ensureVerificationCommandAvailable)(
+    options.repoRoot,
+    options.buildCommand,
+    "git-ai pr fix-tests"
+  );
 
   console.log(`Fetching pull request #${options.prNumber}...`);
   const pullRequest = await options.forge.fetchPullRequestDetails(options.prNumber);

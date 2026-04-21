@@ -32,11 +32,25 @@ function createPrompt(answers: string[], prompts: string[] = []) {
   };
 }
 
-function mockGit(
+function mockChildProcess(
   repoRoot: string,
-  responses: Record<string, string | Error>
+  responses: Record<string, string | Error>,
+  options: { ghAuthStatus?: string | Error } = {}
 ): void {
   execFileSyncMock.mockImplementation((command, args) => {
+    if (command === "gh") {
+      const ghArgs = Array.isArray(args) ? args.map((value) => String(value)) : [];
+      if (ghArgs.join(" ") !== "auth status") {
+        throw new Error(`Unexpected gh arguments: ${ghArgs.join(" ")}`);
+      }
+
+      if (options.ghAuthStatus instanceof Error) {
+        throw options.ghAuthStatus;
+      }
+
+      return options.ghAuthStatus ?? "";
+    }
+
     if (command !== "git") {
       throw new Error(`Unexpected command: ${String(command)}`);
     }
@@ -93,11 +107,15 @@ describe("setup command", () => {
     writeFileSync(resolve(repoRoot, "tsconfig.json"), "{}\n");
     writeFileSync(resolve(repoRoot, ".gitignore"), "node_modules/\n");
 
-    mockGit(repoRoot, {
+    mockChildProcess(
+      repoRoot,
+      {
       "rev-parse --show-toplevel": `${repoRoot}\n`,
       "symbolic-ref refs/remotes/origin/HEAD": "refs/remotes/origin/main\n",
       "remote get-url origin": "git@github.com:acme/fixture-node-repo.git\n",
-    });
+      },
+      { ghAuthStatus: new Error("not logged in") }
+    );
 
     const prompts: string[] = [];
     const messages: string[] = [];
@@ -157,7 +175,7 @@ describe("setup command", () => {
     );
     writeFileSync(resolve(repoRoot, "vendor", "bin", "phpunit"), "");
 
-    mockGit(repoRoot, {
+    mockChildProcess(repoRoot, {
       "rev-parse --show-toplevel": `${repoRoot}\n`,
       "symbolic-ref refs/remotes/origin/HEAD": "refs/remotes/origin/develop\n",
       "remote get-url origin": "git@gitlab.com:acme/drupal-site.git\n",
@@ -224,11 +242,15 @@ describe("setup command", () => {
       ].join("\n")
     );
 
-    mockGit(repoRoot, {
+    mockChildProcess(
+      repoRoot,
+      {
       "rev-parse --show-toplevel": `${repoRoot}\n`,
       "symbolic-ref refs/remotes/origin/HEAD": "refs/remotes/origin/main\n",
       "remote get-url origin": "git@github.com:acme/fixture-node-repo.git\n",
-    });
+      },
+      { ghAuthStatus: new Error("not logged in") }
+    );
 
     await runSetupCommand({
       promptForLine: createPrompt([
@@ -252,5 +274,44 @@ describe("setup command", () => {
     expect(agentsContent).toContain("`pnpm build`");
     expect(agentsContent).toContain("`coverage/**`");
     expect(agentsContent).toContain("`generated/**`");
+  });
+
+  it("detects npm test when the repository has tests but no build script", async () => {
+    const repoRoot = createRepo("git-ai-setup-npm-test-");
+    writeFileSync(
+      resolve(repoRoot, "package.json"),
+      JSON.stringify(
+        {
+          name: "fixture-npm-repo",
+          scripts: {
+            test: "vitest run",
+          },
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(resolve(repoRoot, "package-lock.json"), "{}\n");
+
+    mockChildProcess(repoRoot, {
+      "rev-parse --show-toplevel": `${repoRoot}\n`,
+      "symbolic-ref refs/remotes/origin/HEAD": "refs/remotes/origin/trunk\n",
+      "remote get-url origin": "git@gitlab.com:acme/fixture-npm-repo.git\n",
+    });
+
+    await runSetupCommand({
+      promptForLine: createPrompt(["", "", "", "", ""]),
+      repoRoot,
+    });
+
+    expect(
+      JSON.parse(readFileSync(resolve(repoRoot, ".git-ai", "config.json"), "utf8"))
+    ).toEqual({
+      baseBranch: "trunk",
+      buildCommand: ["npm", "test"],
+      forge: {
+        type: "none",
+      },
+    });
   });
 });

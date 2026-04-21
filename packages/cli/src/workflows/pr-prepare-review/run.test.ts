@@ -135,6 +135,11 @@ function createDefaultCommandOptions(repoRoot: string, forge: RepositoryForge) {
     prNumber: 206,
     repoRoot,
     buildCommand: ["pnpm", "build"],
+    ensureVerificationCommandAvailable: vi.fn(),
+    preflightBaseBranch: vi.fn().mockReturnValue({
+      remoteRef: "origin/main",
+      remoteTip: "abc123base",
+    }),
     forge,
     ensureCleanWorkingTree: vi.fn(),
     promptForLine: vi.fn(),
@@ -334,6 +339,11 @@ describe("runPrPrepareReviewCommand", () => {
       prNumber: 206,
       repoRoot,
       buildCommand: ["pnpm", "build"],
+      ensureVerificationCommandAvailable: vi.fn(),
+      preflightBaseBranch: vi.fn().mockReturnValue({
+        remoteRef: "origin/main",
+        remoteTip: "abc123base",
+      }),
       forge,
       ensureCleanWorkingTree: vi.fn(),
       promptForLine: vi.fn(),

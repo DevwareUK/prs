@@ -45,11 +45,27 @@ import {
   type TrackedCommandOptions,
   type TrackedCommandResult,
 } from "../tracked-command";
+import {
+  ensureVerificationCommandAvailable,
+  preflightRemoteBranch,
+} from "../../workflow-preflights";
 
 type RunPrPrepareReviewCommandOptions = {
   prNumber: number;
   repoRoot: string;
   buildCommand: string[];
+  ensureVerificationCommandAvailable?(
+    repoRoot: string,
+    buildCommand: string[],
+    workflowLabel: string
+  ): void;
+  preflightBaseBranch?(
+    repoRoot: string,
+    remoteName: string,
+    branchName: string,
+    branchLabel: string,
+    recoveryHint: string
+  ): { remoteRef: string; remoteTip: string };
   forge: RepositoryForge;
   ensureCleanWorkingTree(repoRoot: string): void;
   promptForLine(prompt: string): Promise<string>;
@@ -579,9 +595,21 @@ export async function runPrPrepareReviewCommand(
 
   ensureCodexAvailable();
   options.ensureCleanWorkingTree(options.repoRoot);
+  (options.ensureVerificationCommandAvailable ?? ensureVerificationCommandAvailable)(
+    options.repoRoot,
+    options.buildCommand,
+    "git-ai pr prepare-review"
+  );
 
   console.log(`Fetching pull request #${options.prNumber}...`);
   const pullRequest = await options.forge.fetchPullRequestDetails(options.prNumber);
+  (options.preflightBaseBranch ?? preflightRemoteBranch)(
+    options.repoRoot,
+    "origin",
+    pullRequest.baseRefName,
+    `PR base branch "${pullRequest.baseRefName}"`,
+    "confirm the pull request base branch still exists on origin"
+  );
   const linkedIssues = (
     await fetchLinkedIssuesForPullRequest(options.forge, pullRequest)
   ).map((issue) => ({

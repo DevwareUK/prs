@@ -103,7 +103,7 @@ cd /path/to/your-repo
 git-ai setup
 ```
 
-`git-ai setup` detects the repository root, suggests repo-aware defaults, writes `.git-ai/config.json`, ensures `.git-ai/` is gitignored, and can create or update a managed `AGENTS.md` guidance section.
+`git-ai setup` detects the repository root, suggests repo-aware defaults for the base branch, verification command, forge, and extra AI exclusions, writes `.git-ai/config.json`, ensures `.git-ai/` is gitignored, and can create or update a managed `AGENTS.md` guidance section. When setup cannot determine a value confidently, it prints an explicit warning before asking you to confirm or replace the suggestion.
 
 ### First successful CLI runs
 
@@ -220,8 +220,8 @@ Supported fields:
 - `ai.provider.baseUrl`: optional override for `"openai"`.
 - `ai.provider.region`: optional explicit AWS region for `"bedrock-claude"`. Falls back to `AWS_REGION` or `AWS_DEFAULT_REGION`.
 - `aiContext.excludePaths`: repository-relative glob patterns excluded from AI diff and repository context. These exclusions apply across `git-ai commit`, `git-ai diff`, `git-ai review`, issue-to-PR flows, and repository backlog scans. Bare filename globs like `*.map` match by basename anywhere in the repository. Defaults: `["**/node_modules/**", "**/vendor/**", "**/dist/**", "**/build/**", "*.map"]`.
-- `baseBranch`: base branch used by `git-ai issue <number>` and `git-ai issue prepare <number>` when switching, pulling, and opening pull requests. Default: `main`.
-- `buildCommand`: command run after the interactive runtime exits during full local `git-ai issue <number>`, `git-ai pr fix-comments <pr-number>`, and `git-ai pr fix-tests <pr-number>` flows. Default: `["pnpm", "build"]`.
+- `baseBranch`: base branch used by `git-ai issue <number>` and `git-ai issue prepare <number>` when switching, syncing from `origin`, and opening pull requests. If unset, the resolved default is `main`, but `git-ai setup` first tries the remote default branch and then prints an explicit fallback warning when it has to guess.
+- `buildCommand`: command run after the interactive runtime exits during full local `git-ai issue <number>`, `git-ai pr fix-comments <pr-number>`, and `git-ai pr fix-tests <pr-number>` flows. If unset, the resolved default is `["pnpm", "build"]`, but `git-ai setup` first tries repository-local `verify`, `build`, or `test` commands from `package.json`, `composer.json`, or PHPUnit signals and warns before falling back.
 - `forge.type`: forge integration. Use `"github"` for GitHub-backed issue and PR flows or `"none"` to disable forge-backed issue and PR features for the repository.
 
 Runtime and provider fallback behavior:
@@ -281,7 +281,7 @@ Requirements:
 git-ai setup
 ```
 
-Runs a guided repository setup flow for the current Git repository. The command inspects the repo, suggests defaults for `baseBranch`, `forge.type`, `buildCommand`, and extra `aiContext.excludePaths`, writes `.git-ai/config.json`, ensures `.git-ai/` is gitignored, and can create or update a managed `AGENTS.md` section with repo-specific guidance.
+Runs a guided repository setup flow for the current Git repository. The command inspects the repo, suggests defaults for `baseBranch`, `forge.type`, `buildCommand`, and extra `aiContext.excludePaths`, prints the detection source for each suggestion, warns when it had to fall back because signals were missing or conflicting, writes `.git-ai/config.json`, ensures `.git-ai/` is gitignored, and can create or update a managed `AGENTS.md` section with repo-specific guidance.
 
 The setup flow still expects you to create `.env` yourself because it cannot safely write secrets like `OPENAI_API_KEY`.
 
@@ -302,12 +302,12 @@ Available subcommands:
 
 | Command | What it does |
 | --- | --- |
-| `git-ai issue <number>` | Full local issue-to-PR flow in interactive mode. Fetches the configured forge issue, switches to the configured `baseBranch`, pulls the latest changes, creates the issue branch, writes `.git-ai/` workspace files, opens the configured interactive runtime, runs the configured build command after that runtime exits, generates a proposed commit message from the completed diff for review, and then either creates the commit plus an AI-authored PR title/body or leaves the branch uncommitted. Creating the pull request pushes the reviewed issue branch first. Generated PR bodies include an issue-closing reference and the managed PR assistant section markers. |
+| `git-ai issue <number>` | Full local issue-to-PR flow in interactive mode. Preflights the configured forge, verification command, and `baseBranch`, fetches the configured forge issue, fast-forwards the configured base branch to `origin/<base-branch>`, creates the issue branch, writes `.git-ai/` workspace files, opens the configured interactive runtime, runs the configured build command after that runtime exits, generates a proposed commit message from the completed diff for review, and then either creates the commit plus an AI-authored PR title/body or leaves the branch uncommitted. Creating the pull request pushes the reviewed issue branch first. Generated PR bodies include an issue-closing reference and the managed PR assistant section markers. |
 | `git-ai issue <number> --mode unattended` | Full local issue-to-PR flow in unattended mode. Requires `ai.runtime.type` to be `codex`, reuses the same per-issue branch and session state as interactive runs, launches Codex non-interactively, commits with the generated commit message automatically, pushes the issue branch through the pull-request creation path, and then opens the pull request without prompting. |
 | `git-ai issue batch <number> <number> [...number]` | Sequential unattended issue queue. Defaults to `--mode unattended`, requires at least two unique issue numbers, runs each issue as its own independent unattended issue execution, stores batch progress separately under `.git-ai/batches/`, and stops immediately at the first incomplete issue so reruns can resume from there. Each completed issue uses the same unattended issue-to-PR path, including pushing the branch before opening the pull request. |
 | `git-ai issue draft` | Interactive issue drafting flow. Prompts for a rough idea, creates `.git-ai/` draft-run artifacts, launches the configured runtime so it can inspect the repository and ask targeted follow-up questions itself, expects the runtime to write the Markdown draft under `.git-ai/issues/`, previews the draft in the terminal, and lets you create it as-is, modify it in `$VISUAL`, `$EDITOR`, or `vim`, or keep it on disk without creating the issue. |
 | `git-ai issue plan <number>` | Generates an issue resolution plan for the configured forge issue through the configured text provider and posts it as a managed comment. If an editable plan comment already exists, the command reuses it instead of overwriting collaborator edits. |
-| `git-ai issue prepare <number>` | Switches to the configured `baseBranch`, pulls the latest changes, prepares the issue branch and `.git-ai/` workspace artifacts, and then prints machine-readable JSON describing the run. |
+| `git-ai issue prepare <number>` | Preflights the configured forge, verification command, and `baseBranch`, fast-forwards the configured base branch to `origin/<base-branch>`, prepares the issue branch and `.git-ai/` workspace artifacts, and then prints machine-readable JSON describing the run. |
 | `git-ai issue prepare <number> --mode github-action` | Same preparation flow, but writes prompt instructions tailored for non-interactive GitHub Actions runs. |
 | `git-ai issue finalize <number>` | Generates a proposed commit message from the current repository diff, lets you preview, edit, or skip it, and creates the commit only after confirmation. It does not push or open a pull request. |
 
@@ -316,6 +316,8 @@ Important behavior:
 - `git-ai issue draft`, `git-ai issue plan <number>`, `git-ai issue prepare <number>`, `git-ai issue finalize <number>`, and full `git-ai issue <number>` runs print an advanced workflow notice before execution
 - `git-ai issue batch ...` prints a beta workflow notice before execution
 - `git-ai issue` requires a clean working tree before it starts
+- `git-ai issue <number>` and `git-ai issue prepare <number>` fail before checkout if the configured verification command cannot run from the repository root
+- `git-ai issue <number>` and `git-ai issue prepare <number>` fail before checkout if the configured base branch is missing locally, missing on `origin`, or cannot be fast-forwarded cleanly
 - `git-ai issue batch ...` requires at least two unique issue numbers
 - `git-ai issue draft` previews the generated draft in the terminal and only opens `$VISUAL`, `$EDITOR`, or `vim` when you explicitly choose modify
 - `git-ai issue draft` requires an available interactive runtime CLI on `PATH`; if the configured non-default runtime is unavailable, `git-ai` falls back to `codex` when possible
@@ -331,7 +333,7 @@ Important behavior:
 - unattended single-issue and batch runs keep per-issue resume state in `.git-ai/issues/<number>/session.json`
 - unattended batch runs reject `--mode interactive`
 - unattended batch runs keep queue progress separately in `.git-ai/batches/` and skip issues already marked completed on later reruns of the same ordered batch
-- issue preparation checks out and pulls the configured `baseBranch`, defaulting to `main`
+- issue preparation checks out the configured `baseBranch` and fast-forwards it to `origin/<base-branch>`, defaulting to `main` only when no repository config is present
 - PR creation uses the configured `baseBranch`, defaulting to `main`
 - GitHub-backed PR creation requires `gh` to be installed and authenticated
 - GitHub-backed issue plan comments require `GH_TOKEN` or `GITHUB_TOKEN`, or an authenticated `gh` session, when they are created
@@ -355,9 +357,9 @@ Available subcommands:
 
 | Command | What it does |
 | --- | --- |
-| `git-ai pr prepare-review <pr-number>` | Fetches pull request metadata and linked issues, requires a clean working tree, checks out the best available local review branch for the PR, fetches the latest `origin/<base-branch>` tip, skips merging when the checked-out branch already contains that tip, otherwise merges the base branch into the review branch before brief generation, routes merge conflicts through an interactive Codex conflict-resolution session when needed, writes `.git-ai/` run artifacts, generates `review-brief.md`, prints the saved brief path plus a terminal preview, and then leaves you in an interactive Codex session on that branch for follow-up review questions or requested fixes. After that session exits, `git-ai` exits cleanly if there are no new reviewed commits to sync, or else runs the configured build command when there are follow-up file changes, offers the same reviewed commit-message flow used by the other local fix workflows, and pushes any new reviewed commits back to `origin/<pr-head-branch>`. |
-| `git-ai pr fix-comments <pr-number>` | Fetches pull request metadata and review comments from the configured forge, filters out obviously non-actionable comments, groups nearby threads into selectable review tasks, preserves non-trivial replies as thread context, writes richer `.git-ai/` run artifacts, opens the configured interactive runtime, runs the configured build command, previews a proposed commit message that you can edit, accept, or skip, and then pushes the reviewed commit back to `origin/<pr-head-branch>` when `HEAD` is ahead and not behind after fetching the latest remote head. |
-| `git-ai pr fix-tests <pr-number>` | Fetches pull request metadata and PR issue comments from the configured forge, finds the managed AI Test Suggestions comment, parses structured suggestion areas into selectable tasks, writes focused `.git-ai/` run artifacts, opens the configured interactive runtime, runs the configured build command, previews a proposed commit message that you can edit, accept, or skip, and then pushes the reviewed commit back to `origin/<pr-head-branch>` when `HEAD` is ahead and not behind after fetching the latest remote head. |
+| `git-ai pr prepare-review <pr-number>` | Fetches pull request metadata and linked issues, requires a clean working tree, preflights the configured verification command plus the live PR base branch on `origin`, checks out the best available local review branch for the PR, fetches the latest `origin/<base-branch>` tip, skips merging when the checked-out branch already contains that tip, otherwise merges the base branch into the review branch before brief generation, routes merge conflicts through an interactive Codex conflict-resolution session when needed, writes `.git-ai/` run artifacts, generates `review-brief.md`, prints the saved brief path plus a terminal preview, and then leaves you in an interactive Codex session on that branch for follow-up review questions or requested fixes. After that session exits, `git-ai` exits cleanly if there are no new reviewed commits to sync, or else runs the configured build command when there are follow-up file changes, offers the same reviewed commit-message flow used by the other local fix workflows, and pushes any new reviewed commits back to `origin/<pr-head-branch>`. |
+| `git-ai pr fix-comments <pr-number>` | Requires a clean working tree, preflights the configured verification command, fetches pull request metadata and review comments from the configured forge, filters out obviously non-actionable comments, groups nearby threads into selectable review tasks, preserves non-trivial replies as thread context, writes richer `.git-ai/` run artifacts, opens the configured interactive runtime, runs the configured build command, previews a proposed commit message that you can edit, accept, or skip, and then pushes the reviewed commit back to `origin/<pr-head-branch>` when `HEAD` is ahead and not behind after fetching the latest remote head. |
+| `git-ai pr fix-tests <pr-number>` | Requires a clean working tree, preflights the configured verification command, fetches pull request metadata and PR issue comments from the configured forge, finds the managed AI Test Suggestions comment, parses structured suggestion areas into selectable tasks, writes focused `.git-ai/` run artifacts, opens the configured interactive runtime, runs the configured build command, previews a proposed commit message that you can edit, accept, or skip, and then pushes the reviewed commit back to `origin/<pr-head-branch>` when `HEAD` is ahead and not behind after fetching the latest remote head. |
 
 Important behavior:
 
@@ -365,7 +367,9 @@ Important behavior:
 - `git-ai pr prepare-review <pr-number>` requires a clean working tree before it starts
 - `git-ai pr fix-comments <pr-number>` requires a clean working tree before it starts
 - `git-ai pr fix-tests <pr-number>` requires a clean working tree before it starts
+- `git-ai pr prepare-review <pr-number>`, `git-ai pr fix-comments <pr-number>`, and `git-ai pr fix-tests <pr-number>` fail early when the configured verification command cannot run from the repository root
 - `git-ai pr prepare-review <pr-number>` requires `codex` on `PATH`
+- `git-ai pr prepare-review <pr-number>` validates that the live PR base branch still exists on `origin` before it checks out or fetches a review branch
 - `git-ai pr prepare-review <pr-number>` reuses a linked issue branch when exactly one linked issue has saved local state and that branch still exists locally
 - otherwise `git-ai pr prepare-review <pr-number>` checks out the local PR head branch when it already exists, or fetches the PR head into a dedicated `review/pr-<pr-number>-<slug>` branch
 - after checkout, `git-ai pr prepare-review <pr-number>` fetches the latest `origin/<pr-base-branch>` tip and records whether the branch was already current or had to be merged with the latest base branch
