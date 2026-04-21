@@ -44,17 +44,23 @@ Add `actions/pr-assistant` when you also want managed PR-body updates that prese
 
 ## Advanced and beta workflows
 
-These workflows remain supported and documented below, but they are separate from the launch-stage offer because they ask a new team to trust wider-scoped automation earlier:
+These workflows remain supported and documented below, but they are separate from the launch-stage offer because they ask a new team to trust wider-scoped automation earlier. The CLI now prints local launch-stage notices before these commands run.
+
+Advanced workflows:
 
 - `git-ai issue draft`
 - `git-ai issue plan <number>`
 - `git-ai issue prepare <number>`
 - `git-ai issue finalize <number>`
 - `git-ai issue <number>`
+
+Beta workflows:
+
 - `git-ai issue batch <number> <number> [...number]`
 - `git-ai pr prepare-review <pr-number>`
 - `git-ai feature-backlog`
-- multi-provider and runtime-parity paths such as `bedrock-claude` and `claude-code`
+
+Separate from the command tiers, multi-provider and runtime-parity paths such as `bedrock-claude` and `claude-code` also remain supported but are still deeper-launch paths.
 
 ## Quick start
 
@@ -139,13 +145,16 @@ Primary offer commands:
 - `git-ai pr fix-tests <pr-number>`: implement selected AI PR test suggestions with the configured interactive runtime
 - `git-ai test-backlog`: find high-value automated testing gaps
 
-Advanced and beta commands:
+Advanced commands:
 
 - `git-ai issue draft`: turn a rough idea into a structured issue draft
 - `git-ai issue plan <number>`: generate or refresh an issue-resolution plan comment
 - `git-ai issue <number>`: run the full local issue-to-PR workflow
-- `git-ai issue batch ...`: queue unattended issue-to-PR runs
 - `git-ai issue prepare <number>` and `git-ai issue finalize <number>`: split issue setup from local completion
+
+Beta commands:
+
+- `git-ai issue batch ...`: queue unattended issue-to-PR runs
 - `git-ai pr prepare-review <pr-number>`: prepare a reviewer workspace and review brief before a live Codex session
 - `git-ai feature-backlog`: find high-value feature opportunities
 
@@ -303,6 +312,8 @@ Available subcommands:
 
 Important behavior:
 
+- `git-ai issue draft`, `git-ai issue plan <number>`, `git-ai issue prepare <number>`, `git-ai issue finalize <number>`, and full `git-ai issue <number>` runs print an advanced workflow notice before execution
+- `git-ai issue batch ...` prints a beta workflow notice before execution
 - `git-ai issue` requires a clean working tree before it starts
 - `git-ai issue batch ...` requires at least two unique issue numbers
 - `git-ai issue draft` previews the generated draft in the terminal and only opens `$VISUAL`, `$EDITOR`, or `vim` when you explicitly choose modify
@@ -347,6 +358,7 @@ Available subcommands:
 
 Important behavior:
 
+- `git-ai pr prepare-review <pr-number>` prints a beta workflow notice before execution
 - `git-ai pr prepare-review <pr-number>` requires a clean working tree before it starts
 - `git-ai pr fix-comments <pr-number>` requires a clean working tree before it starts
 - `git-ai pr fix-tests <pr-number>` requires a clean working tree before it starts
@@ -480,6 +492,7 @@ git-ai feature-backlog . --format json
 
 Important behavior:
 
+- `git-ai feature-backlog` prints a beta workflow notice before execution
 - the repository analysis is heuristic and based on the repository structure, current product surface, and automation signals
 - with the default GitHub forge integration, `--create-issues` requires `GH_TOKEN` or `GITHUB_TOKEN`
 - with the default GitHub forge integration, issue creation targets the analyzed repository's `origin` remote, not just the current working directory

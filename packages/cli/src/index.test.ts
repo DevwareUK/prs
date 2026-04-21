@@ -386,6 +386,15 @@ function captureStdout(): { output: () => string } {
   };
 }
 
+function parseJsonPayloadFromOutput<T>(output: string): T {
+  const jsonStart = output.indexOf("{");
+  if (jsonStart === -1) {
+    throw new Error(`Expected JSON output but none was found:\n${output}`);
+  }
+
+  return JSON.parse(output.slice(jsonStart)) as T;
+}
+
 function listIssueDraftFiles(): string[] {
   try {
     return readdirSync(resolve(REPO_ROOT, ".git-ai", "issues"))
@@ -1044,8 +1053,72 @@ describe("CLI integration", () => {
     expect(stdout.output()).toContain("GitHub-first AI workflows");
     expect(stdout.output()).toContain("Start here:");
     expect(stdout.output()).toContain("git-ai pr fix-comments <pr-number>");
-    expect(stdout.output()).toContain("Advanced / beta:");
+    expect(stdout.output()).toContain("Advanced:");
+    expect(stdout.output()).toContain("Beta:");
     expect(stdout.output()).toContain("git-ai issue draft");
+    expect(stdout.output()).toContain("git-ai pr prepare-review <pr-number>");
+  });
+
+  it("prints a beta workflow notice before feature-backlog output", async () => {
+    const { run } = await loadCli({
+      featureAnalysisResult: createFeatureBacklogAnalysis(),
+    });
+
+    process.argv = ["node", "git-ai", "feature-backlog", ".", "--format", "json"];
+
+    const stdout = captureStdout();
+    await run();
+
+    const output = stdout.output();
+    expect(output).toContain("BETA WORKFLOW NOTICE");
+    expect(output).toContain("`git-ai feature-backlog`");
+    expect(output).toContain('"summary"');
+    expect(output.indexOf("BETA WORKFLOW NOTICE")).toBeLessThan(
+      output.indexOf('"summary"')
+    );
+  });
+
+  it("prints an advanced workflow notice before issue-plan execution starts", async () => {
+    const { run } = await loadCli();
+
+    await withRepositoryConfig(
+      JSON.stringify(
+        {
+          forge: {
+            type: "none",
+          },
+        },
+        null,
+        2
+      ),
+      async () => {
+        process.argv = ["node", "git-ai", "issue", "plan", "42"];
+
+        const stdout = captureStdout();
+        await expect(run()).rejects.toThrow(
+          "Repository forge support is disabled by .git-ai/config.json. Configure `forge.type` to enable issue workflows."
+        );
+
+        const output = stdout.output();
+        expect(output).toContain("ADVANCED WORKFLOW NOTICE");
+        expect(output).toContain("`git-ai issue plan <number>`");
+      }
+    );
+  });
+
+  it("does not print a launch-stage notice for primary-offer test-backlog runs", async () => {
+    const { run } = await loadCli({
+      analysisResult: createTestBacklogAnalysis(),
+    });
+
+    process.argv = ["node", "git-ai", "test-backlog", "--format", "json"];
+
+    const stdout = captureStdout();
+    await run();
+
+    const output = stdout.output();
+    expect(output).not.toContain("WORKFLOW NOTICE");
+    expect(output).toContain('"summary"');
   });
 
   it("includes the same help overview in unknown-command errors", async () => {
@@ -3974,7 +4047,7 @@ describe("CLI integration", () => {
       maxSuggestions: 5,
     });
 
-    const output = JSON.parse(stdout.output()) as {
+    const output = parseJsonPayloadFromOutput(stdout.output()) as {
       suggestions: Array<{ issueTitle: string }>;
       createdIssues: Array<{ number: number; title: string; status: string }>;
     };
@@ -5002,7 +5075,7 @@ describe("CLI integration", () => {
     const stdout = captureStdout();
     await run();
 
-    const output = JSON.parse(stdout.output()) as {
+    const output = parseJsonPayloadFromOutput(stdout.output()) as {
       branchName: string;
       issueFile: string;
       promptFile: string;
@@ -5123,7 +5196,7 @@ describe("CLI integration", () => {
     const stdout = captureStdout();
     await run();
 
-    const output = JSON.parse(stdout.output()) as {
+    const output = parseJsonPayloadFromOutput(stdout.output()) as {
       promptFile: string;
       runDir: string;
       mode: string;

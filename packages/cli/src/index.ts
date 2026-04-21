@@ -37,6 +37,10 @@ import {
 } from "./config";
 import { buildDoneStateInstructions } from "./done-state";
 import {
+  formatLaunchStageNotice,
+  type LaunchStageNoticeId,
+} from "./launch-stage";
+import {
   parsePrCommandArgs as parsePrCommandArgsImpl,
   type PrCommandOptions,
 } from "./commands/pr";
@@ -295,13 +299,15 @@ const TOP_LEVEL_HELP = [
   "  git-ai pr fix-tests <pr-number>",
   "  git-ai test-backlog [--top <count>]",
   "",
-  "Advanced / beta:",
+  "Advanced:",
   "  git-ai issue draft",
   "  git-ai issue plan <number>",
   "  git-ai issue <number> [--mode <interactive|unattended>]",
-  "  git-ai issue batch <number> <number> [...number] [--mode unattended]",
   "  git-ai issue prepare <number> [--mode <local|github-action>]",
   "  git-ai issue finalize <number>",
+  "",
+  "Beta:",
+  "  git-ai issue batch <number> <number> [...number] [--mode unattended]",
   "  git-ai pr prepare-review <pr-number>",
   "  git-ai feature-backlog [repo-path]",
   "",
@@ -1139,6 +1145,49 @@ export function parseReviewCommandArgs(args: string[]): ReviewCommandOptions {
     format,
     issueNumber,
   };
+}
+
+function resolveLaunchStageNoticeId(args: string[]): LaunchStageNoticeId | undefined {
+  const command = args[0] ?? "commit";
+
+  if (command === "feature-backlog") {
+    return "feature-backlog";
+  }
+
+  if (command === "issue") {
+    const issueCommand = parseIssueCommandArgs(args);
+
+    switch (issueCommand.action) {
+      case "batch":
+        return "issue-batch";
+      case "draft":
+        return "issue-draft";
+      case "finalize":
+        return "issue-finalize";
+      case "plan":
+        return "issue-plan";
+      case "prepare":
+        return "issue-prepare";
+      case "run":
+        return "issue-run";
+    }
+  }
+
+  if (command === "pr") {
+    const prCommand = parsePrCommandArgs(args);
+    return prCommand.action === "prepare-review" ? "pr-prepare-review" : undefined;
+  }
+
+  return undefined;
+}
+
+function emitLaunchStageNotice(args: string[]): void {
+  const noticeId = resolveLaunchStageNoticeId(args);
+  if (!noticeId) {
+    return;
+  }
+
+  process.stdout.write(`${formatLaunchStageNotice(noticeId)}\n`);
 }
 
 function stripIssuePlanCommentMarker(body: string): string {
@@ -3537,6 +3586,8 @@ export async function run(): Promise<void> {
   ) {
     throw new Error(`Unknown command: ${command}.\n\n${TOP_LEVEL_HELP}`);
   }
+
+  emitLaunchStageNotice(args);
 
   if (command === "commit") {
     const diff = readStagedDiff();
