@@ -5,16 +5,24 @@ describe("PRAssistantOutput", () => {
   it("parses a valid PR assistant payload", () => {
     const parsed = PRAssistantOutput.parse({
       summary: "Adds a shared PR assistant section for generated review guidance.",
-      keyChanges: ["Introduces a unified action and workflow."],
       riskAreas: ["Managed section replacement logic in the PR body."],
-      reviewerFocus: ["Verify existing body content remains unchanged outside markers."],
+      filesChanged: ["actions/pr-assistant/src/index.ts"],
+      testingNotes: ["pnpm build"],
+      rolloutConcerns: ["Managed section replacement depends on stable markers."],
+      reviewerChecklist: [
+        "Verify existing body content remains unchanged outside markers.",
+      ],
     });
 
     expect(parsed).toEqual({
       summary: "Adds a shared PR assistant section for generated review guidance.",
-      keyChanges: ["Introduces a unified action and workflow."],
       riskAreas: ["Managed section replacement logic in the PR body."],
-      reviewerFocus: ["Verify existing body content remains unchanged outside markers."],
+      filesChanged: ["actions/pr-assistant/src/index.ts"],
+      testingNotes: ["pnpm build"],
+      rolloutConcerns: ["Managed section replacement depends on stable markers."],
+      reviewerChecklist: [
+        "Verify existing body content remains unchanged outside markers.",
+      ],
     });
   });
 
@@ -22,9 +30,11 @@ describe("PRAssistantOutput", () => {
     expect(() =>
       PRAssistantOutput.parse({
         summary: "   ",
-        keyChanges: ["Valid change"],
         riskAreas: [],
-        reviewerFocus: ["Valid focus"],
+        filesChanged: ["actions/pr-assistant/src/index.ts"],
+        testingNotes: [],
+        rolloutConcerns: [],
+        reviewerChecklist: ["Valid focus"],
       })
     ).toThrow();
   });

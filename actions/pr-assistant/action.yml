@@ -1,5 +1,5 @@
 name: "AI PR Assistant"
-description: "Generate and merge a managed PR assistant section into the pull request body"
+description: "Generate and merge a managed PR assistant section with summary, risks, files, testing, rollout, and checklist notes"
 
 inputs:
   diff:
@@ -35,7 +35,7 @@ outputs:
   summary:
     description: "Generated PR assistant summary paragraph"
   section:
-    description: "Generated managed PR assistant section markdown"
+    description: "Generated managed PR assistant section markdown with stable reviewer headings"
   body:
     description: "Updated pull request body with the managed PR assistant section"
 

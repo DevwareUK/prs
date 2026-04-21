@@ -25,7 +25,7 @@ Start here if you are evaluating `git-ai` for a team:
 | Surface | Why it is part of the primary offer |
 | --- | --- |
 | `actions/pr-review` | Adds AI pull request review summaries, higher-level findings, and line-linked review comments in GitHub. |
-| `actions/pr-assistant` | Maintains a managed PR assistant section in the pull request body without overwriting unrelated manual content. |
+| `actions/pr-assistant` | Maintains a managed PR assistant section in the pull request body without overwriting unrelated manual content, using stable summary, risk, file, testing, rollout, and checklist headings. |
 | `actions/test-suggestions` | Posts practical test suggestions for the current pull request diff in GitHub. |
 | `git-ai review` | Runs a local senior-style diff review before or during a pull request. |
 | `git-ai pr fix-comments <pr-number>` | Pulls selected GitHub review comments into a focused local fix flow. |
@@ -652,10 +652,12 @@ Inputs:
 Outputs:
 
 - `summary`
-- `section`
+- `section` with `Summary`, `Risk areas`, `Files changed`, `Testing notes`, `Rollout concerns`, and `Reviewer checklist`
 - `body`
 
 When `GITHUB_OUTPUT` is not set, outputs are printed to stdout.
+
+`Files changed` is derived from the diff headers in code so the managed section stays grounded in the actual patch.
 
 #### Test suggestions action
 

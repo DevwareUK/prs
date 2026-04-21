@@ -5,21 +5,62 @@ import {
   PRAssistantOutputType,
 } from "@git-ai/contracts";
 import { AIProvider } from "@git-ai/providers";
+import { z } from "zod";
 import {
   buildDiffTaskPrompt,
   DIFF_GROUNDED_SYSTEM_PROMPT_LINES,
 } from "./diff-task";
-import { generateStructuredOutput } from "./structured-generation";
+import {
+  generateStructuredOutput,
+  normalizeNullableFields,
+} from "./structured-generation";
 
 const PR_ASSISTANT_SYSTEM_PROMPT = [
   "You are a senior software engineer writing a GitHub pull request assistant section for human reviewers.",
-  "Be concise but informative.",
+  "Be concise, repetitive, and predictable.",
   ...DIFF_GROUNDED_SYSTEM_PROMPT_LINES,
-  "Focus on a reviewer-useful summary, key changes, risk areas, and reviewer guidance.",
+  "Focus on a reviewer-useful summary, risk areas, testing notes, rollout concerns, and reviewer checklist items.",
   "Use the PR title, PR body, and commit messages only as supporting context and prefer the diff when they conflict.",
   "Only identify risks when they are supported by the diff or supporting context.",
   "Do not suggest reviewer checks that are not grounded in the change.",
+  "Use calm empty states and avoid novelty or marketing language.",
 ].join(" ");
+
+const PRAssistantModelItem = z.string().trim().min(1);
+
+const PRAssistantModelOutput = z.object({
+  summary: z.string().trim().min(1, "summary must be non-empty"),
+  riskAreas: z.array(PRAssistantModelItem).default([]),
+  testingNotes: z.array(PRAssistantModelItem).default([]),
+  rolloutConcerns: z.array(PRAssistantModelItem).default([]),
+  reviewerChecklist: z.array(PRAssistantModelItem).default([]),
+});
+
+function collectChangedFiles(diff: string): string[] {
+  const files: string[] = [];
+  const seen = new Set<string>();
+
+  for (const line of diff.split("\n")) {
+    if (!line.startsWith("diff --git ")) {
+      continue;
+    }
+
+    const match = line.match(/^diff --git a\/(.+?) b\/(.+)$/);
+    if (!match) {
+      continue;
+    }
+
+    const [, fromPath, toPath] = match;
+    const resolvedPath =
+      toPath === "dev/null" ? fromPath : fromPath === "dev/null" ? toPath : toPath;
+    if (!seen.has(resolvedPath)) {
+      seen.add(resolvedPath);
+      files.push(resolvedPath);
+    }
+  }
+
+  return files;
+}
 
 function buildPrompt(input: PRAssistantInputType): string {
   const contextLines: string[] = [];
@@ -39,16 +80,19 @@ function buildPrompt(input: PRAssistantInputType): string {
       "Generate a structured GitHub pull request assistant section from the provided diff.",
     guidanceLines: [
       'The "summary" should be a short paragraph describing the overall change and intent.',
-      '"keyChanges" should list the most meaningful implementation changes for reviewers.',
       '"riskAreas" should list concrete review risks or be an empty array if none are clearly supported.',
-      '"reviewerFocus" should list the specific checks a reviewer should make based on the diff.',
+      '"testingNotes" should list testing evidence, gaps, or notable verification context grounded in the diff or supporting context.',
+      '"rolloutConcerns" should list rollout, migration, or deployment concerns grounded in the diff or be an empty array.',
+      '"reviewerChecklist" should list the specific checks a reviewer should make based on the diff.',
+      "Do not include a files list in the JSON. File paths are derived from the diff separately.",
       "Avoid repeating the same point across multiple fields.",
     ],
     schemaLines: [
       '  "summary": string,',
-      '  "keyChanges": string[],',
       '  "riskAreas": string[],',
-      '  "reviewerFocus": string[]',
+      '  "testingNotes": string[],',
+      '  "rolloutConcerns": string[],',
+      '  "reviewerChecklist": string[]',
     ],
     contextLines:
       contextLines.length > 0
@@ -64,12 +108,23 @@ export async function generatePRAssistant(
 ): Promise<PRAssistantOutputType> {
   const parsedInput = PRAssistantInput.parse(input);
   const prompt = buildPrompt(parsedInput);
-
-  return generateStructuredOutput({
+  const modelOutput = await generateStructuredOutput({
     provider,
     systemPrompt: PR_ASSISTANT_SYSTEM_PROMPT,
     prompt,
-    schema: PRAssistantOutput,
+    schema: PRAssistantModelOutput,
     validationErrorPrefix: "Model output failed PR assistant schema validation",
+    normalizeParsedJson: (value) =>
+      normalizeNullableFields(value, [
+        "riskAreas",
+        "testingNotes",
+        "rolloutConcerns",
+        "reviewerChecklist",
+      ]),
+  });
+
+  return PRAssistantOutput.parse({
+    ...modelOutput,
+    filesChanged: collectChangedFiles(parsedInput.diff),
   });
 }

@@ -13,9 +13,11 @@ export type PRAssistantInputType = z.infer<typeof PRAssistantInput>;
 
 export const PRAssistantOutput = z.object({
   summary: z.string().trim().min(1, "summary must be non-empty"),
-  keyChanges: z.array(PRAssistantItem).min(1, "keyChanges must be non-empty"),
   riskAreas: z.array(PRAssistantItem),
-  reviewerFocus: z.array(PRAssistantItem).min(1, "reviewerFocus must be non-empty"),
+  filesChanged: z.array(PRAssistantItem),
+  testingNotes: z.array(PRAssistantItem),
+  rolloutConcerns: z.array(PRAssistantItem),
+  reviewerChecklist: z.array(PRAssistantItem),
 });
 
 export type PRAssistantOutputType = z.infer<typeof PRAssistantOutput>;

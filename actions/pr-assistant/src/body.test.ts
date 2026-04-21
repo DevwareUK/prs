@@ -8,17 +8,38 @@ import {
 } from "./body";
 
 describe("pr-assistant body helpers", () => {
-  it("renders the managed section with fallback risk text", () => {
+  it("renders the managed section with the stable reviewer headings", () => {
     const section = buildPRAssistantSection({
       summary: "Adds a single PR assistant action.",
-      keyChanges: ["Merges duplicate PR automation into one output."],
       riskAreas: [],
-      reviewerFocus: ["Verify the managed block updates without touching other text."],
+      filesChanged: ["actions/pr-assistant/src/index.ts"],
+      testingNotes: [],
+      rolloutConcerns: [],
+      reviewerChecklist: [
+        "Verify the managed block updates without touching other text.",
+      ],
     });
 
     expect(section).toContain("## PR Assistant");
     expect(section).toContain("### Risk areas");
-    expect(section).toContain("No additional diff-grounded risk areas identified.");
+    expect(section).toContain("### Files changed");
+    expect(section).toContain("### Testing notes");
+    expect(section).toContain("### Rollout concerns");
+    expect(section).toContain("### Reviewer checklist");
+    expect(section).toContain("None noted.");
+  });
+
+  it("renders an explicit empty files state", () => {
+    const section = buildPRAssistantSection({
+      summary: "Keeps the renderer calm when no file headers are available.",
+      riskAreas: [],
+      filesChanged: [],
+      testingNotes: [],
+      rolloutConcerns: [],
+      reviewerChecklist: [],
+    });
+
+    expect(section).toContain("No changed files detected from the diff.");
   });
 
   it("appends a managed section when the PR body has no markers", () => {

@@ -73,21 +73,41 @@ function stripManagedPRAssistantSection(body) {
   const stripped = body.replace(PR_ASSISTANT_SECTION_PATTERN, "").replace(/\n{3,}/g, "\n\n").trim();
   return stripped ? stripped : void 0;
 }
-function buildPRAssistantSection(summary) {
-  const lines = ["## PR Assistant", "", "### Summary", summary.summary, ""];
-  lines.push(...renderBulletSection("Key changes", summary.keyChanges, "No key changes identified."));
+function buildPRAssistantSection(assistant) {
+  const lines = ["## PR Assistant", "", "### Summary", assistant.summary, ""];
   lines.push(
     ...renderBulletSection(
       "Risk areas",
-      summary.riskAreas,
-      "No additional diff-grounded risk areas identified."
+      assistant.riskAreas,
+      "None noted."
     )
   );
   lines.push(
     ...renderBulletSection(
-      "Reviewer focus",
-      summary.reviewerFocus,
-      "No additional reviewer focus areas identified."
+      "Files changed",
+      assistant.filesChanged,
+      "No changed files detected from the diff."
+    )
+  );
+  lines.push(
+    ...renderBulletSection(
+      "Testing notes",
+      assistant.testingNotes,
+      "None noted."
+    )
+  );
+  lines.push(
+    ...renderBulletSection(
+      "Rollout concerns",
+      assistant.rolloutConcerns,
+      "None noted."
+    )
+  );
+  lines.push(
+    ...renderBulletSection(
+      "Reviewer checklist",
+      assistant.reviewerChecklist,
+      "None noted."
     )
   );
   while (lines[lines.length - 1] === "") {

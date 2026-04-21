@@ -575,9 +575,11 @@ async function loadCli(options: {
   issueResolutionPlanResult?: ReturnType<typeof createIssueResolutionPlanResult>;
   prAssistantResult?: {
     summary: string;
-    keyChanges: string[];
     riskAreas: string[];
-    reviewerFocus: string[];
+    filesChanged: string[];
+    testingNotes: string[];
+    rolloutConcerns: string[];
+    reviewerChecklist: string[];
   };
   prDescriptionResult?: {
     title: string;
@@ -632,9 +634,13 @@ async function loadCli(options: {
   generatePRAssistant.mockResolvedValue(
     options.prAssistantResult ?? {
       summary: "Adds reviewer-ready PR assistant content to issue-created pull requests.",
-      keyChanges: ["Generates a managed PR assistant section from the completed diff."],
       riskAreas: [],
-      reviewerFocus: ["Confirm the generated PR body and assistant section match the diff."],
+      filesChanged: ["packages/cli/src/index.ts"],
+      testingNotes: ["pnpm build"],
+      rolloutConcerns: [],
+      reviewerChecklist: [
+        "Confirm the generated PR body and assistant section match the diff.",
+      ],
     }
   );
   const generatePRDescription = vi.fn();
@@ -6865,12 +6871,11 @@ describe("CLI integration", () => {
         },
         prAssistantResult: {
           summary: "Keeps issue-created pull requests aligned with repository configuration.",
-          keyChanges: [
-            "Uses the configured base branch for issue preparation and PR creation.",
-            "Uses the configured build command before commit and PR steps.",
-          ],
           riskAreas: [],
-          reviewerFocus: [
+          filesChanged: ["packages/cli/src/index.ts"],
+          testingNotes: ["npm run verify"],
+          rolloutConcerns: [],
+          reviewerChecklist: [
             "Verify the workflow honors the configured base branch and build command.",
           ],
         },
@@ -7058,7 +7063,7 @@ describe("CLI integration", () => {
         "<!-- git-ai:pr-assistant:start -->"
       );
       expect(prArgs[prArgs.indexOf("--body") + 1]).toContain(
-        "### Reviewer focus"
+        "### Reviewer checklist"
       );
     } finally {
       if (hadOriginalConfig && originalConfig !== undefined) {

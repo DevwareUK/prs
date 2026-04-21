@@ -39,23 +39,43 @@ export function stripManagedPRAssistantSection(
 }
 
 export function buildPRAssistantSection(
-  summary: PRAssistantOutputType
+  assistant: PRAssistantOutputType
 ): string {
-  const lines: string[] = ["## PR Assistant", "", "### Summary", summary.summary, ""];
+  const lines: string[] = ["## PR Assistant", "", "### Summary", assistant.summary, ""];
 
-  lines.push(...renderBulletSection("Key changes", summary.keyChanges, "No key changes identified."));
   lines.push(
     ...renderBulletSection(
       "Risk areas",
-      summary.riskAreas,
-      "No additional diff-grounded risk areas identified."
+      assistant.riskAreas,
+      "None noted."
     )
   );
   lines.push(
     ...renderBulletSection(
-      "Reviewer focus",
-      summary.reviewerFocus,
-      "No additional reviewer focus areas identified."
+      "Files changed",
+      assistant.filesChanged,
+      "No changed files detected from the diff."
+    )
+  );
+  lines.push(
+    ...renderBulletSection(
+      "Testing notes",
+      assistant.testingNotes,
+      "None noted."
+    )
+  );
+  lines.push(
+    ...renderBulletSection(
+      "Rollout concerns",
+      assistant.rolloutConcerns,
+      "None noted."
+    )
+  );
+  lines.push(
+    ...renderBulletSection(
+      "Reviewer checklist",
+      assistant.reviewerChecklist,
+      "None noted."
     )
   );
 

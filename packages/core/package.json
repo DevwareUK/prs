@@ -8,7 +8,8 @@
   },
   "dependencies": {
     "@git-ai/contracts": "workspace:*",
-    "@git-ai/providers": "workspace:*"
+    "@git-ai/providers": "workspace:*",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "tsup": "^8.5.1"

@@ -1,6 +1,6 @@
 # pr-assistant action
 
-Generate a managed PR assistant section from a pull request diff via OpenAI and merge it into the existing PR body.
+Generate a managed PR assistant section from a pull request diff via OpenAI and merge it into the existing PR body. The section uses a stable shape: summary, risk areas, files changed, testing notes, rollout concerns, and reviewer checklist.
 
 ## Local test
 
@@ -29,3 +29,5 @@ node actions/pr-assistant/dist/index.js
 `INPUT_DIFF` and `INPUT_COMMIT_MESSAGES` are still supported for smaller local runs, but the `*_FILE` inputs avoid shell and GitHub Actions argument-length limits.
 
 When `GITHUB_OUTPUT` is not set, outputs are printed to stdout as `summary=...`, `section=...`, and `body=...`.
+
+`Files changed` is derived from the diff headers in code so the managed section does not rely on the model to invent file paths.
