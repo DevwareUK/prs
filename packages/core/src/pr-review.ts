@@ -13,10 +13,11 @@ import {
   generateStructuredOutput,
   normalizeNullableFields,
 } from "./structured-generation";
+import { trimPRReviewOutput } from "./pr-review-top-risks";
 
 const PR_REVIEW_SYSTEM_PROMPT = [
   "You are a senior software engineer producing pre-review signal for another human reviewer on a GitHub pull request.",
-  "Produce a concise overall pre-review summary, a very small set of high-signal inline review comments, and only when justified a very small set of higher-level findings.",
+  "Produce a concise overall pre-review summary and the smallest useful set of reviewer-ready risks, not a full review artifact.",
   ...DIFF_GROUNDED_SYSTEM_PROMPT_LINES,
   "Use linked issue context when it is provided so you can check whether the change matches the requested behavior.",
   "Focus on correctness, maintainability, performance, security, and testing concerns.",
@@ -179,16 +180,19 @@ function buildPrompt(input: PRReviewInputType): string {
     taskLine:
       "Generate an AI pull request pre-review signal from the provided diff.",
     guidanceLines: [
-      'The "summary" should be a short paragraph describing the overall pre-review outcome, the strongest evidence-backed concerns, and how the change aligns with the diff context.',
-      'The "comments" array should contain 0 to 6 actionable inline comments.',
+      'The "summary" should be 1 to 2 short sentences describing the overall pre-review outcome, the strongest evidence-backed concerns, and how the change aligns with the diff context.',
+      "Return only the top reviewer-ready risks and keep the combined total across comments and findings to 5 or fewer items.",
+      "Prefer 3 to 5 total risks only when the diff supports that many; return fewer or zero when the evidence is sparse.",
+      'Order both arrays from highest priority to lowest priority so trimming preserves the strongest risks first.',
+      'The "comments" array should contain 0 to 5 actionable inline comments, but only when each comment is one of the strongest reviewer-ready risks in the diff.',
       'The "findings" array should contain 0 to 3 actionable higher-level findings that are grounded in the diff but are not naturally tied to one changed line.',
       'Each comment must use a "path" that appears in the diff.',
       'Each comment "line" must be the right-side line number for an added or modified line in the diff.',
       'Use "severity" to communicate review priority and "confidence" to communicate how strongly the diff supports the concern.',
       'Use "category" to classify the concern.',
       'Use "affectedFile" to name the file a reviewer should inspect. For inline comments, set "affectedFile" to the same value as "path".',
-      'The "body" field should explain the specific concern without repeating labels.',
-      'The "whyThisMatters" field should explain the concrete impact or review risk.',
+      'The "body" field should explain the specific concern in one concise sentence without repeating labels.',
+      'The "whyThisMatters" field should explain the concrete impact or review risk in one concise sentence.',
       'Include "suggestedFix" only when you can concisely describe a justified improvement.',
       'Reserve high confidence for concerns that are directly supported by the diff and would likely survive human review.',
       "When the linked issue context matters, mention requirement alignment in the summary or comments.",
@@ -262,7 +266,12 @@ function normalizeModelOutput(value: unknown): unknown {
     );
   }
 
-  return normalized;
+  const parsedReview = PRReviewOutput.safeParse(normalized);
+  if (!parsedReview.success) {
+    return normalized;
+  }
+
+  return trimPRReviewOutput(parsedReview.data);
 }
 
 export async function generatePRReview(

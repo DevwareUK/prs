@@ -3,6 +3,10 @@ import type {
   PRReviewFindingType,
   PRReviewOutputType,
 } from "@git-ai/contracts";
+import {
+  MAX_PR_REVIEW_SIGNALS,
+  rankPRReviewSignals,
+} from "./pr-review-top-risks";
 
 type ReviewIssueContext = {
   number?: number;
@@ -57,18 +61,24 @@ function formatSignalHeading(
   return `${toTitleCase(severity)} severity, ${toTitleCase(confidence)} confidence ${toTitleCase(category)}`;
 }
 
-function appendCommonSignalLines(
-  lines: string[],
+function formatSignalLocation(
   signal: PRReviewCommentType | PRReviewFindingType
-): void {
-  lines.push(`  Severity: ${toTitleCase(signal.severity)}`);
-  lines.push(`  Confidence: ${toTitleCase(signal.confidence)}`);
-  lines.push(`  Affected file: \`${signal.affectedFile}\``);
-  lines.push(`  Concern: ${signal.body}`);
-  lines.push(`  Why this matters: ${signal.whyThisMatters}`);
-  if (signal.suggestedFix) {
-    lines.push(`  Suggested fix: ${signal.suggestedFix}`);
+): string {
+  if ("path" in signal) {
+    return `${signal.path}:${signal.line}`;
   }
+
+  return signal.affectedFile;
+}
+
+function formatInspectNext(
+  signal: PRReviewCommentType | PRReviewFindingType
+): string {
+  if (signal.suggestedFix) {
+    return signal.suggestedFix;
+  }
+
+  return `Inspect \`${formatSignalLocation(signal)}\` in context and confirm the concern above is addressed.`;
 }
 
 function collectChangedLines(diff: string): Map<string, Set<number>> {
@@ -117,6 +127,7 @@ export function formatPRReviewMarkdown(
   review: PRReviewOutputType,
   issue?: ReviewIssueContext
 ): string {
+  const topSignals = rankPRReviewSignals(review).slice(0, MAX_PR_REVIEW_SIGNALS);
   const lines: string[] = [
     "# AI PR Pre-Review Signal",
     "",
@@ -134,35 +145,28 @@ export function formatPRReviewMarkdown(
     );
   }
 
-  if (review.findings.length > 0) {
-    lines.push("", "## Higher-level signals");
+  lines.push("", "## Top Risks");
 
-    for (const finding of review.findings) {
-      lines.push(
-        `- ${finding.title} (${formatSignalHeading(
-          finding.severity,
-          finding.confidence,
-          finding.category
-        )})`
-      );
-      appendCommonSignalLines(lines, finding);
-    }
-  }
-
-  lines.push("", "## Line-level signals");
-
-  if (review.comments.length === 0) {
-    lines.push("No actionable line-level pre-review signals identified.");
+  if (topSignals.length === 0) {
+    lines.push("No reviewer-ready risks identified from this diff.");
   } else {
-    for (const comment of review.comments) {
+    for (const [index, rankedSignal] of topSignals.entries()) {
+      const signal = rankedSignal.signal;
+      const headline =
+        rankedSignal.kind === "finding"
+          ? rankedSignal.signal.title
+          : rankedSignal.signal.body;
+
       lines.push(
-        `- \`${comment.path}:${comment.line}\` (${formatSignalHeading(
-          comment.severity,
-          comment.confidence,
-          comment.category
-        )})`
+        `${index + 1}. **${headline}** (\`${formatSignalLocation(signal)}\`)`,
+        `   Why it matters: ${signal.whyThisMatters}`,
+        `   Inspect next: ${formatInspectNext(signal)}`,
+        `   Signal: ${formatSignalHeading(
+          signal.severity,
+          signal.confidence,
+          signal.category
+        )}`
       );
-      appendCommonSignalLines(lines, comment);
     }
   }
 

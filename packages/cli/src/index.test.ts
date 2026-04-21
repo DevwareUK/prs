@@ -1605,12 +1605,14 @@ describe("CLI integration", () => {
       issueUrl: "https://github.com/DevwareUK/git-ai/issues/50",
     });
     expect(stdout.output()).toContain("# AI PR Pre-Review Signal");
-    expect(stdout.output()).toContain("## Higher-level signals");
+    expect(stdout.output()).toContain("## Top Risks");
     expect(stdout.output()).toContain("README.md");
     expect(stdout.output()).toContain("## Linked issue");
     expect(stdout.output()).toContain("packages/cli/src/index.ts:412");
-    expect(stdout.output()).toContain("Confidence: High");
-    expect(stdout.output()).toContain("Why this matters: Malformed input should fail");
+    expect(stdout.output()).toContain("Signal: High severity, High confidence Correctness");
+    expect(stdout.output()).toContain(
+      "Why it matters: Malformed input should fail as a clear validation error"
+    );
   });
 
   it("fails pr prepare-review clearly when repository forge support is disabled", async () => {

@@ -82,6 +82,9 @@ describe("generatePRReview", () => {
     expect(request?.prompt).toContain(
       "review for command correctness, setup accuracy, first-time user clarity"
     );
+    expect(request?.prompt).toContain(
+      "combined total across comments and findings to 5 or fewer items"
+    );
     expect(request?.prompt).toContain('"findings": [');
   });
 
@@ -166,6 +169,9 @@ describe("generatePRReview", () => {
     expect(request?.prompt).toContain(
       'The "findings" array should usually stay empty for code-heavy diffs'
     );
+    expect(request?.prompt).toContain(
+      "Return only the top reviewer-ready risks"
+    );
     expect(request?.prompt).toContain('"confidence": "high" | "medium" | "low"');
     expect(request?.prompt).toContain('"whyThisMatters": string');
     expect(request?.prompt).toContain('"affectedFile": string');
@@ -241,5 +247,121 @@ describe("generatePRReview", () => {
       "Classification signal: No added or removed lines were detected in the diff."
     );
     expect(request?.prompt).not.toContain("This diff is documentation-heavy");
+  });
+
+  it("trims noisy review output down to the top five combined risks", async () => {
+    const provider = createProvider({
+      summary: "The diff introduces several reviewer-visible risks that should be narrowed before review.",
+      findings: [
+        {
+          title: "Auth bypass on the admin path",
+          severity: "high",
+          confidence: "high",
+          category: "security",
+          affectedFile: "packages/cli/src/index.ts",
+          body: "The new admin flow does not show any permission check before executing the command.",
+          whyThisMatters: "A privileged action can become reachable from an unguarded path.",
+        },
+        {
+          title: "Retry loop can duplicate writes",
+          severity: "high",
+          confidence: "medium",
+          category: "correctness",
+          affectedFile: "packages/cli/src/runtime.ts",
+          body: "The retried operation now reuses a write path without an idempotency guard.",
+          whyThisMatters: "A transient failure can produce duplicated state changes.",
+        },
+        {
+          title: "No regression test covers the fallback branch",
+          severity: "medium",
+          confidence: "medium",
+          category: "testing",
+          affectedFile: "packages/cli/src/runtime.test.ts",
+          body: "The new fallback path is reachable from the diff but has no direct test coverage.",
+          whyThisMatters: "A later refactor can silently break the branch without a focused test.",
+        },
+      ],
+      comments: [
+        {
+          path: "packages/cli/src/index.ts",
+          line: 11,
+          severity: "high",
+          confidence: "high",
+          category: "correctness",
+          affectedFile: "packages/cli/src/index.ts",
+          body: "This branch now dereferences `issueNumber` before validation.",
+          whyThisMatters: "Malformed input can crash the command instead of failing clearly.",
+        },
+        {
+          path: "packages/cli/src/runtime.ts",
+          line: 21,
+          severity: "medium",
+          confidence: "high",
+          category: "maintainability",
+          affectedFile: "packages/cli/src/runtime.ts",
+          body: "The new fallback path is spread across two flags with no shared guard helper.",
+          whyThisMatters: "The next edit can change one branch and leave the other inconsistent.",
+        },
+        {
+          path: "packages/cli/src/setup.ts",
+          line: 31,
+          severity: "low",
+          confidence: "high",
+          category: "documentation",
+          affectedFile: "packages/cli/src/setup.ts",
+          body: "This inline note is vague about when the setup path runs.",
+          whyThisMatters: "Reviewers need to infer the lifecycle from nearby code.",
+        },
+        {
+          path: "packages/cli/src/config.ts",
+          line: 41,
+          severity: "low",
+          confidence: "low",
+          category: "maintainability",
+          affectedFile: "packages/cli/src/config.ts",
+          body: "This rename could be clearer.",
+          whyThisMatters: "Future readers may need extra context.",
+        },
+      ],
+    });
+
+    const review = await generatePRReview(provider, {
+      diff: [
+        "diff --git a/packages/cli/src/index.ts b/packages/cli/src/index.ts",
+        "--- a/packages/cli/src/index.ts",
+        "+++ b/packages/cli/src/index.ts",
+        "@@ -10,0 +11,2 @@",
+        "+const nextIssueNumber = issueNumber.value;",
+        "+runAdminFlow(nextIssueNumber);",
+        "diff --git a/packages/cli/src/runtime.ts b/packages/cli/src/runtime.ts",
+        "--- a/packages/cli/src/runtime.ts",
+        "+++ b/packages/cli/src/runtime.ts",
+        "@@ -20,0 +21,2 @@",
+        "+retryWrite();",
+        "+enableFallbackMode();",
+        "diff --git a/packages/cli/src/setup.ts b/packages/cli/src/setup.ts",
+        "--- a/packages/cli/src/setup.ts",
+        "+++ b/packages/cli/src/setup.ts",
+        "@@ -30,0 +31,1 @@",
+        "+// setup note",
+        "diff --git a/packages/cli/src/config.ts b/packages/cli/src/config.ts",
+        "--- a/packages/cli/src/config.ts",
+        "+++ b/packages/cli/src/config.ts",
+        "@@ -40,0 +41,1 @@",
+        "+const nextName = configName;",
+      ].join("\n"),
+    });
+
+    expect(review.findings.map((finding) => finding.title)).toEqual([
+      "Auth bypass on the admin path",
+      "Retry loop can duplicate writes",
+      "No regression test covers the fallback branch",
+    ]);
+    expect(review.comments.map((comment) => comment.path)).toEqual([
+      "packages/cli/src/index.ts",
+      "packages/cli/src/runtime.ts",
+    ]);
+    expect(review.comments).toHaveLength(2);
+    expect(review.findings.length + review.comments.length).toBe(5);
   });
 });

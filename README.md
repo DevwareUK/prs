@@ -27,7 +27,7 @@ Start here if you are evaluating `git-ai` for a team:
 | `actions/pr-review` | Adds AI pull request pre-review signal, higher-level findings, and line-linked review comments in GitHub. |
 | `actions/pr-assistant` | Maintains a managed PR assistant section in the pull request body without overwriting unrelated manual content, using stable summary, risk, file, testing, rollout, and checklist headings. |
 | `actions/test-suggestions` | Posts practical, task-ready test suggestions for the current pull request diff in GitHub. |
-| `git-ai review` | Runs a local senior-style diff pre-review before or during a pull request. |
+| `git-ai review` | Runs a local top-risk diff pre-review that surfaces the strongest reviewer-ready concerns before or during a pull request. |
 | `git-ai pr fix-comments <pr-number>` | Pulls selected GitHub review comments into a focused local fix flow. |
 | `git-ai pr fix-tests <pr-number>` | Pulls selected managed AI test suggestions into a focused local implementation flow with preserved task context. |
 | `git-ai test-backlog` | Finds the highest-value automated testing gaps in the repository. |
@@ -408,8 +408,8 @@ Flags:
 | --- | --- |
 | `--base <git-ref>` | Reviews the diff from `<git-ref>...HEAD` by default, or `<git-ref>...<head>` when `--head` is also provided. Without `--base`, `git-ai review` uses `git diff HEAD`. |
 | `--head <git-ref>` | Optional comparison head revision. Requires `--base`. |
-| `--format markdown` | Prints a readable Markdown pre-review signal for a human reviewer. This is the default. |
-| `--format json` | Prints the structured review payload, including higher-level findings and line-linked comments. |
+| `--format markdown` | Prints a readable Markdown pre-review signal for a human reviewer, capped to the strongest reviewer-ready risks. This is the default. |
+| `--format json` | Prints the structured review payload, including higher-level findings and line-linked comments, with the combined risk set trimmed to the strongest few items. |
 | `--issue-number <number>` | Fetches the linked issue from the configured forge and includes it as review context. |
 
 Examples:
@@ -426,7 +426,8 @@ Important behavior:
 - `git-ai review` requires the configured provider to be usable, defaulting to `OPENAI_API_KEY`
 - without `--base`, it reviews the current `git diff HEAD`
 - with `--issue-number`, the CLI fetches the issue title and body from the configured forge and grounds the review in that context
-- JSON output includes higher-level findings plus line-linked comment suggestions with severity, confidence, affected file, why-this-matters context, optional suggested fixes, and right-side line numbers taken from the diff
+- markdown output is optimized as a compact pre-review checklist that highlights only the top 3 to 5 reviewer-ready risks when the diff supports that many, and fewer when the diff is low risk
+- JSON output keeps the same `summary` / `findings` / `comments` structure for automation, with severity, confidence, affected file, why-this-matters context, optional suggested fixes, and right-side line numbers taken from the diff
 
 ### `git-ai test-backlog`
 

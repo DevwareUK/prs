@@ -5,7 +5,7 @@ import {
 } from "./pr-review-render";
 
 describe("formatPRReviewMarkdown", () => {
-  it("renders PR review output as pre-review signal with confidence and impact fields", () => {
+  it("renders PR review output as a ranked reviewer-ready top-risks report", () => {
     const markdown = formatPRReviewMarkdown(
       {
         summary: "The diff mostly aligns with the linked issue, but one branch still looks under-validated.",
@@ -44,12 +44,28 @@ describe("formatPRReviewMarkdown", () => {
 
     expect(markdown).toContain("# AI PR Pre-Review Signal");
     expect(markdown).toContain("pre-review signal for a human reviewer");
-    expect(markdown).toContain("Confidence: High");
-    expect(markdown).toContain("Affected file: `packages/cli/src/index.ts`");
-    expect(markdown).toContain("Why this matters: Malformed input will raise a runtime failure");
-    expect(markdown).toContain("Suggested fix: Validate the flag before using it in this branch.");
-    expect(markdown).toContain("## Higher-level signals");
-    expect(markdown).toContain("## Line-level signals");
+    expect(markdown).toContain("## Top Risks");
+    expect(markdown).toContain("1. **This branch assumes the issue number flag was populated.");
+    expect(markdown).toContain("(`packages/cli/src/index.ts:412`)");
+    expect(markdown).toContain("Why it matters: Malformed input will raise a runtime failure");
+    expect(markdown).toContain(
+      "Inspect next: Validate the flag before using it in this branch."
+    );
+    expect(markdown).toContain("Signal: High severity, High confidence Correctness");
+    expect(markdown).toContain("2. **Quick start still mixes setup and first-run commands**");
+  });
+
+  it("keeps low-risk output terse when there are no reviewer-ready risks", () => {
+    const markdown = formatPRReviewMarkdown({
+      summary: "The diff is small and no actionable reviewer-ready risks stand out.",
+      findings: [],
+      comments: [],
+    });
+
+    expect(markdown).toContain("## Top Risks");
+    expect(markdown).toContain("No reviewer-ready risks identified from this diff.");
+    expect(markdown).not.toContain("## Higher-level signals");
+    expect(markdown).not.toContain("## Line-level signals");
   });
 });
 
