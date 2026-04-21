@@ -32,6 +32,10 @@ Start here if you are evaluating `git-ai` for a team:
 | `git-ai pr fix-tests <pr-number>` | Pulls selected managed AI test suggestions into a focused local implementation flow with preserved task context. |
 | `git-ai test-backlog` | Finds the highest-value automated testing gaps in the repository. |
 
+## Launch demo guide
+
+Use [docs/launch-demo.md](docs/launch-demo.md) when you need a buyer-facing walkthrough of the first-offer workflows. It lays out the recommended demo order, the trust boundary for each step, the `.git-ai` audit trail story, and the narrow onboarding path that matches the current implementation.
+
 ## Recommended first three workflows
 
 These are the fastest paths to a useful first result:
