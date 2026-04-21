@@ -71,15 +71,13 @@ describe("generatePRDescription", () => {
     });
   });
 
-  it("normalizes nullable optional notes before validation", async () => {
+  it("parses a valid title/body payload", async () => {
     const result = await generatePRDescription(
       {
         generateText: async () =>
           JSON.stringify({
             title: "feat: harden PR description diagnostics",
             body: "Adds better failure handling for PR description generation.",
-            testingNotes: null,
-            riskNotes: null,
           }),
       },
       {
@@ -91,11 +89,9 @@ describe("generatePRDescription", () => {
     expect(result.body).toBe(
       "Adds better failure handling for PR description generation."
     );
-    expect(result.testingNotes).toBeUndefined();
-    expect(result.riskNotes).toBeUndefined();
   });
 
-  it("preserves parsed and normalized payloads on schema validation errors", async () => {
+  it("preserves parsed payloads on schema validation errors", async () => {
     let error: unknown;
 
     try {
@@ -104,9 +100,7 @@ describe("generatePRDescription", () => {
           generateText: async () =>
             JSON.stringify({
               title: "feat: harden PR description diagnostics",
-              body: "Valid body",
-              testingNotes: null,
-              riskNotes: 42,
+              body: 42,
             }),
         },
         {
@@ -122,15 +116,11 @@ describe("generatePRDescription", () => {
       kind: "schema_validation",
       parsedJson: {
         title: "feat: harden PR description diagnostics",
-        body: "Valid body",
-        testingNotes: null,
-        riskNotes: 42,
+        body: 42,
       },
       normalizedJson: {
         title: "feat: harden PR description diagnostics",
-        body: "Valid body",
-        testingNotes: undefined,
-        riskNotes: 42,
+        body: 42,
       },
     });
   });

@@ -655,8 +655,6 @@ async function loadCli(options: {
   prDescriptionResult?: {
     title: string;
     body: string;
-    testingNotes?: string;
-    riskNotes?: string;
   };
   prReviewResult?: ReturnType<typeof createPRReviewResult>;
   readlineAnswers?: string[];
@@ -719,15 +717,10 @@ async function loadCli(options: {
     options.prDescriptionResult ?? {
       title: "feat: improve issue workflow authoring",
       body: [
-        "## Summary",
-        "Generate commit and PR authoring from the completed issue diff.",
+        "Generate commit and pull request authoring from the completed issue diff.",
         "",
-        "## Changes",
         "- Reuse the AI-backed commit message path for issue finalization.",
-        "- Generate a reviewer-ready PR body before opening the pull request.",
-        "",
-        "## Testing",
-        "- pnpm build",
+        "- Generate a concise PR description before opening the pull request.",
       ].join("\n"),
     }
   );
@@ -7080,15 +7073,10 @@ describe("CLI integration", () => {
         prDescriptionResult: {
           title: "refactor: use configured issue run defaults",
           body: [
-            "## Summary",
             "Use repository config defaults throughout the issue workflow.",
             "",
-            "## Changes",
             "- Read the configured base branch before preparing the issue branch.",
             "- Use the configured build command before finalizing issue work.",
-            "",
-            "## Testing",
-            "- npm run verify",
           ].join("\n"),
         },
         prAssistantResult: {

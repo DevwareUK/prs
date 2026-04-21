@@ -11,8 +11,6 @@ export type PRDescriptionInputType = z.infer<typeof PRDescriptionInput>;
 export const PRDescriptionOutput = z.object({
   title: z.string().trim().min(1, "title must be non-empty"),
   body: z.string().trim().min(1, "body must be non-empty"),
-  testingNotes: z.string().trim().min(1).optional(),
-  riskNotes: z.string().trim().min(1).optional(),
 });
 
 export type PRDescriptionOutputType = z.infer<typeof PRDescriptionOutput>;

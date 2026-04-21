@@ -9,10 +9,7 @@ import {
   buildDiffTaskPrompt,
   DIFF_GROUNDED_SYSTEM_PROMPT_LINES,
 } from "./diff-task";
-import {
-  generateStructuredOutput,
-  normalizeNullableFields,
-} from "./structured-generation";
+import { generateStructuredOutput } from "./structured-generation";
 
 const PR_DESCRIPTION_SYSTEM_PROMPT =
   [
@@ -37,27 +34,15 @@ function buildPrompt(input: PRDescriptionInputType): string {
     guidanceLines: [
       'The "title" should be concise and specific to the change.',
       "Use issue context only as supporting context and prefer the diff when they conflict.",
-      'The "body" must be markdown using these section headings:',
-      "## Summary",
-      "High-level explanation of what changed.",
-      "",
-      "## Changes",
-      "Bullet list of important changes.",
-      "",
-      "## Testing",
-      "How a reviewer could validate the change.",
-      "",
-      "## Risk",
-      "Potential risks, rollout notes, or migration concerns.",
-      "",
-      'Omit "testingNotes" when there are no concrete validation steps supported by the diff.',
-      'Omit "riskNotes" when there are no clear risks, rollout notes, or migration concerns supported by the diff.',
+      'The "body" must be concise markdown that explains the change narrative for the pull request description.',
+      "Use short paragraphs or a short bullet list when it improves readability.",
+      "Do not use the four-section template with Summary, Changes, Testing, and Risk headings.",
+      "Do not add dedicated testing, risk, rollout, or reviewer checklist sections.",
+      "Leave reviewer-operational detail for the managed PR Assistant section.",
     ],
     schemaLines: [
       '  "title": string,',
-      '  "body": string,',
-      '  "testingNotes"?: string,',
-      '  "riskNotes"?: string',
+      '  "body": string',
     ],
     contextLines:
       contextLines.length > 0
@@ -78,10 +63,7 @@ export async function generatePRDescription(
     systemPrompt: PR_DESCRIPTION_SYSTEM_PROMPT,
     prompt,
     schema: PRDescriptionOutput,
-    validationErrorPrefix:
-      "Model output failed PR description schema validation",
-    normalizeParsedJson: (value) =>
-      normalizeNullableFields(value, ["testingNotes", "riskNotes"]),
+    validationErrorPrefix: "Model output failed PR description schema validation",
   });
 
   return modelOutput;
