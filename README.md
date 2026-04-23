@@ -107,7 +107,7 @@ cd /path/to/your-repo
 git-ai setup
 ```
 
-`git-ai setup` detects the repository root, suggests repo-aware defaults for the base branch, verification command, forge, and extra AI exclusions, writes `.git-ai/config.json`, ensures `.git-ai/` is gitignored, and can create or update a managed `AGENTS.md` guidance section. When setup cannot determine a value confidently, it prints an explicit warning before asking you to confirm or replace the suggestion.
+`git-ai setup` detects the repository root, suggests repo-aware defaults for the base branch, verification command, forge, Codex-first runtime, and extra AI exclusions, then offers a fast "use the recommended setup" confirmation path. It writes `.git-ai/config.json`, ensures `.git-ai/` is gitignored, can optionally add a minimal `AGENTS.md` scaffold for repo-specific agent guidance, and for GitHub repositories can also install the recommended PR-focused workflows under `.github/workflows/git-ai-*.yml`. When setup cannot determine a value confidently, it prints an explicit warning before asking you to confirm or replace the suggestion.
 
 ### First successful CLI runs
 
@@ -285,7 +285,17 @@ Requirements:
 git-ai setup
 ```
 
-Runs a guided repository setup flow for the current Git repository. The command inspects the repo, suggests defaults for `baseBranch`, `forge.type`, `buildCommand`, and extra `aiContext.excludePaths`, prints the detection source for each suggestion, warns when it had to fall back because signals were missing or conflicting, writes `.git-ai/config.json`, ensures `.git-ai/` is gitignored, and can create or update a managed `AGENTS.md` section with repo-specific guidance.
+Runs a guided repository setup flow for the current Git repository. The command inspects the repo, suggests defaults for `baseBranch`, `forge.type`, `ai.runtime.type`, `buildCommand`, and extra `aiContext.excludePaths`, prints the detection source for each suggestion, warns when it had to fall back because signals were missing or conflicting, and first offers a one-confirmation "use the recommended setup" path before dropping into per-field prompts when you want to customize values. It writes `.git-ai/config.json`, preserves any existing `ai.provider` settings already present in that file, ensures `.git-ai/` is gitignored, and only touches `AGENTS.md` when you explicitly opt in to a minimal scaffold for non-obvious repository guidance.
+
+When `forge.type` is `github`, setup can also install the recommended pull-request workflows into the target repository:
+
+- `.github/workflows/git-ai-pr-review.yml`
+- `.github/workflows/git-ai-pr-assistant.yml`
+- `.github/workflows/git-ai-test-suggestions.yml`
+
+Those installed workflows reference `DevwareUK/git-ai/actions/...@main` and require a GitHub repository secret named `OPENAI_API_KEY`. Optional repository variables: `GIT_AI_OPENAI_MODEL` and `GIT_AI_OPENAI_BASE_URL`.
+
+When you opt into the `AGENTS.md` scaffold, setup adds only placeholder prompts such as protected paths, generated files, deployment caveats, and domain rules. It intentionally does not copy repository config values like branch names or build commands into `AGENTS.md`.
 
 The setup flow still expects you to create `.env` yourself because it cannot safely write secrets like `OPENAI_API_KEY`.
 

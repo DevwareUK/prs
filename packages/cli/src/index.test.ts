@@ -4358,7 +4358,7 @@ describe("CLI integration", () => {
     );
   });
 
-  it("runs setup with repo-aware defaults and writes config, gitignore, and AGENTS guidance", async () => {
+  it("runs setup with repo-aware defaults without creating AGENTS guidance by default", async () => {
     const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-setup-node-"));
     cleanupTargets.add(repoRoot);
     mkdirSync(resolve(repoRoot, ".github", "workflows"), { recursive: true });
@@ -4376,7 +4376,7 @@ describe("CLI integration", () => {
 
     const { run } = await loadCli({
       runtimeRepoRoot: repoRoot,
-      readlineAnswers: ["", "", "", "", ""],
+      readlineAnswers: ["", "", ""],
       execFileSyncImpl: (command, args) => {
         if (
           command === "git" &&
@@ -4397,6 +4397,17 @@ describe("CLI integration", () => {
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
       },
+      spawnSyncImpl: (command, args) => {
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "claude" && args[0] === "--version") {
+          return { status: 1, error: new Error("claude unavailable") };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
     });
 
     process.argv = ["node", "git-ai", "setup"];
@@ -4411,6 +4422,11 @@ describe("CLI integration", () => {
     expect(
       JSON.parse(readFileSync(resolve(repoRoot, ".git-ai", "config.json"), "utf8"))
     ).toEqual({
+      ai: {
+        runtime: {
+          type: "codex",
+        },
+      },
       aiContext: {
         excludePaths: ["**/coverage/**"],
       },
@@ -4421,13 +4437,13 @@ describe("CLI integration", () => {
       },
     });
     expect(readFileSync(resolve(repoRoot, ".gitignore"), "utf8")).toContain(".git-ai/\n");
+    expect(
+      readFileSync(resolve(repoRoot, ".github", "workflows", "git-ai-pr-review.yml"), "utf8")
+    ).toContain("DevwareUK/git-ai/actions/pr-review@main");
 
-    const agentsContent = readFileSync(resolve(repoRoot, "AGENTS.md"), "utf8");
-    expect(agentsContent).toContain("<!-- git-ai:setup:start -->");
-    expect(agentsContent).toContain("Detected stack: TypeScript repository.");
-    expect(agentsContent).toContain("`pnpm build`");
-    expect(agentsContent).toContain("`github`");
+    expect(existsSync(resolve(repoRoot, "AGENTS.md"))).toBe(false);
     expect(messages.join("\n")).toContain("Next step: create `.env`");
+    expect(messages.join("\n")).toContain("OPENAI_API_KEY` repository secret");
   });
 
   it("updates an existing AGENTS managed section during setup and keeps manual guidance", async () => {
@@ -4465,7 +4481,7 @@ describe("CLI integration", () => {
 
     const { run } = await loadCli({
       runtimeRepoRoot: repoRoot,
-      readlineAnswers: ["develop", "none", "", "", ""],
+      readlineAnswers: ["n", "develop", "none", "codex", "", "", "y"],
       execFileSyncImpl: (command, args) => {
         if (
           command === "git" &&
@@ -4486,6 +4502,17 @@ describe("CLI integration", () => {
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
       },
+      spawnSyncImpl: (command, args) => {
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "claude" && args[0] === "--version") {
+          return { status: 1, error: new Error("claude unavailable") };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
     });
 
     process.argv = ["node", "git-ai", "setup"];
@@ -4494,6 +4521,11 @@ describe("CLI integration", () => {
     expect(
       JSON.parse(readFileSync(resolve(repoRoot, ".git-ai", "config.json"), "utf8"))
     ).toEqual({
+      ai: {
+        runtime: {
+          type: "codex",
+        },
+      },
       aiContext: {
         excludePaths: [
           "web/sites/default/files/**",
@@ -4515,9 +4547,10 @@ describe("CLI integration", () => {
     expect(agentsContent).toContain("# Repository Notes");
     expect(agentsContent).toContain("Keep this manual guidance.");
     expect(agentsContent).not.toContain("Old managed setup guidance.");
-    expect(agentsContent).toContain("Detected stack: Drupal/PHP repository.");
-    expect(agentsContent).toContain("`composer test`");
-    expect(agentsContent).toContain("`none`");
+    expect(agentsContent).toContain("## Repository guidance for agents");
+    expect(agentsContent).toContain("Protected paths or files:");
+    expect(agentsContent).not.toContain("Detected stack:");
+    expect(agentsContent).not.toContain("`composer test`");
   });
 
   it("launches the default issue draft runtime workflow and saves the draft under .git-ai/issues", async () => {
