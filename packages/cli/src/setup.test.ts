@@ -1,4 +1,5 @@
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -11,13 +12,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("node:child_process", () => ({
   execFileSync: vi.fn(),
+  spawnSync: vi.fn(),
 }));
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { parseSetupCommandArgs, runSetupCommand } from "./setup";
 
 const cleanupTargets = new Set<string>();
 const execFileSyncMock = vi.mocked(execFileSync);
+const spawnSyncMock = vi.mocked(spawnSync);
 
 function createRepo(prefix: string): string {
   const repoRoot = mkdtempSync(resolve(tmpdir(), prefix));
@@ -35,7 +38,10 @@ function createPrompt(answers: string[], prompts: string[] = []) {
 function mockChildProcess(
   repoRoot: string,
   responses: Record<string, string | Error>,
-  options: { ghAuthStatus?: string | Error } = {}
+  options: {
+    codexAvailable?: boolean;
+    ghAuthStatus?: string | Error;
+  } = {}
 ): void {
   execFileSyncMock.mockImplementation((command, args) => {
     if (command === "gh") {
@@ -73,6 +79,21 @@ function mockChildProcess(
 
     throw new Error(`Unexpected execFileSync call: ${command} ${gitArgs.join(" ")}`);
   });
+
+  spawnSyncMock.mockImplementation((command, args) => {
+    const runtimeArgs = Array.isArray(args) ? args.map((value) => String(value)) : [];
+    if (command === "codex" && runtimeArgs[0] === "--version") {
+      return options.codexAvailable === false
+        ? { status: 1, error: new Error("codex unavailable") }
+        : { status: 0 };
+    }
+
+    if (command === "claude" && runtimeArgs[0] === "--version") {
+      return { status: 1, error: new Error("claude unavailable") };
+    }
+
+    throw new Error(`Unexpected spawnSync call: ${String(command)} ${runtimeArgs.join(" ")}`);
+  });
 }
 
 afterEach(() => {
@@ -85,7 +106,7 @@ afterEach(() => {
 });
 
 describe("setup command", () => {
-  it("runs setup with repo-aware defaults and writes config, gitignore, and AGENTS guidance", async () => {
+  it("runs setup with repo-aware defaults without creating AGENTS guidance by default", async () => {
     const repoRoot = createRepo("git-ai-setup-node-");
     mkdirSync(resolve(repoRoot, ".github", "workflows"), { recursive: true });
     mkdirSync(resolve(repoRoot, "coverage"), { recursive: true });
@@ -124,14 +145,19 @@ describe("setup command", () => {
     });
 
     await runSetupCommand({
-      promptForLine: createPrompt(["", "", "", "", ""], prompts),
+      promptForLine: createPrompt(["", "", ""], prompts),
       repoRoot,
     });
 
-    expect(prompts).toHaveLength(5);
+    expect(prompts).toHaveLength(3);
     expect(
       JSON.parse(readFileSync(resolve(repoRoot, ".git-ai", "config.json"), "utf8"))
     ).toEqual({
+      ai: {
+        runtime: {
+          type: "codex",
+        },
+      },
       aiContext: {
         excludePaths: ["**/coverage/**"],
       },
@@ -142,22 +168,27 @@ describe("setup command", () => {
       },
     });
     expect(readFileSync(resolve(repoRoot, ".gitignore"), "utf8")).toContain(".git-ai/\n");
-
-    const agentsContent = readFileSync(resolve(repoRoot, "AGENTS.md"), "utf8");
-    expect(agentsContent).toContain("<!-- git-ai:setup:start -->");
-    expect(agentsContent).toContain(
-      "Recommended launch path for new teams: GitHub forge, OpenAI provider, and Codex runtime first."
-    );
-    expect(agentsContent).toContain("Detected stack: TypeScript repository.");
-    expect(agentsContent).toContain("`pnpm build`");
-    expect(agentsContent).toContain("`github`");
+    expect(
+      readFileSync(resolve(repoRoot, ".github", "workflows", "git-ai-pr-review.yml"), "utf8")
+    ).toContain("DevwareUK/git-ai/actions/pr-review@main");
+    expect(
+      readFileSync(resolve(repoRoot, ".github", "workflows", "git-ai-pr-assistant.yml"), "utf8")
+    ).toContain("DevwareUK/git-ai/actions/pr-assistant@main");
+    expect(
+      readFileSync(
+        resolve(repoRoot, ".github", "workflows", "git-ai-test-suggestions.yml"),
+        "utf8"
+      )
+    ).toContain("DevwareUK/git-ai/actions/test-suggestions@main");
     expect(messages.join("\n")).toContain(
       "Recommended launch path: GitHub forge, OpenAI provider, and Codex runtime."
     );
     expect(messages.join("\n")).toContain(
       "GitHub Actions in this repo are OpenAI-only today, and unattended issue runs plus `git-ai pr prepare-review` remain Codex-specific."
     );
+    expect(existsSync(resolve(repoRoot, "AGENTS.md"))).toBe(false);
     expect(messages.join("\n")).toContain("Next step: create `.env`");
+    expect(messages.join("\n")).toContain("OPENAI_API_KEY` repository secret");
   });
 
   it("generates repository-specific config defaults from Drupal repository signals", async () => {
@@ -191,13 +222,18 @@ describe("setup command", () => {
     });
 
     await runSetupCommand({
-      promptForLine: createPrompt(["", "", "", "", ""]),
+      promptForLine: createPrompt(["", ""]),
       repoRoot,
     });
 
     expect(
       JSON.parse(readFileSync(resolve(repoRoot, ".git-ai", "config.json"), "utf8"))
     ).toEqual({
+      ai: {
+        runtime: {
+          type: "codex",
+        },
+      },
       aiContext: {
         excludePaths: [
           "docroot/sites/default/files/**",
@@ -263,10 +299,13 @@ describe("setup command", () => {
 
     await runSetupCommand({
       promptForLine: createPrompt([
+        "n",
         "release",
         "github",
+        "codex",
         "pnpm build",
         "coverage/**, generated/**",
+        "y",
         "y",
       ]),
       repoRoot,
@@ -279,13 +318,13 @@ describe("setup command", () => {
     expect(agentsContent).toContain("# Repository Notes");
     expect(agentsContent).toContain("Keep this manual guidance.");
     expect(agentsContent).not.toContain("Old managed setup guidance.");
-    expect(agentsContent).toContain(
-      "Advanced customization remains available through `bedrock-claude` and `claude-code`"
-    );
-    expect(agentsContent).toContain("`release`");
-    expect(agentsContent).toContain("`pnpm build`");
-    expect(agentsContent).toContain("`coverage/**`");
-    expect(agentsContent).toContain("`generated/**`");
+    expect(agentsContent).toContain("## Repository guidance for agents");
+    expect(agentsContent).toContain("Protected paths or files:");
+    expect(agentsContent).not.toContain("`release`");
+    expect(agentsContent).not.toContain("`pnpm build`");
+    expect(
+      readFileSync(resolve(repoRoot, ".github", "workflows", "git-ai-pr-review.yml"), "utf8")
+    ).toContain("# Generated by git-ai setup");
   });
 
   it("detects npm test when the repository has tests but no build script", async () => {
@@ -312,18 +351,171 @@ describe("setup command", () => {
     });
 
     await runSetupCommand({
-      promptForLine: createPrompt(["", "", "", "", ""]),
+      promptForLine: createPrompt(["", ""]),
       repoRoot,
     });
 
     expect(
       JSON.parse(readFileSync(resolve(repoRoot, ".git-ai", "config.json"), "utf8"))
     ).toEqual({
+      ai: {
+        runtime: {
+          type: "codex",
+        },
+      },
       baseBranch: "trunk",
       buildCommand: ["npm", "test"],
       forge: {
         type: "none",
       },
     });
+  });
+
+  it("preserves existing ai provider settings when setup rewrites the repository config", async () => {
+    const repoRoot = createRepo("git-ai-setup-preserve-ai-");
+    mkdirSync(resolve(repoRoot, ".git-ai"), { recursive: true });
+    writeFileSync(
+      resolve(repoRoot, ".git-ai", "config.json"),
+      JSON.stringify(
+        {
+          ai: {
+            provider: {
+              type: "openai",
+              model: "gpt-5-mini",
+            },
+            runtime: {
+              type: "claude-code",
+            },
+          },
+          baseBranch: "main",
+          buildCommand: ["pnpm", "build"],
+          forge: {
+            type: "github",
+          },
+        },
+        null,
+        2
+      )
+    );
+
+    mockChildProcess(repoRoot, {
+      "rev-parse --show-toplevel": `${repoRoot}\n`,
+      "symbolic-ref refs/remotes/origin/HEAD": "refs/remotes/origin/main\n",
+      "remote get-url origin": "git@github.com:acme/fixture-node-repo.git\n",
+    });
+
+    await runSetupCommand({
+      promptForLine: createPrompt(["", "", ""]),
+      repoRoot,
+    });
+
+    expect(
+      JSON.parse(readFileSync(resolve(repoRoot, ".git-ai", "config.json"), "utf8"))
+    ).toEqual({
+      ai: {
+        provider: {
+          model: "gpt-5-mini",
+          type: "openai",
+        },
+        runtime: {
+          type: "claude-code",
+        },
+      },
+      baseBranch: "main",
+      buildCommand: ["pnpm", "build"],
+      forge: {
+        type: "github",
+      },
+    });
+  });
+
+  it("creates the AGENTS scaffold only when explicitly requested", async () => {
+    const repoRoot = createRepo("git-ai-setup-agents-scaffold-");
+    writeFileSync(
+      resolve(repoRoot, "package.json"),
+      JSON.stringify(
+        {
+          name: "fixture-node-repo",
+          scripts: {
+            build: "tsup",
+          },
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(resolve(repoRoot, "pnpm-lock.yaml"), "");
+
+    mockChildProcess(repoRoot, {
+      "rev-parse --show-toplevel": `${repoRoot}\n`,
+      "symbolic-ref refs/remotes/origin/HEAD": "refs/remotes/origin/main\n",
+      "remote get-url origin": "git@gitlab.com:acme/fixture-node-repo.git\n",
+    });
+
+    await runSetupCommand({
+      promptForLine: createPrompt(["", "y"]),
+      repoRoot,
+    });
+
+    const agentsContent = readFileSync(resolve(repoRoot, "AGENTS.md"), "utf8");
+    expect(agentsContent).toContain("## Repository guidance for agents");
+    expect(agentsContent).toContain(
+      "Fill in only repository-specific guidance that is not obvious from code or config."
+    );
+    expect(agentsContent).toContain("Protected paths or files:");
+    expect(agentsContent).not.toContain("Forge integration");
+    expect(agentsContent).not.toContain("Verification command after interactive agent work");
+  });
+
+  it("updates legacy generated workflow files when setup is rerun", async () => {
+    const repoRoot = createRepo("git-ai-setup-workflow-update-");
+    mkdirSync(resolve(repoRoot, ".github", "workflows"), { recursive: true });
+    writeFileSync(
+      resolve(repoRoot, "package.json"),
+      JSON.stringify(
+        {
+          name: "fixture-node-repo",
+          scripts: {
+            build: "tsup",
+          },
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(resolve(repoRoot, "pnpm-lock.yaml"), "");
+    writeFileSync(
+      resolve(repoRoot, ".github", "workflows", "git-ai-pr-review.yml"),
+      [
+        "name: Git AI PR Review",
+        "jobs:",
+        "  pr-review:",
+        "    steps:",
+        "      - uses: DevwareUK/ai-actions/actions/pr-review@main",
+        "",
+      ].join("\n")
+    );
+
+    mockChildProcess(
+      repoRoot,
+      {
+        "rev-parse --show-toplevel": `${repoRoot}\n`,
+        "symbolic-ref refs/remotes/origin/HEAD": "refs/remotes/origin/main\n",
+        "remote get-url origin": "git@github.com:acme/fixture-node-repo.git\n",
+      },
+      { ghAuthStatus: new Error("not logged in") }
+    );
+
+    await runSetupCommand({
+      promptForLine: createPrompt(["", "", ""]),
+      repoRoot,
+    });
+
+    expect(
+      readFileSync(resolve(repoRoot, ".github", "workflows", "git-ai-pr-review.yml"), "utf8")
+    ).toContain("DevwareUK/git-ai/actions/pr-review@main");
+    expect(
+      readFileSync(resolve(repoRoot, ".github", "workflows", "git-ai-pr-review.yml"), "utf8")
+    ).not.toContain("DevwareUK/ai-actions/actions/pr-review@main");
   });
 });
