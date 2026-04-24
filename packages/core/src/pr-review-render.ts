@@ -2,7 +2,7 @@ import type {
   PRReviewCommentType,
   PRReviewFindingType,
   PRReviewOutputType,
-} from "@git-ai/contracts";
+} from "@prs/contracts";
 import {
   MAX_PR_REVIEW_SIGNALS,
   rankPRReviewSignals,

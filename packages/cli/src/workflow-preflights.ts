@@ -52,7 +52,7 @@ export function ensureVerificationCommandAvailable(
   throw new Error(
     `${workflowLabel} cannot run the configured verification command \`${formatCommandForDisplay(
       buildCommand
-    )}\` from the repository root. Install \`${command}\` or update \`.git-ai/config.json\` with \`git-ai setup\`.`
+    )}\` from the repository root. Install \`${command}\` or update \`.prs/config.json\` with \`prs setup\`.`
   );
 }
 
@@ -101,7 +101,7 @@ export function preflightIssueBaseBranch(
   ]);
   if (localBranchCheck.error || localBranchCheck.status !== 0) {
     throw new Error(
-      `Configured base branch "${baseBranch}" does not exist locally. Update \`.git-ai/config.json\` with \`git-ai setup\` or create the branch before running issue workflows.`
+      `Configured base branch "${baseBranch}" does not exist locally. Update \`.prs/config.json\` with \`prs setup\` or create the branch before running issue workflows.`
     );
   }
 
@@ -111,7 +111,7 @@ export function preflightIssueBaseBranch(
       "origin",
       baseBranch,
       `Configured base branch "${baseBranch}"`,
-      'update `.git-ai/config.json` with `git-ai setup`'
+      'update `.prs/config.json` with `prs setup`'
     ),
   };
 }

@@ -131,8 +131,8 @@ afterEach(() => {
 
 describe("setup command", () => {
   it("runs setup with repo-aware defaults without creating AGENTS guidance by default", async () => {
-    const repoRoot = createRepo("git-ai-setup-node-");
-    createCodexHome("git-ai-setup-codex-home-");
+    const repoRoot = createRepo("prs-setup-node-");
+    createCodexHome("prs-setup-codex-home-");
     mkdirSync(resolve(repoRoot, ".github", "workflows"), { recursive: true });
     mkdirSync(resolve(repoRoot, "coverage"), { recursive: true });
     writeFileSync(
@@ -176,7 +176,7 @@ describe("setup command", () => {
 
     expect(prompts).toHaveLength(3);
     expect(
-      JSON.parse(readFileSync(resolve(repoRoot, ".git-ai", "config.json"), "utf8"))
+      JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
     ).toEqual({
       ai: {
         issueDraft: {
@@ -195,24 +195,24 @@ describe("setup command", () => {
         type: "github",
       },
     });
-    expect(readFileSync(resolve(repoRoot, ".gitignore"), "utf8")).toContain(".git-ai/\n");
+    expect(readFileSync(resolve(repoRoot, ".gitignore"), "utf8")).toContain(".prs/\n");
     expect(
-      readFileSync(resolve(repoRoot, ".github", "workflows", "git-ai-pr-review.yml"), "utf8")
-    ).toContain("DevwareUK/git-ai/actions/pr-review@main");
+      readFileSync(resolve(repoRoot, ".github", "workflows", "prs-pr-review.yml"), "utf8")
+    ).toContain("DevwareUK/prs/actions/pr-review@main");
     expect(
-      readFileSync(resolve(repoRoot, ".github", "workflows", "git-ai-pr-assistant.yml"), "utf8")
-    ).toContain("DevwareUK/git-ai/actions/pr-assistant@main");
+      readFileSync(resolve(repoRoot, ".github", "workflows", "prs-pr-assistant.yml"), "utf8")
+    ).toContain("DevwareUK/prs/actions/pr-assistant@main");
     expect(
       readFileSync(
-        resolve(repoRoot, ".github", "workflows", "git-ai-test-suggestions.yml"),
+        resolve(repoRoot, ".github", "workflows", "prs-test-suggestions.yml"),
         "utf8"
       )
-    ).toContain("DevwareUK/git-ai/actions/test-suggestions@main");
+    ).toContain("DevwareUK/prs/actions/test-suggestions@main");
     expect(messages.join("\n")).toContain(
       "Recommended launch path: GitHub forge, OpenAI provider, and Codex runtime."
     );
     expect(messages.join("\n")).toContain(
-      "GitHub Actions in this repo are OpenAI-only today, and unattended issue runs plus `git-ai pr prepare-review` remain Codex-specific."
+      "GitHub Actions in this repo are OpenAI-only today, and unattended issue runs plus `prs pr prepare-review` remain Codex-specific."
     );
     expect(existsSync(resolve(repoRoot, "AGENTS.md"))).toBe(false);
     expect(messages.join("\n")).toContain("Next step: create `.env`");
@@ -220,8 +220,8 @@ describe("setup command", () => {
   });
 
   it("generates repository-specific config defaults from Drupal repository signals", async () => {
-    const repoRoot = createRepo("git-ai-setup-drupal-defaults-");
-    createCodexHome("git-ai-setup-codex-home-");
+    const repoRoot = createRepo("prs-setup-drupal-defaults-");
+    createCodexHome("prs-setup-codex-home-");
     mkdirSync(resolve(repoRoot, "vendor", "bin"), { recursive: true });
     mkdirSync(resolve(repoRoot, "docroot", "sites", "default", "files"), {
       recursive: true,
@@ -256,7 +256,7 @@ describe("setup command", () => {
     });
 
     expect(
-      JSON.parse(readFileSync(resolve(repoRoot, ".git-ai", "config.json"), "utf8"))
+      JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
     ).toEqual({
       ai: {
         issueDraft: {
@@ -283,13 +283,13 @@ describe("setup command", () => {
 
   it("rejects unexpected setup arguments", () => {
     expect(() => parseSetupCommandArgs(["setup", "--force"])).toThrow(
-      'Unknown setup option "--force". Usage:\n  git-ai setup'
+      'Unknown setup option "--force". Usage:\n  prs setup'
     );
   });
 
   it("updates an existing AGENTS managed section during setup and keeps manual guidance", async () => {
-    const repoRoot = createRepo("git-ai-setup-agents-");
-    createCodexHome("git-ai-setup-codex-home-");
+    const repoRoot = createRepo("prs-setup-agents-");
+    createCodexHome("prs-setup-codex-home-");
     mkdirSync(resolve(repoRoot, ".github", "workflows"), { recursive: true });
     writeFileSync(
       resolve(repoRoot, "package.json"),
@@ -305,7 +305,7 @@ describe("setup command", () => {
       )
     );
     writeFileSync(resolve(repoRoot, "pnpm-lock.yaml"), "");
-    writeFileSync(resolve(repoRoot, ".gitignore"), ".git-ai/\n");
+    writeFileSync(resolve(repoRoot, ".gitignore"), ".prs/\n");
     writeFileSync(
       resolve(repoRoot, "AGENTS.md"),
       [
@@ -313,9 +313,9 @@ describe("setup command", () => {
         "",
         "Keep this manual guidance.",
         "",
-        "<!-- git-ai:setup:start -->",
+        "<!-- prs:setup:start -->",
         "Old managed setup guidance.",
-        "<!-- git-ai:setup:end -->",
+        "<!-- prs:setup:end -->",
         "",
       ].join("\n")
     );
@@ -345,7 +345,7 @@ describe("setup command", () => {
     });
 
     const gitignoreContent = readFileSync(resolve(repoRoot, ".gitignore"), "utf8");
-    expect(gitignoreContent.match(/\.git-ai\//g) ?? []).toHaveLength(1);
+    expect(gitignoreContent.match(/\.prs\//g) ?? []).toHaveLength(1);
 
     const agentsContent = readFileSync(resolve(repoRoot, "AGENTS.md"), "utf8");
     expect(agentsContent).toContain("# Repository Notes");
@@ -356,13 +356,13 @@ describe("setup command", () => {
     expect(agentsContent).not.toContain("`release`");
     expect(agentsContent).not.toContain("`pnpm build`");
     expect(
-      readFileSync(resolve(repoRoot, ".github", "workflows", "git-ai-pr-review.yml"), "utf8")
-    ).toContain("# Generated by git-ai setup");
+      readFileSync(resolve(repoRoot, ".github", "workflows", "prs-pr-review.yml"), "utf8")
+    ).toContain("# Generated by prs setup");
   });
 
   it("detects npm test when the repository has tests but no build script", async () => {
-    const repoRoot = createRepo("git-ai-setup-npm-test-");
-    createCodexHome("git-ai-setup-codex-home-");
+    const repoRoot = createRepo("prs-setup-npm-test-");
+    createCodexHome("prs-setup-codex-home-");
     writeFileSync(
       resolve(repoRoot, "package.json"),
       JSON.stringify(
@@ -390,7 +390,7 @@ describe("setup command", () => {
     });
 
     expect(
-      JSON.parse(readFileSync(resolve(repoRoot, ".git-ai", "config.json"), "utf8"))
+      JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
     ).toEqual({
       ai: {
         issueDraft: {
@@ -409,11 +409,11 @@ describe("setup command", () => {
   });
 
   it("preserves existing ai provider settings when setup rewrites the repository config", async () => {
-    const repoRoot = createRepo("git-ai-setup-preserve-ai-");
-    createCodexHome("git-ai-setup-codex-home-");
-    mkdirSync(resolve(repoRoot, ".git-ai"), { recursive: true });
+    const repoRoot = createRepo("prs-setup-preserve-ai-");
+    createCodexHome("prs-setup-codex-home-");
+    mkdirSync(resolve(repoRoot, ".prs"), { recursive: true });
     writeFileSync(
-      resolve(repoRoot, ".git-ai", "config.json"),
+      resolve(repoRoot, ".prs", "config.json"),
       JSON.stringify(
         {
           ai: {
@@ -448,7 +448,7 @@ describe("setup command", () => {
     });
 
     expect(
-      JSON.parse(readFileSync(resolve(repoRoot, ".git-ai", "config.json"), "utf8"))
+      JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
     ).toEqual({
       ai: {
         issueDraft: {
@@ -471,8 +471,8 @@ describe("setup command", () => {
   });
 
   it("creates the AGENTS scaffold only when explicitly requested", async () => {
-    const repoRoot = createRepo("git-ai-setup-agents-scaffold-");
-    createCodexHome("git-ai-setup-codex-home-");
+    const repoRoot = createRepo("prs-setup-agents-scaffold-");
+    createCodexHome("prs-setup-codex-home-");
     writeFileSync(
       resolve(repoRoot, "package.json"),
       JSON.stringify(
@@ -510,8 +510,8 @@ describe("setup command", () => {
   });
 
   it("updates legacy generated workflow files when setup is rerun", async () => {
-    const repoRoot = createRepo("git-ai-setup-workflow-update-");
-    createCodexHome("git-ai-setup-codex-home-");
+    const repoRoot = createRepo("prs-setup-workflow-update-");
+    createCodexHome("prs-setup-codex-home-");
     mkdirSync(resolve(repoRoot, ".github", "workflows"), { recursive: true });
     writeFileSync(
       resolve(repoRoot, "package.json"),
@@ -528,7 +528,7 @@ describe("setup command", () => {
     );
     writeFileSync(resolve(repoRoot, "pnpm-lock.yaml"), "");
     writeFileSync(
-      resolve(repoRoot, ".github", "workflows", "git-ai-pr-review.yml"),
+      resolve(repoRoot, ".github", "workflows", "prs-pr-review.yml"),
       [
         "name: Git AI PR Review",
         "jobs:",
@@ -555,16 +555,16 @@ describe("setup command", () => {
     });
 
     expect(
-      readFileSync(resolve(repoRoot, ".github", "workflows", "git-ai-pr-review.yml"), "utf8")
-    ).toContain("DevwareUK/git-ai/actions/pr-review@main");
+      readFileSync(resolve(repoRoot, ".github", "workflows", "prs-pr-review.yml"), "utf8")
+    ).toContain("DevwareUK/prs/actions/pr-review@main");
     expect(
-      readFileSync(resolve(repoRoot, ".github", "workflows", "git-ai-pr-review.yml"), "utf8")
+      readFileSync(resolve(repoRoot, ".github", "workflows", "prs-pr-review.yml"), "utf8")
     ).not.toContain("DevwareUK/ai-actions/actions/pr-review@main");
   });
 
   it("writes useCodexSuperpowers true when Superpowers is detectable for Codex", async () => {
-    const repoRoot = createRepo("git-ai-setup-superpowers-");
-    const codexHome = createCodexHome("git-ai-setup-codex-home-");
+    const repoRoot = createRepo("prs-setup-superpowers-");
+    const codexHome = createCodexHome("prs-setup-codex-home-");
     writeSuperpowersPlugin(codexHome);
     writeFileSync(
       resolve(repoRoot, "package.json"),
@@ -598,7 +598,7 @@ describe("setup command", () => {
     });
 
     expect(
-      JSON.parse(readFileSync(resolve(repoRoot, ".git-ai", "config.json"), "utf8"))
+      JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
     ).toMatchObject({
       ai: {
         issueDraft: {
@@ -615,8 +615,8 @@ describe("setup command", () => {
   });
 
   it("preserves an existing explicit useCodexSuperpowers value on setup rerun", async () => {
-    const repoRoot = createRepo("git-ai-setup-preserve-superpowers-");
-    const codexHome = createCodexHome("git-ai-setup-codex-home-");
+    const repoRoot = createRepo("prs-setup-preserve-superpowers-");
+    const codexHome = createCodexHome("prs-setup-codex-home-");
     writeSuperpowersPlugin(codexHome);
     writeFileSync(
       resolve(repoRoot, "package.json"),
@@ -632,9 +632,9 @@ describe("setup command", () => {
       )
     );
     writeFileSync(resolve(repoRoot, "pnpm-lock.yaml"), "");
-    mkdirSync(resolve(repoRoot, ".git-ai"), { recursive: true });
+    mkdirSync(resolve(repoRoot, ".prs"), { recursive: true });
     writeFileSync(
-      resolve(repoRoot, ".git-ai", "config.json"),
+      resolve(repoRoot, ".prs", "config.json"),
       JSON.stringify(
         {
           ai: {
@@ -660,7 +660,7 @@ describe("setup command", () => {
     });
 
     expect(
-      JSON.parse(readFileSync(resolve(repoRoot, ".git-ai", "config.json"), "utf8"))
+      JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
     ).toMatchObject({
       ai: {
         issueDraft: {

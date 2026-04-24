@@ -1,4 +1,4 @@
-import type { ResolvedRepositoryConfigType } from "@git-ai/contracts";
+import type { ResolvedRepositoryConfigType } from "@prs/contracts";
 import { createGitHubRepositoryForge } from "./github";
 
 export type IssueDetails = {
@@ -98,61 +98,61 @@ class NoopRepositoryForge implements RepositoryForge {
 
   async fetchIssueDetails(): Promise<IssueDetails> {
     throw new Error(
-      "Repository forge support is disabled by .git-ai/config.json. Configure `forge.type` to enable issue workflows."
+      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
     );
   }
 
   async fetchIssuePlanComment(): Promise<IssuePlanComment | undefined> {
     throw new Error(
-      "Repository forge support is disabled by .git-ai/config.json. Configure `forge.type` to enable issue workflows."
+      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
     );
   }
 
   async fetchPullRequestDetails(): Promise<PullRequestDetails> {
     throw new Error(
-      "Repository forge support is disabled by .git-ai/config.json. Configure `forge.type` to enable pull request workflows."
+      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable pull request workflows."
     );
   }
 
   async fetchPullRequestIssueComments(): Promise<RepositoryComment[]> {
     throw new Error(
-      "Repository forge support is disabled by .git-ai/config.json. Configure `forge.type` to enable pull request workflows."
+      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable pull request workflows."
     );
   }
 
   async fetchPullRequestReviewComments(): Promise<PullRequestReviewComment[]> {
     throw new Error(
-      "Repository forge support is disabled by .git-ai/config.json. Configure `forge.type` to enable pull request workflows."
+      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable pull request workflows."
     );
   }
 
   async createIssuePlanComment(): Promise<IssuePlanComment> {
     throw new Error(
-      "Repository forge support is disabled by .git-ai/config.json. Configure `forge.type` to enable issue workflows."
+      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
     );
   }
 
   async updateIssuePlanComment(): Promise<IssuePlanComment> {
     throw new Error(
-      "Repository forge support is disabled by .git-ai/config.json. Configure `forge.type` to enable issue workflows."
+      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
     );
   }
 
   async createDraftIssue(): Promise<string> {
     throw new Error(
-      "Repository forge support is disabled by .git-ai/config.json. Configure `forge.type` to enable issue creation."
+      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue creation."
     );
   }
 
   async createOrReuseIssue(): Promise<CreatedIssueRecord> {
     throw new Error(
-      "Repository forge support is disabled by .git-ai/config.json. Configure `forge.type` to enable issue creation."
+      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue creation."
     );
   }
 
   async createPullRequest(): Promise<CreatedPullRequestRecord> {
     throw new Error(
-      "Repository forge support is disabled by .git-ai/config.json. Configure `forge.type` to enable pull request creation."
+      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable pull request creation."
     );
   }
 }

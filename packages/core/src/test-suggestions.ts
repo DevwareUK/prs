@@ -3,8 +3,8 @@ import {
   TestSuggestionsInputType,
   TestSuggestionsOutput,
   TestSuggestionsOutputType,
-} from "@git-ai/contracts";
-import { AIProvider } from "@git-ai/providers";
+} from "@prs/contracts";
+import { AIProvider } from "@prs/providers";
 import { DIFF_GROUNDED_SYSTEM_PROMPT_LINES } from "./diff-task";
 import {
   generateStructuredOutput,

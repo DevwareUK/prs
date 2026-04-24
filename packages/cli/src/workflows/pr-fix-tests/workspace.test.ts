@@ -21,7 +21,7 @@ import type {
 const cleanupTargets = new Set<string>();
 
 function createTempRepoRoot(): string {
-  const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-pr-fix-tests-"));
+  const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-pr-fix-tests-"));
   cleanupTargets.add(repoRoot);
   return repoRoot;
 }
@@ -40,9 +40,9 @@ describe("pr-fix-tests workspace", () => {
 
     const pullRequest: PullRequestDetails = {
       number: 71,
-      title: "Add git-ai pr fix-tests",
+      title: "Add prs pr fix-tests",
       body: "Closes #70\n\nImplement AI test suggestion handoff.",
-      url: "https://github.com/DevwareUK/git-ai/pull/71",
+      url: "https://github.com/DevwareUK/prs/pull/71",
       baseRefName: "main",
       headRefName: "feat/pr-fix-tests",
     };
@@ -67,8 +67,8 @@ describe("pr-fix-tests workspace", () => {
     const suggestionsComment: PullRequestTestSuggestionsComment = {
       sourceComment: {
         id: 4097382615,
-        body: "<!-- git-ai-test-suggestions -->",
-        url: "https://github.com/DevwareUK/git-ai/pull/71#issuecomment-4097382615",
+        body: "<!-- prs:test-suggestions -->",
+        url: "https://github.com/DevwareUK/prs/pull/71#issuecomment-4097382615",
         createdAt: "2026-03-20T11:20:00Z",
         updatedAt: "2026-03-20T11:29:35Z",
         author: "github-actions[bot]",
@@ -85,9 +85,9 @@ describe("pr-fix-tests workspace", () => {
     const linkedIssues: PullRequestLinkedIssueContext[] = [
       {
         number: 70,
-        title: "Add git-ai pr fix-tests",
+        title: "Add prs pr fix-tests",
         body: "Support implementing managed AI test suggestions from pull requests.",
-        url: "https://github.com/DevwareUK/git-ai/issues/70",
+        url: "https://github.com/DevwareUK/prs/issues/70",
       },
     ];
 
@@ -102,7 +102,7 @@ describe("pr-fix-tests workspace", () => {
     );
 
     expect(existsSync(workspace.runDir)).toBe(true);
-    expect(workspace.runDir).toMatch(/\.git-ai\/runs\/.+-pr-71-fix-tests$/);
+    expect(workspace.runDir).toMatch(/\.prs\/runs\/.+-pr-71-fix-tests$/);
 
     const snapshot = readFileSync(workspace.snapshotFilePath, "utf8");
     const prompt = readFileSync(workspace.promptFilePath, "utf8");
@@ -120,7 +120,7 @@ describe("pr-fix-tests workspace", () => {
     const outputLog = readFileSync(workspace.outputLogPath, "utf8");
 
     expect(snapshot).toContain("# Pull Request Test Suggestions Fix Snapshot");
-    expect(snapshot).toContain("### Issue #70: Add git-ai pr fix-tests");
+    expect(snapshot).toContain("### Issue #70: Add prs pr fix-tests");
     expect(snapshot).toContain(
       "### Suggestion 1: Test parsing of managed AI test suggestions comments"
     );
@@ -130,15 +130,15 @@ describe("pr-fix-tests workspace", () => {
     expect(snapshot).toContain("## Suggested edge cases");
 
     expect(prompt).toContain(
-      "Read the pull request test suggestions fix snapshot at `.git-ai/runs/"
+      "Read the pull request test suggestions fix snapshot at `.prs/runs/"
     );
-    expect(prompt).toContain("Use `.git-ai/runs/");
+    expect(prompt).toContain("Use `.prs/runs/");
     expect(prompt).toContain("- keep code changes focused on implementing automated tests");
     expect(prompt).toContain("- run `pnpm build` before finishing if code changes are made");
     expect(prompt).toContain("✅ Implementation complete");
     expect(prompt).toContain("add a short explanation of how to see the change in action");
     expect(prompt).toContain(
-      "continue by giving further instruction or type `/exit` when they are satisfied and want to hand control back to `git-ai`"
+      "continue by giving further instruction or type `/exit` when they are satisfied and want to hand control back to `prs`"
     );
     expect(prompt).not.toContain("[2] Commit changes");
     expect(prompt).not.toContain("/commit");
@@ -147,8 +147,8 @@ describe("pr-fix-tests workspace", () => {
     expect(metadata.linkedIssues).toEqual([
       {
         number: 70,
-        title: "Add git-ai pr fix-tests",
-        url: "https://github.com/DevwareUK/git-ai/issues/70",
+        title: "Add prs pr fix-tests",
+        url: "https://github.com/DevwareUK/prs/issues/70",
       },
     ]);
     expect(metadata.selectedSuggestions).toEqual([
@@ -176,14 +176,14 @@ describe("pr-fix-tests workspace", () => {
       "packages/cli/src/workflows/pr-fix-tests/selection.test.ts",
       "packages/cli/src/workflows/pr-fix-tests/run.test.ts",
     ]);
-    expect(metadata.snapshotFile).toMatch(/\.git-ai\/runs\/.+\/pr-test-suggestions\.md$/);
-    expect(metadata.promptFile).toMatch(/\.git-ai\/runs\/.+\/prompt\.md$/);
-    expect(metadata.outputLog).toMatch(/\.git-ai\/runs\/.+\/output\.log$/);
-    expect(metadata.runDir).toMatch(/\.git-ai\/runs\/.+-pr-71-fix-tests$/);
+    expect(metadata.snapshotFile).toMatch(/\.prs\/runs\/.+\/pr-test-suggestions\.md$/);
+    expect(metadata.promptFile).toMatch(/\.prs\/runs\/.+\/prompt\.md$/);
+    expect(metadata.outputLog).toMatch(/\.prs\/runs\/.+\/output\.log$/);
+    expect(metadata.runDir).toMatch(/\.prs\/runs\/.+-pr-71-fix-tests$/);
 
-    expect(outputLog).toContain("# git-ai pr fix-tests run log");
-    expect(outputLog).toContain("Snapshot file: .git-ai/runs/");
-    expect(outputLog).toContain("Prompt file: .git-ai/runs/");
+    expect(outputLog).toContain("# prs pr fix-tests run log");
+    expect(outputLog).toContain("Snapshot file: .prs/runs/");
+    expect(outputLog).toContain("Prompt file: .prs/runs/");
   });
 
   it("formats the configured build command in the generated Codex prompt", () => {
@@ -196,7 +196,7 @@ describe("pr-fix-tests workspace", () => {
         number: 88,
         title: "Test prompt build command formatting",
         body: "",
-        url: "https://github.com/DevwareUK/git-ai/pull/88",
+        url: "https://github.com/DevwareUK/prs/pull/88",
         baseRefName: "main",
         headRefName: "feat/prompt-build-command-formatting",
       },
@@ -220,8 +220,8 @@ describe("pr-fix-tests workspace", () => {
       {
         sourceComment: {
           id: 901,
-          body: "<!-- git-ai-test-suggestions -->",
-          url: "https://github.com/DevwareUK/git-ai/pull/88#issuecomment-901",
+          body: "<!-- prs:test-suggestions -->",
+          url: "https://github.com/DevwareUK/prs/pull/88#issuecomment-901",
           createdAt: "2026-03-20T12:00:00Z",
           updatedAt: "2026-03-20T12:00:00Z",
           author: "github-actions[bot]",

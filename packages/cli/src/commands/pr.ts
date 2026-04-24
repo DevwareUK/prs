@@ -5,9 +5,9 @@ export type PrCommandOptions = {
 
 export const PR_USAGE = [
   "Usage:",
-  "  git-ai pr prepare-review <pr-number>",
-  "  git-ai pr fix-comments <pr-number>",
-  "  git-ai pr fix-tests <pr-number>",
+  "  prs pr prepare-review <pr-number>",
+  "  prs pr fix-comments <pr-number>",
+  "  prs pr fix-tests <pr-number>",
 ].join("\n");
 
 export function parsePrCommandArgs(

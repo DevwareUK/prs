@@ -3,8 +3,8 @@ import {
   DiffSummaryInputType,
   DiffSummaryOutput,
   DiffSummaryOutputType,
-} from "@git-ai/contracts";
-import { AIProvider } from "@git-ai/providers";
+} from "@prs/contracts";
+import { AIProvider } from "@prs/providers";
 import {
   buildDiffTaskPrompt,
   DIFF_GROUNDED_SYSTEM_PROMPT_LINES,

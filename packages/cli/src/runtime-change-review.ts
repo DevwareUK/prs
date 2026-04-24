@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
-import { generateCommitMessage } from "@git-ai/core";
-import type { AIProvider } from "@git-ai/providers";
+import { generateCommitMessage } from "@prs/core";
+import type { AIProvider } from "@prs/providers";
 import {
   reviewGeneratedText,
   type ReviewedGeneratedText,

@@ -1,5 +1,5 @@
 {
-  "name": "@git-ai/test-suggestions-action",
+  "name": "@prs/test-suggestions-action",
   "version": "0.0.1",
   "private": true,
   "main": "dist/index.js",
@@ -8,9 +8,9 @@
     "build": "tsup"
   },
   "dependencies": {
-    "@git-ai/contracts": "workspace:*",
-    "@git-ai/core": "workspace:*",
-    "@git-ai/providers": "workspace:*"
+    "@prs/contracts": "workspace:*",
+    "@prs/core": "workspace:*",
+    "@prs/providers": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8.5.1"

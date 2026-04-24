@@ -18,7 +18,7 @@ export function createPullRequestFixTestsWorkspace(
 ): PullRequestFixTestsWorkspace {
   const runDir = resolve(
     repoRoot,
-    ".git-ai",
+    ".prs",
     "runs",
     `${formatRunTimestamp()}-pr-${prNumber}-fix-tests`
   );
@@ -59,8 +59,8 @@ function buildPullRequestFixTestsRuntimePrompt(
     "- preserve current behavior outside the selected testing scope",
     "- verify each selected test suggestion is addressed before finishing",
     `- run \`${formatCommandForDisplay(buildCommand)}\` before finishing if code changes are made`,
-    "- do not modify `.git-ai/` unless needed for local workflow artifacts",
-    "- do not commit `.git-ai/` files",
+    "- do not modify `.prs/` unless needed for local workflow artifacts",
+    "- do not commit `.prs/` files",
     "",
     ...doneStateInstructions,
   ].join("\n");
@@ -141,7 +141,7 @@ export function writePullRequestFixTestsWorkspaceFiles(
   writeFileSync(
     workspace.outputLogPath,
     [
-      "# git-ai pr fix-tests run log",
+      "# prs pr fix-tests run log",
       "",
       `Created: ${createdAt}`,
       `Snapshot file: ${toRepoRelativePath(repoRoot, workspace.snapshotFilePath)}`,

@@ -16,7 +16,7 @@ export function createPullRequestPrepareReviewWorkspace(
 ): PullRequestPrepareReviewWorkspace {
   const runDir = resolve(
     repoRoot,
-    ".git-ai",
+    ".prs",
     "runs",
     `${formatRunTimestamp()}-pr-${prNumber}-prepare-review`
   );
@@ -55,7 +55,7 @@ function buildPullRequestPrepareReviewPrompt(
     "",
     "Instructions to the coding agent:",
     "- inspect the repository only as needed to prepare the review brief",
-    "- do not modify tracked repository files; only write the requested review brief and local workflow artifacts under `.git-ai/`",
+    "- do not modify tracked repository files; only write the requested review brief and local workflow artifacts under `.prs/`",
     "- base the brief on the checked-out repository state, the PR context in the snapshot, and the current diff against the PR base branch",
     "- use the pull request body, linked issues, and managed PR assistant content only as supporting context when they are relevant",
     "- include the checked-out branch and the checkout source that was already chosen for this review workspace",
@@ -146,7 +146,7 @@ export function initializePullRequestPrepareReviewOutputLog(
   writeFileSync(
     workspace.outputLogPath,
     [
-      "# git-ai pr prepare-review run log",
+      "# prs pr prepare-review run log",
       "",
       `Created: ${new Date().toISOString()}`,
       `Snapshot file: ${toRepoRelativePath(repoRoot, workspace.snapshotFilePath)}`,

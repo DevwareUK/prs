@@ -18,7 +18,7 @@ export function createPullRequestFixWorkspace(
 ): PullRequestFixWorkspace {
   const runDir = resolve(
     repoRoot,
-    ".git-ai",
+    ".prs",
     "runs",
     `${formatRunTimestamp()}-pr-${prNumber}-fix-comments`
   );
@@ -58,8 +58,8 @@ function buildPullRequestFixRuntimePrompt(
     "- follow existing architecture patterns",
     "- verify each selected review thread or grouped task is fully addressed before finishing",
     `- run \`${formatCommandForDisplay(buildCommand)}\` before finishing if code changes are made`,
-    "- do not modify `.git-ai/` unless needed for local workflow artifacts",
-    "- do not commit `.git-ai/` files",
+    "- do not modify `.prs/` unless needed for local workflow artifacts",
+    "- do not commit `.prs/` files",
     "",
     ...doneStateInstructions,
   ].join("\n");
@@ -127,7 +127,7 @@ export function writePullRequestFixWorkspaceFiles(
   writeFileSync(
     workspace.outputLogPath,
     [
-      "# git-ai pr fix-comments run log",
+      "# prs pr fix-comments run log",
       "",
       `Created: ${createdAt}`,
       `Snapshot file: ${toRepoRelativePath(repoRoot, workspace.snapshotFilePath)}`,

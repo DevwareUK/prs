@@ -1,3 +1,4 @@
+export * from "./branding";
 export * from "./commit-message";
 export * from "./diff-summary";
 export * from "./feature-backlog";

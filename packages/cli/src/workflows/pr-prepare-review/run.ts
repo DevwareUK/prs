@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import type { AIProvider } from "@git-ai/providers";
+import type { AIProvider } from "@prs/providers";
 import { formatCommandForDisplay } from "../../config";
 import type { PullRequestDetails, RepositoryForge } from "../../forge";
 import {
@@ -18,7 +18,7 @@ import {
   launchUnattendedRuntime,
 } from "../../runtime";
 import {
-  getIssueSessionStateFilePath,
+  resolveExistingIssueSessionStateFilePath,
   toRepoRelativePath,
 } from "../../run-artifacts";
 import { fetchLinkedIssuesForPullRequest } from "./snapshot";
@@ -342,7 +342,7 @@ function synchronizePullRequestBaseBranch(
     const recoveryMessage = [
       `Base-branch sync is still incomplete for "${branchName}".`,
       ...recoveryParts,
-      `After fixing the branch state, rerun \`git-ai pr prepare-review ${pullRequest.number}\`.`,
+      `After fixing the branch state, rerun \`prs pr prepare-review ${pullRequest.number}\`.`,
     ].join(" ");
 
     appendPullRequestPrepareReviewWarning(workspace, recoveryMessage);
@@ -416,7 +416,7 @@ function loadIssueSessionState(
   repoRoot: string,
   issueNumber: number
 ): PullRequestPrepareReviewIssueSessionState | undefined {
-  const stateFilePath = getIssueSessionStateFilePath(repoRoot, issueNumber);
+  const stateFilePath = resolveExistingIssueSessionStateFilePath(repoRoot, issueNumber);
   if (!existsSync(stateFilePath)) {
     return undefined;
   }
@@ -579,7 +579,7 @@ function ensureCodexAvailable(): void {
   const availability = runtime.checkAvailability();
   if (!availability.available) {
     throw new Error(
-      `\`git-ai pr prepare-review\` requires Codex because it generates the review brief in an unattended runtime. Configured Codex is unavailable because ${availability.reason}.`
+      `\`prs pr prepare-review\` requires Codex because it generates the review brief in an unattended runtime. Configured Codex is unavailable because ${availability.reason}.`
     );
   }
 }
@@ -589,7 +589,7 @@ export async function runPrPrepareReviewCommand(
 ): Promise<void> {
   if (options.forge.type === "none") {
     throw new Error(
-      "Repository forge support is disabled by .git-ai/config.json. Configure `forge.type` to enable pull request workflows."
+      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable pull request workflows."
     );
   }
 
@@ -598,7 +598,7 @@ export async function runPrPrepareReviewCommand(
   (options.ensureVerificationCommandAvailable ?? ensureVerificationCommandAvailable)(
     options.repoRoot,
     options.buildCommand,
-    "git-ai pr prepare-review"
+    "prs pr prepare-review"
   );
 
   console.log(`Fetching pull request #${options.prNumber}...`);

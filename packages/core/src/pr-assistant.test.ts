@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { AIProvider } from "@git-ai/providers";
+import type { AIProvider } from "@prs/providers";
 import { generatePRAssistant } from "./pr-assistant";
 
 describe("generatePRAssistant", () => {

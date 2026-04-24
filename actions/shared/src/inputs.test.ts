@@ -15,7 +15,7 @@ let originalCommitMessagesFile: string | undefined;
 
 function writeTempFile(name: string, contents: string): string {
   if (!tempDirPath) {
-    tempDirPath = mkdtempSync(join(tmpdir(), "git-ai-action-inputs-"));
+    tempDirPath = mkdtempSync(join(tmpdir(), "prs-action-inputs-"));
   }
 
   const filePath = join(tempDirPath, name);
@@ -97,7 +97,7 @@ describe("action input helpers", () => {
   it("throws a readable error when the input file cannot be read", () => {
     process.env.INPUT_DIFF_FILE = join(
       tmpdir(),
-      `missing-git-ai-action-${Date.now()}-${Math.random().toString(16).slice(2)}.diff`
+      `missing-prs-action-${Date.now()}-${Math.random().toString(16).slice(2)}.diff`
     );
     delete process.env.INPUT_DIFF;
 

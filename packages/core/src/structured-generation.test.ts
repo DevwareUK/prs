@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ReviewSummaryOutput } from "@git-ai/contracts";
+import { ReviewSummaryOutput } from "@prs/contracts";
 import { generateStructuredOutput } from "./structured-generation";
 
 describe("generateStructuredOutput", () => {

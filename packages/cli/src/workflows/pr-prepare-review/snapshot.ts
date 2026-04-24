@@ -2,7 +2,7 @@ import {
   PR_ASSISTANT_END_MARKER,
   PR_ASSISTANT_START_MARKER,
   stripManagedPRAssistantSection,
-} from "@git-ai/core";
+} from "@prs/core";
 import { fetchLinkedIssuesForPullRequest } from "../pr-fix-comments/snapshot";
 import type { PullRequestPrepareReviewSnapshotInput } from "./types";
 

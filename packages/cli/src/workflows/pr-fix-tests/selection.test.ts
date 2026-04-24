@@ -13,7 +13,7 @@ function createComment(
   return {
     id: options.id ?? 1,
     body,
-    url: options.url ?? "https://github.com/DevwareUK/git-ai/pull/71#issuecomment-1",
+    url: options.url ?? "https://github.com/DevwareUK/prs/pull/71#issuecomment-1",
     createdAt: options.createdAt ?? "2026-03-20T11:00:00Z",
     updatedAt: options.updatedAt ?? "2026-03-20T11:00:00Z",
     author: options.author ?? "github-actions[bot]",
@@ -76,7 +76,7 @@ describe("pr-fix-tests selection helpers", () => {
   it("parses a managed AI test suggestions comment into structured suggestions", () => {
     const comment = createComment(
       [
-        "<!-- git-ai-test-suggestions -->",
+        "<!-- prs:test-suggestions -->",
         "## AI Test Suggestions",
         "",
         "### Overview",
@@ -86,7 +86,7 @@ describe("pr-fix-tests selection helpers", () => {
         "### Suggested test areas",
         "",
         ...buildSuggestionBlock({
-          title: "Verify command execution for 'git-ai pr fix-tests'",
+          title: "Verify command execution for 'prs pr fix-tests'",
           priority: "High",
           behavior:
             "The workflow should fetch PR context and hand the selected tests to Codex with the full task details.",
@@ -146,7 +146,7 @@ describe("pr-fix-tests selection helpers", () => {
       suggestions: [
         {
           suggestionId: "suggestion-1",
-          area: "Verify command execution for 'git-ai pr fix-tests'",
+          area: "Verify command execution for 'prs pr fix-tests'",
           priority: "high",
           testType: "integration",
           behavior:
@@ -201,7 +201,7 @@ describe("pr-fix-tests selection helpers", () => {
   it("falls back to combined suggestion locations when the comment omits a likely places section", () => {
     const comment = createComment(
       [
-        "<!-- git-ai-test-suggestions -->",
+        "<!-- prs:test-suggestions -->",
         "## AI Test Suggestions",
         "",
         "### Suggested test areas",
@@ -236,15 +236,15 @@ describe("pr-fix-tests selection helpers", () => {
   });
 
   it("selects the newest managed comment and breaks ties by id", () => {
-    const older = createComment("<!-- git-ai-test-suggestions -->", {
+    const older = createComment("<!-- prs:test-suggestions -->", {
       id: 10,
       updatedAt: "2026-03-20T10:00:00Z",
     });
-    const newer = createComment("<!-- git-ai-test-suggestions -->", {
+    const newer = createComment("<!-- prs:test-suggestions -->", {
       id: 11,
       updatedAt: "2026-03-20T11:00:00Z",
     });
-    const sameTimeHigherId = createComment("<!-- git-ai-test-suggestions -->", {
+    const sameTimeHigherId = createComment("<!-- prs:test-suggestions -->", {
       id: 12,
       updatedAt: "2026-03-20T11:00:00Z",
     });
@@ -256,6 +256,28 @@ describe("pr-fix-tests selection helpers", () => {
     expect(
       findManagedTestSuggestionsComment([older, unrelated, newer, sameTimeHigherId])
     ).toBe(sameTimeHigherId);
+  });
+
+  it("parses canonical prs managed comments while still ignoring either marker line", () => {
+    const comment = createComment(
+      [
+        "<!-- prs:test-suggestions -->",
+        "## AI Test Suggestions",
+        "",
+        "### Suggested test areas",
+        "",
+        ...buildSuggestionBlock({
+          title: "Verify command execution for 'prs pr fix-tests'",
+          priority: "High",
+          value: "The renamed workflow should keep its structured task details.",
+        }),
+      ].join("\n")
+    );
+
+    expect(parseManagedTestSuggestionsComment(comment).suggestions).toHaveLength(1);
+    expect(parseManagedTestSuggestionsComment(comment).suggestions[0]?.area).toContain(
+      "prs pr fix-tests"
+    );
   });
 
   it("parses interactive suggestion selection and rejects invalid entries", () => {

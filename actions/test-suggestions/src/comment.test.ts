@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { TestSuggestionsOutputType } from "@git-ai/contracts";
+import type { TestSuggestionsOutputType } from "@prs/contracts";
 import { buildCommentBody } from "./comment";
 
 describe("buildCommentBody", () => {

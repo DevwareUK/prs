@@ -12,7 +12,7 @@ function writeFile(repoRoot: string, relativePath: string, contents: string): vo
 
 describe("analyzeTestBacklog", () => {
   it("detects Vitest and CI wiring without recommending a new framework", async () => {
-    const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-test-backlog-"));
+    const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-test-backlog-"));
 
     writeFile(
       repoRoot,
@@ -77,7 +77,7 @@ describe("analyzeTestBacklog", () => {
   });
 
   it("ignores excluded test paths from the repository scan", async () => {
-    const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-test-backlog-exclude-"));
+    const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-test-backlog-exclude-"));
 
     writeFile(
       repoRoot,

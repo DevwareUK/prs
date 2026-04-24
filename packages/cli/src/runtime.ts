@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
-import type { ResolvedRepositoryConfigType } from "@git-ai/contracts";
+import type { ResolvedRepositoryConfigType } from "@prs/contracts";
 import { toRepoRelativePath } from "./run-artifacts";
 
 export type InteractiveRuntimeType =
@@ -361,7 +361,7 @@ function createCodexRuntime(): InteractiveRuntime {
         appendFileSync(
           workspace.outputLogPath,
           [
-            "Warning: git-ai could not determine the new Codex session id for future resume support.",
+            "Warning: prs could not determine the new Codex session id for future resume support.",
             "",
           ].join("\n"),
           "utf8"
@@ -430,7 +430,7 @@ function createCodexRuntime(): InteractiveRuntime {
         appendFileSync(
           workspace.outputLogPath,
           [
-            "Warning: git-ai could not determine the new Codex session id for future resume support.",
+            "Warning: prs could not determine the new Codex session id for future resume support.",
             "",
           ].join("\n"),
           "utf8"
@@ -520,7 +520,7 @@ export function selectInteractiveRuntime(
       `${formatRuntimeUnavailableMessage(
         configuredRuntime,
         configuredAvailability.reason
-      )} Install the missing dependency before running interactive git-ai workflows.`
+      )} Install the missing dependency before running interactive prs workflows.`
     );
   }
 

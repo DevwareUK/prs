@@ -7,7 +7,7 @@ import {
   type FeatureBacklogOutputType,
   type FeatureBacklogSuggestionType,
   type RepositoryFeatureSignalsType,
-} from "@git-ai/contracts";
+} from "@prs/contracts";
 import { createRepositoryPathMatcher } from "./path-filter";
 import { resolveRepositoryConfig } from "./repository-config";
 
@@ -42,7 +42,8 @@ type SuggestionDraft = Omit<FeatureBacklogSuggestionType, "issueBody">;
 
 const SKIP_DIRECTORIES = new Set([
   ".git",
-  ".git-ai",
+  ".prs",
+  ".prs",
   "node_modules",
   "dist",
   "coverage",

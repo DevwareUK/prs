@@ -3,8 +3,8 @@ import {
   PRAssistantInputType,
   PRAssistantOutput,
   PRAssistantOutputType,
-} from "@git-ai/contracts";
-import { AIProvider } from "@git-ai/providers";
+} from "@prs/contracts";
+import { AIProvider } from "@prs/providers";
 import { z } from "zod";
 import {
   buildDiffTaskPrompt,

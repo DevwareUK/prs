@@ -8,7 +8,7 @@ import {
   readFileSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import {
   analyzeFeatureBacklog,
@@ -24,13 +24,19 @@ import {
   generatePRDescription,
   mergePRAssistantSection,
   StructuredGenerationError,
-} from "@git-ai/core";
+} from "@prs/core";
 import {
   createProviderFromConfig,
   type AIProvider,
   readProviderEnvironment,
-} from "@git-ai/providers";
-import type { ResolvedRepositoryConfigType } from "@git-ai/contracts";
+} from "@prs/providers";
+import type { ResolvedRepositoryConfigType } from "@prs/contracts";
+import {
+  GIT_AI_ALIAS_DEPRECATION_MESSAGE,
+  ISSUE_PLAN_COMMENT_MARKER,
+  LEGACY_PRODUCT_SHORT_NAME,
+  PRODUCT_SHORT_NAME,
+} from "@prs/contracts";
 import dotenv from "dotenv";
 import {
   formatCommandForDisplay,
@@ -78,6 +84,8 @@ import {
   getIssueBatchStateFilePath,
   getIssueSessionStateFilePath,
   getIssueStateDir,
+  resolveExistingIssueBatchStateFilePath,
+  resolveExistingIssueSessionStateFilePath,
   toRepoRelativePath,
 } from "./run-artifacts";
 import { parseSetupCommandArgs, runSetupCommand } from "./setup";
@@ -270,71 +278,74 @@ type UnattendedIssueRunResult = {
   prUrl?: string;
 };
 
-const ISSUE_PLAN_COMMENT_MARKER = "<!-- git-ai:issue-plan -->";
-
 const ISSUE_USAGE = [
   "Usage:",
-  "  git-ai issue <number> [--mode <interactive|unattended>]",
-  "  git-ai issue batch <number> <number> [...number] [--mode unattended]",
-  "  git-ai issue draft",
-  "  git-ai issue plan <number> [--refresh]",
-  "  git-ai issue prepare <number> [--mode <local|github-action>]",
-  "  git-ai issue finalize <number>",
+  "  prs issue <number> [--mode <interactive|unattended>]",
+  "  prs issue batch <number> <number> [...number] [--mode unattended]",
+  "  prs issue draft",
+  "  prs issue plan <number> [--refresh]",
+  "  prs issue prepare <number> [--mode <local|github-action>]",
+  "  prs issue finalize <number>",
 ].join("\n");
 
 const TEST_BACKLOG_USAGE = [
   "Usage:",
-  "  git-ai test-backlog [--format <markdown|json>] [--top <count>]",
+  "  prs test-backlog [--format <markdown|json>] [--top <count>]",
   "                       [--repo-root <path>] [--create-issues]",
   "                       [--max-issues <count>] [--label <name>] [--labels <a,b>]",
 ].join("\n");
 
 const FEATURE_BACKLOG_USAGE = [
   "Usage:",
-  "  git-ai feature-backlog [repo-path] [--format <markdown|json>] [--top <count>]",
+  "  prs feature-backlog [repo-path] [--format <markdown|json>] [--top <count>]",
   "                          [--create-issues] [--max-issues <count>]",
   "                          [--label <name>] [--labels <a,b>]",
 ].join("\n");
 
 const REVIEW_USAGE = [
   "Usage:",
-  "  git-ai review [--base <git-ref>] [--head <git-ref>] [--format <markdown|json>]",
+  "  prs review [--base <git-ref>] [--head <git-ref>] [--format <markdown|json>]",
   "                [--issue-number <number>]",
 ].join("\n");
 
 const TOP_LEVEL_HELP = [
-  "git-ai",
+  "prs",
   "",
   "GitHub-first AI workflows for pull request review, follow-up fixes, and backlog discovery.",
   "",
   "Start here:",
-  "  git-ai review",
-  "  git-ai pr fix-comments <pr-number>",
-  "  git-ai pr fix-tests <pr-number>",
-  "  git-ai test-backlog [--top <count>]",
+  "  prs review",
+  "  prs pr fix-comments <pr-number>",
+  "  prs pr fix-tests <pr-number>",
+  "  prs test-backlog [--top <count>]",
   "",
   "Advanced:",
-  "  git-ai issue draft",
-  "  git-ai issue plan <number> [--refresh]",
-  "  git-ai issue <number> [--mode <interactive|unattended>]",
-  "  git-ai issue prepare <number> [--mode <local|github-action>]",
-  "  git-ai issue finalize <number>",
+  "  prs issue draft",
+  "  prs issue plan <number> [--refresh]",
+  "  prs issue <number> [--mode <interactive|unattended>]",
+  "  prs issue prepare <number> [--mode <local|github-action>]",
+  "  prs issue finalize <number>",
   "",
   "Beta:",
-  "  git-ai issue batch <number> <number> [...number] [--mode unattended]",
-  "  git-ai pr prepare-review <pr-number>",
-  "  git-ai feature-backlog [repo-path]",
+  "  prs issue batch <number> <number> [...number] [--mode unattended]",
+  "  prs pr prepare-review <pr-number>",
+  "  prs feature-backlog [repo-path]",
   "",
   "Supporting commands:",
-  "  git-ai setup",
-  "  git-ai commit",
-  "  git-ai diff",
+  "  prs setup",
+  "  prs commit",
+  "  prs diff",
   "",
   "GitHub-only by design: forge-backed issue and pull request workflows currently target GitHub repositories.",
 ].join("\n");
 
 function getCliArgs(): string[] {
   return process.argv.slice(2).filter((arg) => arg !== "--");
+}
+
+function getInvokedCommandName(): string {
+  const argvPath = process.argv[1];
+  return argvPath ? basename(argvPath) : PRODUCT_SHORT_NAME;
 }
 
 function getDefaultRepoRoot(): string {
@@ -615,7 +626,7 @@ function hasChanges(repoRoot: string): boolean {
 function ensureCleanWorkingTree(repoRoot: string): void {
   if (hasChanges(repoRoot)) {
     throw new Error(
-      "Working tree is not clean. Commit or stash existing changes before running git-ai issue workflows."
+      "Working tree is not clean. Commit or stash existing changes before running prs issue workflows."
     );
   }
 }
@@ -1237,7 +1248,7 @@ function renderIssueResolutionPlanComment(
     ISSUE_PLAN_COMMENT_MARKER,
     "## Issue Resolution Plan",
     "",
-    `Generated by \`git-ai issue plan ${issueNumber}\`. Edit this comment directly on GitHub to refine the plan. Later \`git-ai issue\` runs will use the latest version of this comment.`,
+    `Generated by \`prs issue plan ${issueNumber}\`. Edit this comment directly on GitHub to refine the plan. Later \`prs issue\` runs will use the latest version of this comment.`,
     "",
     "### Summary",
     plan.summary,
@@ -1286,8 +1297,8 @@ function createIssueBranchName(issueNumber: number, title: string): string {
 
 function createIssueDraftWorkspace(repoRoot: string): IssueDraftWorkspace {
   const timestamp = formatRunTimestamp();
-  const issueDir = resolve(repoRoot, ".git-ai", "issues");
-  const runDir = resolve(repoRoot, ".git-ai", "runs", `${timestamp}-issue-draft`);
+  const issueDir = resolve(repoRoot, ".prs", "issues");
+  const runDir = resolve(repoRoot, ".prs", "runs", `${timestamp}-issue-draft`);
 
   mkdirSync(issueDir, { recursive: true });
   mkdirSync(runDir, { recursive: true });
@@ -1338,7 +1349,7 @@ function buildIssueDraftRuntimePrompt(
       "- keep the draft grounded in actual repository structure, existing patterns, and likely touchpoints",
       "- do not create the GitHub issue directly",
       "- do not modify unrelated repository files",
-      "- do not modify `.git-ai/` except for the provided draft file and local workflow artifacts",
+      "- do not modify `.prs/` except for the provided draft file and local workflow artifacts",
       "",
       "When the draft is complete and saved, stop.",
     ].join("\n");
@@ -1365,7 +1376,7 @@ function buildIssueDraftRuntimePrompt(
     "- write the completed draft to the provided draft path before exiting",
     "- do not create the GitHub issue directly",
     "- do not modify unrelated repository files",
-    "- do not modify `.git-ai/` except for the provided draft file and local workflow artifacts",
+    "- do not modify `.prs/` except for the provided draft file and local workflow artifacts",
     "",
     "When the draft is complete and saved, stop.",
   ].join("\n");
@@ -1413,7 +1424,7 @@ function writeIssueDraftWorkspaceFiles(
   writeFileSync(
     workspace.outputLogPath,
     [
-      "# git-ai issue draft run log",
+      "# prs issue draft run log",
       "",
       `Created: ${createdAt}`,
       `Runtime: ${runtime.displayName}`,
@@ -1429,7 +1440,7 @@ function loadIssueSessionState(
   repoRoot: string,
   issueNumber: number
 ): IssueSessionState | undefined {
-  const stateFilePath = getIssueSessionStateFilePath(repoRoot, issueNumber);
+  const stateFilePath = resolveExistingIssueSessionStateFilePath(repoRoot, issueNumber);
   if (!existsSync(stateFilePath)) {
     return undefined;
   }
@@ -1462,7 +1473,7 @@ function loadIssueSessionState(
       `Issue session state at ${toRepoRelativePath(
         repoRoot,
         stateFilePath
-      )} is malformed. Remove it and rerun \`git-ai issue ${issueNumber}\` to start a fresh session.`
+      )} is malformed. Remove it and rerun \`prs issue ${issueNumber}\` to start a fresh session.`
     );
   }
 
@@ -1497,7 +1508,7 @@ function buildIssueResumeRecoveryMessage(
 
   return [
     detail,
-    `Recovery: remove ${stateFile} and rerun \`git-ai issue ${issueNumber}\` to start a fresh session.`,
+    `Recovery: remove ${stateFile} and rerun \`prs issue ${issueNumber}\` to start a fresh session.`,
   ].join(" ");
 }
 
@@ -1510,10 +1521,10 @@ function createIssueWorkspace(
   const slug = slugifyIssueTitle(issue.title) || `issue-${issueNumber}`;
   const issueDir =
     issueDirOverride ??
-    resolve(repoRoot, ".git-ai", "issues", `${issueNumber}-${slug}`);
+    resolve(repoRoot, ".prs", "issues", `${issueNumber}-${slug}`);
   const runDir = resolve(
     repoRoot,
-    ".git-ai",
+    ".prs",
     "runs",
     `${formatRunTimestamp()}-issue-${issueNumber}`
   );
@@ -1574,7 +1585,7 @@ function loadIssueBatchState(
   repoRoot: string,
   issueNumbers: number[]
 ): IssueBatchState | undefined {
-  const stateFilePath = getIssueBatchStateFilePath(repoRoot, issueNumbers);
+  const stateFilePath = resolveExistingIssueBatchStateFilePath(repoRoot, issueNumbers);
   if (!existsSync(stateFilePath)) {
     return undefined;
   }
@@ -1867,7 +1878,7 @@ function buildRuntimePrompt(
         ]
       : mode === "unattended"
         ? [
-            "You are running inside an unattended local git-ai issue workflow via Codex.",
+            "You are running inside an unattended local prs issue workflow via Codex.",
             "Do not wait for interactive user input.",
           ]
       : [];
@@ -1890,8 +1901,8 @@ function buildRuntimePrompt(
     "- follow existing architecture patterns",
     "- if the issue snapshot includes a resolution plan, treat it as the latest plan of record",
     `- run \`${formatCommandForDisplay(buildCommand)}\` before finishing if code changes are made`,
-    "- do not modify `.git-ai/` unless needed for local workflow artifacts",
-    "- do not commit `.git-ai/` files",
+    "- do not modify `.prs/` unless needed for local workflow artifacts",
+    "- do not commit `.prs/` files",
     "",
     ...doneStateInstructions,
   ].join("\n");
@@ -1954,7 +1965,7 @@ function writeIssueWorkspaceFiles(
   writeFileSync(
     workspace.outputLogPath,
     [
-      "# git-ai issue run log",
+      "# prs issue run log",
       "",
       `Created: ${createdAt}`,
       `Issue snapshot: ${toRepoRelativePath(repoRoot, workspace.issueFilePath)}`,
@@ -2056,7 +2067,7 @@ function runTrackedCommand(
 }
 
 function verifyBuild(repoRoot: string, buildCommand: string[], outputLogPath: string): void {
-  ensureVerificationCommandAvailable(repoRoot, buildCommand, "git-ai");
+  ensureVerificationCommandAvailable(repoRoot, buildCommand, "prs");
 
   runTrackedCommand(
     buildCommand[0],
@@ -2169,7 +2180,7 @@ async function promptForRequiredLine(prompt: string): Promise<string> {
 function createStandaloneIssueFinalizeRunDir(repoRoot: string, issueNumber: number): string {
   const runDir = resolve(
     repoRoot,
-    ".git-ai",
+    ".prs",
     "runs",
     `${formatRunTimestamp()}-issue-${issueNumber}-finalize`
   );
@@ -2884,7 +2895,7 @@ async function runIssueDraftCommand(): Promise<void> {
     !shouldUseCodexSuperpowers
   ) {
     console.log(
-      "Codex Superpowers-backed issue drafting is enabled in .git-ai/config.json, but Superpowers is not available in the current Codex installation. Falling back to the standard issue-draft prompt."
+      "Codex Superpowers-backed issue drafting is enabled in .prs/config.json, but Superpowers is not available in the current Codex installation. Falling back to the standard issue-draft prompt."
     );
   }
 
@@ -2918,7 +2929,7 @@ async function runIssueDraftCommand(): Promise<void> {
       console.log("Issue creation skipped because GitHub access is unavailable.");
     } else {
       console.log(
-        "Issue creation skipped because repository forge support is disabled by .git-ai/config.json."
+        "Issue creation skipped because repository forge support is disabled by .prs/config.json."
       );
     }
     return;
@@ -3005,13 +3016,13 @@ async function prepareIssueRun(
   );
   if (forge.type === "none") {
     throw new Error(
-      "Repository forge support is disabled by .git-ai/config.json. Configure `forge.type` to enable issue workflows."
+      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
     );
   }
   ensureVerificationCommandAvailable(
     repoRoot,
     repositoryConfig.buildCommand,
-    "git-ai issue workflows"
+    "prs issue workflows"
   );
   const baseBranchPreflight = preflightIssueBaseBranch(
     repoRoot,
@@ -3188,7 +3199,7 @@ function requireCodexForUnattendedIssueRuns(
 ): void {
   if (repositoryConfig.ai.runtime.type !== "codex") {
     throw new Error(
-      'Unattended issue runs currently require `ai.runtime.type` to be "codex" in .git-ai/config.json.'
+      'Unattended issue runs currently require `ai.runtime.type` to be "codex" in .prs/config.json.'
     );
   }
 
@@ -3214,7 +3225,7 @@ async function runUnattendedIssueCommand(
   const forge = getRepositoryForge(repoRoot);
   if (!forge.isAuthenticated()) {
     throw new Error(
-      "Unattended issue runs require authenticated GitHub access so git-ai can open the pull request automatically."
+      "Unattended issue runs require authenticated GitHub access so prs can open the pull request automatically."
     );
   }
 
@@ -3555,7 +3566,7 @@ async function runIssueCommand(): Promise<void> {
   );
   console.log(`Complete the issue work in ${runtime.displayName}.`);
   console.log(
-    `When ${runtime.displayName} exits, git-ai will resume with build and commit steps.`
+    `When ${runtime.displayName} exits, prs will resume with build and commit steps.`
   );
   const runtimeLaunch = runtime.launch(repoRoot, context.workspace, {
     resumeSessionId: context.runtime.sessionId,
@@ -3636,13 +3647,16 @@ async function runIssueCommand(): Promise<void> {
   }
 
   console.log(
-    "Pull request creation skipped because repository forge support is disabled by .git-ai/config.json."
+    "Pull request creation skipped because repository forge support is disabled by .prs/config.json."
   );
 }
 
 export async function run(): Promise<void> {
   const args = getCliArgs();
   const firstArg = args[0];
+  if (getInvokedCommandName() === LEGACY_PRODUCT_SHORT_NAME) {
+    console.warn(GIT_AI_ALIAS_DEPRECATION_MESSAGE);
+  }
 
   if (firstArg === "help" || firstArg === "--help" || firstArg === "-h") {
     process.stdout.write(`${TOP_LEVEL_HELP}\n`);

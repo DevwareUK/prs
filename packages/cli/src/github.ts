@@ -188,7 +188,7 @@ async function listIssueComments(
   const token = tryResolveGitHubApiToken();
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
-    "User-Agent": "git-ai-cli",
+    "User-Agent": "prs-cli",
   };
 
   if (token) {
@@ -315,7 +315,7 @@ async function fetchIssueWithApi(
   const token = tryResolveGitHubApiToken();
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
-    "User-Agent": "git-ai-cli",
+    "User-Agent": "prs-cli",
   };
 
   if (token) {
@@ -358,7 +358,7 @@ async function fetchPullRequestWithApi(
   const token = tryResolveGitHubApiToken();
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
-    "User-Agent": "git-ai-cli",
+    "User-Agent": "prs-cli",
   };
 
   if (token) {
@@ -413,7 +413,7 @@ async function listPullRequestReviewComments(
   const token = tryResolveGitHubApiToken();
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
-    "User-Agent": "git-ai-cli",
+    "User-Agent": "prs-cli",
   };
 
   if (token) {
@@ -490,7 +490,7 @@ async function listOpenIssues(
       headers: {
         Accept: "application/vnd.github+json",
         Authorization: `Bearer ${token}`,
-        "User-Agent": "git-ai-cli",
+        "User-Agent": "prs-cli",
       },
     }
   );
@@ -529,7 +529,7 @@ async function createGitHubIssue(
       Accept: "application/vnd.github+json",
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
-      "User-Agent": "git-ai-cli",
+      "User-Agent": "prs-cli",
     },
     body: JSON.stringify({
       title,
@@ -586,7 +586,7 @@ class GitHubRepositoryForge implements RepositoryForge {
     const comments = await listIssueComments(owner, repo, issueNumber);
 
     return comments
-      .filter((comment) => comment.body.includes("<!-- git-ai:issue-plan -->"))
+      .filter((comment) => includesManagedMarker(comment.body, ALL_ISSUE_PLAN_COMMENT_MARKERS))
       .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0];
   }
 
@@ -626,7 +626,7 @@ class GitHubRepositoryForge implements RepositoryForge {
           Accept: "application/vnd.github+json",
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
-          "User-Agent": "git-ai-cli",
+          "User-Agent": "prs-cli",
         },
         body: JSON.stringify({ body }),
       }
@@ -667,7 +667,7 @@ class GitHubRepositoryForge implements RepositoryForge {
           Accept: "application/vnd.github+json",
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
-          "User-Agent": "git-ai-cli",
+          "User-Agent": "prs-cli",
         },
         body: JSON.stringify({ body }),
       }
@@ -787,3 +787,7 @@ class GitHubRepositoryForge implements RepositoryForge {
 export function createGitHubRepositoryForge(repoRoot: string): RepositoryForge {
   return new GitHubRepositoryForge(repoRoot);
 }
+import {
+  ALL_ISSUE_PLAN_COMMENT_MARKERS,
+  includesManagedMarker,
+} from "@prs/contracts";

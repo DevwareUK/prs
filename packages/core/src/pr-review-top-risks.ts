@@ -2,7 +2,7 @@ import type {
   PRReviewCommentType,
   PRReviewFindingType,
   PRReviewOutputType,
-} from "@git-ai/contracts";
+} from "@prs/contracts";
 
 export const MAX_PR_REVIEW_SIGNALS = 5;
 

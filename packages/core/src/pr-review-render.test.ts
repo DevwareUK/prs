@@ -38,7 +38,7 @@ describe("formatPRReviewMarkdown", () => {
       {
         number: 50,
         title: "Implement AI-Powered Pull Request Review Functionality",
-        url: "https://github.com/DevwareUK/git-ai/issues/50",
+        url: "https://github.com/DevwareUK/prs/issues/50",
       }
     );
 

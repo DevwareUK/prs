@@ -18,9 +18,9 @@ pnpm build
 2. Write the diff to a file and run the action entry locally:
 
 ```bash
-git diff -- . ':!pnpm-lock.yaml' > /tmp/git-ai-test-suggestions.diff
+git diff -- . ':!pnpm-lock.yaml' > /tmp/prs-test-suggestions.diff
 
-INPUT_DIFF_FILE="/tmp/git-ai-test-suggestions.diff" \
+INPUT_DIFF_FILE="/tmp/prs-test-suggestions.diff" \
 INPUT_PR_TITLE="Example PR title" \
 INPUT_OPENAI_API_KEY="<your-key>" \
 INPUT_OPENAI_MODEL="gpt-4o-mini" \

@@ -1,7 +1,7 @@
 import { appendFileSync } from "node:fs";
-import { PRAssistantInput } from "@git-ai/contracts";
-import { generatePRAssistant } from "@git-ai/core";
-import { OpenAIProvider } from "@git-ai/providers";
+import { PRAssistantInput } from "@prs/contracts";
+import { generatePRAssistant } from "@prs/core";
+import { OpenAIProvider } from "@prs/providers";
 import {
   getOptionalInlineOrFileInput,
   getOptionalInput,

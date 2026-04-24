@@ -1,15 +1,28 @@
-import { PRAssistantOutputType } from "@git-ai/contracts";
-
-export const PR_ASSISTANT_START_MARKER = "<!-- git-ai:pr-assistant:start -->";
-export const PR_ASSISTANT_END_MARKER = "<!-- git-ai:pr-assistant:end -->";
+import {
+  ALL_PR_ASSISTANT_END_MARKERS,
+  ALL_PR_ASSISTANT_START_MARKERS,
+  PRAssistantOutputType,
+} from "@prs/contracts";
+export {
+  PR_ASSISTANT_END_MARKER,
+  PR_ASSISTANT_START_MARKER,
+} from "@prs/contracts";
+import {
+  PR_ASSISTANT_END_MARKER,
+  PR_ASSISTANT_START_MARKER,
+} from "@prs/contracts";
 
 const PR_ASSISTANT_SECTION_PATTERN = new RegExp(
-  `${escapeRegExp(PR_ASSISTANT_START_MARKER)}[\\s\\S]*?${escapeRegExp(PR_ASSISTANT_END_MARKER)}`,
+  `${buildMarkerGroup(ALL_PR_ASSISTANT_START_MARKERS)}[\\s\\S]*?${buildMarkerGroup(ALL_PR_ASSISTANT_END_MARKERS)}`,
   "m"
 );
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildMarkerGroup(markers: readonly string[]): string {
+  return `(?:${markers.map((marker) => escapeRegExp(marker)).join("|")})`;
 }
 
 function renderBulletSection(

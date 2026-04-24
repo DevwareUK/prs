@@ -5,8 +5,8 @@ import {
   CommitMessageModelOutputType,
   CommitMessageOutput,
   CommitMessageOutputType,
-} from "@git-ai/contracts";
-import { AIProvider } from "@git-ai/providers";
+} from "@prs/contracts";
+import { AIProvider } from "@prs/providers";
 import { generateStructuredOutput } from "./structured-generation";
 
 const COMMIT_MESSAGE_SYSTEM_PROMPT =

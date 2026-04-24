@@ -115,8 +115,8 @@ describe("selectInteractiveRuntime", () => {
   });
 
   it("does not send the original issue prompt again when resuming a Codex session", () => {
-    const repoRoot = resolve(tmpdir(), "git-ai-runtime-resume-test");
-    const runDir = resolve(repoRoot, ".git-ai", "runs", "20260415T000000000Z-issue-1");
+    const repoRoot = resolve(tmpdir(), "prs-runtime-resume-test");
+    const runDir = resolve(repoRoot, ".prs", "runs", "20260415T000000000Z-issue-1");
     mkdirSync(runDir, { recursive: true });
 
     vi.mocked(spawnSync).mockImplementation((command) => {
@@ -165,14 +165,14 @@ describe("selectInteractiveRuntime", () => {
 
 describe("isCodexSuperpowersAvailable", () => {
   it("returns true when the cached Superpowers plugin exposes the required skills", () => {
-    const codexHome = createCodexHome("git-ai-runtime-codex-home-");
+    const codexHome = createCodexHome("prs-runtime-codex-home-");
     writeSuperpowersPlugin(codexHome);
 
     expect(isCodexSuperpowersAvailable(codexHome)).toBe(true);
   });
 
   it("returns false when the Superpowers plugin is missing or incomplete", () => {
-    const codexHome = createCodexHome("git-ai-runtime-codex-home-");
+    const codexHome = createCodexHome("prs-runtime-codex-home-");
     mkdirSync(
       resolve(codexHome, "plugins", "cache", "openai-curated", "superpowers", "partial"),
       {

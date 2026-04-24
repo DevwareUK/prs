@@ -1,4 +1,9 @@
+import { existsSync } from "node:fs";
 import { relative, resolve } from "node:path";
+import {
+  LEGACY_REPOSITORY_STATE_DIRECTORY,
+  REPOSITORY_STATE_DIRECTORY,
+} from "@prs/contracts";
 
 export function toRepoRelativePath(repoRoot: string, filePath: string): string {
   return (relative(repoRoot, filePath) || ".").split("\\").join("/");
@@ -22,7 +27,11 @@ export function formatRunTimestamp(date = new Date()): string {
 }
 
 export function getIssueStateDir(repoRoot: string, issueNumber: number): string {
-  return resolve(repoRoot, ".git-ai", "issues", String(issueNumber));
+  return resolve(repoRoot, REPOSITORY_STATE_DIRECTORY, "issues", String(issueNumber));
+}
+
+export function getLegacyIssueStateDir(repoRoot: string, issueNumber: number): string {
+  return resolve(repoRoot, LEGACY_REPOSITORY_STATE_DIRECTORY, "issues", String(issueNumber));
 }
 
 export function getIssueSessionStateFilePath(
@@ -32,12 +41,33 @@ export function getIssueSessionStateFilePath(
   return resolve(getIssueStateDir(repoRoot, issueNumber), "session.json");
 }
 
+export function getLegacyIssueSessionStateFilePath(
+  repoRoot: string,
+  issueNumber: number
+): string {
+  return resolve(getLegacyIssueStateDir(repoRoot, issueNumber), "session.json");
+}
+
+export function resolveExistingIssueSessionStateFilePath(
+  repoRoot: string,
+  issueNumber: number
+): string {
+  const canonicalPath = getIssueSessionStateFilePath(repoRoot, issueNumber);
+  return existsSync(canonicalPath)
+    ? canonicalPath
+    : getLegacyIssueSessionStateFilePath(repoRoot, issueNumber);
+}
+
 function formatBatchKey(issueNumbers: number[]): string {
   return `issues-${issueNumbers.join("-")}`;
 }
 
 export function getIssueBatchStateDir(repoRoot: string): string {
-  return resolve(repoRoot, ".git-ai", "batches");
+  return resolve(repoRoot, REPOSITORY_STATE_DIRECTORY, "batches");
+}
+
+export function getLegacyIssueBatchStateDir(repoRoot: string): string {
+  return resolve(repoRoot, LEGACY_REPOSITORY_STATE_DIRECTORY, "batches");
 }
 
 export function getIssueBatchStateFilePath(
@@ -47,6 +77,23 @@ export function getIssueBatchStateFilePath(
   return resolve(getIssueBatchStateDir(repoRoot), `${formatBatchKey(issueNumbers)}.json`);
 }
 
+export function getLegacyIssueBatchStateFilePath(
+  repoRoot: string,
+  issueNumbers: number[]
+): string {
+  return resolve(getLegacyIssueBatchStateDir(repoRoot), `${formatBatchKey(issueNumbers)}.json`);
+}
+
+export function resolveExistingIssueBatchStateFilePath(
+  repoRoot: string,
+  issueNumbers: number[]
+): string {
+  const canonicalPath = getIssueBatchStateFilePath(repoRoot, issueNumbers);
+  return existsSync(canonicalPath)
+    ? canonicalPath
+    : getLegacyIssueBatchStateFilePath(repoRoot, issueNumbers);
+}
+
 export function getIssueBatchRunDir(
   repoRoot: string,
   issueNumbers: number[],
@@ -54,7 +101,7 @@ export function getIssueBatchRunDir(
 ): string {
   return resolve(
     repoRoot,
-    ".git-ai",
+    REPOSITORY_STATE_DIRECTORY,
     "runs",
     `${formatRunTimestamp(date)}-${formatBatchKey(issueNumbers)}`
   );

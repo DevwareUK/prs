@@ -88,7 +88,7 @@ function createTestBacklogAnalysis() {
       },
     },
     notableCoverageGaps: [
-      "No integration coverage for git-ai issue prepare/finalize.",
+      "No integration coverage for prs issue prepare/finalize.",
       "No command-level coverage for test-backlog issue creation.",
     ],
     findings: [
@@ -100,7 +100,7 @@ function createTestBacklogAnalysis() {
         suggestedTestTypes: ["integration", "cli"] as const,
         relatedPaths: ["packages/cli/src/index.ts"],
         existingCoverage: "Argument parsing is covered, but command execution is not.",
-        issueTitle: "Add CLI integration coverage for git-ai issue prepare",
+        issueTitle: "Add CLI integration coverage for prs issue prepare",
         issueBody: "Exercise issue prepare against mocked git and GitHub boundaries.",
       },
       {
@@ -111,7 +111,7 @@ function createTestBacklogAnalysis() {
         suggestedTestTypes: ["integration", "cli"] as const,
         relatedPaths: ["packages/cli/src/index.ts", "package.json"],
         existingCoverage: "Core backlog analysis is covered separately.",
-        issueTitle: "Add CLI integration coverage for git-ai test-backlog",
+        issueTitle: "Add CLI integration coverage for prs test-backlog",
         issueBody: "Verify JSON and markdown output plus duplicate issue reuse logic.",
       },
       {
@@ -121,7 +121,7 @@ function createTestBacklogAnalysis() {
         rationale: "Finalize should fail clearly when Codex has not produced changes.",
         suggestedTestTypes: ["integration", "cli"] as const,
         relatedPaths: ["packages/cli/src/index.ts"],
-        issueTitle: "Add failure coverage for git-ai issue finalize",
+        issueTitle: "Add failure coverage for prs issue finalize",
         issueBody: "Assert finalize surfaces incomplete run state clearly.",
       },
     ],
@@ -488,7 +488,7 @@ function syntheticGitRefTip(ref: string): string {
 
 function listIssueDraftFiles(): string[] {
   try {
-    return readdirSync(resolve(REPO_ROOT, ".git-ai", "issues"))
+    return readdirSync(resolve(REPO_ROOT, ".prs", "issues"))
       .filter((entry) => entry.startsWith("issue-draft-") && entry.endsWith(".md"))
       .sort();
   } catch {
@@ -498,7 +498,7 @@ function listIssueDraftFiles(): string[] {
 
 function listRunDirectories(): string[] {
   try {
-    return readdirSync(resolve(REPO_ROOT, ".git-ai", "runs")).sort();
+    return readdirSync(resolve(REPO_ROOT, ".prs", "runs")).sort();
   } catch {
     return [];
   }
@@ -526,7 +526,7 @@ function readIssueBatchState(issueNumbers: number[]): {
 } {
   const statePath = resolve(
     REPO_ROOT,
-    ".git-ai",
+    ".prs",
     "batches",
     `issues-${issueNumbers.join("-")}.json`
   );
@@ -565,13 +565,13 @@ function readLatestRunMetadata(): {
   const runDir = [...listRunDirectories()]
     .reverse()
     .find((entry) =>
-      existsSync(resolve(REPO_ROOT, ".git-ai", "runs", entry, "metadata.json"))
+      existsSync(resolve(REPO_ROOT, ".prs", "runs", entry, "metadata.json"))
     );
   if (!runDir) {
     throw new Error("Expected a run directory.");
   }
 
-  const metadataPath = resolve(REPO_ROOT, ".git-ai", "runs", runDir, "metadata.json");
+  const metadataPath = resolve(REPO_ROOT, ".prs", "runs", runDir, "metadata.json");
   return {
     runDir,
     metadata: JSON.parse(readFileSync(metadataPath, "utf8")) as {
@@ -584,7 +584,7 @@ function readLatestRunMetadata(): {
 }
 
 function createMockCodexHome(): string {
-  const codexHome = mkdtempSync(resolve(tmpdir(), "git-ai-codex-home-"));
+  const codexHome = mkdtempSync(resolve(tmpdir(), "prs-codex-home-"));
   mkdirSync(resolve(codexHome, "sessions"), { recursive: true });
   cleanupTargets.add(codexHome);
   process.env.CODEX_HOME = codexHome;
@@ -630,7 +630,7 @@ function withRepositoryConfig(
   contents: string,
   callback: () => Promise<void>
 ): Promise<void> {
-  const configPath = resolve(REPO_ROOT, ".git-ai", "config.json");
+  const configPath = resolve(REPO_ROOT, ".prs", "config.json");
   const hadOriginalConfig = existsSync(configPath);
   const originalConfig = hadOriginalConfig ? readFileSync(configPath, "utf8") : undefined;
   mkdirSync(dirname(configPath), { recursive: true });
@@ -885,7 +885,7 @@ async function loadCli(options: {
     close: vi.fn(),
   }));
 
-  vi.doMock("@git-ai/core", async () => {
+  vi.doMock("@prs/core", async () => {
     const prAssistantBody = await import("../../core/src/pr-assistant-body");
     const prReviewRender = await import("../../core/src/pr-review-render");
 
@@ -951,12 +951,47 @@ async function loadCli(options: {
     })),
   };
   });
-  vi.doMock("@git-ai/contracts", () => ({
+  vi.doMock("@prs/contracts", () => ({
+    ALL_PR_ASSISTANT_END_MARKERS: [
+      "<!-- prs:pr-assistant:end -->",
+      "<!-- git-ai:pr-assistant:end -->",
+    ],
+    ALL_ISSUE_PLAN_COMMENT_MARKERS: [
+      "<!-- prs:issue-plan -->",
+      "<!-- git-ai:issue-plan -->",
+    ],
+    ALL_PR_ASSISTANT_START_MARKERS: [
+      "<!-- prs:pr-assistant:start -->",
+      "<!-- git-ai:pr-assistant:start -->",
+    ],
+    ALL_TEST_SUGGESTIONS_COMMENT_MARKERS: [
+      "<!-- prs:test-suggestions -->",
+      "<!-- git-ai-test-suggestions -->",
+    ],
+    GIT_AI_ALIAS_DEPRECATION_MESSAGE: "`git-ai` is deprecated. Use `prs` instead.",
+    includesManagedMarker: (body: string, markers: string[]) =>
+      markers.some((marker) => body.includes(marker)),
+    ISSUE_PLAN_COMMENT_MARKER: "<!-- prs:issue-plan -->",
+    LEGACY_PRODUCT_SHORT_NAME: "git-ai",
+    LEGACY_REPOSITORY_STATE_DIRECTORY: ".git-ai",
+    PRODUCT_SHORT_NAME: "prs",
+    PR_ASSISTANT_END_MARKER: "<!-- prs:pr-assistant:end -->",
+    PR_ASSISTANT_START_MARKER: "<!-- prs:pr-assistant:start -->",
+    REPOSITORY_CONFIG_RELATIVE_PATH: ".prs/config.json",
+    REPOSITORY_STATE_DIRECTORY: ".prs",
+    LEGACY_REPOSITORY_CONFIG_RELATIVE_PATH: ".git-ai/config.json",
+    GENERATED_BY_SETUP_HEADER: "# Generated by prs setup",
+    LEGACY_ACTION_REPOSITORY: "DevwareUK/git-ai",
+    LEGACY_GENERATED_BY_SETUP_HEADER: "# Generated by git-ai setup",
+    LEGACY_SETUP_SECTION_END: "<!-- git-ai:setup:end -->",
+    LEGACY_SETUP_SECTION_START: "<!-- git-ai:setup:start -->",
+    SETUP_SECTION_END: "<!-- prs:setup:end -->",
+    SETUP_SECTION_START: "<!-- prs:setup:start -->",
     RepositoryConfig: {
       parse: vi.fn((value?: unknown) => parseMockRepositoryConfig(value)),
     },
   }));
-  vi.doMock("@git-ai/providers", () => ({
+  vi.doMock("@prs/providers", () => ({
     createProviderFromConfig: vi.fn(async (config: { type: string }, environment: {
       openaiApiKey?: string;
       openaiModel?: string;
@@ -979,7 +1014,7 @@ async function loadCli(options: {
       const region = environment.awsRegion ?? environment.awsDefaultRegion;
       if (!("model" in config) || typeof config.model !== "string" || !config.model.trim()) {
         throw new Error(
-          "Bedrock Claude provider requires an explicit model in `.git-ai/config.json` under `ai.provider.model`."
+          "Bedrock Claude provider requires an explicit model in `.prs/config.json` under `ai.provider.model`."
         );
       }
 
@@ -1235,18 +1270,33 @@ describe("CLI integration", () => {
   it("prints launch-stage command tiers for top-level help", async () => {
     const { run } = await loadCli();
 
-    process.argv = ["node", "git-ai", "--help"];
+    process.argv = ["node", "prs", "--help"];
 
     const stdout = captureStdout();
     await run();
 
     expect(stdout.output()).toContain("GitHub-first AI workflows");
     expect(stdout.output()).toContain("Start here:");
-    expect(stdout.output()).toContain("git-ai pr fix-comments <pr-number>");
+    expect(stdout.output()).toContain("prs pr fix-comments <pr-number>");
     expect(stdout.output()).toContain("Advanced:");
     expect(stdout.output()).toContain("Beta:");
-    expect(stdout.output()).toContain("git-ai issue draft");
-    expect(stdout.output()).toContain("git-ai pr prepare-review <pr-number>");
+    expect(stdout.output()).toContain("prs issue draft");
+    expect(stdout.output()).toContain("prs pr prepare-review <pr-number>");
+  });
+
+  it("prints a deprecation notice when invoked through the legacy git-ai alias", async () => {
+    const { run } = await loadCli();
+
+    process.argv = ["node", "git-ai", "--help"];
+
+    const stdout = captureStdout();
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await run();
+
+    expect(warning).toHaveBeenCalledWith(
+      expect.stringContaining("`git-ai` is deprecated")
+    );
+    expect(stdout.output()).toContain("prs pr fix-comments <pr-number>");
   });
 
   it("prints a beta workflow notice before feature-backlog output", async () => {
@@ -1254,14 +1304,14 @@ describe("CLI integration", () => {
       featureAnalysisResult: createFeatureBacklogAnalysis(),
     });
 
-    process.argv = ["node", "git-ai", "feature-backlog", ".", "--format", "json"];
+    process.argv = ["node", "prs", "feature-backlog", ".", "--format", "json"];
 
     const stdout = captureStdout();
     await run();
 
     const output = stdout.output();
     expect(output).toContain("BETA WORKFLOW NOTICE");
-    expect(output).toContain("`git-ai feature-backlog`");
+    expect(output).toContain("`prs feature-backlog`");
     expect(output).toContain('"summary"');
     expect(output.indexOf("BETA WORKFLOW NOTICE")).toBeLessThan(
       output.indexOf('"summary"')
@@ -1282,16 +1332,16 @@ describe("CLI integration", () => {
         2
       ),
       async () => {
-        process.argv = ["node", "git-ai", "issue", "plan", "42"];
+        process.argv = ["node", "prs", "issue", "plan", "42"];
 
         const stdout = captureStdout();
         await expect(run()).rejects.toThrow(
-          "Repository forge support is disabled by .git-ai/config.json. Configure `forge.type` to enable issue workflows."
+          "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
         );
 
         const output = stdout.output();
         expect(output).toContain("ADVANCED WORKFLOW NOTICE");
-        expect(output).toContain("`git-ai issue plan <number> [--refresh]`");
+        expect(output).toContain("`prs issue plan <number> [--refresh]`");
       }
     );
   });
@@ -1301,7 +1351,7 @@ describe("CLI integration", () => {
       analysisResult: createTestBacklogAnalysis(),
     });
 
-    process.argv = ["node", "git-ai", "test-backlog", "--format", "json"];
+    process.argv = ["node", "prs", "test-backlog", "--format", "json"];
 
     const stdout = captureStdout();
     await run();
@@ -1314,10 +1364,10 @@ describe("CLI integration", () => {
   it("includes the same help overview in unknown-command errors", async () => {
     const { run } = await loadCli();
 
-    process.argv = ["node", "git-ai", "unknown-command"];
+    process.argv = ["node", "prs", "unknown-command"];
 
     await expect(run()).rejects.toThrow(
-      "Unknown command: unknown-command.\n\ngit-ai"
+      "Unknown command: unknown-command.\n\nprs"
     );
   });
 
@@ -1326,7 +1376,7 @@ describe("CLI integration", () => {
     const { parseSetupCommandArgs } = await loadCli();
 
     expect(() => parseSetupCommandArgs(["setup", "--force"])).toThrow(
-      'Unknown setup option "--force". Usage:\n  git-ai setup'
+      'Unknown setup option "--force". Usage:\n  prs setup'
     );
   });
 
@@ -1371,7 +1421,7 @@ describe("CLI integration", () => {
         });
 
         process.env.OPENAI_API_KEY = "test-key";
-        process.argv = ["node", "git-ai", "commit"];
+        process.argv = ["node", "prs", "commit"];
 
         const stdout = captureStdout();
         await run();
@@ -1465,7 +1515,7 @@ describe("CLI integration", () => {
           {
             number: 41,
             title: analysis.findings[0].issueTitle,
-            html_url: "https://github.com/DevwareUK/git-ai/issues/41",
+            html_url: "https://github.com/DevwareUK/prs/issues/41",
           },
         ])
       )
@@ -1473,14 +1523,14 @@ describe("CLI integration", () => {
         createFetchResponse({
           number: 42,
           title: analysis.findings[1].issueTitle,
-          html_url: "https://github.com/DevwareUK/git-ai/issues/42",
+          html_url: "https://github.com/DevwareUK/prs/issues/42",
         })
       )
       .mockResolvedValueOnce(
         createFetchResponse({
           number: 43,
           title: analysis.findings[2].issueTitle,
-          html_url: "https://github.com/DevwareUK/git-ai/issues/43",
+          html_url: "https://github.com/DevwareUK/prs/issues/43",
         })
       );
     vi.stubGlobal("fetch", fetchMock);
@@ -1489,7 +1539,7 @@ describe("CLI integration", () => {
       analysisResult: analysis,
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -1499,7 +1549,7 @@ describe("CLI integration", () => {
     process.env.GITHUB_TOKEN = "test-token";
     process.argv = [
       "node",
-      "git-ai",
+      "prs",
       "test-backlog",
       "--format",
       "json",
@@ -1522,6 +1572,7 @@ describe("CLI integration", () => {
         "**/dist/**",
         "**/build/**",
         "*.map",
+        "**/coverage/**",
       ],
       repoRoot: REPO_ROOT,
       maxFindings: 3,
@@ -1539,19 +1590,19 @@ describe("CLI integration", () => {
       {
         number: 41,
         title: analysis.findings[0].issueTitle,
-        url: "https://github.com/DevwareUK/git-ai/issues/41",
+        url: "https://github.com/DevwareUK/prs/issues/41",
         status: "existing",
       },
       {
         number: 42,
         title: analysis.findings[1].issueTitle,
-        url: "https://github.com/DevwareUK/git-ai/issues/42",
+        url: "https://github.com/DevwareUK/prs/issues/42",
         status: "created",
       },
       {
         number: 43,
         title: analysis.findings[2].issueTitle,
-        url: "https://github.com/DevwareUK/git-ai/issues/43",
+        url: "https://github.com/DevwareUK/prs/issues/43",
         status: "created",
       },
     ]);
@@ -1564,7 +1615,7 @@ describe("CLI integration", () => {
       analysisResult: analysis,
     });
 
-    process.argv = ["node", "git-ai", "test-backlog", "--top", "2"];
+    process.argv = ["node", "prs", "test-backlog", "--top", "2"];
 
     const stdout = captureStdout();
     await run();
@@ -1576,6 +1627,7 @@ describe("CLI integration", () => {
         "**/dist/**",
         "**/build/**",
         "*.map",
+        "**/coverage/**",
       ],
       repoRoot: REPO_ROOT,
       maxFindings: 2,
@@ -1584,7 +1636,7 @@ describe("CLI integration", () => {
     expect(stdout.output()).toContain("## Summary");
     expect(stdout.output()).toContain("### Missing CLI integration coverage for issue prepare");
     expect(stdout.output()).toContain(
-      "- Draft issue title: Add CLI integration coverage for git-ai issue prepare"
+      "- Draft issue title: Add CLI integration coverage for prs issue prepare"
     );
   });
 
@@ -1603,7 +1655,7 @@ describe("CLI integration", () => {
         }
 
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -1623,7 +1675,7 @@ describe("CLI integration", () => {
         createFetchResponse({
           title: "Implement AI-Powered Pull Request Review Functionality",
           body: "Review pull requests line by line and use the linked issue as context.",
-          html_url: "https://github.com/DevwareUK/git-ai/issues/50",
+          html_url: "https://github.com/DevwareUK/prs/issues/50",
         })
       )
       .mockResolvedValueOnce(createFetchResponse([]));
@@ -1631,7 +1683,7 @@ describe("CLI integration", () => {
 
     process.env.OPENAI_API_KEY = "test-key";
     process.env.GITHUB_TOKEN = "test-token";
-    process.argv = ["node", "git-ai", "review", "--issue-number", "50"];
+    process.argv = ["node", "prs", "review", "--issue-number", "50"];
 
     const stdout = captureStdout();
     await run();
@@ -1641,7 +1693,7 @@ describe("CLI integration", () => {
       issueNumber: 50,
       issueTitle: "Implement AI-Powered Pull Request Review Functionality",
       issueBody: "Review pull requests line by line and use the linked issue as context.",
-      issueUrl: "https://github.com/DevwareUK/git-ai/issues/50",
+      issueUrl: "https://github.com/DevwareUK/prs/issues/50",
     });
     expect(stdout.output()).toContain("# AI PR Pre-Review Signal");
     expect(stdout.output()).toContain("## Top Risks");
@@ -1668,10 +1720,10 @@ describe("CLI integration", () => {
       async () => {
         const { run } = await loadCli();
 
-        process.argv = ["node", "git-ai", "pr", "prepare-review", "87"];
+        process.argv = ["node", "prs", "pr", "prepare-review", "87"];
 
         await expect(run()).rejects.toThrow(
-          "Repository forge support is disabled by .git-ai/config.json. Configure `forge.type` to enable pull request workflows."
+          "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable pull request workflows."
         );
       }
     );
@@ -1683,7 +1735,7 @@ describe("CLI integration", () => {
     const branchName = "feat/issue-211-review-setup";
     const sessionId = "019d9001-aaaa-7bbb-8ccc-ddddeeeeffff";
     const codexHome = createMockCodexHome();
-    const sessionStateDir = resolve(REPO_ROOT, ".git-ai", "issues", String(issueNumber));
+    const sessionStateDir = resolve(REPO_ROOT, ".prs", "issues", String(issueNumber));
 
     writeMockCodexSession(codexHome, sessionId, REPO_ROOT, "2026-04-10T08:15:00.000Z");
     mkdirSync(sessionStateDir, { recursive: true });
@@ -1694,10 +1746,10 @@ describe("CLI integration", () => {
           issueNumber,
           runtimeType: "codex",
           branchName,
-          issueDir: `.git-ai/issues/${issueNumber}-review-setup`,
-          runDir: ".git-ai/runs/20260410T081500000Z-issue-211",
-          promptFile: ".git-ai/runs/20260410T081500000Z-issue-211/prompt.md",
-          outputLog: ".git-ai/runs/20260410T081500000Z-issue-211/output.log",
+          issueDir: `.prs/issues/${issueNumber}-review-setup`,
+          runDir: ".prs/runs/20260410T081500000Z-issue-211",
+          promptFile: ".prs/runs/20260410T081500000Z-issue-211/prompt.md",
+          outputLog: ".prs/runs/20260410T081500000Z-issue-211/output.log",
           sessionId,
           sandboxMode: "workspace-write",
           approvalPolicy: "on-request",
@@ -1722,7 +1774,7 @@ describe("CLI integration", () => {
             "",
             "Set up a reviewer-ready local workspace for this pull request.",
             "",
-            "<!-- git-ai:pr-assistant:start -->",
+            "<!-- prs:pr-assistant:start -->",
             "## PR Assistant",
             "",
             "### Summary",
@@ -1730,9 +1782,9 @@ describe("CLI integration", () => {
             "",
             "### Reviewer focus",
             "- Confirm the saved branch and session are reused when safe.",
-            "<!-- git-ai:pr-assistant:end -->",
+            "<!-- prs:pr-assistant:end -->",
           ].join("\n"),
-          html_url: "https://github.com/DevwareUK/git-ai/pull/87",
+          html_url: "https://github.com/DevwareUK/prs/pull/87",
           base: { ref: "main" },
           head: { ref: "feat/pr-review-workspace" },
         })
@@ -1741,7 +1793,7 @@ describe("CLI integration", () => {
         createFetchResponse({
           title: "Add PR review workspace setup",
           body: "Reuse saved issue state when preparing a local PR review.",
-          html_url: "https://github.com/DevwareUK/git-ai/issues/211",
+          html_url: "https://github.com/DevwareUK/prs/issues/211",
         })
       );
     vi.stubGlobal("fetch", fetchMock);
@@ -1753,7 +1805,7 @@ describe("CLI integration", () => {
         }
 
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -1807,7 +1859,7 @@ describe("CLI integration", () => {
           }
 
           writeFileSync(
-            resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir, "review-brief.md"),
+            resolve(REPO_ROOT, ".prs", "runs", createdRunDir, "review-brief.md"),
             [
               "# Review Brief",
               "",
@@ -1832,7 +1884,7 @@ describe("CLI integration", () => {
     });
 
     process.env.GITHUB_TOKEN = "test-token";
-    process.argv = ["node", "git-ai", "pr", "prepare-review", "87"];
+    process.argv = ["node", "prs", "pr", "prepare-review", "87"];
     const messages: string[] = [];
     vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
       messages.push(String(message ?? ""));
@@ -1843,7 +1895,7 @@ describe("CLI integration", () => {
     const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
     expect(createdRunDir).toBeDefined();
 
-    const runDirPath = resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string);
+    const runDirPath = resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string);
     const snapshotFilePath = resolve(runDirPath, "pr-review-prepare.md");
     const promptFilePath = resolve(runDirPath, "prompt.md");
     const interactivePromptFilePath = resolve(runDirPath, "interactive-prompt.md");
@@ -1871,7 +1923,7 @@ describe("CLI integration", () => {
       "do not modify tracked repository files"
     );
     expect(readFileSync(promptFilePath, "utf8")).toContain("pnpm build");
-    expect(readFileSync(outputLogPath, "utf8")).toContain("# git-ai pr prepare-review run log");
+    expect(readFileSync(outputLogPath, "utf8")).toContain("# prs pr prepare-review run log");
     expect(readFileSync(outputLogPath, "utf8")).toContain("git fetch origin main");
     expect(readFileSync(outputLogPath, "utf8")).toContain(`git checkout ${branchName}`);
     expect(readFileSync(reviewBriefPath, "utf8")).toContain("## Reviewer Commands");
@@ -1944,7 +1996,7 @@ describe("CLI integration", () => {
     const issueNumber = 212;
     const branchName = "feat/issue-212-review-setup";
     const staleSessionId = "019d9002-0000-7111-8222-933344445555";
-    const sessionStateDir = resolve(REPO_ROOT, ".git-ai", "issues", String(issueNumber));
+    const sessionStateDir = resolve(REPO_ROOT, ".prs", "issues", String(issueNumber));
 
     createMockCodexHome();
     mkdirSync(sessionStateDir, { recursive: true });
@@ -1955,10 +2007,10 @@ describe("CLI integration", () => {
           issueNumber,
           runtimeType: "codex",
           branchName,
-          issueDir: `.git-ai/issues/${issueNumber}-review-setup`,
-          runDir: ".git-ai/runs/20260410T091500000Z-issue-212",
-          promptFile: ".git-ai/runs/20260410T091500000Z-issue-212/prompt.md",
-          outputLog: ".git-ai/runs/20260410T091500000Z-issue-212/output.log",
+          issueDir: `.prs/issues/${issueNumber}-review-setup`,
+          runDir: ".prs/runs/20260410T091500000Z-issue-212",
+          promptFile: ".prs/runs/20260410T091500000Z-issue-212/prompt.md",
+          outputLog: ".prs/runs/20260410T091500000Z-issue-212/output.log",
           sessionId: staleSessionId,
           sandboxMode: "workspace-write",
           approvalPolicy: "on-request",
@@ -1979,7 +2031,7 @@ describe("CLI integration", () => {
           number: 88,
           title: "Prepare another review workspace",
           body: "Fixes #212\n\nRegenerate the reviewer brief when the old session is gone.",
-          html_url: "https://github.com/DevwareUK/git-ai/pull/88",
+          html_url: "https://github.com/DevwareUK/prs/pull/88",
           base: { ref: "main" },
           head: { ref: "feat/pr-review-workspace-stale" },
         })
@@ -1988,7 +2040,7 @@ describe("CLI integration", () => {
         createFetchResponse({
           title: "Handle stale saved Codex sessions",
           body: "Warn and fall back instead of failing the reviewer workflow.",
-          html_url: "https://github.com/DevwareUK/git-ai/issues/212",
+          html_url: "https://github.com/DevwareUK/prs/issues/212",
         })
       );
     vi.stubGlobal("fetch", fetchMock);
@@ -2000,7 +2052,7 @@ describe("CLI integration", () => {
         }
 
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -2054,7 +2106,7 @@ describe("CLI integration", () => {
           }
 
           writeFileSync(
-            resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir, "review-brief.md"),
+            resolve(REPO_ROOT, ".prs", "runs", createdRunDir, "review-brief.md"),
             [
               "# Review Brief",
               "",
@@ -2076,14 +2128,14 @@ describe("CLI integration", () => {
     });
 
     process.env.GITHUB_TOKEN = "test-token";
-    process.argv = ["node", "git-ai", "pr", "prepare-review", "88"];
+    process.argv = ["node", "prs", "pr", "prepare-review", "88"];
 
     await run();
 
     const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
     expect(createdRunDir).toBeDefined();
 
-    const runDirPath = resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string);
+    const runDirPath = resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string);
     const snapshotFilePath = resolve(runDirPath, "pr-review-prepare.md");
     const interactivePromptFilePath = resolve(runDirPath, "interactive-prompt.md");
     const metadataFilePath = resolve(runDirPath, "metadata.json");
@@ -2158,7 +2210,7 @@ describe("CLI integration", () => {
         number: 206,
         title: "Tighten prepare-review follow-up fixes",
         body: "Keep the reviewer workflow open for follow-up fixes and commit review.",
-        html_url: "https://github.com/DevwareUK/git-ai/pull/206",
+        html_url: "https://github.com/DevwareUK/prs/pull/206",
         base: { ref: "main" },
         head: { ref: headBranchName },
       })
@@ -2181,7 +2233,7 @@ describe("CLI integration", () => {
         }
 
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         if (command === "git" && args[0] === "diff" && args[1] === "--name-only") {
@@ -2256,7 +2308,7 @@ describe("CLI integration", () => {
           }
 
           writeFileSync(
-            resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir, "review-brief.md"),
+            resolve(REPO_ROOT, ".prs", "runs", createdRunDir, "review-brief.md"),
             ["# Review Brief", "", "## Reviewer Commands", "- `pnpm build`"].join("\n"),
             "utf8"
           );
@@ -2316,7 +2368,7 @@ describe("CLI integration", () => {
     });
 
     process.env.GITHUB_TOKEN = "test-token";
-    process.argv = ["node", "git-ai", "pr", "prepare-review", "206"];
+    process.argv = ["node", "prs", "pr", "prepare-review", "206"];
     const stdout = captureStdout();
     const messages: string[] = [];
     vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
@@ -2328,7 +2380,7 @@ describe("CLI integration", () => {
     const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
     expect(createdRunDir).toBeDefined();
 
-    const runDirPath = resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string);
+    const runDirPath = resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string);
     const outputLogPath = resolve(runDirPath, "output.log");
     cleanupTargets.add(runDirPath);
 
@@ -2367,7 +2419,7 @@ describe("CLI integration", () => {
         number: 207,
         title: "Skip prepare-review follow-up commit",
         body: "Offer commit review after the follow-up session.",
-        html_url: "https://github.com/DevwareUK/git-ai/pull/207",
+        html_url: "https://github.com/DevwareUK/prs/pull/207",
         base: { ref: "main" },
         head: { ref: headBranchName },
       })
@@ -2387,7 +2439,7 @@ describe("CLI integration", () => {
         }
 
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         if (command === "git" && args[0] === "diff" && args[1] === "--name-only") {
@@ -2462,7 +2514,7 @@ describe("CLI integration", () => {
           }
 
           writeFileSync(
-            resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir, "review-brief.md"),
+            resolve(REPO_ROOT, ".prs", "runs", createdRunDir, "review-brief.md"),
             ["# Review Brief", "", "## Reviewer Commands", "- `pnpm build`"].join("\n"),
             "utf8"
           );
@@ -2531,7 +2583,7 @@ describe("CLI integration", () => {
     });
 
     process.env.GITHUB_TOKEN = "test-token";
-    process.argv = ["node", "git-ai", "pr", "prepare-review", "207"];
+    process.argv = ["node", "prs", "pr", "prepare-review", "207"];
 
     const messages: string[] = [];
     vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
@@ -2559,7 +2611,7 @@ describe("CLI integration", () => {
         number: 208,
         title: "Fail prepare-review follow-up build",
         body: "Build verification must stop before commit creation.",
-        html_url: "https://github.com/DevwareUK/git-ai/pull/208",
+        html_url: "https://github.com/DevwareUK/prs/pull/208",
         base: { ref: "main" },
         head: { ref: headBranchName },
       })
@@ -2575,7 +2627,7 @@ describe("CLI integration", () => {
         }
 
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -2629,7 +2681,7 @@ describe("CLI integration", () => {
           }
 
           writeFileSync(
-            resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir, "review-brief.md"),
+            resolve(REPO_ROOT, ".prs", "runs", createdRunDir, "review-brief.md"),
             ["# Review Brief", "", "## Reviewer Commands", "- `pnpm build`"].join("\n"),
             "utf8"
           );
@@ -2694,7 +2746,7 @@ describe("CLI integration", () => {
     });
 
     process.env.GITHUB_TOKEN = "test-token";
-    process.argv = ["node", "git-ai", "pr", "prepare-review", "208"];
+    process.argv = ["node", "prs", "pr", "prepare-review", "208"];
 
     await expect(run()).rejects.toThrow("Build failed. Changes were not committed.");
     expect(generateCommitMessage).not.toHaveBeenCalled();
@@ -2716,7 +2768,7 @@ describe("CLI integration", () => {
         number: 205,
         title: "Prepare a review workspace",
         body: "Generate a local reviewer brief for this pull request.",
-        html_url: "https://github.com/DevwareUK/git-ai/pull/205",
+        html_url: "https://github.com/DevwareUK/prs/pull/205",
         base: { ref: "main" },
         head: { ref: "feat/prepare-review-workspace" },
       })
@@ -2730,7 +2782,7 @@ describe("CLI integration", () => {
         }
 
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -2803,7 +2855,7 @@ describe("CLI integration", () => {
           }
 
           writeFileSync(
-            resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir, "review-brief.md"),
+            resolve(REPO_ROOT, ".prs", "runs", createdRunDir, "review-brief.md"),
             [
               "# Review Brief",
               "",
@@ -2864,7 +2916,7 @@ describe("CLI integration", () => {
     });
 
     process.env.GITHUB_TOKEN = "test-token";
-    process.argv = ["node", "git-ai", "pr", "prepare-review", "205"];
+    process.argv = ["node", "prs", "pr", "prepare-review", "205"];
     const stdout = captureStdout();
     const messages: string[] = [];
     vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
@@ -2876,7 +2928,7 @@ describe("CLI integration", () => {
     const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
     expect(createdRunDir).toBeDefined();
 
-    const runDirPath = resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string);
+    const runDirPath = resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string);
     const snapshotFilePath = resolve(runDirPath, "pr-review-prepare.md");
     const interactivePromptFilePath = resolve(runDirPath, "interactive-prompt.md");
     const metadataFilePath = resolve(runDirPath, "metadata.json");
@@ -2976,7 +3028,7 @@ describe("CLI integration", () => {
         number: 209,
         title: "Resolve prepare-review merge conflicts",
         body: "Sync the reviewer branch with main before brief generation.",
-        html_url: "https://github.com/DevwareUK/git-ai/pull/209",
+        html_url: "https://github.com/DevwareUK/prs/pull/209",
         base: { ref: "main" },
         head: { ref: headBranchName },
       })
@@ -2990,7 +3042,7 @@ describe("CLI integration", () => {
         }
 
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -3124,7 +3176,7 @@ describe("CLI integration", () => {
           }
 
           writeFileSync(
-            resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir, "review-brief.md"),
+            resolve(REPO_ROOT, ".prs", "runs", createdRunDir, "review-brief.md"),
             [
               "# Review Brief",
               "",
@@ -3149,14 +3201,14 @@ describe("CLI integration", () => {
     });
 
     process.env.GITHUB_TOKEN = "test-token";
-    process.argv = ["node", "git-ai", "pr", "prepare-review", "209"];
+    process.argv = ["node", "prs", "pr", "prepare-review", "209"];
 
     await run();
 
     const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
     expect(createdRunDir).toBeDefined();
 
-    const runDirPath = resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string);
+    const runDirPath = resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string);
     const conflictPromptFilePath = resolve(runDirPath, "base-sync-conflict-prompt.md");
     const snapshotFilePath = resolve(runDirPath, "pr-review-prepare.md");
     const metadataFilePath = resolve(runDirPath, "metadata.json");
@@ -3215,7 +3267,7 @@ describe("CLI integration", () => {
         number: 210,
         title: "Fail unresolved prepare-review merge conflicts",
         body: "Stop review preparation until the base-branch merge is clean.",
-        html_url: "https://github.com/DevwareUK/git-ai/pull/210",
+        html_url: "https://github.com/DevwareUK/prs/pull/210",
         base: { ref: "main" },
         head: { ref: headBranchName },
       })
@@ -3229,7 +3281,7 @@ describe("CLI integration", () => {
         }
 
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -3316,7 +3368,7 @@ describe("CLI integration", () => {
     });
 
     process.env.GITHUB_TOKEN = "test-token";
-    process.argv = ["node", "git-ai", "pr", "prepare-review", "210"];
+    process.argv = ["node", "prs", "pr", "prepare-review", "210"];
 
     await expect(run()).rejects.toThrow(
       'Base-branch sync is still incomplete for "feat/prepare-review-conflicts-unresolved".'
@@ -3325,7 +3377,7 @@ describe("CLI integration", () => {
     const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
     expect(createdRunDir).toBeDefined();
 
-    const runDirPath = resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string);
+    const runDirPath = resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string);
     const snapshotFilePath = resolve(runDirPath, "pr-review-prepare.md");
     const metadataFilePath = resolve(runDirPath, "metadata.json");
     const outputLogPath = resolve(runDirPath, "output.log");
@@ -3360,7 +3412,7 @@ describe("CLI integration", () => {
           number: 88,
           title: "Tighten PR review comment fixing flow",
           body: "Apply selected review feedback with Codex and keep the workflow auditable.",
-          html_url: "https://github.com/DevwareUK/git-ai/pull/88",
+          html_url: "https://github.com/DevwareUK/prs/pull/88",
           base: { ref: "main" },
           head: { ref: "feat/pr-fix-comments" },
         })
@@ -3375,7 +3427,7 @@ describe("CLI integration", () => {
             side: "RIGHT",
             diff_hunk: "@@ -1890,0 +1900,4 @@",
             html_url:
-              "https://github.com/DevwareUK/git-ai/pull/88#discussion_r501",
+              "https://github.com/DevwareUK/prs/pull/88#discussion_r501",
             user: { login: "reviewer-a" },
             created_at: "2026-03-18T08:00:00Z",
             updated_at: "2026-03-18T08:05:00Z",
@@ -3387,7 +3439,7 @@ describe("CLI integration", () => {
             line: 1904,
             side: "RIGHT",
             html_url:
-              "https://github.com/DevwareUK/git-ai/pull/88#discussion_r502",
+              "https://github.com/DevwareUK/prs/pull/88#discussion_r502",
             user: { login: "reviewer-b" },
             created_at: "2026-03-18T08:06:00Z",
             updated_at: "2026-03-18T08:06:00Z",
@@ -3405,7 +3457,7 @@ describe("CLI integration", () => {
         }
 
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -3479,14 +3531,14 @@ describe("CLI integration", () => {
       },
     });
 
-    process.argv = ["node", "git-ai", "pr", "fix-comments", "88"];
+    process.argv = ["node", "prs", "pr", "fix-comments", "88"];
 
     await run();
 
     const createdRun = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
     expect(createdRun).toBeDefined();
 
-    const runDirPath = resolve(REPO_ROOT, ".git-ai", "runs", createdRun as string);
+    const runDirPath = resolve(REPO_ROOT, ".prs", "runs", createdRun as string);
     const snapshotFilePath = resolve(runDirPath, "pr-review-comments.md");
     const promptFilePath = resolve(runDirPath, "prompt.md");
     const metadataFilePath = resolve(runDirPath, "metadata.json");
@@ -3506,7 +3558,7 @@ describe("CLI integration", () => {
     );
     expect(readFileSync(promptFilePath, "utf8")).not.toContain("[2] Commit changes");
     expect(readFileSync(promptFilePath, "utf8")).not.toContain("/commit");
-    expect(readFileSync(outputLogPath, "utf8")).toContain("# git-ai pr fix-comments run log");
+    expect(readFileSync(outputLogPath, "utf8")).toContain("# prs pr fix-comments run log");
     expect(readFileSync(outputLogPath, "utf8")).toContain(
       "$ git fetch origin feat/pr-fix-comments"
     );
@@ -3523,7 +3575,7 @@ describe("CLI integration", () => {
           id: 501,
           path: "packages/cli/src/index.ts",
           line: 1900,
-          url: "https://github.com/DevwareUK/git-ai/pull/88#discussion_r501",
+          url: "https://github.com/DevwareUK/prs/pull/88#discussion_r501",
         },
       ],
     });
@@ -3550,7 +3602,7 @@ describe("CLI integration", () => {
           number: 66,
           title: "Improve fix-comments task handoff",
           body: "Closes #42\n\nImprove the prompt quality for Codex handoff.",
-          html_url: "https://github.com/DevwareUK/git-ai/pull/66",
+          html_url: "https://github.com/DevwareUK/prs/pull/66",
           base: { ref: "main" },
           head: { ref: "feat/fix-comment-task-handoff" },
         })
@@ -3559,7 +3611,7 @@ describe("CLI integration", () => {
         createFetchResponse({
           title: "Improve PR comment selection and context quality",
           body: "Make the review-fix snapshot more coherent for Codex.",
-          html_url: "https://github.com/DevwareUK/git-ai/issues/42",
+          html_url: "https://github.com/DevwareUK/prs/issues/42",
         })
       )
       .mockResolvedValueOnce(
@@ -3572,7 +3624,7 @@ describe("CLI integration", () => {
             side: "RIGHT",
             diff_hunk: "@@ -1196,0 +1200,4 @@",
             html_url:
-              "https://github.com/DevwareUK/git-ai/pull/66#discussion_r701",
+              "https://github.com/DevwareUK/prs/pull/66#discussion_r701",
             user: { login: "reviewer-a" },
             created_at: "2026-03-18T08:00:00Z",
             updated_at: "2026-03-18T08:05:00Z",
@@ -3585,7 +3637,7 @@ describe("CLI integration", () => {
             side: "RIGHT",
             diff_hunk: "@@ -1196,0 +1200,4 @@",
             html_url:
-              "https://github.com/DevwareUK/git-ai/pull/66#discussion_r702",
+              "https://github.com/DevwareUK/prs/pull/66#discussion_r702",
             user: { login: "reviewer-b" },
             created_at: "2026-03-18T08:06:00Z",
             updated_at: "2026-03-18T08:08:00Z",
@@ -3599,7 +3651,7 @@ describe("CLI integration", () => {
             side: "RIGHT",
             diff_hunk: "@@ -1204,0 +1208,4 @@",
             html_url:
-              "https://github.com/DevwareUK/git-ai/pull/66#discussion_r703",
+              "https://github.com/DevwareUK/prs/pull/66#discussion_r703",
             user: { login: "reviewer-c" },
             created_at: "2026-03-18T08:09:00Z",
             updated_at: "2026-03-18T08:10:00Z",
@@ -3617,7 +3669,7 @@ describe("CLI integration", () => {
         }
 
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -3647,14 +3699,14 @@ describe("CLI integration", () => {
       },
     });
 
-    process.argv = ["node", "git-ai", "pr", "fix-comments", "66"];
+    process.argv = ["node", "prs", "pr", "fix-comments", "66"];
 
     await run();
 
     const createdRun = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
     expect(createdRun).toBeDefined();
 
-    const runDirPath = resolve(REPO_ROOT, ".git-ai", "runs", createdRun as string);
+    const runDirPath = resolve(REPO_ROOT, ".prs", "runs", createdRun as string);
     const snapshotFilePath = resolve(runDirPath, "pr-review-comments.md");
     const metadataFilePath = resolve(runDirPath, "metadata.json");
     cleanupTargets.add(runDirPath);
@@ -3673,7 +3725,7 @@ describe("CLI integration", () => {
         {
           number: 42,
           title: "Improve PR comment selection and context quality",
-          url: "https://github.com/DevwareUK/git-ai/issues/42",
+          url: "https://github.com/DevwareUK/prs/issues/42",
         },
       ],
       selectedTasks: [
@@ -3697,7 +3749,7 @@ describe("CLI integration", () => {
           number: 91,
           title: "Close the AI test suggestions implementation loop",
           body: "Apply selected AI-generated test suggestions with Codex.",
-          html_url: "https://github.com/DevwareUK/git-ai/pull/91",
+          html_url: "https://github.com/DevwareUK/prs/pull/91",
           base: { ref: "main" },
           head: { ref: "feat/pr-fix-tests" },
         })
@@ -3707,7 +3759,7 @@ describe("CLI integration", () => {
           {
             id: 801,
             body: [
-              "<!-- git-ai-test-suggestions -->",
+              "<!-- prs:test-suggestions -->",
               "## AI Test Suggestions",
               "",
               "### Overview",
@@ -3750,7 +3802,7 @@ describe("CLI integration", () => {
               "### Likely places to add tests",
               "- `packages/cli/src/index.test.ts`",
             ].join("\n"),
-            html_url: "https://github.com/DevwareUK/git-ai/issues/91#issuecomment-801",
+            html_url: "https://github.com/DevwareUK/prs/issues/91#issuecomment-801",
             updated_at: "2026-03-19T10:00:00Z",
             user: { login: "github-actions[bot]", type: "Bot" },
           },
@@ -3767,7 +3819,7 @@ describe("CLI integration", () => {
         }
 
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -3841,14 +3893,14 @@ describe("CLI integration", () => {
       },
     });
 
-    process.argv = ["node", "git-ai", "pr", "fix-tests", "91"];
+    process.argv = ["node", "prs", "pr", "fix-tests", "91"];
 
     await run();
 
     const createdRun = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
     expect(createdRun).toBeDefined();
 
-    const runDirPath = resolve(REPO_ROOT, ".git-ai", "runs", createdRun as string);
+    const runDirPath = resolve(REPO_ROOT, ".prs", "runs", createdRun as string);
     const snapshotFilePath = resolve(runDirPath, "pr-test-suggestions.md");
     const promptFilePath = resolve(runDirPath, "prompt.md");
     const metadataFilePath = resolve(runDirPath, "metadata.json");
@@ -3880,7 +3932,7 @@ describe("CLI integration", () => {
     );
     expect(readFileSync(promptFilePath, "utf8")).not.toContain("[2] Commit changes");
     expect(readFileSync(promptFilePath, "utf8")).not.toContain("/commit");
-    expect(readFileSync(outputLogPath, "utf8")).toContain("# git-ai pr fix-tests run log");
+    expect(readFileSync(outputLogPath, "utf8")).toContain("# prs pr fix-tests run log");
     expect(readFileSync(outputLogPath, "utf8")).toContain(
       "$ git fetch origin feat/pr-fix-tests"
     );
@@ -3892,7 +3944,7 @@ describe("CLI integration", () => {
       prTitle: "Close the AI test suggestions implementation loop",
       sourceComment: {
         id: 801,
-        url: "https://github.com/DevwareUK/git-ai/issues/91#issuecomment-801",
+        url: "https://github.com/DevwareUK/prs/issues/91#issuecomment-801",
       },
       selectedSuggestions: [
         {
@@ -3934,7 +3986,7 @@ describe("CLI integration", () => {
           number: 94,
           title: "Allow skipping selected AI test suggestions",
           body: "",
-          html_url: "https://github.com/DevwareUK/git-ai/pull/94",
+          html_url: "https://github.com/DevwareUK/prs/pull/94",
           base: { ref: "main" },
           head: { ref: "feat/skip-test-suggestions" },
         })
@@ -3944,7 +3996,7 @@ describe("CLI integration", () => {
           {
             id: 804,
             body: [
-              "<!-- git-ai-test-suggestions -->",
+              "<!-- prs:test-suggestions -->",
               "## AI Test Suggestions",
               "",
               "### Suggested test areas",
@@ -3955,7 +4007,7 @@ describe("CLI integration", () => {
                 value: "Users should be able to back out cleanly.",
               }),
             ].join("\n"),
-            html_url: "https://github.com/DevwareUK/git-ai/issues/94#issuecomment-804",
+            html_url: "https://github.com/DevwareUK/prs/issues/94#issuecomment-804",
             updated_at: "2026-03-19T11:30:00Z",
             user: { login: "github-actions[bot]", type: "Bot" },
           },
@@ -3971,7 +4023,7 @@ describe("CLI integration", () => {
         }
 
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -3993,7 +4045,7 @@ describe("CLI integration", () => {
       },
     });
 
-    process.argv = ["node", "git-ai", "pr", "fix-tests", "94"];
+    process.argv = ["node", "prs", "pr", "fix-tests", "94"];
 
     await run();
 
@@ -4019,7 +4071,7 @@ describe("CLI integration", () => {
           number: 92,
           title: "No managed AI test suggestions comment",
           body: "",
-          html_url: "https://github.com/DevwareUK/git-ai/pull/92",
+          html_url: "https://github.com/DevwareUK/prs/pull/92",
           base: { ref: "main" },
           head: { ref: "feat/no-managed-test-comment" },
         })
@@ -4029,7 +4081,7 @@ describe("CLI integration", () => {
           {
             id: 802,
             body: "Human discussion without the managed marker.",
-            html_url: "https://github.com/DevwareUK/git-ai/issues/92#issuecomment-802",
+            html_url: "https://github.com/DevwareUK/prs/issues/92#issuecomment-802",
             updated_at: "2026-03-19T10:30:00Z",
             user: { login: "reviewer-a", type: "User" },
           },
@@ -4044,7 +4096,7 @@ describe("CLI integration", () => {
         }
 
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -4058,7 +4110,7 @@ describe("CLI integration", () => {
       },
     });
 
-    process.argv = ["node", "git-ai", "pr", "fix-tests", "92"];
+    process.argv = ["node", "prs", "pr", "fix-tests", "92"];
 
     await expect(run()).rejects.toThrow(
       "No managed AI test suggestions comment was found for PR #92."
@@ -4073,7 +4125,7 @@ describe("CLI integration", () => {
           number: 93,
           title: "Malformed managed AI test suggestions comment",
           body: "",
-          html_url: "https://github.com/DevwareUK/git-ai/pull/93",
+          html_url: "https://github.com/DevwareUK/prs/pull/93",
           base: { ref: "main" },
           head: { ref: "feat/malformed-managed-test-comment" },
         })
@@ -4083,7 +4135,7 @@ describe("CLI integration", () => {
           {
             id: 803,
             body: [
-              "<!-- git-ai-test-suggestions -->",
+              "<!-- prs:test-suggestions -->",
               "## AI Test Suggestions",
               "",
               "### Suggested test areas",
@@ -4094,7 +4146,7 @@ describe("CLI integration", () => {
               "- Behavior covered: Missing Why Field should still be parsed until the required field check fails.",
               "- Regression risk: The parser should surface which required field is absent.",
             ].join("\n"),
-            html_url: "https://github.com/DevwareUK/git-ai/issues/93#issuecomment-803",
+            html_url: "https://github.com/DevwareUK/prs/issues/93#issuecomment-803",
             updated_at: "2026-03-19T11:00:00Z",
             user: { login: "github-actions[bot]", type: "Bot" },
           },
@@ -4109,7 +4161,7 @@ describe("CLI integration", () => {
         }
 
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -4123,7 +4175,7 @@ describe("CLI integration", () => {
       },
     });
 
-    process.argv = ["node", "git-ai", "pr", "fix-tests", "93"];
+    process.argv = ["node", "prs", "pr", "fix-tests", "93"];
 
     await expect(run()).rejects.toThrow(
       'Failed to parse the managed AI test suggestions comment for PR #93. Suggestion "Missing Why Field" is missing a Why it matters field.'
@@ -4138,7 +4190,7 @@ describe("CLI integration", () => {
           number: 89,
           title: "No actionable review comments",
           body: "",
-          html_url: "https://github.com/DevwareUK/git-ai/pull/89",
+          html_url: "https://github.com/DevwareUK/prs/pull/89",
           base: { ref: "main" },
           head: { ref: "feat/no-actionable-comments" },
         })
@@ -4152,7 +4204,7 @@ describe("CLI integration", () => {
             line: 10,
             side: "RIGHT",
             html_url:
-              "https://github.com/DevwareUK/git-ai/pull/89#discussion_r601",
+              "https://github.com/DevwareUK/prs/pull/89#discussion_r601",
             user: { login: "reviewer-a" },
             created_at: "2026-03-18T09:00:00Z",
             updated_at: "2026-03-18T09:01:00Z",
@@ -4168,7 +4220,7 @@ describe("CLI integration", () => {
         }
 
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -4182,7 +4234,7 @@ describe("CLI integration", () => {
       },
     });
 
-    process.argv = ["node", "git-ai", "pr", "fix-comments", "89"];
+    process.argv = ["node", "prs", "pr", "fix-comments", "89"];
 
     await expect(run()).rejects.toThrow(
       "No actionable pull request review comments were found for PR #89."
@@ -4206,7 +4258,7 @@ describe("CLI integration", () => {
           analysisResult: analysis,
         });
 
-        process.argv = ["node", "git-ai", "test-backlog", "--top", "1"];
+        process.argv = ["node", "prs", "test-backlog", "--top", "1"];
 
         const stdout = captureStdout();
         await run();
@@ -4235,7 +4287,7 @@ describe("CLI integration", () => {
 
     process.env.GITHUB_TOKEN = "";
     process.env.GH_TOKEN = "";
-    process.argv = ["node", "git-ai", "test-backlog", "--create-issues"];
+    process.argv = ["node", "prs", "test-backlog", "--create-issues"];
 
     await expect(run()).rejects.toThrow(
       "Creating GitHub issues requires GH_TOKEN or GITHUB_TOKEN to be set."
@@ -4251,7 +4303,7 @@ describe("CLI integration", () => {
           {
             number: 51,
             title: analysis.suggestions[0].issueTitle,
-            html_url: "https://github.com/DevwareUK/git-ai/issues/51",
+            html_url: "https://github.com/DevwareUK/prs/issues/51",
           },
         ])
       )
@@ -4259,7 +4311,7 @@ describe("CLI integration", () => {
         createFetchResponse({
           number: 52,
           title: "Custom release automation title",
-          html_url: "https://github.com/DevwareUK/git-ai/issues/52",
+          html_url: "https://github.com/DevwareUK/prs/issues/52",
         })
       );
     vi.stubGlobal("fetch", fetchMock);
@@ -4280,7 +4332,7 @@ describe("CLI integration", () => {
           command === "git" &&
           (args[0] === "-C" || args[0] === "remote")
         ) {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -4290,7 +4342,7 @@ describe("CLI integration", () => {
     process.env.GITHUB_TOKEN = "test-token";
     process.argv = [
       "node",
-      "git-ai",
+      "prs",
       "feature-backlog",
       ".",
       "--format",
@@ -4312,6 +4364,7 @@ describe("CLI integration", () => {
         "**/dist/**",
         "**/build/**",
         "*.map",
+        "**/coverage/**",
       ],
       repoRoot: REPO_ROOT,
       maxSuggestions: 5,
@@ -4329,13 +4382,13 @@ describe("CLI integration", () => {
       {
         number: 51,
         title: analysis.suggestions[0].issueTitle,
-        url: "https://github.com/DevwareUK/git-ai/issues/51",
+        url: "https://github.com/DevwareUK/prs/issues/51",
         status: "existing",
       },
       {
         number: 52,
         title: "Custom release automation title",
-        url: "https://github.com/DevwareUK/git-ai/issues/52",
+        url: "https://github.com/DevwareUK/prs/issues/52",
         status: "created",
       },
     ]);
@@ -4348,7 +4401,7 @@ describe("CLI integration", () => {
       featureAnalysisResult: analysis,
     });
 
-    process.argv = ["node", "git-ai", "feature-backlog", ".", "--top", "2"];
+    process.argv = ["node", "prs", "feature-backlog", ".", "--top", "2"];
 
     const stdout = captureStdout();
     await run();
@@ -4360,6 +4413,7 @@ describe("CLI integration", () => {
         "**/dist/**",
         "**/build/**",
         "*.map",
+        "**/coverage/**",
       ],
       repoRoot: REPO_ROOT,
       maxSuggestions: 2,
@@ -4375,7 +4429,7 @@ describe("CLI integration", () => {
   });
 
   it("runs setup with repo-aware defaults without creating AGENTS guidance by default", async () => {
-    const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-setup-node-"));
+    const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-setup-node-"));
     cleanupTargets.add(repoRoot);
     createMockCodexHome();
     mkdirSync(resolve(repoRoot, ".github", "workflows"), { recursive: true });
@@ -4427,7 +4481,7 @@ describe("CLI integration", () => {
       },
     });
 
-    process.argv = ["node", "git-ai", "setup"];
+    process.argv = ["node", "prs", "setup"];
 
     const messages: string[] = [];
     vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
@@ -4437,7 +4491,7 @@ describe("CLI integration", () => {
     await run();
 
     expect(
-      JSON.parse(readFileSync(resolve(repoRoot, ".git-ai", "config.json"), "utf8"))
+      JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
     ).toEqual({
       ai: {
         issueDraft: {
@@ -4456,10 +4510,10 @@ describe("CLI integration", () => {
         type: "github",
       },
     });
-    expect(readFileSync(resolve(repoRoot, ".gitignore"), "utf8")).toContain(".git-ai/\n");
+    expect(readFileSync(resolve(repoRoot, ".gitignore"), "utf8")).toContain(".prs/\n");
     expect(
-      readFileSync(resolve(repoRoot, ".github", "workflows", "git-ai-pr-review.yml"), "utf8")
-    ).toContain("DevwareUK/git-ai/actions/pr-review@main");
+      readFileSync(resolve(repoRoot, ".github", "workflows", "prs-pr-review.yml"), "utf8")
+    ).toContain("DevwareUK/prs/actions/pr-review@main");
 
     expect(existsSync(resolve(repoRoot, "AGENTS.md"))).toBe(false);
     expect(messages.join("\n")).toContain("Next step: create `.env`");
@@ -4467,7 +4521,7 @@ describe("CLI integration", () => {
   });
 
   it("updates an existing AGENTS managed section during setup and keeps manual guidance", async () => {
-    const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-setup-drupal-"));
+    const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-setup-drupal-"));
     cleanupTargets.add(repoRoot);
     createMockCodexHome();
     mkdirSync(resolve(repoRoot, "web", "themes", "custom", "site", "css"), {
@@ -4485,7 +4539,7 @@ describe("CLI integration", () => {
         test: ["phpunit"],
       },
     }, null, 2));
-    writeFileSync(resolve(repoRoot, ".gitignore"), ".git-ai/\n");
+    writeFileSync(resolve(repoRoot, ".gitignore"), ".prs/\n");
     writeFileSync(
       resolve(repoRoot, "AGENTS.md"),
       [
@@ -4493,9 +4547,9 @@ describe("CLI integration", () => {
         "",
         "Keep this manual guidance.",
         "",
-        "<!-- git-ai:setup:start -->",
+        "<!-- prs:setup:start -->",
         "Old managed setup guidance.",
-        "<!-- git-ai:setup:end -->",
+        "<!-- prs:setup:end -->",
         "",
       ].join("\n")
     );
@@ -4536,11 +4590,11 @@ describe("CLI integration", () => {
       },
     });
 
-    process.argv = ["node", "git-ai", "setup"];
+    process.argv = ["node", "prs", "setup"];
     await run();
 
     expect(
-      JSON.parse(readFileSync(resolve(repoRoot, ".git-ai", "config.json"), "utf8"))
+      JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
     ).toEqual({
       ai: {
         issueDraft: {
@@ -4565,7 +4619,7 @@ describe("CLI integration", () => {
     });
 
     const gitignoreContent = readFileSync(resolve(repoRoot, ".gitignore"), "utf8");
-    expect(gitignoreContent.match(/\.git-ai\//g) ?? []).toHaveLength(1);
+    expect(gitignoreContent.match(/\.prs\//g) ?? []).toHaveLength(1);
 
     const agentsContent = readFileSync(resolve(repoRoot, "AGENTS.md"), "utf8");
     expect(agentsContent).toContain("# Repository Notes");
@@ -4577,7 +4631,7 @@ describe("CLI integration", () => {
     expect(agentsContent).not.toContain("`composer test`");
   });
 
-  it("launches the default issue draft runtime workflow and saves the draft under .git-ai/issues", async () => {
+  it("launches the default issue draft runtime workflow and saves the draft under .prs/issues", async () => {
     const beforeDrafts = listIssueDraftFiles();
     const beforeRuns = listRunDirectories();
     let runtimePrompt = "";
@@ -4633,7 +4687,7 @@ describe("CLI integration", () => {
       },
     });
 
-    process.argv = ["node", "git-ai", "issue", "draft"];
+    process.argv = ["node", "prs", "issue", "draft"];
     await run();
 
     expect(runtimePrompt).toContain(
@@ -4647,15 +4701,15 @@ describe("CLI integration", () => {
 
     const createdDraft = listIssueDraftFiles().find((entry) => !beforeDrafts.includes(entry));
     expect(createdDraft).toBeDefined();
-    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "issues", createdDraft as string));
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "issues", createdDraft as string));
 
     const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
     expect(createdRunDir).toBeDefined();
-    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string));
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
 
     const metadata = JSON.parse(
       readFileSync(
-        resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string, "metadata.json"),
+        resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string, "metadata.json"),
         "utf8"
       )
     ) as {
@@ -4672,16 +4726,16 @@ describe("CLI integration", () => {
       flow: "issue-draft",
       featureIdea:
         "Combine PR description and review summary into a single PR assistant action.",
-      draftFile: `.git-ai/issues/${createdDraft}`,
-      promptFile: `.git-ai/runs/${createdRunDir}/prompt.md`,
-      runDir: `.git-ai/runs/${createdRunDir}`,
+      draftFile: `.prs/issues/${createdDraft}`,
+      promptFile: `.prs/runs/${createdRunDir}/prompt.md`,
+      runDir: `.prs/runs/${createdRunDir}`,
       runtime: {
         type: "codex",
       },
     });
 
     const content = readFileSync(
-      resolve(REPO_ROOT, ".git-ai", "issues", createdDraft as string),
+      resolve(REPO_ROOT, ".prs", "issues", createdDraft as string),
       "utf8"
     );
     expect(content).toContain("# Merge PR description and review summary into one PR assistant action");
@@ -4736,24 +4790,24 @@ describe("CLI integration", () => {
           },
         });
 
-        process.argv = ["node", "git-ai", "issue", "draft"];
+        process.argv = ["node", "prs", "issue", "draft"];
         await run();
       }
     );
 
     const createdDraft = listIssueDraftFiles().find((entry) => !beforeDrafts.includes(entry));
     expect(createdDraft).toBeDefined();
-    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "issues", createdDraft as string));
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "issues", createdDraft as string));
 
     const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
     expect(createdRunDir).toBeDefined();
-    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string));
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
 
     expect(runtimePrompt).toContain("Draft the Claude Code runtime support issue.");
 
     const metadata = JSON.parse(
       readFileSync(
-        resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string, "metadata.json"),
+        resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string, "metadata.json"),
         "utf8"
       )
     ) as {
@@ -4783,10 +4837,10 @@ describe("CLI integration", () => {
       },
     });
 
-    process.argv = ["node", "git-ai", "issue", "draft"];
+    process.argv = ["node", "prs", "issue", "draft"];
 
     await expect(run()).rejects.toThrow(
-      'Configured runtime "Codex" is unavailable because the `codex` CLI is not available on PATH. Install the missing dependency before running interactive git-ai workflows.'
+      'Configured runtime "Codex" is unavailable because the `codex` CLI is not available on PATH. Install the missing dependency before running interactive prs workflows.'
     );
   });
 
@@ -4846,18 +4900,18 @@ describe("CLI integration", () => {
           },
         });
 
-        process.argv = ["node", "git-ai", "issue", "draft"];
+        process.argv = ["node", "prs", "issue", "draft"];
         await run();
       }
     );
 
     const createdDraft = listIssueDraftFiles().find((entry) => !beforeDrafts.includes(entry));
     expect(createdDraft).toBeDefined();
-    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "issues", createdDraft as string));
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "issues", createdDraft as string));
 
     const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
     expect(createdRunDir).toBeDefined();
-    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string));
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
 
     expect(runtimePrompt).toContain("use `superpowers:brainstorming` first");
     expect(runtimePrompt).toContain("use `superpowers:writing-plans` discipline");
@@ -4909,7 +4963,7 @@ describe("CLI integration", () => {
           },
         });
 
-        process.argv = ["node", "git-ai", "issue", "draft"];
+        process.argv = ["node", "prs", "issue", "draft"];
         const stdout = captureStdout();
         const messages: string[] = [];
         vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
@@ -4917,7 +4971,7 @@ describe("CLI integration", () => {
         });
         await run();
         expect(messages.join("\n")).toContain(
-          "Codex Superpowers-backed issue drafting is enabled in .git-ai/config.json, but Superpowers is not available in the current Codex installation. Falling back to the standard issue-draft prompt."
+          "Codex Superpowers-backed issue drafting is enabled in .prs/config.json, but Superpowers is not available in the current Codex installation. Falling back to the standard issue-draft prompt."
         );
         expect(stdout.output()).toContain("# Draft");
       }
@@ -4925,11 +4979,11 @@ describe("CLI integration", () => {
 
     const createdDraft = listIssueDraftFiles().find((entry) => !beforeDrafts.includes(entry));
     expect(createdDraft).toBeDefined();
-    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "issues", createdDraft as string));
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "issues", createdDraft as string));
 
     const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
     expect(createdRunDir).toBeDefined();
-    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string));
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
 
     expect(runtimePrompt).not.toContain("use `superpowers:brainstorming` first");
     expect(runtimePrompt).toContain("ask the user targeted clarifying questions");
@@ -4944,11 +4998,11 @@ describe("CLI integration", () => {
       readlineAnswers: ["Unify PR assistant outputs.", "y"],
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         if (command === "gh" && args[0] === "issue" && args[1] === "create") {
-          return "https://github.com/DevwareUK/git-ai/issues/99\n";
+          return "https://github.com/DevwareUK/prs/issues/99\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -4981,17 +5035,17 @@ describe("CLI integration", () => {
       },
     });
 
-    process.argv = ["node", "git-ai", "issue", "draft"];
+    process.argv = ["node", "prs", "issue", "draft"];
     const stdout = captureStdout();
     await run();
 
     const createdDraft = listIssueDraftFiles().find((entry) => !beforeDrafts.includes(entry));
     expect(createdDraft).toBeDefined();
-    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "issues", createdDraft as string));
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "issues", createdDraft as string));
 
     const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
     expect(createdRunDir).toBeDefined();
-    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string));
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
 
     expect(execFileSync).toHaveBeenCalledWith(
       "gh",
@@ -4999,7 +5053,7 @@ describe("CLI integration", () => {
         "issue",
         "create",
         "--repo",
-        "DevwareUK/git-ai",
+        "DevwareUK/prs",
         "--title",
         issueTitle,
         "--body",
@@ -5024,11 +5078,11 @@ describe("CLI integration", () => {
       readlineAnswers: ["Unify PR assistant outputs.", "m", "y"],
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         if (command === "gh" && args[0] === "issue" && args[1] === "create") {
-          return "https://github.com/DevwareUK/git-ai/issues/100\n";
+          return "https://github.com/DevwareUK/prs/issues/100\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -5071,16 +5125,16 @@ describe("CLI integration", () => {
       },
     });
 
-    process.argv = ["node", "git-ai", "issue", "draft"];
+    process.argv = ["node", "prs", "issue", "draft"];
     await run();
 
     const createdDraft = listIssueDraftFiles().find((entry) => !beforeDrafts.includes(entry));
     expect(createdDraft).toBeDefined();
-    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "issues", createdDraft as string));
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "issues", createdDraft as string));
 
     const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
     expect(createdRunDir).toBeDefined();
-    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string));
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
 
     expect(execFileSync).toHaveBeenCalledWith(
       "gh",
@@ -5088,7 +5142,7 @@ describe("CLI integration", () => {
         "issue",
         "create",
         "--repo",
-        "DevwareUK/git-ai",
+        "DevwareUK/prs",
         "--title",
         updatedTitle,
         "--body",
@@ -5110,7 +5164,7 @@ describe("CLI integration", () => {
       readlineAnswers: ["Unify PR assistant outputs.", "n"],
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -5143,7 +5197,7 @@ describe("CLI integration", () => {
       },
     });
 
-    process.argv = ["node", "git-ai", "issue", "draft"];
+    process.argv = ["node", "prs", "issue", "draft"];
 
     const messages: string[] = [];
     vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
@@ -5153,15 +5207,15 @@ describe("CLI integration", () => {
 
     const createdDraft = listIssueDraftFiles().find((entry) => !beforeDrafts.includes(entry));
     expect(createdDraft).toBeDefined();
-    const createdDraftPath = resolve(REPO_ROOT, ".git-ai", "issues", createdDraft as string);
+    const createdDraftPath = resolve(REPO_ROOT, ".prs", "issues", createdDraft as string);
     cleanupTargets.add(createdDraftPath);
 
     const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
     expect(createdRunDir).toBeDefined();
-    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string));
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
 
     expect(readFileSync(createdDraftPath, "utf8")).toContain(issueTitle);
-    expect(messages.join("\n")).toContain(`Draft kept at .git-ai/issues/${createdDraft}`);
+    expect(messages.join("\n")).toContain(`Draft kept at .prs/issues/${createdDraft}`);
     expect(execFileSync).not.toHaveBeenCalledWith(
       "gh",
       expect.arrayContaining(["issue", "create"]),
@@ -5177,7 +5231,7 @@ describe("CLI integration", () => {
       readlineAnswers: ["Unify PR assistant outputs.", "m", "n"],
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -5216,7 +5270,7 @@ describe("CLI integration", () => {
       },
     });
 
-    process.argv = ["node", "git-ai", "issue", "draft"];
+    process.argv = ["node", "prs", "issue", "draft"];
 
     const messages: string[] = [];
     vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
@@ -5226,11 +5280,11 @@ describe("CLI integration", () => {
 
     const createdDraft = listIssueDraftFiles().find((entry) => !beforeDrafts.includes(entry));
     expect(createdDraft).toBeDefined();
-    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "issues", createdDraft as string));
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "issues", createdDraft as string));
 
     const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
     expect(createdRunDir).toBeDefined();
-    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string));
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
 
     expect(messages.join("\n")).toContain("Issue draft cannot be empty.");
     expect(execFileSync).not.toHaveBeenCalledWith(
@@ -5249,7 +5303,7 @@ describe("CLI integration", () => {
       createFetchResponse({
         number: 109,
         title: issueTitle,
-        html_url: "https://github.com/DevwareUK/git-ai/issues/109",
+        html_url: "https://github.com/DevwareUK/prs/issues/109",
       })
     );
     vi.stubGlobal("fetch", fetchMock);
@@ -5258,7 +5312,7 @@ describe("CLI integration", () => {
       readlineAnswers: ["Unify PR assistant outputs.", "y"],
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -5293,20 +5347,20 @@ describe("CLI integration", () => {
 
     process.env.GH_TOKEN = "";
     process.env.GITHUB_TOKEN = "test-token";
-    process.argv = ["node", "git-ai", "issue", "draft"];
+    process.argv = ["node", "prs", "issue", "draft"];
 
     await run();
 
     const createdDraft = listIssueDraftFiles().find((entry) => !beforeDrafts.includes(entry));
     expect(createdDraft).toBeDefined();
-    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "issues", createdDraft as string));
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "issues", createdDraft as string));
 
     const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
     expect(createdRunDir).toBeDefined();
-    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string));
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.github.com/repos/DevwareUK/git-ai/issues",
+      "https://api.github.com/repos/DevwareUK/prs/issues",
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({
@@ -5330,15 +5384,15 @@ describe("CLI integration", () => {
         createFetchResponse({
           title: "Add Command to Generate and Modify Issue Resolution Plan",
           body: "Create a plan comment and reuse it in later issue runs.",
-          html_url: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
         })
       )
       .mockResolvedValueOnce(
         createFetchResponse({
           id: 501,
-          body: "<!-- git-ai:issue-plan -->\n## Issue Resolution Plan",
+          body: "<!-- prs:issue-plan -->\n## Issue Resolution Plan",
           html_url:
-            `https://github.com/DevwareUK/git-ai/issues/${issueNumber}#issuecomment-501`,
+            `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-501`,
           updated_at: "2026-03-18T11:11:41Z",
         })
       );
@@ -5349,7 +5403,7 @@ describe("CLI integration", () => {
       issueResolutionPlanResult: issuePlan,
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -5366,7 +5420,7 @@ describe("CLI integration", () => {
     process.env.OPENAI_API_KEY = "test-key";
     process.env.GH_TOKEN = "";
     process.env.GITHUB_TOKEN = "test-token";
-    process.argv = ["node", "git-ai", "issue", "plan", String(issueNumber)];
+    process.argv = ["node", "prs", "issue", "plan", String(issueNumber)];
 
     await run();
 
@@ -5374,11 +5428,11 @@ describe("CLI integration", () => {
       issueNumber,
       issueTitle: "Add Command to Generate and Modify Issue Resolution Plan",
       issueBody: "Create a plan comment and reuse it in later issue runs.",
-      issueUrl: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
+      issueUrl: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
     });
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock.mock.calls[2]?.[0]).toBe(
-      `https://api.github.com/repos/DevwareUK/git-ai/issues/${issueNumber}/comments`
+      `https://api.github.com/repos/DevwareUK/prs/issues/${issueNumber}/comments`
     );
     expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({
       method: "POST",
@@ -5387,7 +5441,7 @@ describe("CLI integration", () => {
       }),
     });
     expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toMatchObject({
-      body: expect.stringContaining("<!-- git-ai:issue-plan -->"),
+      body: expect.stringContaining("<!-- prs:issue-plan -->"),
     });
     expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toMatchObject({
       body: expect.stringContaining(issuePlan.summary),
@@ -5415,13 +5469,13 @@ describe("CLI integration", () => {
           {
             id: 777,
             body: [
-              "<!-- git-ai:issue-plan -->",
+              "<!-- prs:issue-plan -->",
               "## Issue Resolution Plan",
               "",
               "Edited on GitHub by a collaborator.",
             ].join("\n"),
             html_url:
-              `https://github.com/DevwareUK/git-ai/issues/${issueNumber}#issuecomment-777`,
+              `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-777`,
             updated_at: "2026-03-18T12:00:00Z",
           },
         ])
@@ -5431,7 +5485,7 @@ describe("CLI integration", () => {
     const { run, generateIssueResolutionPlan } = await loadCli({
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -5445,7 +5499,7 @@ describe("CLI integration", () => {
       },
     });
 
-    process.argv = ["node", "git-ai", "issue", "plan", String(issueNumber)];
+    process.argv = ["node", "prs", "issue", "plan", String(issueNumber)];
 
     await run();
 
@@ -5462,13 +5516,13 @@ describe("CLI integration", () => {
           {
             id: 777,
             body: [
-              "<!-- git-ai:issue-plan -->",
+              "<!-- prs:issue-plan -->",
               "## Issue Resolution Plan",
               "",
               "Edited on GitHub by a collaborator.",
             ].join("\n"),
             html_url:
-              `https://github.com/DevwareUK/git-ai/issues/${issueNumber}#issuecomment-777`,
+              `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-777`,
             updated_at: "2026-03-18T12:00:00Z",
           },
         ])
@@ -5477,15 +5531,15 @@ describe("CLI integration", () => {
         createFetchResponse({
           title: "Add Command to Generate and Modify Issue Resolution Plan",
           body: "Create a plan comment and reuse it in later issue runs.",
-          html_url: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
         })
       )
       .mockResolvedValueOnce(
         createFetchResponse({
           id: 777,
-          body: "<!-- git-ai:issue-plan -->\n## Issue Resolution Plan",
+          body: "<!-- prs:issue-plan -->\n## Issue Resolution Plan",
           html_url:
-            `https://github.com/DevwareUK/git-ai/issues/${issueNumber}#issuecomment-777`,
+            `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-777`,
           updated_at: "2026-03-18T12:05:00Z",
         })
       );
@@ -5496,7 +5550,7 @@ describe("CLI integration", () => {
       issueResolutionPlanResult: issuePlan,
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -5513,7 +5567,7 @@ describe("CLI integration", () => {
     process.env.OPENAI_API_KEY = "test-key";
     process.env.GH_TOKEN = "";
     process.env.GITHUB_TOKEN = "test-token";
-    process.argv = ["node", "git-ai", "issue", "plan", String(issueNumber), "--refresh"];
+    process.argv = ["node", "prs", "issue", "plan", String(issueNumber), "--refresh"];
 
     await run();
 
@@ -5521,11 +5575,11 @@ describe("CLI integration", () => {
       issueNumber,
       issueTitle: "Add Command to Generate and Modify Issue Resolution Plan",
       issueBody: "Create a plan comment and reuse it in later issue runs.",
-      issueUrl: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
+      issueUrl: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
     });
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock.mock.calls[2]?.[0]).toBe(
-      `https://api.github.com/repos/DevwareUK/git-ai/issues/comments/777`
+      `https://api.github.com/repos/DevwareUK/prs/issues/comments/777`
     );
     expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({
       method: "PATCH",
@@ -5541,7 +5595,7 @@ describe("CLI integration", () => {
   it("prepares an issue run and writes automation artifacts", async () => {
     const issueNumber = 91234;
     const issueTitle = "CLI issue prepare integration fixture";
-    const outputDir = mkdtempSync(resolve(tmpdir(), "git-ai-cli-issue-prepare-"));
+    const outputDir = mkdtempSync(resolve(tmpdir(), "prs-cli-issue-prepare-"));
     const githubOutputPath = resolve(outputDir, "github-output.txt");
     writeFileSync(githubOutputPath, "");
     cleanupTargets.add(outputDir);
@@ -5553,7 +5607,7 @@ describe("CLI integration", () => {
         createFetchResponse({
           title: issueTitle,
           body: "Ensure issue prepare writes the expected workspace files.",
-          html_url: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
         })
       )
       .mockResolvedValueOnce(
@@ -5561,13 +5615,13 @@ describe("CLI integration", () => {
           {
             id: 613,
             body: [
-              "<!-- git-ai:issue-plan -->",
+              "<!-- prs:issue-plan -->",
               "## Issue Resolution Plan",
               "",
               "Edited plan from GitHub.",
             ].join("\n"),
             html_url:
-              `https://github.com/DevwareUK/git-ai/issues/${issueNumber}#issuecomment-613`,
+              `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-613`,
             updated_at: "2026-03-18T11:30:00Z",
           },
         ])
@@ -5581,7 +5635,7 @@ describe("CLI integration", () => {
         }
 
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -5659,7 +5713,7 @@ describe("CLI integration", () => {
     process.env.GITHUB_OUTPUT = githubOutputPath;
     process.argv = [
       "node",
-      "git-ai",
+      "prs",
       "issue",
       "prepare",
       String(issueNumber),
@@ -5719,7 +5773,7 @@ describe("CLI integration", () => {
     expect(readFileSync(promptFilePath, "utf8")).toContain(
       "do not ask for input or wait for a reply after printing the done state"
     );
-    expect(readFileSync(outputLogPath, "utf8")).toContain("# git-ai issue run log");
+    expect(readFileSync(outputLogPath, "utf8")).toContain("# prs issue run log");
     expect(JSON.parse(readFileSync(metadataFilePath, "utf8"))).toMatchObject({
       issueNumber,
       issueTitle,
@@ -5728,7 +5782,7 @@ describe("CLI integration", () => {
       promptFile: output.promptFile,
       outputLog: output.outputLog,
       issuePlanCommentUrl:
-        `https://github.com/DevwareUK/git-ai/issues/${issueNumber}#issuecomment-613`,
+        `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-613`,
       mode: "github-action",
     });
     expect(readFileSync(githubOutputPath, "utf8")).toContain("branch_name<<");
@@ -5746,7 +5800,7 @@ describe("CLI integration", () => {
         createFetchResponse({
           title: issueTitle,
           body: "Ensure the local issue prompt does not require a separate /exit.",
-          html_url: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
         })
       )
       .mockResolvedValueOnce(createFetchResponse([]));
@@ -5759,7 +5813,7 @@ describe("CLI integration", () => {
         }
 
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -5789,7 +5843,7 @@ describe("CLI integration", () => {
       },
     });
 
-    process.argv = ["node", "git-ai", "issue", "prepare", String(issueNumber)];
+    process.argv = ["node", "prs", "issue", "prepare", String(issueNumber)];
 
     const stdout = captureStdout();
     await run();
@@ -5810,7 +5864,7 @@ describe("CLI integration", () => {
       "add a short explanation of how to see the change in action"
     );
     expect(readFileSync(promptFilePath, "utf8")).toContain(
-      "continue by giving further instruction or type `/exit` when they are satisfied and want to hand control back to `git-ai`"
+      "continue by giving further instruction or type `/exit` when they are satisfied and want to hand control back to `prs`"
     );
     expect(readFileSync(promptFilePath, "utf8")).not.toContain("[1] Continue refining");
     expect(readFileSync(promptFilePath, "utf8")).not.toContain("/commit");
@@ -5830,16 +5884,16 @@ describe("CLI integration", () => {
     ]);
     const batchStatePath = resolve(
       REPO_ROOT,
-      ".git-ai",
+      ".prs",
       "batches",
       `issues-${issueNumbers.join("-")}.json`
     );
 
     for (const target of [
-      resolve(REPO_ROOT, ".git-ai", "issues", "123"),
-      resolve(REPO_ROOT, ".git-ai", "issues", "124"),
-      resolve(REPO_ROOT, ".git-ai", "issues", "123-batch-queue-first-issue"),
-      resolve(REPO_ROOT, ".git-ai", "issues", "124-batch-queue-second-issue"),
+      resolve(REPO_ROOT, ".prs", "issues", "123"),
+      resolve(REPO_ROOT, ".prs", "issues", "124"),
+      resolve(REPO_ROOT, ".prs", "issues", "123-batch-queue-first-issue"),
+      resolve(REPO_ROOT, ".prs", "issues", "124-batch-queue-second-issue"),
       batchStatePath,
     ]) {
       rmSync(target, { recursive: true, force: true });
@@ -5866,7 +5920,7 @@ describe("CLI integration", () => {
         return createFetchResponse({
           title: issueTitles.get(issueNumber),
           body: `Implement issue ${issueNumber} through unattended batch orchestration.`,
-          html_url: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
         });
       }
 
@@ -5906,7 +5960,7 @@ describe("CLI integration", () => {
         }
 
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -5974,7 +6028,7 @@ describe("CLI integration", () => {
         if (command === "gh" && args[0] === "pr" && args[1] === "create") {
           return {
             status: 0,
-            stdout: `https://github.com/DevwareUK/git-ai/pull/${activeIssueNumber === 123 ? 701 : 702}\n`,
+            stdout: `https://github.com/DevwareUK/prs/pull/${activeIssueNumber === 123 ? 701 : 702}\n`,
             stderr: "",
           };
         }
@@ -5985,7 +6039,7 @@ describe("CLI integration", () => {
 
     process.env.OPENAI_API_KEY = "test-key";
     process.env.GITHUB_TOKEN = "test-token";
-    process.argv = ["node", "git-ai", "issue", "batch", "123", "124"];
+    process.argv = ["node", "prs", "issue", "batch", "123", "124"];
 
     await expect(run()).rejects.toThrow(
       "The unattended Codex session did not complete successfully."
@@ -6001,7 +6055,7 @@ describe("CLI integration", () => {
         issueNumber: 123,
         status: "completed",
         branchName: branchByIssue.get(123),
-        prUrl: "https://github.com/DevwareUK/git-ai/pull/701",
+        prUrl: "https://github.com/DevwareUK/prs/pull/701",
       },
       {
         issueNumber: 124,
@@ -6014,13 +6068,13 @@ describe("CLI integration", () => {
       readFileSync(resolve(REPO_ROOT, failedBatchState.latestRunDir, "summary.md"), "utf8")
     ).toContain("Stopped at issue: #124");
 
-    process.argv = ["node", "git-ai", "issue", "batch", "123", "124"];
+    process.argv = ["node", "prs", "issue", "batch", "123", "124"];
     await run();
 
     const completedBatchState = readIssueBatchState(issueNumbers);
     cleanupTargets.add(resolve(REPO_ROOT, completedBatchState.latestRunDir));
     for (const runDir of listRunDirectories().filter((entry) => !beforeRuns.includes(entry))) {
-      cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "runs", runDir));
+      cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", runDir));
     }
 
     expect(completedBatchState.stoppedIssueNumber).toBeUndefined();
@@ -6028,12 +6082,12 @@ describe("CLI integration", () => {
       {
         issueNumber: 123,
         status: "completed",
-        prUrl: "https://github.com/DevwareUK/git-ai/pull/701",
+        prUrl: "https://github.com/DevwareUK/prs/pull/701",
       },
       {
         issueNumber: 124,
         status: "completed",
-        prUrl: "https://github.com/DevwareUK/git-ai/pull/702",
+        prUrl: "https://github.com/DevwareUK/prs/pull/702",
       },
     ]);
     expect(codexIssues).toEqual([123, 124, 124]);
@@ -6049,16 +6103,16 @@ describe("CLI integration", () => {
     const branch224 = "feat/issue-224-independent-batch-queue-second-issue";
     const batchStatePath = resolve(
       REPO_ROOT,
-      ".git-ai",
+      ".prs",
       "batches",
       "issues-223-224.json"
     );
 
     for (const target of [
-      resolve(REPO_ROOT, ".git-ai", "issues", "223"),
-      resolve(REPO_ROOT, ".git-ai", "issues", "224"),
-      resolve(REPO_ROOT, ".git-ai", "issues", "223-independent-batch-queue-first-issue"),
-      resolve(REPO_ROOT, ".git-ai", "issues", "224-independent-batch-queue-second-issue"),
+      resolve(REPO_ROOT, ".prs", "issues", "223"),
+      resolve(REPO_ROOT, ".prs", "issues", "224"),
+      resolve(REPO_ROOT, ".prs", "issues", "223-independent-batch-queue-first-issue"),
+      resolve(REPO_ROOT, ".prs", "issues", "224-independent-batch-queue-second-issue"),
       batchStatePath,
     ]) {
       rmSync(target, { recursive: true, force: true });
@@ -6084,7 +6138,7 @@ describe("CLI integration", () => {
         return createFetchResponse({
           title: issueTitles.get(issueNumber),
           body: `Implement issue ${issueNumber} through unattended orchestration.`,
-          html_url: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
         });
       }
 
@@ -6124,7 +6178,7 @@ describe("CLI integration", () => {
         }
 
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -6191,7 +6245,7 @@ describe("CLI integration", () => {
         if (command === "gh" && args[0] === "pr" && args[1] === "create") {
           return {
             status: 0,
-            stdout: `https://github.com/DevwareUK/git-ai/pull/${codexAttempts.get(224) === 2 ? 804 : 803}\n`,
+            stdout: `https://github.com/DevwareUK/prs/pull/${codexAttempts.get(224) === 2 ? 804 : 803}\n`,
             stderr: "",
           };
         }
@@ -6202,18 +6256,18 @@ describe("CLI integration", () => {
 
     process.env.OPENAI_API_KEY = "test-key";
     process.env.GITHUB_TOKEN = "test-token";
-    process.argv = ["node", "git-ai", "issue", "batch", "223", "224"];
+    process.argv = ["node", "prs", "issue", "batch", "223", "224"];
 
     await expect(run()).rejects.toThrow(
       "The unattended Codex session did not complete successfully."
     );
 
-    const sessionStatePath = resolve(REPO_ROOT, ".git-ai", "issues", "224", "session.json");
+    const sessionStatePath = resolve(REPO_ROOT, ".prs", "issues", "224", "session.json");
     cleanupTargets.add(sessionStatePath);
     expect(existsSync(sessionStatePath)).toBe(true);
 
     const rerunGitCommandIndex = gitCommands.length;
-    process.argv = ["node", "git-ai", "issue", "224", "--mode", "unattended"];
+    process.argv = ["node", "prs", "issue", "224", "--mode", "unattended"];
     await run();
 
     const rerunGitCommands = gitCommands.slice(rerunGitCommandIndex);
@@ -6224,7 +6278,7 @@ describe("CLI integration", () => {
     expect(rerunGitCommands).not.toContainEqual(["checkout", "-b", branch224]);
     expect(codexAttempts.get(224)).toBe(2);
     for (const runDir of listRunDirectories().filter((entry) => !beforeRuns.includes(entry))) {
-      cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "runs", runDir));
+      cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", runDir));
     }
   });
 
@@ -6235,10 +6289,10 @@ describe("CLI integration", () => {
     const branchName = "feat/issue-148-track-resumable-codex-issue-sessions";
     const sessionId = "019d5000-1111-7222-8333-444455556666";
     const codexHome = createMockCodexHome();
-    const sessionStateDir = resolve(REPO_ROOT, ".git-ai", "issues", String(issueNumber));
+    const sessionStateDir = resolve(REPO_ROOT, ".prs", "issues", String(issueNumber));
     const issueWorkspaceDir = resolve(
       REPO_ROOT,
-      ".git-ai",
+      ".prs",
       "issues",
       `${issueNumber}-track-resumable-codex-issue-sessions`
     );
@@ -6255,7 +6309,7 @@ describe("CLI integration", () => {
         createFetchResponse({
           title: issueTitle,
           body: "Persist the session id after the first full issue run.",
-          html_url: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
         })
       )
       .mockResolvedValueOnce(createFetchResponse([]));
@@ -6293,7 +6347,7 @@ describe("CLI integration", () => {
         }
 
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -6353,14 +6407,14 @@ describe("CLI integration", () => {
       },
     });
 
-    process.argv = ["node", "git-ai", "issue", String(issueNumber)];
+    process.argv = ["node", "prs", "issue", String(issueNumber)];
     await run();
 
     const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
     expect(createdRunDir).toBeDefined();
 
     const sessionStatePath = resolve(sessionStateDir, "session.json");
-    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string));
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
 
     const sessionState = JSON.parse(readFileSync(sessionStatePath, "utf8")) as {
       runtimeType: string;
@@ -6376,16 +6430,16 @@ describe("CLI integration", () => {
       runtimeType: "codex",
       branchName,
       sessionId,
-      runDir: `.git-ai/runs/${createdRunDir}`,
-      promptFile: `.git-ai/runs/${createdRunDir}/prompt.md`,
-      outputLog: `.git-ai/runs/${createdRunDir}/output.log`,
-      issueDir: `.git-ai/issues/${issueNumber}-track-resumable-codex-issue-sessions`,
+      runDir: `.prs/runs/${createdRunDir}`,
+      promptFile: `.prs/runs/${createdRunDir}/prompt.md`,
+      outputLog: `.prs/runs/${createdRunDir}/output.log`,
+      issueDir: `.prs/issues/${issueNumber}-track-resumable-codex-issue-sessions`,
       sandboxMode: "workspace-write",
       approvalPolicy: "on-request",
     });
 
     const metadata = JSON.parse(
-      readFileSync(resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string, "metadata.json"), "utf8")
+      readFileSync(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string, "metadata.json"), "utf8")
     ) as {
       runtime?: {
         type?: string;
@@ -6412,11 +6466,11 @@ describe("CLI integration", () => {
     const branchName = "feat/issue-149-resume-saved-codex-sessions";
     const sessionId = "019d5001-aaaa-7bbb-8ccc-ddddeeeeffff";
     const codexHome = createMockCodexHome();
-    const sessionStateDir = resolve(REPO_ROOT, ".git-ai", "issues", String(issueNumber));
+    const sessionStateDir = resolve(REPO_ROOT, ".prs", "issues", String(issueNumber));
     const sessionStatePath = resolve(sessionStateDir, "session.json");
     const issueWorkspaceDir = resolve(
       REPO_ROOT,
-      ".git-ai",
+      ".prs",
       "issues",
       `${issueNumber}-resume-saved-codex-sessions`
     );
@@ -6432,10 +6486,10 @@ describe("CLI integration", () => {
           issueNumber,
           runtimeType: "codex",
           branchName,
-          issueDir: `.git-ai/issues/${issueNumber}-resume-saved-codex-sessions`,
-          runDir: ".git-ai/runs/20260401T090000000Z-issue-149",
-          promptFile: ".git-ai/runs/20260401T090000000Z-issue-149/prompt.md",
-          outputLog: ".git-ai/runs/20260401T090000000Z-issue-149/output.log",
+          issueDir: `.prs/issues/${issueNumber}-resume-saved-codex-sessions`,
+          runDir: ".prs/runs/20260401T090000000Z-issue-149",
+          promptFile: ".prs/runs/20260401T090000000Z-issue-149/prompt.md",
+          outputLog: ".prs/runs/20260401T090000000Z-issue-149/output.log",
           sessionId,
           sandboxMode: "workspace-write",
           approvalPolicy: "on-request",
@@ -6456,7 +6510,7 @@ describe("CLI integration", () => {
         createFetchResponse({
           title: issueTitle,
           body: "Resume the same session instead of starting a new branch.",
-          html_url: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
         })
       )
       .mockResolvedValueOnce(createFetchResponse([]));
@@ -6494,7 +6548,7 @@ describe("CLI integration", () => {
         }
 
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -6556,12 +6610,12 @@ describe("CLI integration", () => {
       },
     });
 
-    process.argv = ["node", "git-ai", "issue", String(issueNumber)];
+    process.argv = ["node", "prs", "issue", String(issueNumber)];
     await run();
 
     const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
     expect(createdRunDir).toBeDefined();
-    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string));
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
 
     expect(spawnSync).toHaveBeenCalledWith(
       "codex",
@@ -6578,7 +6632,7 @@ describe("CLI integration", () => {
     expect(gitCommands).not.toContainEqual(["checkout", "-b", branchName]);
 
     const metadata = JSON.parse(
-      readFileSync(resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string, "metadata.json"), "utf8")
+      readFileSync(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string, "metadata.json"), "utf8")
     ) as {
       runtime?: {
         type?: string;
@@ -6600,9 +6654,9 @@ describe("CLI integration", () => {
       outputLog: string;
     };
     expect(updatedSessionState).toMatchObject({
-      runDir: `.git-ai/runs/${createdRunDir}`,
-      promptFile: `.git-ai/runs/${createdRunDir}/prompt.md`,
-      outputLog: `.git-ai/runs/${createdRunDir}/output.log`,
+      runDir: `.prs/runs/${createdRunDir}`,
+      promptFile: `.prs/runs/${createdRunDir}/prompt.md`,
+      outputLog: `.prs/runs/${createdRunDir}/output.log`,
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
@@ -6611,7 +6665,7 @@ describe("CLI integration", () => {
     const issueNumber = 150;
     const branchName = "feat/issue-150-stale-codex-session-state";
     createMockCodexHome();
-    const sessionStateDir = resolve(REPO_ROOT, ".git-ai", "issues", String(issueNumber));
+    const sessionStateDir = resolve(REPO_ROOT, ".prs", "issues", String(issueNumber));
     const sessionStatePath = resolve(sessionStateDir, "session.json");
 
     mkdirSync(sessionStateDir, { recursive: true });
@@ -6622,10 +6676,10 @@ describe("CLI integration", () => {
           issueNumber,
           runtimeType: "codex",
           branchName,
-          issueDir: `.git-ai/issues/${issueNumber}-stale-codex-session-state`,
-          runDir: ".git-ai/runs/20260401T092500000Z-issue-150",
-          promptFile: ".git-ai/runs/20260401T092500000Z-issue-150/prompt.md",
-          outputLog: ".git-ai/runs/20260401T092500000Z-issue-150/output.log",
+          issueDir: `.prs/issues/${issueNumber}-stale-codex-session-state`,
+          runDir: ".prs/runs/20260401T092500000Z-issue-150",
+          promptFile: ".prs/runs/20260401T092500000Z-issue-150/prompt.md",
+          outputLog: ".prs/runs/20260401T092500000Z-issue-150/output.log",
           sessionId: "019d5002-0000-7111-8222-933344445555",
           sandboxMode: "workspace-write",
           approvalPolicy: "on-request",
@@ -6645,7 +6699,7 @@ describe("CLI integration", () => {
         createFetchResponse({
           title: "Stale Codex session state",
           body: "Fail with a recovery path when the saved session no longer exists.",
-          html_url: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
         })
       )
       .mockResolvedValueOnce(createFetchResponse([]));
@@ -6658,7 +6712,7 @@ describe("CLI integration", () => {
         }
 
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -6684,7 +6738,7 @@ describe("CLI integration", () => {
       },
     });
 
-    process.argv = ["node", "git-ai", "issue", String(issueNumber)];
+    process.argv = ["node", "prs", "issue", String(issueNumber)];
 
     let caughtError: unknown;
     try {
@@ -6698,7 +6752,7 @@ describe("CLI integration", () => {
       `Saved Codex session 019d5002-0000-7111-8222-933344445555 for issue #${issueNumber} is no longer available.`
     );
     expect((caughtError as Error).message).toContain(
-      `remove .git-ai/issues/${issueNumber}/session.json and rerun \`git-ai issue ${issueNumber}\``
+      `remove .prs/issues/${issueNumber}/session.json and rerun \`prs issue ${issueNumber}\``
     );
     expect(spawnSync).not.toHaveBeenCalledWith(
       "codex",
@@ -6711,11 +6765,11 @@ describe("CLI integration", () => {
   it("accepts legacy unattended issue session state without runtimeType", async () => {
     const issueNumber = 151;
     const branchName = "feat/issue-151-legacy-unattended-session-state";
-    const sessionStateDir = resolve(REPO_ROOT, ".git-ai", "issues", String(issueNumber));
+    const sessionStateDir = resolve(REPO_ROOT, ".prs", "issues", String(issueNumber));
     const sessionStatePath = resolve(sessionStateDir, "session.json");
     const issueWorkspaceDir = resolve(
       REPO_ROOT,
-      ".git-ai",
+      ".prs",
       "issues",
       `${issueNumber}-legacy-unattended-session-state`
     );
@@ -6729,10 +6783,10 @@ describe("CLI integration", () => {
         {
           issueNumber,
           branchName,
-          issueDir: `.git-ai/issues/${issueNumber}-legacy-unattended-session-state`,
-          runDir: ".git-ai/runs/20260415T074750395Z-issue-151",
-          promptFile: ".git-ai/runs/20260415T074750395Z-issue-151/prompt.md",
-          outputLog: ".git-ai/runs/20260415T074750395Z-issue-151/output.log",
+          issueDir: `.prs/issues/${issueNumber}-legacy-unattended-session-state`,
+          runDir: ".prs/runs/20260415T074750395Z-issue-151",
+          promptFile: ".prs/runs/20260415T074750395Z-issue-151/prompt.md",
+          outputLog: ".prs/runs/20260415T074750395Z-issue-151/output.log",
           executionMode: "unattended",
           sandboxMode: "workspace-write",
           approvalPolicy: "on-request",
@@ -6753,7 +6807,7 @@ describe("CLI integration", () => {
         createFetchResponse({
           title: "Legacy unattended session state",
           body: "Resume unattended runs created before runtimeType was persisted.",
-          html_url: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
         })
       )
       .mockResolvedValueOnce(createFetchResponse([]));
@@ -6788,7 +6842,7 @@ describe("CLI integration", () => {
         }
 
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -6845,7 +6899,7 @@ describe("CLI integration", () => {
         if (command === "gh" && args[0] === "pr" && args[1] === "create") {
           return {
             status: 0,
-            stdout: "https://github.com/DevwareUK/git-ai/pull/851\n",
+            stdout: "https://github.com/DevwareUK/prs/pull/851\n",
             stderr: "",
           };
         }
@@ -6856,7 +6910,7 @@ describe("CLI integration", () => {
 
     process.env.OPENAI_API_KEY = "test-key";
     process.env.GITHUB_TOKEN = "test-token";
-    process.argv = ["node", "git-ai", "issue", String(issueNumber), "--mode", "unattended"];
+    process.argv = ["node", "prs", "issue", String(issueNumber), "--mode", "unattended"];
 
     await run();
 
@@ -6869,10 +6923,10 @@ describe("CLI integration", () => {
 
   it("continues with build and commit flow when Codex exits a full issue run", async () => {
     const issueNumber = 145;
-    const sessionStateDir = resolve(REPO_ROOT, ".git-ai", "issues", String(issueNumber));
+    const sessionStateDir = resolve(REPO_ROOT, ".prs", "issues", String(issueNumber));
     const issueWorkspaceDir = resolve(
       REPO_ROOT,
-      ".git-ai",
+      ".prs",
       "issues",
       "145-resume-issue-automation-after-the-codex-session"
     );
@@ -6887,7 +6941,7 @@ describe("CLI integration", () => {
         createFetchResponse({
           title: "Resume issue automation after the Codex session exits",
           body: "The outer issue workflow should continue after a normal Codex exit.",
-          html_url: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
         })
       )
       .mockResolvedValueOnce(createFetchResponse([]));
@@ -6923,7 +6977,7 @@ describe("CLI integration", () => {
         }
 
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -6996,7 +7050,7 @@ describe("CLI integration", () => {
       },
     });
 
-    process.argv = ["node", "git-ai", "issue", String(issueNumber)];
+    process.argv = ["node", "prs", "issue", String(issueNumber)];
     await run();
 
     expect(spawnSync).toHaveBeenCalledWith(
@@ -7025,10 +7079,10 @@ describe("CLI integration", () => {
   it("writes a PR description diagnostic artifact during full issue runs when schema validation fails", async () => {
     const beforeRuns = listRunDirectories();
     const issueNumber = 147;
-    const sessionStateDir = resolve(REPO_ROOT, ".git-ai", "issues", String(issueNumber));
+    const sessionStateDir = resolve(REPO_ROOT, ".prs", "issues", String(issueNumber));
     const issueWorkspaceDir = resolve(
       REPO_ROOT,
-      ".git-ai",
+      ".prs",
       "issues",
       "147-persist-pr-description-diagnostics-in-issue-runs"
     );
@@ -7043,7 +7097,7 @@ describe("CLI integration", () => {
         createFetchResponse({
           title: "Persist PR description diagnostics in issue runs",
           body: "The issue workflow should preserve failed PR description payloads locally.",
-          html_url: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
         })
       )
       .mockResolvedValueOnce(createFetchResponse([]));
@@ -7080,7 +7134,7 @@ describe("CLI integration", () => {
           }
 
           if (command === "git" && args[0] === "remote") {
-            return "git@github.com:DevwareUK/git-ai.git\n";
+            return "git@github.com:DevwareUK/prs.git\n";
           }
 
           throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -7169,7 +7223,7 @@ describe("CLI integration", () => {
       })
     );
 
-    process.argv = ["node", "git-ai", "issue", String(issueNumber)];
+    process.argv = ["node", "prs", "issue", String(issueNumber)];
 
     let caughtError: unknown;
     try {
@@ -7181,9 +7235,9 @@ describe("CLI integration", () => {
     expect(caughtError).toBeInstanceOf(Error);
     const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
     expect(createdRunDir).toBeDefined();
-    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string));
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
 
-    const artifactRelativePath = `.git-ai/runs/${createdRunDir}/pr-description-generation-error.json`;
+    const artifactRelativePath = `.prs/runs/${createdRunDir}/pr-description-generation-error.json`;
     expect((caughtError as Error).message).toContain(
       `Failed to generate PR description. Model output failed PR description schema validation:`
     );
@@ -7236,10 +7290,10 @@ describe("CLI integration", () => {
 
   it("uses repository config for issue build verification and pull request base branch", async () => {
     const issueNumber = 144;
-    const sessionStateDir = resolve(REPO_ROOT, ".git-ai", "issues", String(issueNumber));
+    const sessionStateDir = resolve(REPO_ROOT, ".prs", "issues", String(issueNumber));
     const issueWorkspaceDir = resolve(
       REPO_ROOT,
-      ".git-ai",
+      ".prs",
       "issues",
       "144-use-repository-config-in-issue-runs"
     );
@@ -7247,7 +7301,7 @@ describe("CLI integration", () => {
     rmSync(issueWorkspaceDir, { recursive: true, force: true });
     cleanupTargets.add(sessionStateDir);
     cleanupTargets.add(issueWorkspaceDir);
-    const configPath = resolve(REPO_ROOT, ".git-ai", "config.json");
+    const configPath = resolve(REPO_ROOT, ".prs", "config.json");
     const hadOriginalConfig = existsSync(configPath);
     const originalConfig = hadOriginalConfig ? readFileSync(configPath, "utf8") : undefined;
     mkdirSync(dirname(configPath), { recursive: true });
@@ -7270,8 +7324,8 @@ describe("CLI integration", () => {
       .mockResolvedValueOnce(
         createFetchResponse({
           title: "Use repository config in issue runs",
-          body: "Verify issue automation reads .git-ai/config.json.",
-          html_url: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
+          body: "Verify issue automation reads .prs/config.json.",
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
         })
       )
       .mockResolvedValueOnce(createFetchResponse([]));
@@ -7328,7 +7382,7 @@ describe("CLI integration", () => {
           }
 
           if (command === "git" && args[0] === "remote") {
-            return "git@github.com:DevwareUK/git-ai.git\n";
+            return "git@github.com:DevwareUK/prs.git\n";
           }
 
           throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -7446,7 +7500,7 @@ describe("CLI integration", () => {
         },
       });
 
-      process.argv = ["node", "git-ai", "issue", String(issueNumber)];
+      process.argv = ["node", "prs", "issue", String(issueNumber)];
       await run();
 
       expect(gitCommands).toEqual([
@@ -7480,7 +7534,7 @@ describe("CLI integration", () => {
       expect(prArgs[prArgs.indexOf("--base") + 1]).toBe("develop");
       expect(prArgs[prArgs.indexOf("--body") + 1]).toContain(`Closes #${issueNumber}`);
       expect(prArgs[prArgs.indexOf("--body") + 1]).toContain(
-        "<!-- git-ai:pr-assistant:start -->"
+        "<!-- prs:pr-assistant:start -->"
       );
       expect(prArgs[prArgs.indexOf("--body") + 1]).toContain(
         "### Reviewer checklist"
@@ -7502,7 +7556,7 @@ describe("CLI integration", () => {
         createFetchResponse({
           title: "Surface git pull failures during issue prep",
           body: "The issue workflow should stop if updating the base branch fails.",
-          html_url: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
         })
       )
       .mockResolvedValueOnce(createFetchResponse([]));
@@ -7515,7 +7569,7 @@ describe("CLI integration", () => {
         }
 
         if (command === "git" && args[0] === "remote") {
-          return "git@github.com:DevwareUK/git-ai.git\n";
+          return "git@github.com:DevwareUK/prs.git\n";
         }
 
         throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
@@ -7587,7 +7641,7 @@ describe("CLI integration", () => {
       },
     });
 
-    process.argv = ["node", "git-ai", "issue", "prepare", String(issueNumber)];
+    process.argv = ["node", "prs", "issue", "prepare", String(issueNumber)];
 
     await expect(run()).rejects.toThrow(
       'Failed to fast-forward base branch "main" to origin/main.'
@@ -7595,19 +7649,19 @@ describe("CLI integration", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("fails clearly when .git-ai/config.json contains malformed JSON", async () => {
+  it("fails clearly when .prs/config.json contains malformed JSON", async () => {
     await withRepositoryConfig("{invalid-json", async () => {
       const { run } = await loadCli({
         analysisResult: createTestBacklogAnalysis(),
       });
 
-      process.argv = ["node", "git-ai", "test-backlog", "--create-issues"];
+      process.argv = ["node", "prs", "test-backlog", "--create-issues"];
 
-      await expect(run()).rejects.toThrow("Failed to parse .git-ai/config.json");
+      await expect(run()).rejects.toThrow("Failed to parse .prs/config.json");
     });
   });
 
-  it("fails clearly when .git-ai/config.json contains an empty buildCommand", async () => {
+  it("fails clearly when .prs/config.json contains an empty buildCommand", async () => {
     await withRepositoryConfig(
       JSON.stringify({ buildCommand: [] }, null, 2),
       async () => {
@@ -7615,14 +7669,14 @@ describe("CLI integration", () => {
           analysisResult: createTestBacklogAnalysis(),
         });
 
-        process.argv = ["node", "git-ai", "test-backlog", "--create-issues"];
+        process.argv = ["node", "prs", "test-backlog", "--create-issues"];
 
-        await expect(run()).rejects.toThrow("Invalid .git-ai/config.json");
+        await expect(run()).rejects.toThrow("Invalid .prs/config.json");
       }
     );
   });
 
-  it("fails clearly when .git-ai/config.json contains an unsupported forge type", async () => {
+  it("fails clearly when .prs/config.json contains an unsupported forge type", async () => {
     await withRepositoryConfig(
       JSON.stringify({ forge: { type: "gitlab" } }, null, 2),
       async () => {
@@ -7630,9 +7684,9 @@ describe("CLI integration", () => {
           analysisResult: createTestBacklogAnalysis(),
         });
 
-        process.argv = ["node", "git-ai", "test-backlog", "--create-issues"];
+        process.argv = ["node", "prs", "test-backlog", "--create-issues"];
 
-        await expect(run()).rejects.toThrow("Invalid .git-ai/config.json");
+        await expect(run()).rejects.toThrow("Invalid .prs/config.json");
       }
     );
   });
@@ -7643,10 +7697,10 @@ describe("CLI integration", () => {
       async () => {
         const { run } = await loadCli();
 
-        process.argv = ["node", "git-ai", "issue", "42"];
+        process.argv = ["node", "prs", "issue", "42"];
 
         await expect(run()).rejects.toThrow(
-          "Repository forge support is disabled by .git-ai/config.json"
+          "Repository forge support is disabled by .prs/config.json"
         );
       }
     );
@@ -7658,10 +7712,10 @@ describe("CLI integration", () => {
       async () => {
         const { run } = await loadCli();
 
-        process.argv = ["node", "git-ai", "issue", "plan", "42"];
+        process.argv = ["node", "prs", "issue", "plan", "42"];
 
         await expect(run()).rejects.toThrow(
-          "Repository forge support is disabled by .git-ai/config.json"
+          "Repository forge support is disabled by .prs/config.json"
         );
       }
     );
@@ -7675,10 +7729,10 @@ describe("CLI integration", () => {
           analysisResult: createTestBacklogAnalysis(),
         });
 
-        process.argv = ["node", "git-ai", "test-backlog", "--create-issues"];
+        process.argv = ["node", "prs", "test-backlog", "--create-issues"];
 
         await expect(run()).rejects.toThrow(
-          "Repository forge support is disabled by .git-ai/config.json"
+          "Repository forge support is disabled by .prs/config.json"
         );
       }
     );
@@ -7711,7 +7765,7 @@ describe("CLI integration", () => {
           },
         });
 
-        process.argv = ["node", "git-ai", "issue", "draft"];
+        process.argv = ["node", "prs", "issue", "draft"];
 
         const messages: string[] = [];
         const stdout = captureStdout();
@@ -7721,13 +7775,13 @@ describe("CLI integration", () => {
         await run();
 
         const { runDir, metadata } = readLatestRunMetadata();
-        cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "runs", runDir));
+        cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", runDir));
         if (metadata.draftFile) {
           cleanupTargets.add(resolve(REPO_ROOT, metadata.draftFile));
         }
 
         expect(messages.join("\n")).toContain(
-          "Issue creation skipped because repository forge support is disabled by .git-ai/config.json."
+          "Issue creation skipped because repository forge support is disabled by .prs/config.json."
         );
         expect(stdout.output()).toContain("Generated issue draft");
         expect(stdout.output()).toContain("# Unify PR assistant outputs.");
@@ -7794,7 +7848,7 @@ describe("CLI integration", () => {
       },
     });
 
-    process.argv = ["node", "git-ai", "issue", "finalize", "29"];
+    process.argv = ["node", "prs", "issue", "finalize", "29"];
     const stdout = captureStdout();
 
     await run();
@@ -7863,7 +7917,7 @@ describe("CLI integration", () => {
       },
     });
 
-    process.argv = ["node", "git-ai", "issue", "finalize", "29"];
+    process.argv = ["node", "prs", "issue", "finalize", "29"];
 
     const messages: string[] = [];
     vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
@@ -7894,7 +7948,7 @@ describe("CLI integration", () => {
       },
     });
 
-    process.argv = ["node", "git-ai", "issue", "finalize", "29"];
+    process.argv = ["node", "prs", "issue", "finalize", "29"];
 
     await expect(run()).rejects.toThrow(
       "The interactive runtime completed without producing any file changes to commit."

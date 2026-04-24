@@ -33,13 +33,13 @@ importers:
 
   actions/pr-assistant:
     dependencies:
-      '@git-ai/contracts':
+      '@prs/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@git-ai/core':
+      '@prs/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@git-ai/providers':
+      '@prs/providers':
         specifier: workspace:*
         version: link:../../packages/providers
     devDependencies:
@@ -49,13 +49,13 @@ importers:
 
   actions/pr-review:
     dependencies:
-      '@git-ai/contracts':
+      '@prs/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@git-ai/core':
+      '@prs/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@git-ai/providers':
+      '@prs/providers':
         specifier: workspace:*
         version: link:../../packages/providers
     devDependencies:
@@ -65,13 +65,13 @@ importers:
 
   actions/test-suggestions:
     dependencies:
-      '@git-ai/contracts':
+      '@prs/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@git-ai/core':
+      '@prs/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@git-ai/providers':
+      '@prs/providers':
         specifier: workspace:*
         version: link:../../packages/providers
     devDependencies:
@@ -81,13 +81,13 @@ importers:
 
   packages/cli:
     dependencies:
-      '@git-ai/contracts':
+      '@prs/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@git-ai/core':
+      '@prs/core':
         specifier: workspace:*
         version: link:../core
-      '@git-ai/providers':
+      '@prs/providers':
         specifier: workspace:*
         version: link:../providers
       dotenv:
@@ -110,10 +110,10 @@ importers:
 
   packages/core:
     dependencies:
-      '@git-ai/contracts':
+      '@prs/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@git-ai/providers':
+      '@prs/providers':
         specifier: workspace:*
         version: link:../providers
       zod:

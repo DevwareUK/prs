@@ -1,7 +1,7 @@
 import { appendFileSync } from "node:fs";
-import { TestSuggestionsInput } from "@git-ai/contracts";
-import { generateTestSuggestions } from "@git-ai/core";
-import { OpenAIProvider } from "@git-ai/providers";
+import { TestSuggestionsInput } from "@prs/contracts";
+import { generateTestSuggestions } from "@prs/core";
+import { OpenAIProvider } from "@prs/providers";
 import {
   getOptionalInput,
   getRequiredInlineOrFileInput,

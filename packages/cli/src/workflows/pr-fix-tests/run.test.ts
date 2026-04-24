@@ -34,7 +34,7 @@ function createManagedComment(body: string): RepositoryComment {
   return {
     id: 801,
     body,
-    url: "https://github.com/DevwareUK/git-ai/pull/71#issuecomment-801",
+    url: "https://github.com/DevwareUK/prs/pull/71#issuecomment-801",
     createdAt: "2026-03-20T11:00:00Z",
     updatedAt: "2026-03-20T11:29:35Z",
     author: "github-actions[bot]",
@@ -96,9 +96,9 @@ function buildSuggestionBlock(options: {
 function createPullRequest(): PullRequestDetails {
   return {
     number: 71,
-    title: "Add git-ai pr fix-tests",
+    title: "Add prs pr fix-tests",
     body: "Closes #70\n\nImplement managed AI test suggestion handoff.",
-    url: "https://github.com/DevwareUK/git-ai/pull/71",
+    url: "https://github.com/DevwareUK/prs/pull/71",
     baseRefName: "main",
     headRefName: "feat/pr-fix-tests",
   };
@@ -135,24 +135,24 @@ function createForge(
 }
 
 describe("runPrFixTestsCommand", () => {
-  const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-pr-fix-tests-"));
+  const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-pr-fix-tests-"));
   const workspace: PullRequestFixTestsWorkspace = {
-    runDir: resolve(repoRoot, ".git-ai/runs/20260320T112935000Z-pr-71-fix-tests"),
+    runDir: resolve(repoRoot, ".prs/runs/20260320T112935000Z-pr-71-fix-tests"),
     snapshotFilePath: resolve(
       repoRoot,
-      ".git-ai/runs/20260320T112935000Z-pr-71-fix-tests/pr-test-suggestions.md"
+      ".prs/runs/20260320T112935000Z-pr-71-fix-tests/pr-test-suggestions.md"
     ),
     promptFilePath: resolve(
       repoRoot,
-      ".git-ai/runs/20260320T112935000Z-pr-71-fix-tests/prompt.md"
+      ".prs/runs/20260320T112935000Z-pr-71-fix-tests/prompt.md"
     ),
     metadataFilePath: resolve(
       repoRoot,
-      ".git-ai/runs/20260320T112935000Z-pr-71-fix-tests/metadata.json"
+      ".prs/runs/20260320T112935000Z-pr-71-fix-tests/metadata.json"
     ),
     outputLogPath: resolve(
       repoRoot,
-      ".git-ai/runs/20260320T112935000Z-pr-71-fix-tests/output.log"
+      ".prs/runs/20260320T112935000Z-pr-71-fix-tests/output.log"
     ),
   };
 
@@ -183,9 +183,9 @@ describe("runPrFixTestsCommand", () => {
     vi.mocked(fetchLinkedIssuesForPullRequest).mockResolvedValue([
       {
         number: 70,
-        title: "Add git-ai pr fix-tests",
+        title: "Add prs pr fix-tests",
         body: "Implement managed AI test suggestion handoff.",
-        url: "https://github.com/DevwareUK/git-ai/issues/70",
+        url: "https://github.com/DevwareUK/prs/issues/70",
       },
     ]);
     vi.mocked(createPullRequestFixTestsWorkspace).mockReturnValue(workspace);
@@ -198,13 +198,13 @@ describe("runPrFixTestsCommand", () => {
   it("fetches PR context, writes workspace files, runs the selected runtime, verifies the build, and commits", async () => {
     const comment = createManagedComment(
       [
-        "<!-- git-ai-test-suggestions -->",
+        "<!-- prs:test-suggestions -->",
         "## AI Test Suggestions",
         "",
         "### Suggested test areas",
         "",
         ...buildSuggestionBlock({
-          title: "Verify command execution for 'git-ai pr fix-tests'",
+          title: "Verify command execution for 'prs pr fix-tests'",
           priority: "High",
           value: "The command should orchestrate the selected test workflow.",
           protectedPaths: [
@@ -275,7 +275,7 @@ describe("runPrFixTestsCommand", () => {
       expect.objectContaining({ number: 71 }),
       [
         expect.objectContaining({
-          area: "Verify command execution for 'git-ai pr fix-tests'",
+          area: "Verify command execution for 'prs pr fix-tests'",
           priority: "high",
           testType: "integration",
         }),
@@ -329,7 +329,7 @@ describe("runPrFixTestsCommand", () => {
   it("uses the newest managed AI test suggestions comment when multiple candidates exist", async () => {
     const olderComment = createManagedComment(
         [
-          "<!-- git-ai-test-suggestions -->",
+          "<!-- prs:test-suggestions -->",
           "## AI Test Suggestions",
           "",
           "### Suggested test areas",
@@ -344,7 +344,7 @@ describe("runPrFixTestsCommand", () => {
     const newerComment = {
       ...createManagedComment(
         [
-          "<!-- git-ai-test-suggestions -->",
+          "<!-- prs:test-suggestions -->",
           "## AI Test Suggestions",
           "",
           "### Suggested test areas",
@@ -411,13 +411,13 @@ describe("runPrFixTestsCommand", () => {
     const { forge } = createForge([
       createManagedComment(
         [
-          "<!-- git-ai-test-suggestions -->",
+          "<!-- prs:test-suggestions -->",
           "## AI Test Suggestions",
           "",
           "### Suggested test areas",
           "",
           ...buildSuggestionBlock({
-            title: "Verify command execution for 'git-ai pr fix-tests'",
+            title: "Verify command execution for 'prs pr fix-tests'",
             priority: "High",
             value: "The command should orchestrate the selected test workflow.",
           }),
@@ -462,7 +462,7 @@ describe("runPrFixTestsCommand", () => {
     const { forge } = createForge([
       createManagedComment(
         [
-          "<!-- git-ai-test-suggestions -->",
+          "<!-- prs:test-suggestions -->",
           "## AI Test Suggestions",
           "",
           "### Suggested test areas",
@@ -522,7 +522,7 @@ describe("runPrFixTestsCommand", () => {
     const { forge } = createForge([
       createManagedComment(
         [
-          "<!-- git-ai-test-suggestions -->",
+          "<!-- prs:test-suggestions -->",
           "## AI Test Suggestions",
           "",
           "### Suggested test areas",
@@ -612,7 +612,7 @@ describe("runPrFixTestsCommand", () => {
     const { forge } = createForge([
       createManagedComment(
         [
-          "<!-- git-ai-test-suggestions -->",
+          "<!-- prs:test-suggestions -->",
           "## AI Test Suggestions",
           "",
           "### Suggested test areas",
@@ -684,7 +684,7 @@ describe("runPrFixTestsCommand", () => {
     const { forge } = createForge([
       createManagedComment(
         [
-          "<!-- git-ai-test-suggestions -->",
+          "<!-- prs:test-suggestions -->",
           "## AI Test Suggestions",
           "",
           "### Suggested test areas",
@@ -762,7 +762,7 @@ describe("runPrFixTestsCommand", () => {
     const { forge } = createForge([
       createManagedComment(
         [
-          "<!-- git-ai-test-suggestions -->",
+          "<!-- prs:test-suggestions -->",
           "## AI Test Suggestions",
           "",
           "### Suggested test areas",

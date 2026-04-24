@@ -1,4 +1,4 @@
-import type { TestSuggestionsOutputType } from "@git-ai/contracts";
+import type { TestSuggestionsOutputType } from "@prs/contracts";
 
 function toTitleCase(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);

@@ -60,7 +60,7 @@ function createPullRequest(): PullRequestDetails {
     number: 206,
     title: "Tighten prepare-review follow-up fixes",
     body: "Closes #205\n\nCarry the review follow-up flow through commit proposal generation.",
-    url: "https://github.com/DevwareUK/git-ai/pull/206",
+    url: "https://github.com/DevwareUK/prs/pull/206",
     baseRefName: "main",
     headRefName: "feat/prepare-review-follow-up",
   };
@@ -94,7 +94,7 @@ function createForge(): {
 function createWorkspace(repoRoot: string): PullRequestPrepareReviewWorkspace {
   const runDir = resolve(
     repoRoot,
-    ".git-ai/runs/20260417T155614124Z-pr-206-prepare-review"
+    ".prs/runs/20260417T155614124Z-pr-206-prepare-review"
   );
   mkdirSync(runDir, { recursive: true });
 
@@ -168,7 +168,7 @@ describe("runPrPrepareReviewCommand", () => {
   });
 
   it("passes a diff-based commit proposal into runtime finalization and pushes an accepted follow-up commit", async () => {
-    const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-pr-prepare-review-"));
+    const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-pr-prepare-review-"));
     cleanupTargets.add(repoRoot);
 
     const workspace = createWorkspace(repoRoot);
@@ -416,7 +416,7 @@ describe("runPrPrepareReviewCommand", () => {
   });
 
   it("skips merging when the checked-out branch already contains the fetched base tip", async () => {
-    const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-pr-prepare-review-"));
+    const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-pr-prepare-review-"));
     cleanupTargets.add(repoRoot);
 
     const workspace = createWorkspace(repoRoot);
@@ -547,7 +547,7 @@ describe("runPrPrepareReviewCommand", () => {
   });
 
   it("creates a fetched review branch and merges the latest base tip before generating the brief", async () => {
-    const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-pr-prepare-review-"));
+    const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-pr-prepare-review-"));
     cleanupTargets.add(repoRoot);
 
     const workspace = createWorkspace(repoRoot);
@@ -754,7 +754,7 @@ describe("runPrPrepareReviewCommand", () => {
   });
 
   it("pushes a merge-only fetched review branch back to the real PR head branch", async () => {
-    const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-pr-prepare-review-"));
+    const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-pr-prepare-review-"));
     cleanupTargets.add(repoRoot);
 
     const workspace = createWorkspace(repoRoot);
@@ -932,7 +932,7 @@ describe("runPrPrepareReviewCommand", () => {
   });
 
   it("does not push when prepare-review exits without workflow-created commits", async () => {
-    const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-pr-prepare-review-"));
+    const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-pr-prepare-review-"));
     cleanupTargets.add(repoRoot);
 
     const workspace = createWorkspace(repoRoot);
@@ -1029,7 +1029,7 @@ describe("runPrPrepareReviewCommand", () => {
   });
 
   it("fails clearly when pushing reviewed updates back to the PR branch fails", async () => {
-    const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-pr-prepare-review-"));
+    const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-pr-prepare-review-"));
     cleanupTargets.add(repoRoot);
 
     const workspace = createWorkspace(repoRoot);
@@ -1177,7 +1177,7 @@ describe("runPrPrepareReviewCommand", () => {
   });
 
   it("opens a conflict-resolution Codex session and continues once the base sync is resolved", async () => {
-    const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-pr-prepare-review-"));
+    const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-pr-prepare-review-"));
     cleanupTargets.add(repoRoot);
 
     const workspace = createWorkspace(repoRoot);
@@ -1407,7 +1407,7 @@ describe("runPrPrepareReviewCommand", () => {
   });
 
   it("fails clearly and records blocked artifacts when merge conflicts remain unresolved", async () => {
-    const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-pr-prepare-review-"));
+    const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-pr-prepare-review-"));
     cleanupTargets.add(repoRoot);
 
     const workspace = createWorkspace(repoRoot);
@@ -1553,7 +1553,7 @@ describe("runPrPrepareReviewCommand", () => {
           status: "blocked",
           conflictResolution: "unresolved",
           recoveryMessage: expect.stringContaining(
-            "After fixing the branch state, rerun `git-ai pr prepare-review 206`."
+            "After fixing the branch state, rerun `prs pr prepare-review 206`."
           ),
         }),
       }),

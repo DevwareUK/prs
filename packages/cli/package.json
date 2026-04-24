@@ -1,24 +1,25 @@
 {
-  "name": "@git-ai/cli",
+  "name": "@prs/cli",
   "version": "0.0.1",
   "private": true,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
+    "prs": "dist/index.js",
     "git-ai": "dist/index.js"
   },
   "scripts": {
     "build": "tsup src/index.ts --format cjs --dts --out-dir dist",
-    "commit": "pnpm --filter @git-ai/cli... build && node dist/index.js commit",
-    "diff": "pnpm --filter @git-ai/cli... build && node dist/index.js diff",
-    "feature-backlog": "pnpm --filter @git-ai/cli... build && node dist/index.js feature-backlog",
-    "issue": "pnpm --filter @git-ai/cli... build && node dist/index.js",
-    "review": "pnpm --filter @git-ai/cli... build && node dist/index.js review"
+    "commit": "pnpm --filter @prs/cli... build && node dist/index.js commit",
+    "diff": "pnpm --filter @prs/cli... build && node dist/index.js diff",
+    "feature-backlog": "pnpm --filter @prs/cli... build && node dist/index.js feature-backlog",
+    "issue": "pnpm --filter @prs/cli... build && node dist/index.js",
+    "review": "pnpm --filter @prs/cli... build && node dist/index.js review"
   },
   "dependencies": {
-    "@git-ai/contracts": "workspace:*",
-    "@git-ai/core": "workspace:*",
-    "@git-ai/providers": "workspace:*",
+    "@prs/contracts": "workspace:*",
+    "@prs/core": "workspace:*",
+    "@prs/providers": "workspace:*",
     "dotenv": "^17.2.3"
   },
   "devDependencies": {

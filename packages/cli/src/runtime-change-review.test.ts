@@ -7,7 +7,7 @@ import { finalizeRuntimeChanges } from "./runtime-change-review";
 const cleanupTargets = new Set<string>();
 
 function createRunDir(): string {
-  const runDir = mkdtempSync(resolve(tmpdir(), "git-ai-runtime-change-review-"));
+  const runDir = mkdtempSync(resolve(tmpdir(), "prs-runtime-change-review-"));
   cleanupTargets.add(runDir);
   return runDir;
 }

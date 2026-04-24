@@ -3,7 +3,7 @@ import {
   type RepositoryConfigType,
   ResolvedRepositoryConfig,
   type ResolvedRepositoryConfigType,
-} from "@git-ai/contracts";
+} from "@prs/contracts";
 
 export const DEFAULT_REPOSITORY_BASE_BRANCH = "main";
 export const DEFAULT_REPOSITORY_BUILD_COMMAND = ["pnpm", "build"] as const;

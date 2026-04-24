@@ -35,7 +35,7 @@ function createPullRequest(): PullRequestDetails {
     number: 88,
     title: "Tighten PR review comment fixing flow",
     body: "Apply selected review feedback with Codex.",
-    url: "https://github.com/DevwareUK/git-ai/pull/88",
+    url: "https://github.com/DevwareUK/prs/pull/88",
     baseRefName: "main",
     headRefName: "feat/pr-fix-comments",
   };
@@ -49,7 +49,7 @@ function createReviewComment(body: string): PullRequestReviewComment {
     line: 1900,
     side: "RIGHT",
     diffHunk: "@@ -1890,0 +1900,4 @@",
-    url: "https://github.com/DevwareUK/git-ai/pull/88#discussion_r501",
+    url: "https://github.com/DevwareUK/prs/pull/88#discussion_r501",
     author: "reviewer-a",
     createdAt: "2026-03-18T08:00:00Z",
     updatedAt: "2026-03-18T08:05:00Z",
@@ -87,24 +87,24 @@ function createForge(
 }
 
 describe("runPrFixCommentsCommand", () => {
-  const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-pr-fix-comments-"));
+  const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-pr-fix-comments-"));
   const workspace: PullRequestFixWorkspace = {
-    runDir: resolve(repoRoot, ".git-ai/runs/20260320T112935000Z-pr-88-fix-comments"),
+    runDir: resolve(repoRoot, ".prs/runs/20260320T112935000Z-pr-88-fix-comments"),
     snapshotFilePath: resolve(
       repoRoot,
-      ".git-ai/runs/20260320T112935000Z-pr-88-fix-comments/pr-review-comments.md"
+      ".prs/runs/20260320T112935000Z-pr-88-fix-comments/pr-review-comments.md"
     ),
     promptFilePath: resolve(
       repoRoot,
-      ".git-ai/runs/20260320T112935000Z-pr-88-fix-comments/prompt.md"
+      ".prs/runs/20260320T112935000Z-pr-88-fix-comments/prompt.md"
     ),
     metadataFilePath: resolve(
       repoRoot,
-      ".git-ai/runs/20260320T112935000Z-pr-88-fix-comments/metadata.json"
+      ".prs/runs/20260320T112935000Z-pr-88-fix-comments/metadata.json"
     ),
     outputLogPath: resolve(
       repoRoot,
-      ".git-ai/runs/20260320T112935000Z-pr-88-fix-comments/output.log"
+      ".prs/runs/20260320T112935000Z-pr-88-fix-comments/output.log"
     ),
   };
 
@@ -137,7 +137,7 @@ describe("runPrFixCommentsCommand", () => {
         number: 42,
         title: "Improve PR comment selection",
         body: "Keep the snapshot coherent for Codex.",
-        url: "https://github.com/DevwareUK/git-ai/issues/42",
+        url: "https://github.com/DevwareUK/prs/issues/42",
       },
     ]);
     vi.mocked(createPullRequestFixWorkspace).mockReturnValue(workspace);

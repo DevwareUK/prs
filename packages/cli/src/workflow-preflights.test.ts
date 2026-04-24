@@ -39,7 +39,7 @@ describe("workflow preflights", () => {
       ensureVerificationCommandAvailable(
         repoRoot,
         ["vendor/bin/phpunit"],
-        "git-ai issue workflows"
+        "prs issue workflows"
       )
     ).not.toThrow();
 

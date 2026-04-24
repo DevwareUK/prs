@@ -47,7 +47,7 @@ jobs:
           CI: true
 
       - name: Build CLI
-        run: pnpm --filter @git-ai/cli... build
+        run: pnpm --filter @prs/cli... build
 
       - name: Prepare issue workspace
         id: prepare
@@ -142,7 +142,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const marker = "<!-- git-ai-issue-to-pr -->";
+            const marker = "<!-- prs-issue-to-pr -->";
             const body = `${marker}\nCreated PR #${process.env.PR_NUMBER}: ${process.env.PR_URL}`;
             const { owner, repo } = context.repo;
             const issue_number = Number(process.env.ISSUE_NUMBER);

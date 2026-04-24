@@ -8,8 +8,8 @@ import {
   IssueDraftModelOutput,
   IssueDraftOutput,
   IssueDraftOutputType,
-} from "@git-ai/contracts";
-import { AIProvider } from "@git-ai/providers";
+} from "@prs/contracts";
+import { AIProvider } from "@prs/providers";
 import {
   generateStructuredOutput,
   normalizeNullableFields,

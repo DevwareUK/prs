@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AIProvider } from "@git-ai/providers";
+import { AIProvider } from "@prs/providers";
 import {
   StructuredGenerationError,
   type StructuredGenerationValidationIssue,

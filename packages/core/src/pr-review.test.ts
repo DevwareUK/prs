@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { AIProvider } from "@git-ai/providers";
+import type { AIProvider } from "@prs/providers";
 import { generatePRReview } from "./pr-review";
 
 function createProvider(response: unknown): AIProvider & {
@@ -43,7 +43,7 @@ describe("generatePRReview", () => {
         "+",
         "+pnpm install",
         "+pnpm build",
-        "+git-ai review",
+        "+prs review",
         "+",
         "+More onboarding text",
         "+More onboarding text",

@@ -16,11 +16,11 @@ pnpm build
 2. Write large inputs to files and run the action entry locally:
 
 ```bash
-git diff -- . ':!pnpm-lock.yaml' > /tmp/git-ai-pr-assistant.diff
-git log --reverse --format='%s%n%b%n---' HEAD~3..HEAD > /tmp/git-ai-pr-assistant-commits.txt
+git diff -- . ':!pnpm-lock.yaml' > /tmp/prs-pr-assistant.diff
+git log --reverse --format='%s%n%b%n---' HEAD~3..HEAD > /tmp/prs-pr-assistant-commits.txt
 
-INPUT_DIFF_FILE="/tmp/git-ai-pr-assistant.diff" \
-INPUT_COMMIT_MESSAGES_FILE="/tmp/git-ai-pr-assistant-commits.txt" \
+INPUT_DIFF_FILE="/tmp/prs-pr-assistant.diff" \
+INPUT_COMMIT_MESSAGES_FILE="/tmp/prs-pr-assistant-commits.txt" \
 INPUT_PR_TITLE="Example PR title" \
 INPUT_PR_BODY="Human-authored PR notes" \
 INPUT_OPENAI_API_KEY="<your-key>" \

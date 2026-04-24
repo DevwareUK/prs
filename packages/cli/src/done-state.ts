@@ -27,7 +27,7 @@ export function buildDoneStateInstructions(options: DoneStateOptions): string[] 
 
   return [
     ...sharedLines,
-    "- after that explanation, end with plain-language next steps telling the user they can continue by giving further instruction or type `/exit` when they are satisfied and want to hand control back to `git-ai`",
+    "- after that explanation, end with plain-language next steps telling the user they can continue by giving further instruction or type `/exit` when they are satisfied and want to hand control back to `prs`",
     "- do not present numbered menus or tell the user to pick from fixed option labels",
   ];
 }

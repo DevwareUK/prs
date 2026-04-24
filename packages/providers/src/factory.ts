@@ -98,7 +98,7 @@ export async function createProviderFromConfig(
   const model = config.model?.trim();
   if (!model) {
     throw new Error(
-      "Bedrock Claude provider requires an explicit model in `.git-ai/config.json` under `ai.provider.model`."
+      "Bedrock Claude provider requires an explicit model in `.prs/config.json` under `ai.provider.model`."
     );
   }
 

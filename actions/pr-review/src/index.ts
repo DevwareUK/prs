@@ -1,7 +1,7 @@
 import { appendFileSync } from "node:fs";
-import { PRReviewInput } from "@git-ai/contracts";
-import { formatPRReviewMarkdown, generatePRReview } from "@git-ai/core";
-import { OpenAIProvider } from "@git-ai/providers";
+import { PRReviewInput } from "@prs/contracts";
+import { formatPRReviewMarkdown, generatePRReview } from "@prs/core";
+import { OpenAIProvider } from "@prs/providers";
 import {
   getOptionalInput,
   getRequiredInlineOrFileInput,

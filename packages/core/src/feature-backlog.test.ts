@@ -12,7 +12,7 @@ function writeFile(repoRoot: string, relativePath: string, contents: string): vo
 
 describe("analyzeFeatureBacklog", () => {
   it("identifies release automation, issue-template, example, and provider gaps", async () => {
-    const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-feature-backlog-"));
+    const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-feature-backlog-"));
 
     writeFile(
       repoRoot,
@@ -87,7 +87,7 @@ describe("analyzeFeatureBacklog", () => {
   });
 
   it("ignores excluded example paths from repository signals", async () => {
-    const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-feature-backlog-exclude-"));
+    const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-feature-backlog-exclude-"));
 
     writeFile(
       repoRoot,

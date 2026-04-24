@@ -69,7 +69,7 @@ export async function runPrFixTestsCommand(
 ): Promise<void> {
   if (options.forge.type === "none") {
     throw new Error(
-      "Repository forge support is disabled by .git-ai/config.json. Configure `forge.type` to enable pull request workflows."
+      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable pull request workflows."
     );
   }
 
@@ -77,7 +77,7 @@ export async function runPrFixTestsCommand(
   (options.ensureVerificationCommandAvailable ?? ensureVerificationCommandAvailable)(
     options.repoRoot,
     options.buildCommand,
-    "git-ai pr fix-tests"
+    "prs pr fix-tests"
   );
 
   console.log(`Fetching pull request #${options.prNumber}...`);
@@ -135,7 +135,7 @@ export async function runPrFixTestsCommand(
     `Complete the selected automated test changes in ${runtime.displayName}.`
   );
   console.log(
-    `When ${runtime.displayName} exits, git-ai will resume with build and commit steps.`
+    `When ${runtime.displayName} exits, prs will resume with build and commit steps.`
   );
   runtime.launch(options.repoRoot, workspace);
 
