@@ -645,6 +645,33 @@ function withRepositoryConfig(
   });
 }
 
+function withoutRepositoryConfig(callback: () => Promise<void>): Promise<void> {
+  const configPaths = [
+    resolve(REPO_ROOT, ".prs", "config.json"),
+    resolve(REPO_ROOT, ".git-ai", "config.json"),
+  ] as const;
+  const originals = configPaths.map((configPath) => ({
+    configPath,
+    existed: existsSync(configPath),
+    contents: existsSync(configPath) ? readFileSync(configPath, "utf8") : undefined,
+  }));
+
+  for (const { configPath } of originals) {
+    rmSync(configPath, { force: true });
+  }
+
+  return callback().finally(() => {
+    for (const { configPath, existed, contents } of originals) {
+      if (existed && contents !== undefined) {
+        mkdirSync(dirname(configPath), { recursive: true });
+        writeFileSync(configPath, contents);
+      } else {
+        rmSync(configPath, { force: true });
+      }
+    }
+  });
+}
+
 async function loadCli(options: {
   analysisResult?: ReturnType<typeof createTestBacklogAnalysis>;
   commitMessageResult?: { title: string; body?: string };
@@ -1546,67 +1573,62 @@ describe("CLI integration", () => {
       },
     });
 
-    process.env.GITHUB_TOKEN = "test-token";
-    process.argv = [
-      "node",
-      "prs",
-      "test-backlog",
-      "--format",
-      "json",
-      "--top",
-      "3",
-      "--create-issues",
-      "--max-issues",
-      "3",
-      "--label",
-      "tests",
-    ];
+    await withoutRepositoryConfig(async () => {
+      process.env.GITHUB_TOKEN = "test-token";
+      process.argv = [
+        "node",
+        "prs",
+        "test-backlog",
+        "--format",
+        "json",
+        "--top",
+        "3",
+        "--create-issues",
+        "--max-issues",
+        "3",
+        "--label",
+        "tests",
+      ];
 
-    const stdout = captureStdout();
-    await run();
+      const stdout = captureStdout();
+      await run();
 
-    expect(analyzeTestBacklog).toHaveBeenCalledWith({
-      excludePaths: [
-        "**/node_modules/**",
-        "**/vendor/**",
-        "**/dist/**",
-        "**/build/**",
-        "*.map",
-        "**/coverage/**",
-      ],
-      repoRoot: REPO_ROOT,
-      maxFindings: 3,
+      expect(analyzeTestBacklog).toHaveBeenCalledWith({
+        excludePaths: [...DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS],
+        repoRoot: REPO_ROOT,
+        maxFindings: 3,
+      });
+
+      const output = JSON.parse(stdout.output()) as {
+        findings: Array<{ issueTitle: string }>;
+        createdIssues: Array<{ number: number; title: string; status: string }>;
+      };
+
+      expect(output.findings.map((finding) => finding.issueTitle)).toEqual(
+        analysis.findings.map((finding) => finding.issueTitle)
+      );
+      expect(output.createdIssues).toEqual([
+        {
+          number: 41,
+          title: analysis.findings[0].issueTitle,
+          url: "https://github.com/DevwareUK/prs/issues/41",
+          status: "existing",
+        },
+        {
+          number: 42,
+          title: analysis.findings[1].issueTitle,
+          url: "https://github.com/DevwareUK/prs/issues/42",
+          status: "created",
+        },
+        {
+          number: 43,
+          title: analysis.findings[2].issueTitle,
+          url: "https://github.com/DevwareUK/prs/issues/43",
+          status: "created",
+        },
+      ]);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
     });
-
-    const output = JSON.parse(stdout.output()) as {
-      findings: Array<{ issueTitle: string }>;
-      createdIssues: Array<{ number: number; title: string; status: string }>;
-    };
-
-    expect(output.findings.map((finding) => finding.issueTitle)).toEqual(
-      analysis.findings.map((finding) => finding.issueTitle)
-    );
-    expect(output.createdIssues).toEqual([
-      {
-        number: 41,
-        title: analysis.findings[0].issueTitle,
-        url: "https://github.com/DevwareUK/prs/issues/41",
-        status: "existing",
-      },
-      {
-        number: 42,
-        title: analysis.findings[1].issueTitle,
-        url: "https://github.com/DevwareUK/prs/issues/42",
-        status: "created",
-      },
-      {
-        number: 43,
-        title: analysis.findings[2].issueTitle,
-        url: "https://github.com/DevwareUK/prs/issues/43",
-        status: "created",
-      },
-    ]);
-    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it("renders test-backlog markdown output", async () => {
@@ -1615,29 +1637,24 @@ describe("CLI integration", () => {
       analysisResult: analysis,
     });
 
-    process.argv = ["node", "prs", "test-backlog", "--top", "2"];
+    await withoutRepositoryConfig(async () => {
+      process.argv = ["node", "prs", "test-backlog", "--top", "2"];
 
-    const stdout = captureStdout();
-    await run();
+      const stdout = captureStdout();
+      await run();
 
-    expect(analyzeTestBacklog).toHaveBeenCalledWith({
-      excludePaths: [
-        "**/node_modules/**",
-        "**/vendor/**",
-        "**/dist/**",
-        "**/build/**",
-        "*.map",
-        "**/coverage/**",
-      ],
-      repoRoot: REPO_ROOT,
-      maxFindings: 2,
+      expect(analyzeTestBacklog).toHaveBeenCalledWith({
+        excludePaths: [...DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS],
+        repoRoot: REPO_ROOT,
+        maxFindings: 2,
+      });
+      expect(stdout.output()).toContain("# AI Test Backlog");
+      expect(stdout.output()).toContain("## Summary");
+      expect(stdout.output()).toContain("### Missing CLI integration coverage for issue prepare");
+      expect(stdout.output()).toContain(
+        "- Draft issue title: Add CLI integration coverage for prs issue prepare"
+      );
     });
-    expect(stdout.output()).toContain("# AI Test Backlog");
-    expect(stdout.output()).toContain("## Summary");
-    expect(stdout.output()).toContain("### Missing CLI integration coverage for issue prepare");
-    expect(stdout.output()).toContain(
-      "- Draft issue title: Add CLI integration coverage for prs issue prepare"
-    );
   });
 
   it("runs review in markdown mode with linked issue context", async () => {
@@ -4339,60 +4356,55 @@ describe("CLI integration", () => {
       },
     });
 
-    process.env.GITHUB_TOKEN = "test-token";
-    process.argv = [
-      "node",
-      "prs",
-      "feature-backlog",
-      ".",
-      "--format",
-      "json",
-      "--create-issues",
-      "--max-issues",
-      "2",
-      "--label",
-      "product",
-    ];
+    await withoutRepositoryConfig(async () => {
+      process.env.GITHUB_TOKEN = "test-token";
+      process.argv = [
+        "node",
+        "prs",
+        "feature-backlog",
+        ".",
+        "--format",
+        "json",
+        "--create-issues",
+        "--max-issues",
+        "2",
+        "--label",
+        "product",
+      ];
 
-    const stdout = captureStdout();
-    await run();
+      const stdout = captureStdout();
+      await run();
 
-    expect(analyzeFeatureBacklog).toHaveBeenCalledWith({
-      excludePaths: [
-        "**/node_modules/**",
-        "**/vendor/**",
-        "**/dist/**",
-        "**/build/**",
-        "*.map",
-        "**/coverage/**",
-      ],
-      repoRoot: REPO_ROOT,
-      maxSuggestions: 5,
+      expect(analyzeFeatureBacklog).toHaveBeenCalledWith({
+        excludePaths: [...DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS],
+        repoRoot: REPO_ROOT,
+        maxSuggestions: 5,
+      });
+
+      const output = parseJsonPayloadFromOutput(stdout.output()) as {
+        suggestions: Array<{ issueTitle: string }>;
+        createdIssues: Array<{ number: number; title: string; status: string }>;
+      };
+
+      expect(output.suggestions.map((suggestion) => suggestion.issueTitle)).toEqual(
+        analysis.suggestions.map((suggestion) => suggestion.issueTitle)
+      );
+      expect(output.createdIssues).toEqual([
+        {
+          number: 51,
+          title: analysis.suggestions[0].issueTitle,
+          url: "https://github.com/DevwareUK/prs/issues/51",
+          status: "existing",
+        },
+        {
+          number: 52,
+          title: "Custom release automation title",
+          url: "https://github.com/DevwareUK/prs/issues/52",
+          status: "created",
+        },
+      ]);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
     });
-
-    const output = parseJsonPayloadFromOutput(stdout.output()) as {
-      suggestions: Array<{ issueTitle: string }>;
-      createdIssues: Array<{ number: number; title: string; status: string }>;
-    };
-
-    expect(output.suggestions.map((suggestion) => suggestion.issueTitle)).toEqual(
-      analysis.suggestions.map((suggestion) => suggestion.issueTitle)
-    );
-    expect(output.createdIssues).toEqual([
-      {
-        number: 51,
-        title: analysis.suggestions[0].issueTitle,
-        url: "https://github.com/DevwareUK/prs/issues/51",
-        status: "existing",
-      },
-      {
-        number: 52,
-        title: "Custom release automation title",
-        url: "https://github.com/DevwareUK/prs/issues/52",
-        status: "created",
-      },
-    ]);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("renders feature-backlog markdown output", async () => {
@@ -4401,31 +4413,26 @@ describe("CLI integration", () => {
       featureAnalysisResult: analysis,
     });
 
-    process.argv = ["node", "prs", "feature-backlog", ".", "--top", "2"];
+    await withoutRepositoryConfig(async () => {
+      process.argv = ["node", "prs", "feature-backlog", ".", "--top", "2"];
 
-    const stdout = captureStdout();
-    await run();
+      const stdout = captureStdout();
+      await run();
 
-    expect(analyzeFeatureBacklog).toHaveBeenCalledWith({
-      excludePaths: [
-        "**/node_modules/**",
-        "**/vendor/**",
-        "**/dist/**",
-        "**/build/**",
-        "*.map",
-        "**/coverage/**",
-      ],
-      repoRoot: REPO_ROOT,
-      maxSuggestions: 2,
+      expect(analyzeFeatureBacklog).toHaveBeenCalledWith({
+        excludePaths: [...DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS],
+        repoRoot: REPO_ROOT,
+        maxSuggestions: 2,
+      });
+      expect(stdout.output()).toContain("# AI Feature Backlog");
+      expect(stdout.output()).toContain("## Repository signals");
+      expect(stdout.output()).toContain(
+        "### Add guided issue templates for feature requests and bug reports"
+      );
+      expect(stdout.output()).toContain(
+        "- Draft issue title: Add guided issue templates for feature requests and bug reports"
+      );
     });
-    expect(stdout.output()).toContain("# AI Feature Backlog");
-    expect(stdout.output()).toContain("## Repository signals");
-    expect(stdout.output()).toContain(
-      "### Add guided issue templates for feature requests and bug reports"
-    );
-    expect(stdout.output()).toContain(
-      "- Draft issue title: Add guided issue templates for feature requests and bug reports"
-    );
   });
 
   it("runs setup with repo-aware defaults without creating AGENTS guidance by default", async () => {
