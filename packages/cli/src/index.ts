@@ -119,6 +119,8 @@ type IssueDraftWorkspace = {
   promptFilePath: string;
   metadataFilePath: string;
   outputLogPath: string;
+  superpowersSpecFilePath: string;
+  superpowersPlanFilePath: string;
 };
 
 type IssueCommandOptions =
@@ -1309,6 +1311,8 @@ function createIssueDraftWorkspace(repoRoot: string): IssueDraftWorkspace {
     promptFilePath: resolve(runDir, "prompt.md"),
     metadataFilePath: resolve(runDir, "metadata.json"),
     outputLogPath: resolve(runDir, "output.log"),
+    superpowersSpecFilePath: resolve(runDir, "superpowers-spec.md"),
+    superpowersPlanFilePath: resolve(runDir, "superpowers-plan.md"),
   };
 }
 
@@ -1322,6 +1326,8 @@ function buildIssueDraftRuntimePrompt(
 ): string {
   const draftFile = toRepoRelativePath(repoRoot, workspace.draftFilePath);
   const runDir = toRepoRelativePath(repoRoot, workspace.runDir);
+  const superpowersSpecFile = toRepoRelativePath(repoRoot, workspace.superpowersSpecFilePath);
+  const superpowersPlanFile = toRepoRelativePath(repoRoot, workspace.superpowersPlanFilePath);
 
   if (options.useCodexSuperpowers) {
     return [
@@ -1333,6 +1339,8 @@ function buildIssueDraftRuntimePrompt(
       featureIdea,
       "",
       `Write the final Markdown issue draft to \`${draftFile}\`.`,
+      `Write the Superpowers spec artifact to \`${superpowersSpecFile}\`.`,
+      `Write the Superpowers plan artifact to \`${superpowersPlanFile}\`.`,
       `Use \`${runDir}\` for run artifacts created by this workflow.`,
       "",
       "Instructions to the coding agent:",
@@ -1342,6 +1350,9 @@ function buildIssueDraftRuntimePrompt(
       "- use `superpowers:brainstorming` first for clarification and scope shaping",
       "- use `superpowers:writing-plans` discipline to make the final issue draft implementation-ready",
       "- override the normal Superpowers spec/plan continuation for this workflow",
+      "- keep any intermediate Superpowers docs inside the provided `.prs/runs/...` directory",
+      "- write any Superpowers brainstorming/spec artifact only to the provided spec path",
+      "- write any Superpowers writing-plans artifact only to the provided plan path",
       "- do not create `docs/superpowers/specs/...` documents",
       "- do not create `docs/superpowers/plans/...` documents",
       "- write the completed draft to the provided draft path before exiting",
@@ -1394,6 +1405,15 @@ function writeIssueDraftWorkspaceFiles(
   const createdAt = new Date().toISOString();
   const runtime = getInteractiveRuntimeByType(runtimeType);
   const prompt = buildIssueDraftRuntimePrompt(repoRoot, workspace, featureIdea, options);
+  const superpowersMetadata = options.useCodexSuperpowers
+    ? {
+        enabled: true,
+        specFile: toRepoRelativePath(repoRoot, workspace.superpowersSpecFilePath),
+        planFile: toRepoRelativePath(repoRoot, workspace.superpowersPlanFilePath),
+      }
+    : {
+        enabled: false,
+      };
 
   writeFileSync(workspace.promptFilePath, `${prompt}\n`, "utf8");
   writeFileSync(
@@ -1412,9 +1432,7 @@ function writeIssueDraftWorkspaceFiles(
           displayName: runtime.displayName,
           command: runtime.metadata.command,
         },
-        superpowers: {
-          enabled: options.useCodexSuperpowers,
-        },
+        superpowers: superpowersMetadata,
       },
       null,
       2
@@ -1430,6 +1448,12 @@ function writeIssueDraftWorkspaceFiles(
       `Runtime: ${runtime.displayName}`,
       `Draft file: ${toRepoRelativePath(repoRoot, workspace.draftFilePath)}`,
       `Prompt file: ${toRepoRelativePath(repoRoot, workspace.promptFilePath)}`,
+      ...(options.useCodexSuperpowers
+        ? [
+            `Superpowers spec file: ${toRepoRelativePath(repoRoot, workspace.superpowersSpecFilePath)}`,
+            `Superpowers plan file: ${toRepoRelativePath(repoRoot, workspace.superpowersPlanFilePath)}`,
+          ]
+        : []),
       "",
     ].join("\n"),
     "utf8"

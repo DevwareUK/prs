@@ -4848,6 +4848,16 @@ describe("CLI integration", () => {
     const beforeDrafts = listIssueDraftFiles();
     const beforeRuns = listRunDirectories();
     let runtimePrompt = "";
+    let runtimeMetadata:
+      | {
+          superpowers?: {
+            enabled?: boolean;
+            specFile?: string;
+            planFile?: string;
+          };
+        }
+      | undefined;
+    let outputLog = "";
     const codexHome = createMockCodexHome();
     const pluginRoot = resolve(
       codexHome,
@@ -4888,6 +4898,19 @@ describe("CLI integration", () => {
                 resolve(REPO_ROOT, metadata.promptFile as string),
                 "utf8"
               );
+              runtimeMetadata = JSON.parse(
+                readFileSync(resolve(REPO_ROOT, metadata.runDir as string, "metadata.json"), "utf8")
+              ) as {
+                superpowers?: {
+                  enabled?: boolean;
+                  specFile?: string;
+                  planFile?: string;
+                };
+              };
+              outputLog = readFileSync(
+                resolve(REPO_ROOT, metadata.outputLog as string),
+                "utf8"
+              );
               writeFileSync(resolve(REPO_ROOT, metadata.draftFile as string), "# Draft\n", "utf8");
               return { status: 0 };
             }
@@ -4913,10 +4936,25 @@ describe("CLI integration", () => {
     expect(createdRunDir).toBeDefined();
     cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
 
+    const expectedSpecFile = `.prs/runs/${createdRunDir}/superpowers-spec.md`;
+    const expectedPlanFile = `.prs/runs/${createdRunDir}/superpowers-plan.md`;
+
     expect(runtimePrompt).toContain("use `superpowers:brainstorming` first");
     expect(runtimePrompt).toContain("use `superpowers:writing-plans` discipline");
+    expect(runtimePrompt).toContain(`Write the final Markdown issue draft to \`.prs/issues/${createdDraft}\`.`);
+    expect(runtimePrompt).toContain(`Write the Superpowers spec artifact to \`${expectedSpecFile}\`.`);
+    expect(runtimePrompt).toContain(`Write the Superpowers plan artifact to \`${expectedPlanFile}\`.`);
     expect(runtimePrompt).toContain("do not create `docs/superpowers/specs/");
     expect(runtimePrompt).toContain("do not create `docs/superpowers/plans/");
+    expect(runtimeMetadata).toMatchObject({
+      superpowers: {
+        enabled: true,
+        specFile: expectedSpecFile,
+        planFile: expectedPlanFile,
+      },
+    });
+    expect(outputLog).toContain(`Superpowers spec file: ${expectedSpecFile}`);
+    expect(outputLog).toContain(`Superpowers plan file: ${expectedPlanFile}`);
   });
 
   it("falls back to the standard Codex draft prompt when Superpowers is configured but unavailable", async () => {
