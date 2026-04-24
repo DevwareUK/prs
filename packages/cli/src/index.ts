@@ -66,6 +66,7 @@ import { resolveRuntimeRepoRoot } from "./repo-root";
 import {
   findTrackedRuntimeSessionById,
   getInteractiveRuntimeByType,
+  isCodexSuperpowersAvailable,
   launchUnattendedRuntime,
   selectInteractiveRuntime,
   type InteractiveRuntimeType,
@@ -1303,10 +1304,45 @@ function createIssueDraftWorkspace(repoRoot: string): IssueDraftWorkspace {
 function buildIssueDraftRuntimePrompt(
   repoRoot: string,
   workspace: IssueDraftWorkspace,
-  featureIdea: string
+  featureIdea: string,
+  options: {
+    useCodexSuperpowers: boolean;
+  }
 ): string {
   const draftFile = toRepoRelativePath(repoRoot, workspace.draftFilePath);
   const runDir = toRepoRelativePath(repoRoot, workspace.runDir);
+
+  if (options.useCodexSuperpowers) {
+    return [
+      "You are working in the current repository.",
+      "",
+      "The user wants to turn a rough idea into an implementation-ready GitHub issue draft.",
+      "",
+      "Rough idea:",
+      featureIdea,
+      "",
+      `Write the final Markdown issue draft to \`${draftFile}\`.`,
+      `Use \`${runDir}\` for run artifacts created by this workflow.`,
+      "",
+      "Instructions to the coding agent:",
+      "- inspect the repository only as needed to understand the idea and scope the work",
+      "- avoid asking questions that are already answerable from the codebase",
+      "- ask the user targeted clarifying questions only when repository inspection does not answer an important implementation detail",
+      "- use `superpowers:brainstorming` first for clarification and scope shaping",
+      "- use `superpowers:writing-plans` discipline to make the final issue draft implementation-ready",
+      "- override the normal Superpowers spec/plan continuation for this workflow",
+      "- do not create `docs/superpowers/specs/...` documents",
+      "- do not create `docs/superpowers/plans/...` documents",
+      "- write the completed draft to the provided draft path before exiting",
+      "- write an implementation-ready Markdown issue draft with a top-level title heading and concrete sections such as summary, motivation, scope, requirements, and acceptance criteria when they add value",
+      "- keep the draft grounded in actual repository structure, existing patterns, and likely touchpoints",
+      "- do not create the GitHub issue directly",
+      "- do not modify unrelated repository files",
+      "- do not modify `.git-ai/` except for the provided draft file and local workflow artifacts",
+      "",
+      "When the draft is complete and saved, stop.",
+    ].join("\n");
+  }
 
   return [
     "You are working in the current repository.",
@@ -1339,11 +1375,14 @@ function writeIssueDraftWorkspaceFiles(
   repoRoot: string,
   featureIdea: string,
   workspace: IssueDraftWorkspace,
-  runtimeType: InteractiveRuntimeType
+  runtimeType: InteractiveRuntimeType,
+  options: {
+    useCodexSuperpowers: boolean;
+  }
 ): void {
   const createdAt = new Date().toISOString();
   const runtime = getInteractiveRuntimeByType(runtimeType);
-  const prompt = buildIssueDraftRuntimePrompt(repoRoot, workspace, featureIdea);
+  const prompt = buildIssueDraftRuntimePrompt(repoRoot, workspace, featureIdea, options);
 
   writeFileSync(workspace.promptFilePath, `${prompt}\n`, "utf8");
   writeFileSync(
@@ -1361,6 +1400,9 @@ function writeIssueDraftWorkspaceFiles(
           type: runtime.type,
           displayName: runtime.displayName,
           command: runtime.metadata.command,
+        },
+        superpowers: {
+          enabled: options.useCodexSuperpowers,
         },
       },
       null,
@@ -2831,9 +2873,26 @@ async function runIssueDraftCommand(): Promise<void> {
       console.log(message);
     },
   });
+  const shouldUseCodexSuperpowers =
+    runtime.type === "codex" &&
+    repositoryConfig.ai.issueDraft.useCodexSuperpowers &&
+    isCodexSuperpowersAvailable();
+
+  if (
+    runtime.type === "codex" &&
+    repositoryConfig.ai.issueDraft.useCodexSuperpowers &&
+    !shouldUseCodexSuperpowers
+  ) {
+    console.log(
+      "Codex Superpowers-backed issue drafting is enabled in .git-ai/config.json, but Superpowers is not available in the current Codex installation. Falling back to the standard issue-draft prompt."
+    );
+  }
+
   const featureIdea = await promptForRequiredLine("Rough idea: ");
   const workspace = createIssueDraftWorkspace(repoRoot);
-  writeIssueDraftWorkspaceFiles(repoRoot, featureIdea, workspace, runtime.type);
+  writeIssueDraftWorkspaceFiles(repoRoot, featureIdea, workspace, runtime.type, {
+    useCodexSuperpowers: shouldUseCodexSuperpowers,
+  });
 
   runtime.launch(repoRoot, {
     promptFilePath: workspace.promptFilePath,

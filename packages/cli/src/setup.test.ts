@@ -28,6 +28,28 @@ function createRepo(prefix: string): string {
   return repoRoot;
 }
 
+function createCodexHome(prefix: string): string {
+  const codexHome = mkdtempSync(resolve(tmpdir(), prefix));
+  cleanupTargets.add(codexHome);
+  process.env.CODEX_HOME = codexHome;
+  return codexHome;
+}
+
+function writeSuperpowersPlugin(codexHome: string): void {
+  const pluginRoot = resolve(
+    codexHome,
+    "plugins",
+    "cache",
+    "openai-curated",
+    "superpowers",
+    "test-version"
+  );
+  mkdirSync(resolve(pluginRoot, "skills", "brainstorming"), { recursive: true });
+  mkdirSync(resolve(pluginRoot, "skills", "writing-plans"), { recursive: true });
+  writeFileSync(resolve(pluginRoot, "skills", "brainstorming", "SKILL.md"), "# test\n");
+  writeFileSync(resolve(pluginRoot, "skills", "writing-plans", "SKILL.md"), "# test\n");
+}
+
 function createPrompt(answers: string[], prompts: string[] = []) {
   return async (prompt: string): Promise<string> => {
     prompts.push(prompt);
@@ -97,6 +119,8 @@ function mockChildProcess(
 }
 
 afterEach(() => {
+  delete process.env.CODEX_HOME;
+
   for (const target of cleanupTargets) {
     rmSync(target, { recursive: true, force: true });
   }
@@ -108,6 +132,7 @@ afterEach(() => {
 describe("setup command", () => {
   it("runs setup with repo-aware defaults without creating AGENTS guidance by default", async () => {
     const repoRoot = createRepo("git-ai-setup-node-");
+    createCodexHome("git-ai-setup-codex-home-");
     mkdirSync(resolve(repoRoot, ".github", "workflows"), { recursive: true });
     mkdirSync(resolve(repoRoot, "coverage"), { recursive: true });
     writeFileSync(
@@ -154,6 +179,9 @@ describe("setup command", () => {
       JSON.parse(readFileSync(resolve(repoRoot, ".git-ai", "config.json"), "utf8"))
     ).toEqual({
       ai: {
+        issueDraft: {
+          useCodexSuperpowers: false,
+        },
         runtime: {
           type: "codex",
         },
@@ -193,6 +221,7 @@ describe("setup command", () => {
 
   it("generates repository-specific config defaults from Drupal repository signals", async () => {
     const repoRoot = createRepo("git-ai-setup-drupal-defaults-");
+    createCodexHome("git-ai-setup-codex-home-");
     mkdirSync(resolve(repoRoot, "vendor", "bin"), { recursive: true });
     mkdirSync(resolve(repoRoot, "docroot", "sites", "default", "files"), {
       recursive: true,
@@ -230,6 +259,9 @@ describe("setup command", () => {
       JSON.parse(readFileSync(resolve(repoRoot, ".git-ai", "config.json"), "utf8"))
     ).toEqual({
       ai: {
+        issueDraft: {
+          useCodexSuperpowers: false,
+        },
         runtime: {
           type: "codex",
         },
@@ -257,6 +289,7 @@ describe("setup command", () => {
 
   it("updates an existing AGENTS managed section during setup and keeps manual guidance", async () => {
     const repoRoot = createRepo("git-ai-setup-agents-");
+    createCodexHome("git-ai-setup-codex-home-");
     mkdirSync(resolve(repoRoot, ".github", "workflows"), { recursive: true });
     writeFileSync(
       resolve(repoRoot, "package.json"),
@@ -329,6 +362,7 @@ describe("setup command", () => {
 
   it("detects npm test when the repository has tests but no build script", async () => {
     const repoRoot = createRepo("git-ai-setup-npm-test-");
+    createCodexHome("git-ai-setup-codex-home-");
     writeFileSync(
       resolve(repoRoot, "package.json"),
       JSON.stringify(
@@ -359,6 +393,9 @@ describe("setup command", () => {
       JSON.parse(readFileSync(resolve(repoRoot, ".git-ai", "config.json"), "utf8"))
     ).toEqual({
       ai: {
+        issueDraft: {
+          useCodexSuperpowers: false,
+        },
         runtime: {
           type: "codex",
         },
@@ -373,6 +410,7 @@ describe("setup command", () => {
 
   it("preserves existing ai provider settings when setup rewrites the repository config", async () => {
     const repoRoot = createRepo("git-ai-setup-preserve-ai-");
+    createCodexHome("git-ai-setup-codex-home-");
     mkdirSync(resolve(repoRoot, ".git-ai"), { recursive: true });
     writeFileSync(
       resolve(repoRoot, ".git-ai", "config.json"),
@@ -413,6 +451,9 @@ describe("setup command", () => {
       JSON.parse(readFileSync(resolve(repoRoot, ".git-ai", "config.json"), "utf8"))
     ).toEqual({
       ai: {
+        issueDraft: {
+          useCodexSuperpowers: false,
+        },
         provider: {
           model: "gpt-5-mini",
           type: "openai",
@@ -431,6 +472,7 @@ describe("setup command", () => {
 
   it("creates the AGENTS scaffold only when explicitly requested", async () => {
     const repoRoot = createRepo("git-ai-setup-agents-scaffold-");
+    createCodexHome("git-ai-setup-codex-home-");
     writeFileSync(
       resolve(repoRoot, "package.json"),
       JSON.stringify(
@@ -469,6 +511,7 @@ describe("setup command", () => {
 
   it("updates legacy generated workflow files when setup is rerun", async () => {
     const repoRoot = createRepo("git-ai-setup-workflow-update-");
+    createCodexHome("git-ai-setup-codex-home-");
     mkdirSync(resolve(repoRoot, ".github", "workflows"), { recursive: true });
     writeFileSync(
       resolve(repoRoot, "package.json"),
@@ -517,5 +560,113 @@ describe("setup command", () => {
     expect(
       readFileSync(resolve(repoRoot, ".github", "workflows", "git-ai-pr-review.yml"), "utf8")
     ).not.toContain("DevwareUK/ai-actions/actions/pr-review@main");
+  });
+
+  it("writes useCodexSuperpowers true when Superpowers is detectable for Codex", async () => {
+    const repoRoot = createRepo("git-ai-setup-superpowers-");
+    const codexHome = createCodexHome("git-ai-setup-codex-home-");
+    writeSuperpowersPlugin(codexHome);
+    writeFileSync(
+      resolve(repoRoot, "package.json"),
+      JSON.stringify(
+        {
+          name: "fixture-node-repo",
+          scripts: {
+            build: "tsup",
+          },
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(resolve(repoRoot, "pnpm-lock.yaml"), "");
+
+    mockChildProcess(repoRoot, {
+      "rev-parse --show-toplevel": `${repoRoot}\n`,
+      "symbolic-ref refs/remotes/origin/HEAD": "refs/remotes/origin/main\n",
+      "remote get-url origin": "git@github.com:acme/fixture-node-repo.git\n",
+    });
+
+    const messages: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
+      messages.push(String(message ?? ""));
+    });
+
+    await runSetupCommand({
+      promptForLine: createPrompt(["", "", ""]),
+      repoRoot,
+    });
+
+    expect(
+      JSON.parse(readFileSync(resolve(repoRoot, ".git-ai", "config.json"), "utf8"))
+    ).toMatchObject({
+      ai: {
+        issueDraft: {
+          useCodexSuperpowers: true,
+        },
+      },
+    });
+    expect(messages.join("\n")).toContain(
+      "Suggested Codex Superpowers-backed issue drafting: enabled"
+    );
+    expect(messages.join("\n")).toContain(
+      "Configured Codex Superpowers-backed issue drafting: enabled"
+    );
+  });
+
+  it("preserves an existing explicit useCodexSuperpowers value on setup rerun", async () => {
+    const repoRoot = createRepo("git-ai-setup-preserve-superpowers-");
+    const codexHome = createCodexHome("git-ai-setup-codex-home-");
+    writeSuperpowersPlugin(codexHome);
+    writeFileSync(
+      resolve(repoRoot, "package.json"),
+      JSON.stringify(
+        {
+          name: "fixture-node-repo",
+          scripts: {
+            build: "tsup",
+          },
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(resolve(repoRoot, "pnpm-lock.yaml"), "");
+    mkdirSync(resolve(repoRoot, ".git-ai"), { recursive: true });
+    writeFileSync(
+      resolve(repoRoot, ".git-ai", "config.json"),
+      JSON.stringify(
+        {
+          ai: {
+            issueDraft: {
+              useCodexSuperpowers: false,
+            },
+          },
+        },
+        null,
+        2
+      )
+    );
+
+    mockChildProcess(repoRoot, {
+      "rev-parse --show-toplevel": `${repoRoot}\n`,
+      "symbolic-ref refs/remotes/origin/HEAD": "refs/remotes/origin/main\n",
+      "remote get-url origin": "git@github.com:acme/fixture-node-repo.git\n",
+    });
+
+    await runSetupCommand({
+      promptForLine: createPrompt(["", "", ""]),
+      repoRoot,
+    });
+
+    expect(
+      JSON.parse(readFileSync(resolve(repoRoot, ".git-ai", "config.json"), "utf8"))
+    ).toMatchObject({
+      ai: {
+        issueDraft: {
+          useCodexSuperpowers: false,
+        },
+      },
+    });
   });
 });

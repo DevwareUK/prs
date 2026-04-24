@@ -10,6 +10,7 @@ export const DEFAULT_REPOSITORY_BUILD_COMMAND = ["pnpm", "build"] as const;
 export const DEFAULT_REPOSITORY_FORGE_TYPE = "github" as const;
 export const DEFAULT_REPOSITORY_AI_RUNTIME_TYPE = "codex" as const;
 export const DEFAULT_REPOSITORY_AI_PROVIDER_TYPE = "openai" as const;
+export const DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS = false;
 export const DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS = [
   "**/node_modules/**",
   "**/vendor/**",
@@ -29,6 +30,11 @@ export function resolveRepositoryConfig(
 
   return ResolvedRepositoryConfig.parse({
     ai: {
+      issueDraft: {
+        useCodexSuperpowers:
+          parsedConfig.ai?.issueDraft?.useCodexSuperpowers ??
+          DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
+      },
       runtime: parsedConfig.ai?.runtime ?? {
         type: DEFAULT_REPOSITORY_AI_RUNTIME_TYPE,
       },

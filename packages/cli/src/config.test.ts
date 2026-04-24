@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS,
+  DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
   DEFAULT_REPOSITORY_AI_PROVIDER_TYPE,
   DEFAULT_REPOSITORY_AI_RUNTIME_TYPE,
 } from "../../core/src/repository-config";
@@ -54,6 +55,9 @@ describe("config helpers", () => {
       repoRoot,
       JSON.stringify({
         ai: {
+          issueDraft: {
+            useCodexSuperpowers: true,
+          },
           runtime: {
             type: "claude-code",
           },
@@ -68,6 +72,9 @@ describe("config helpers", () => {
 
     expect(loadRepositoryConfig(repoRoot)).toEqual({
       ai: {
+        issueDraft: {
+          useCodexSuperpowers: true,
+        },
         runtime: {
           type: "claude-code",
         },
@@ -85,6 +92,9 @@ describe("config helpers", () => {
 
     expect(loadResolvedRepositoryConfig(repoRoot)).toEqual({
       ai: {
+        issueDraft: {
+          useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
+        },
         runtime: {
           type: DEFAULT_REPOSITORY_AI_RUNTIME_TYPE,
         },
@@ -109,6 +119,9 @@ describe("config helpers", () => {
       repoRoot,
       JSON.stringify({
         ai: {
+          issueDraft: {
+            useCodexSuperpowers: true,
+          },
           runtime: {
             type: "claude-code",
           },
@@ -122,6 +135,9 @@ describe("config helpers", () => {
     );
 
     expect(loadResolvedRepositoryConfig(repoRoot).ai).toEqual({
+      issueDraft: {
+        useCodexSuperpowers: true,
+      },
       runtime: {
         type: "claude-code",
       },

@@ -336,6 +336,7 @@ function parseMockRepositoryConfig(value?: unknown): Record<string, unknown> {
   const config = (value ?? {}) as {
     ai?: {
       runtime?: { type?: unknown };
+      issueDraft?: { useCodexSuperpowers?: unknown };
       provider?: {
         type?: unknown;
         model?: unknown;
@@ -401,6 +402,17 @@ function parseMockRepositoryConfig(value?: unknown): Record<string, unknown> {
         config.ai.provider.model.trim().length === 0)
     ) {
       throw new Error("ai.provider.model is required for bedrock-claude");
+    }
+  }
+
+  if (config.ai?.issueDraft !== undefined) {
+    if (
+      typeof config.ai.issueDraft !== "object" ||
+      config.ai.issueDraft === null ||
+      (config.ai.issueDraft.useCodexSuperpowers !== undefined &&
+        typeof config.ai.issueDraft.useCodexSuperpowers !== "boolean")
+    ) {
+      throw new Error("ai.issueDraft.useCodexSuperpowers must be a boolean");
     }
   }
 
@@ -902,6 +914,7 @@ async function loadCli(options: {
     resolveRepositoryConfig: vi.fn((config?: {
       ai?: {
         runtime?: { type?: "codex" | "claude-code" };
+        issueDraft?: { useCodexSuperpowers?: boolean };
         provider?:
           | { type?: "openai"; model?: string; baseUrl?: string }
           | { type?: "bedrock-claude"; model?: string; region?: string };
@@ -912,6 +925,9 @@ async function loadCli(options: {
       forge?: { type?: "github" | "none" };
     }) => ({
       ai: {
+        issueDraft: {
+          useCodexSuperpowers: config?.ai?.issueDraft?.useCodexSuperpowers ?? false,
+        },
         runtime: config?.ai?.runtime ?? {
           type: "codex",
         },
@@ -4361,6 +4377,7 @@ describe("CLI integration", () => {
   it("runs setup with repo-aware defaults without creating AGENTS guidance by default", async () => {
     const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-setup-node-"));
     cleanupTargets.add(repoRoot);
+    createMockCodexHome();
     mkdirSync(resolve(repoRoot, ".github", "workflows"), { recursive: true });
     mkdirSync(resolve(repoRoot, "coverage"), { recursive: true });
     writeFileSync(resolve(repoRoot, "package.json"), JSON.stringify({
@@ -4423,6 +4440,9 @@ describe("CLI integration", () => {
       JSON.parse(readFileSync(resolve(repoRoot, ".git-ai", "config.json"), "utf8"))
     ).toEqual({
       ai: {
+        issueDraft: {
+          useCodexSuperpowers: false,
+        },
         runtime: {
           type: "codex",
         },
@@ -4449,6 +4469,7 @@ describe("CLI integration", () => {
   it("updates an existing AGENTS managed section during setup and keeps manual guidance", async () => {
     const repoRoot = mkdtempSync(resolve(tmpdir(), "git-ai-setup-drupal-"));
     cleanupTargets.add(repoRoot);
+    createMockCodexHome();
     mkdirSync(resolve(repoRoot, "web", "themes", "custom", "site", "css"), {
       recursive: true,
     });
@@ -4522,6 +4543,9 @@ describe("CLI integration", () => {
       JSON.parse(readFileSync(resolve(repoRoot, ".git-ai", "config.json"), "utf8"))
     ).toEqual({
       ai: {
+        issueDraft: {
+          useCodexSuperpowers: false,
+        },
         runtime: {
           type: "codex",
         },
@@ -4557,6 +4581,7 @@ describe("CLI integration", () => {
     const beforeDrafts = listIssueDraftFiles();
     const beforeRuns = listRunDirectories();
     let runtimePrompt = "";
+    createMockCodexHome();
 
     const { run } = await loadCli({
       readlineAnswers: [
@@ -4667,6 +4692,7 @@ describe("CLI integration", () => {
     const beforeDrafts = listIssueDraftFiles();
     const beforeRuns = listRunDirectories();
     let runtimePrompt = "";
+    createMockCodexHome();
 
     await withRepositoryConfig(
       JSON.stringify(
@@ -4745,6 +4771,7 @@ describe("CLI integration", () => {
   });
 
   it("requires the codex CLI for issue draft workflows", async () => {
+    createMockCodexHome();
     const { run } = await loadCli({
       readlineAnswers: ["Unify PR assistant outputs."],
       spawnSyncImpl: (command, args) => {
@@ -4763,10 +4790,156 @@ describe("CLI integration", () => {
     );
   });
 
+  it("adds Superpowers-specific instructions to the Codex draft prompt when enabled", async () => {
+    const beforeDrafts = listIssueDraftFiles();
+    const beforeRuns = listRunDirectories();
+    let runtimePrompt = "";
+    const codexHome = createMockCodexHome();
+    const pluginRoot = resolve(
+      codexHome,
+      "plugins",
+      "cache",
+      "openai-curated",
+      "superpowers",
+      "test-version"
+    );
+    mkdirSync(resolve(pluginRoot, "skills", "brainstorming"), { recursive: true });
+    mkdirSync(resolve(pluginRoot, "skills", "writing-plans"), { recursive: true });
+    writeFileSync(resolve(pluginRoot, "skills", "brainstorming", "SKILL.md"), "# test\n");
+    writeFileSync(resolve(pluginRoot, "skills", "writing-plans", "SKILL.md"), "# test\n");
+
+    await withRepositoryConfig(
+      JSON.stringify(
+        {
+          ai: {
+            issueDraft: {
+              useCodexSuperpowers: true,
+            },
+          },
+        },
+        null,
+        2
+      ),
+      async () => {
+        const { run } = await loadCli({
+          readlineAnswers: ["Add an optional Superpowers-backed Codex mode."],
+          spawnSyncImpl: (command, args) => {
+            if (command === "codex" && args[0] === "--version") {
+              return { status: 0 };
+            }
+
+            if (command === "codex") {
+              const { metadata } = readLatestRunMetadata();
+              runtimePrompt = readFileSync(
+                resolve(REPO_ROOT, metadata.promptFile as string),
+                "utf8"
+              );
+              writeFileSync(resolve(REPO_ROOT, metadata.draftFile as string), "# Draft\n", "utf8");
+              return { status: 0 };
+            }
+
+            if (command === "gh" && args[0] === "--version") {
+              return { status: 1, error: new Error("gh is unavailable") };
+            }
+
+            throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+          },
+        });
+
+        process.argv = ["node", "git-ai", "issue", "draft"];
+        await run();
+      }
+    );
+
+    const createdDraft = listIssueDraftFiles().find((entry) => !beforeDrafts.includes(entry));
+    expect(createdDraft).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "issues", createdDraft as string));
+
+    const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
+    expect(createdRunDir).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string));
+
+    expect(runtimePrompt).toContain("use `superpowers:brainstorming` first");
+    expect(runtimePrompt).toContain("use `superpowers:writing-plans` discipline");
+    expect(runtimePrompt).toContain("do not create `docs/superpowers/specs/");
+    expect(runtimePrompt).toContain("do not create `docs/superpowers/plans/");
+  });
+
+  it("falls back to the standard Codex draft prompt when Superpowers is configured but unavailable", async () => {
+    const beforeDrafts = listIssueDraftFiles();
+    const beforeRuns = listRunDirectories();
+    let runtimePrompt = "";
+    createMockCodexHome();
+
+    await withRepositoryConfig(
+      JSON.stringify(
+        {
+          ai: {
+            issueDraft: {
+              useCodexSuperpowers: true,
+            },
+          },
+        },
+        null,
+        2
+      ),
+      async () => {
+        const { run } = await loadCli({
+          readlineAnswers: ["Add an optional Superpowers-backed Codex mode."],
+          spawnSyncImpl: (command, args) => {
+            if (command === "codex" && args[0] === "--version") {
+              return { status: 0 };
+            }
+
+            if (command === "codex") {
+              const { metadata } = readLatestRunMetadata();
+              runtimePrompt = readFileSync(
+                resolve(REPO_ROOT, metadata.promptFile as string),
+                "utf8"
+              );
+              writeFileSync(resolve(REPO_ROOT, metadata.draftFile as string), "# Draft\n", "utf8");
+              return { status: 0 };
+            }
+
+            if (command === "gh" && args[0] === "--version") {
+              return { status: 1, error: new Error("gh is unavailable") };
+            }
+
+            throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+          },
+        });
+
+        process.argv = ["node", "git-ai", "issue", "draft"];
+        const stdout = captureStdout();
+        const messages: string[] = [];
+        vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
+          messages.push(String(message ?? ""));
+        });
+        await run();
+        expect(messages.join("\n")).toContain(
+          "Codex Superpowers-backed issue drafting is enabled in .git-ai/config.json, but Superpowers is not available in the current Codex installation. Falling back to the standard issue-draft prompt."
+        );
+        expect(stdout.output()).toContain("# Draft");
+      }
+    );
+
+    const createdDraft = listIssueDraftFiles().find((entry) => !beforeDrafts.includes(entry));
+    expect(createdDraft).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "issues", createdDraft as string));
+
+    const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
+    expect(createdRunDir).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".git-ai", "runs", createdRunDir as string));
+
+    expect(runtimePrompt).not.toContain("use `superpowers:brainstorming` first");
+    expect(runtimePrompt).toContain("ask the user targeted clarifying questions");
+  });
+
   it("previews the generated issue draft and creates it without opening an editor by default", async () => {
     const beforeDrafts = listIssueDraftFiles();
     const beforeRuns = listRunDirectories();
     const issueTitle = "Merge PR description and review summary into one PR assistant action";
+    createMockCodexHome();
     const { run, execFileSync, spawnSync } = await loadCli({
       readlineAnswers: ["Unify PR assistant outputs.", "y"],
       execFileSyncImpl: (command, args) => {
@@ -4844,6 +5017,7 @@ describe("CLI integration", () => {
   it("opens the issue draft in an editor only when modify is selected", async () => {
     const beforeDrafts = listIssueDraftFiles();
     const beforeRuns = listRunDirectories();
+    createMockCodexHome();
     const initialTitle = "Merge PR description and review summary into one PR assistant action";
     const updatedTitle = "Unify the PR assistant draft creation flow";
     const { run, execFileSync, spawnSync } = await loadCli({
@@ -4930,6 +5104,7 @@ describe("CLI integration", () => {
   it("keeps the reviewed issue draft on disk when creation is declined", async () => {
     const beforeDrafts = listIssueDraftFiles();
     const beforeRuns = listRunDirectories();
+    createMockCodexHome();
     const issueTitle = "Merge PR description and review summary into one PR assistant action";
     const { run, execFileSync } = await loadCli({
       readlineAnswers: ["Unify PR assistant outputs.", "n"],
@@ -4997,6 +5172,7 @@ describe("CLI integration", () => {
   it("rejects empty modified issue drafts and lets the user cancel safely", async () => {
     const beforeDrafts = listIssueDraftFiles();
     const beforeRuns = listRunDirectories();
+    createMockCodexHome();
     const { run, execFileSync } = await loadCli({
       readlineAnswers: ["Unify PR assistant outputs.", "m", "n"],
       execFileSyncImpl: (command, args) => {
@@ -5068,6 +5244,7 @@ describe("CLI integration", () => {
     const beforeDrafts = listIssueDraftFiles();
     const beforeRuns = listRunDirectories();
     const issueTitle = "Merge PR description and review summary into one PR assistant action";
+    createMockCodexHome();
     const fetchMock = vi.fn().mockResolvedValueOnce(
       createFetchResponse({
         number: 109,
@@ -7508,6 +7685,7 @@ describe("CLI integration", () => {
   });
 
   it("skips draft issue creation with a clear message when forge.type is none", async () => {
+    createMockCodexHome();
     await withRepositoryConfig(
       JSON.stringify({ forge: { type: "none" } }, null, 2),
       async () => {

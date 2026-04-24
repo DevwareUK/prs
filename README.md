@@ -117,7 +117,7 @@ cd /path/to/your-repo
 git-ai setup
 ```
 
-`git-ai setup` detects the repository root, suggests repo-aware defaults for the base branch, verification command, forge, Codex-first runtime, and extra AI exclusions, then offers a fast "use the recommended setup" confirmation path. It writes `.git-ai/config.json`, ensures `.git-ai/` is gitignored, can optionally add a minimal `AGENTS.md` scaffold for repo-specific agent guidance, and for GitHub repositories can also install the recommended PR-focused workflows under `.github/workflows/git-ai-*.yml`. When setup cannot determine a value confidently, it prints an explicit warning before asking you to confirm or replace the suggestion.
+`git-ai setup` detects the repository root, suggests repo-aware defaults for the base branch, verification command, forge, Codex-first runtime, the Codex-only `ai.issueDraft.useCodexSuperpowers` flag, and extra AI exclusions, then offers a fast "use the recommended setup" confirmation path. It writes `.git-ai/config.json`, ensures `.git-ai/` is gitignored, can optionally add a minimal `AGENTS.md` scaffold for repo-specific agent guidance, and for GitHub repositories can also install the recommended PR-focused workflows under `.github/workflows/git-ai-*.yml`. When setup cannot determine a value confidently, it prints an explicit warning before asking you to confirm or replace the suggestion.
 
 The setup flow also makes the recommended launch path explicit: GitHub forge, OpenAI provider, and Codex runtime first. `bedrock-claude` and `claude-code` stay available as advanced customization paths after the default GitHub/OpenAI/Codex path is working.
 
@@ -212,6 +212,9 @@ Optional repository-specific defaults live in `.git-ai/config.json`. `git-ai set
 ```json
 {
   "ai": {
+    "issueDraft": {
+      "useCodexSuperpowers": false
+    },
     "runtime": {
       "type": "codex"
     },
@@ -242,6 +245,7 @@ Recommended first configuration: leave `ai.provider.type` unset so it defaults t
 Supported fields:
 
 - `ai.runtime.type`: interactive runtime used by `git-ai issue draft`, local `git-ai issue <number>`, `git-ai pr fix-comments <pr-number>`, and `git-ai pr fix-tests <pr-number>`. Supported values: `"codex"` and `"claude-code"`. Default: `"codex"`.
+- `ai.issueDraft.useCodexSuperpowers`: repository default for `git-ai issue draft` only. When `true`, `git-ai issue draft` adds Codex Superpowers-specific drafting instructions if the launched runtime is Codex and Superpowers is available in the current Codex installation. `git-ai setup` detects local Codex Superpowers availability and writes this flag automatically. Default: `false`.
 - `ai.provider.type`: structured text provider used by `git-ai commit`, `git-ai diff`, `git-ai review`, `git-ai issue plan <number> [--refresh]`, and commit/PR generation inside `git-ai issue <number>` and `git-ai issue finalize <number>`. Supported values: `"openai"` and `"bedrock-claude"`. Default: `"openai"`.
 - `ai.provider.model`: optional for `"openai"`, required for `"bedrock-claude"`.
 - `ai.provider.baseUrl`: optional override for `"openai"`.
@@ -254,8 +258,10 @@ Supported fields:
 Runtime and provider fallback behavior:
 
 - if no `ai.runtime` config is present, `git-ai` uses `codex`
+- if no `ai.issueDraft.useCodexSuperpowers` config is present, `git-ai issue draft` uses `false`
 - if no `ai.provider` config is present, `git-ai` uses `openai`
 - if a configured runtime is unavailable, `git-ai` falls back to `codex` when possible and prints a clear fallback message
+- if `ai.issueDraft.useCodexSuperpowers` is `true` but Superpowers is unavailable when `git-ai issue draft` runs, `git-ai` prints a clear fallback message and uses the standard draft prompt instead of failing
 - if a configured provider is unavailable, `git-ai` falls back to `openai` when possible and prints a clear fallback message
 - if neither the configured choice nor the default choice is usable, the command fails with an actionable error
 
@@ -308,7 +314,9 @@ Requirements:
 git-ai setup
 ```
 
-Runs a guided repository setup flow for the current Git repository. The command inspects the repo, suggests defaults for `baseBranch`, `forge.type`, `ai.runtime.type`, `buildCommand`, and extra `aiContext.excludePaths`, prints the detection source for each suggestion, warns when it had to fall back because signals were missing or conflicting, and first offers a one-confirmation "use the recommended setup" path before dropping into per-field prompts when you want to customize values. It writes `.git-ai/config.json`, preserves any existing `ai.provider` settings already present in that file, ensures `.git-ai/` is gitignored, and only touches `AGENTS.md` when you explicitly opt in to a minimal scaffold for non-obvious repository guidance.
+Runs a guided repository setup flow for the current Git repository. The command inspects the repo, suggests defaults for `baseBranch`, `forge.type`, `ai.runtime.type`, `ai.issueDraft.useCodexSuperpowers`, `buildCommand`, and extra `aiContext.excludePaths`, prints the detection source for each suggestion, warns when it had to fall back because signals were missing or conflicting, and first offers a one-confirmation "use the recommended setup" path before dropping into per-field prompts when you want to customize values. It writes `.git-ai/config.json`, preserves any existing `ai.provider` settings already present in that file, preserves an existing explicit `ai.issueDraft.useCodexSuperpowers` value on reruns, ensures `.git-ai/` is gitignored, and only touches `AGENTS.md` when you explicitly opt in to a minimal scaffold for non-obvious repository guidance.
+
+When Codex is available locally, setup also checks whether the Superpowers plugin is present under the active `CODEX_HOME` and reports whether Codex Superpowers-backed issue drafting was enabled or disabled. Setup does not install Codex plugins for you.
 
 When `forge.type` is `github`, setup can also install the recommended pull-request workflows into the target repository:
 
@@ -342,7 +350,7 @@ Available subcommands:
 | `git-ai issue <number>` | Full local issue-to-PR flow in interactive mode. Preflights the configured forge, verification command, and `baseBranch`, fetches the configured forge issue, fast-forwards the configured base branch to `origin/<base-branch>`, creates the issue branch, writes `.git-ai/` workspace files, opens the configured interactive runtime, runs the configured build command after that runtime exits, generates a proposed commit message from the completed diff for review, and then either creates the commit plus an AI-authored PR title/body or leaves the branch uncommitted. Creating the pull request pushes the reviewed issue branch first. Generated PR bodies use a concise change narrative plus the issue-closing reference, while the managed PR assistant section carries reviewer-operational detail. |
 | `git-ai issue <number> --mode unattended` | Full local issue-to-PR flow in unattended mode. Requires `ai.runtime.type` to be `codex`, reuses the same per-issue branch and session state as interactive runs, launches Codex non-interactively, commits with the generated commit message automatically, pushes the issue branch through the pull-request creation path, and then opens the pull request without prompting. |
 | `git-ai issue batch <number> <number> [...number]` | Sequential unattended issue queue. Defaults to `--mode unattended`, requires at least two unique issue numbers, runs each issue as its own independent unattended issue execution, stores batch progress separately under `.git-ai/batches/`, and stops immediately at the first incomplete issue so reruns can resume from there. Each completed issue uses the same unattended issue-to-PR path, including pushing the branch before opening the pull request. |
-| `git-ai issue draft` | Interactive issue drafting flow. Prompts for a rough idea, creates `.git-ai/` draft-run artifacts, launches the configured runtime so it can inspect the repository and ask targeted follow-up questions itself, expects the runtime to write the Markdown draft under `.git-ai/issues/`, previews the draft in the terminal, and lets you create it as-is, modify it in `$VISUAL`, `$EDITOR`, or `vim`, or keep it on disk without creating the issue. |
+| `git-ai issue draft` | Interactive issue drafting flow. Prompts for a rough idea, creates `.git-ai/` draft-run artifacts, launches the configured runtime so it can inspect the repository and ask targeted follow-up questions itself, expects the runtime to write the Markdown draft under `.git-ai/issues/`, previews the draft in the terminal, and lets you create it as-is, modify it in `$VISUAL`, `$EDITOR`, or `vim`, or keep it on disk without creating the issue. When `ai.issueDraft.useCodexSuperpowers` is `true`, the launched runtime is Codex, and local Codex Superpowers is available, the generated Codex prompt explicitly uses the Superpowers brainstorming/planning discipline while still stopping after the single requested draft file. |
 | `git-ai issue plan <number> [--refresh]` | Secondary issue-execution support. By default it generates a managed issue resolution plan comment once and safely reuses the latest edited managed comment on later runs. Pass `--refresh` to regenerate the managed comment when the issue context has changed. Generated plans include acceptance criteria, likely files, implementation steps, test plan, risks, and a done definition. |
 | `git-ai issue prepare <number>` | Preflights the configured forge, verification command, and `baseBranch`, fast-forwards the configured base branch to `origin/<base-branch>`, prepares the issue branch and `.git-ai/` workspace artifacts, and then prints machine-readable JSON describing the run. |
 | `git-ai issue prepare <number> --mode github-action` | Same preparation flow, but writes prompt instructions tailored for non-interactive GitHub Actions runs. |
@@ -358,6 +366,8 @@ Important behavior:
 - `git-ai issue batch ...` requires at least two unique issue numbers
 - `git-ai issue draft` previews the generated draft in the terminal and only opens `$VISUAL`, `$EDITOR`, or `vim` when you explicitly choose modify
 - `git-ai issue draft` requires an available interactive runtime CLI on `PATH`; if the configured non-default runtime is unavailable, `git-ai` falls back to `codex` when possible
+- `ai.issueDraft.useCodexSuperpowers` affects `git-ai issue draft` only and is ignored unless the launched draft runtime is Codex
+- if `ai.issueDraft.useCodexSuperpowers` is enabled but local Codex Superpowers is no longer available, `git-ai issue draft` prints a fallback notice and continues with the standard draft prompt
 - `git-ai issue plan <number> [--refresh]` requires issue access through the configured forge; creating or refreshing a managed plan comment also requires the configured provider plus GitHub authentication
 - `git-ai issue finalize <number>` requires local file changes plus a usable configured provider so it can draft the proposed commit message
 - local full issue runs require an available interactive runtime CLI on `PATH`

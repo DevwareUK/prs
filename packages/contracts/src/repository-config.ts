@@ -29,6 +29,14 @@ export const RepositoryAiRuntimeConfig = z.discriminatedUnion("type", [
 
 export type RepositoryAiRuntimeConfigType = z.infer<typeof RepositoryAiRuntimeConfig>;
 
+export const RepositoryAiIssueDraftConfig = z.object({
+  useCodexSuperpowers: z.boolean().optional(),
+});
+
+export type RepositoryAiIssueDraftConfigType = z.infer<
+  typeof RepositoryAiIssueDraftConfig
+>;
+
 export const RepositoryAiProviderType = z.enum(["openai", "bedrock-claude"]);
 
 export const RepositoryOpenAiProviderConfig = z.object({
@@ -66,6 +74,7 @@ export const RepositoryAiProviderConfig = z.discriminatedUnion("type", [
 export type RepositoryAiProviderConfigType = z.infer<typeof RepositoryAiProviderConfig>;
 
 export const RepositoryAiConfig = z.object({
+  issueDraft: RepositoryAiIssueDraftConfig.optional(),
   runtime: RepositoryAiRuntimeConfig.optional(),
   provider: RepositoryAiProviderConfig.optional(),
 });
@@ -88,6 +97,9 @@ export type RepositoryConfigType = z.infer<typeof RepositoryConfig>;
 
 export const ResolvedRepositoryConfig = z.object({
   ai: z.object({
+    issueDraft: z.object({
+      useCodexSuperpowers: z.boolean(),
+    }),
     runtime: RepositoryAiRuntimeConfig,
     provider: RepositoryAiProviderConfig,
   }),

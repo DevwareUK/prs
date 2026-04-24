@@ -20,7 +20,7 @@ import {
   getRepositoryConfigPath,
   loadRepositoryConfig,
 } from "./config";
-import { getInteractiveRuntimeByType } from "./runtime";
+import { getInteractiveRuntimeByType, isCodexSuperpowersAvailable } from "./runtime";
 
 const SETUP_USAGE = ["Usage:", "  git-ai setup"].join("\n");
 const AGENTS_SECTION_START = "<!-- git-ai:setup:start -->";
@@ -57,6 +57,8 @@ type RepositoryInspection = {
   suggestedBaseBranchSource: string;
   suggestedBuildCommand: string[];
   suggestedBuildCommandSource: string;
+  suggestedIssueDraftUseCodexSuperpowers: boolean;
+  suggestedIssueDraftUseCodexSuperpowersSource: string;
   suggestedForgeTypeSource: string;
   suggestedRuntimeType: RuntimeType;
   suggestedRuntimeTypeSource: string;
@@ -74,6 +76,7 @@ type SetupAnswers = {
   buildCommand: string[];
   excludePaths: string[];
   forgeType: ForgeType;
+  issueDraftUseCodexSuperpowers: boolean;
   runtimeType: RuntimeType;
   installGitHubWorkflows: boolean;
   updateAgents: boolean;
@@ -428,6 +431,31 @@ function detectRuntimeType(
         : "Codex is not available on PATH yet, so interactive git-ai workflows would fail until you install it.",
     ],
   };
+}
+
+function detectIssueDraftUseCodexSuperpowers(
+  existingConfig?: RepositoryConfigType
+): DetectionResult<boolean> {
+  const existingValue = existingConfig?.ai?.issueDraft?.useCodexSuperpowers;
+  if (typeof existingValue === "boolean") {
+    return {
+      value: existingValue,
+      source: "existing .git-ai/config.json",
+      warnings: [],
+    };
+  }
+
+  return isCodexSuperpowersAvailable()
+    ? {
+        value: true,
+        source: "Superpowers plugin detected in local Codex installation",
+        warnings: [],
+      }
+    : {
+        value: false,
+        source: "Superpowers plugin not detected in local Codex installation",
+        warnings: [],
+      };
 }
 
 function getGitAiWorkflowPath(repoRoot: string, fileName: string): string {
@@ -1210,6 +1238,7 @@ function inspectRepository(
   const buildCommand = detectBuildCommand(repoRoot, existingConfig, packageJson, composerJson);
   const baseBranch = detectBaseBranch(repoRoot, existingConfig);
   const forgeType = detectForgeType(repoRoot, existingConfig);
+  const issueDraftUseCodexSuperpowers = detectIssueDraftUseCodexSuperpowers(existingConfig);
   const runtimeType = detectRuntimeType(existingConfig);
   const actionableGitHubWorkflowIds = findActionableGitHubWorkflowIds(repoRoot);
   const missingGitHubWorkflowIds = findMissingGitHubWorkflowIds(repoRoot);
@@ -1242,6 +1271,8 @@ function inspectRepository(
     suggestedBaseBranchSource: baseBranch.source,
     suggestedBuildCommand: buildCommand.value,
     suggestedBuildCommandSource: buildCommand.source,
+    suggestedIssueDraftUseCodexSuperpowers: issueDraftUseCodexSuperpowers.value,
+    suggestedIssueDraftUseCodexSuperpowersSource: issueDraftUseCodexSuperpowers.source,
     suggestedForgeTypeSource: forgeType.source,
     suggestedRuntimeType: runtimeType.value,
     suggestedRuntimeTypeSource: runtimeType.source,
@@ -1462,6 +1493,9 @@ function buildRepositoryConfig(
 
   const aiConfig: NonNullable<RepositoryConfigType["ai"]> = {
     ...(existingConfig?.ai ?? {}),
+    issueDraft: {
+      useCodexSuperpowers: answers.issueDraftUseCodexSuperpowers,
+    },
     runtime: {
       type: answers.runtimeType,
     },
@@ -1551,6 +1585,11 @@ function logInspection(repoRoot: string, inspection: RepositoryInspection): void
     `Suggested interactive runtime: ${inspection.suggestedRuntimeType} (${inspection.suggestedRuntimeTypeSource})`
   );
   console.log(
+    `Suggested Codex Superpowers-backed issue drafting: ${
+      inspection.suggestedIssueDraftUseCodexSuperpowers ? "enabled" : "disabled"
+    } (${inspection.suggestedIssueDraftUseCodexSuperpowersSource})`
+  );
+  console.log(
     `Suggested extra AI context exclusions: ${renderList(inspection.suggestedExcludePaths)}`
   );
   if (
@@ -1578,6 +1617,7 @@ function buildRecommendedAnswers(inspection: RepositoryInspection): Omit<
     buildCommand: inspection.suggestedBuildCommand,
     excludePaths: inspection.suggestedExcludePaths,
     forgeType: inspection.suggestedForgeType,
+    issueDraftUseCodexSuperpowers: inspection.suggestedIssueDraftUseCodexSuperpowers,
     runtimeType: inspection.suggestedRuntimeType,
   };
 }
@@ -1614,6 +1654,7 @@ async function collectCustomSetupAnswers(
     buildCommand,
     excludePaths,
     forgeType,
+    issueDraftUseCodexSuperpowers: inspection.suggestedIssueDraftUseCodexSuperpowers,
     runtimeType,
   };
 }
@@ -1715,6 +1756,11 @@ export async function runSetupCommand(options: {
     `Configured verification command: ${formatCommandForDisplay(answers.buildCommand)}`
   );
   console.log(`Configured interactive runtime: ${answers.runtimeType}`);
+  console.log(
+    `Configured Codex Superpowers-backed issue drafting: ${
+      answers.issueDraftUseCodexSuperpowers ? "enabled" : "disabled"
+    }`
+  );
   console.log(`Configured forge integration: ${answers.forgeType}`);
   console.log(
     gitignoreUpdated ? "Added `.git-ai/` to .gitignore." : "`.git-ai/` was already gitignored."

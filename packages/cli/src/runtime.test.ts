@@ -1,13 +1,52 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { describe, expect, it, vi } from "vitest";
-import { getInteractiveRuntimeByType, selectInteractiveRuntime } from "./runtime";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  getInteractiveRuntimeByType,
+  isCodexSuperpowersAvailable,
+  selectInteractiveRuntime,
+} from "./runtime";
 
 vi.mock("node:child_process", () => ({
   spawnSync: vi.fn(),
 }));
+
+const cleanupTargets = new Set<string>();
+
+function createCodexHome(prefix: string): string {
+  const codexHome = mkdtempSync(resolve(tmpdir(), prefix));
+  cleanupTargets.add(codexHome);
+  return codexHome;
+}
+
+function writeSuperpowersPlugin(codexHome: string, version = "test-version"): void {
+  const pluginRoot = resolve(
+    codexHome,
+    "plugins",
+    "cache",
+    "openai-curated",
+    "superpowers",
+    version
+  );
+
+  mkdirSync(resolve(pluginRoot, "skills", "brainstorming"), { recursive: true });
+  mkdirSync(resolve(pluginRoot, "skills", "writing-plans"), { recursive: true });
+  writeFileSync(resolve(pluginRoot, "skills", "brainstorming", "SKILL.md"), "# test\n");
+  writeFileSync(resolve(pluginRoot, "skills", "writing-plans", "SKILL.md"), "# test\n");
+}
+
+afterEach(() => {
+  delete process.env.CODEX_HOME;
+
+  for (const target of cleanupTargets) {
+    rmSync(target, { recursive: true, force: true });
+  }
+  cleanupTargets.clear();
+
+  vi.restoreAllMocks();
+});
 
 describe("selectInteractiveRuntime", () => {
   it("selects Claude Code when it is configured and available", () => {
@@ -80,7 +119,7 @@ describe("selectInteractiveRuntime", () => {
     const runDir = resolve(repoRoot, ".git-ai", "runs", "20260415T000000000Z-issue-1");
     mkdirSync(runDir, { recursive: true });
 
-    vi.mocked(spawnSync).mockImplementation((command, args) => {
+    vi.mocked(spawnSync).mockImplementation((command) => {
       if (command === "codex") {
         return { status: 0 } as never;
       }
@@ -121,5 +160,38 @@ describe("selectInteractiveRuntime", () => {
     } finally {
       rmSync(repoRoot, { recursive: true, force: true });
     }
+  });
+});
+
+describe("isCodexSuperpowersAvailable", () => {
+  it("returns true when the cached Superpowers plugin exposes the required skills", () => {
+    const codexHome = createCodexHome("git-ai-runtime-codex-home-");
+    writeSuperpowersPlugin(codexHome);
+
+    expect(isCodexSuperpowersAvailable(codexHome)).toBe(true);
+  });
+
+  it("returns false when the Superpowers plugin is missing or incomplete", () => {
+    const codexHome = createCodexHome("git-ai-runtime-codex-home-");
+    mkdirSync(
+      resolve(codexHome, "plugins", "cache", "openai-curated", "superpowers", "partial"),
+      {
+        recursive: true,
+      }
+    );
+    writeFileSync(
+      resolve(
+        codexHome,
+        "plugins",
+        "cache",
+        "openai-curated",
+        "superpowers",
+        "partial",
+        "README.md"
+      ),
+      "# partial\n"
+    );
+
+    expect(isCodexSuperpowersAvailable(codexHome)).toBe(false);
   });
 });

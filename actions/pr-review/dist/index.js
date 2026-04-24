@@ -16109,6 +16109,7 @@ var require_dist = __commonJS({
       PRReviewSeverity: () => PRReviewSeverity,
       RepositoryAiConfig: () => RepositoryAiConfig,
       RepositoryAiContextConfig: () => RepositoryAiContextConfig,
+      RepositoryAiIssueDraftConfig: () => RepositoryAiIssueDraftConfig,
       RepositoryAiProviderConfig: () => RepositoryAiProviderConfig,
       RepositoryAiProviderType: () => RepositoryAiProviderType,
       RepositoryAiRuntimeConfig: () => RepositoryAiRuntimeConfig,
@@ -16369,6 +16370,9 @@ var require_dist = __commonJS({
         type: import_zod9.z.literal("claude-code")
       })
     ]);
+    var RepositoryAiIssueDraftConfig = import_zod9.z.object({
+      useCodexSuperpowers: import_zod9.z.boolean().optional()
+    });
     var RepositoryAiProviderType = import_zod9.z.enum(["openai", "bedrock-claude"]);
     var RepositoryOpenAiProviderConfig = import_zod9.z.object({
       type: import_zod9.z.literal("openai"),
@@ -16385,6 +16389,7 @@ var require_dist = __commonJS({
       RepositoryBedrockClaudeProviderConfig
     ]);
     var RepositoryAiConfig = import_zod9.z.object({
+      issueDraft: RepositoryAiIssueDraftConfig.optional(),
       runtime: RepositoryAiRuntimeConfig.optional(),
       provider: RepositoryAiProviderConfig.optional()
     });
@@ -16398,6 +16403,9 @@ var require_dist = __commonJS({
     });
     var ResolvedRepositoryConfig = import_zod9.z.object({
       ai: import_zod9.z.object({
+        issueDraft: import_zod9.z.object({
+          useCodexSuperpowers: import_zod9.z.boolean()
+        }),
         runtime: RepositoryAiRuntimeConfig,
         provider: RepositoryAiProviderConfig
       }),
@@ -16536,6 +16544,7 @@ var require_dist2 = __commonJS({
     var index_exports = {};
     __export2(index_exports, {
       DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS: () => DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS,
+      DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS: () => DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
       DEFAULT_REPOSITORY_AI_PROVIDER_TYPE: () => DEFAULT_REPOSITORY_AI_PROVIDER_TYPE,
       DEFAULT_REPOSITORY_AI_RUNTIME_TYPE: () => DEFAULT_REPOSITORY_AI_RUNTIME_TYPE,
       DEFAULT_REPOSITORY_BASE_BRANCH: () => DEFAULT_REPOSITORY_BASE_BRANCH,
@@ -16870,6 +16879,7 @@ ${formatValidationIssues(validationIssues)}`,
     var DEFAULT_REPOSITORY_FORGE_TYPE = "github";
     var DEFAULT_REPOSITORY_AI_RUNTIME_TYPE = "codex";
     var DEFAULT_REPOSITORY_AI_PROVIDER_TYPE = "openai";
+    var DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS = false;
     var DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS = [
       "**/node_modules/**",
       "**/vendor/**",
@@ -16884,6 +16894,9 @@ ${formatValidationIssues(validationIssues)}`,
       const parsedConfig = import_contracts3.RepositoryConfig.parse(config ?? {});
       return import_contracts3.ResolvedRepositoryConfig.parse({
         ai: {
+          issueDraft: {
+            useCodexSuperpowers: parsedConfig.ai?.issueDraft?.useCodexSuperpowers ?? DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS
+          },
           runtime: parsedConfig.ai?.runtime ?? {
             type: DEFAULT_REPOSITORY_AI_RUNTIME_TYPE
           },
