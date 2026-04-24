@@ -157,6 +157,31 @@ function getCodexHome(): string {
   return process.env.CODEX_HOME?.trim() || resolve(homedir(), ".codex");
 }
 
+export function isCodexSuperpowersAvailable(codexHome = getCodexHome()): boolean {
+  const pluginCacheRoot = resolve(
+    codexHome,
+    "plugins",
+    "cache",
+    "openai-curated",
+    "superpowers"
+  );
+
+  if (!existsSync(pluginCacheRoot)) {
+    return false;
+  }
+
+  try {
+    return readdirSync(pluginCacheRoot, { withFileTypes: true }).some(
+      (entry) =>
+        entry.isDirectory() &&
+        existsSync(resolve(pluginCacheRoot, entry.name, "skills", "brainstorming", "SKILL.md")) &&
+        existsSync(resolve(pluginCacheRoot, entry.name, "skills", "writing-plans", "SKILL.md"))
+    );
+  } catch {
+    return false;
+  }
+}
+
 function listFilesRecursively(rootDir: string): string[] {
   if (!existsSync(rootDir)) {
     return [];

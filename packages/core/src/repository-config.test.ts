@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS,
+  DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
   DEFAULT_REPOSITORY_AI_PROVIDER_TYPE,
   DEFAULT_REPOSITORY_AI_RUNTIME_TYPE,
   resolveRepositoryConfig,
@@ -17,6 +18,9 @@ describe("resolveRepositoryConfig", () => {
 
     expect(resolved.baseBranch).toBe("develop");
     expect(resolved.ai).toEqual({
+      issueDraft: {
+        useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
+      },
       runtime: { type: DEFAULT_REPOSITORY_AI_RUNTIME_TYPE },
       provider: { type: DEFAULT_REPOSITORY_AI_PROVIDER_TYPE },
     });
@@ -41,6 +45,9 @@ describe("resolveRepositoryConfig", () => {
     });
 
     expect(resolved.ai).toEqual({
+      issueDraft: {
+        useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
+      },
       runtime: {
         type: "claude-code",
       },
@@ -62,6 +69,9 @@ describe("resolveRepositoryConfig", () => {
         },
       }).ai
     ).toEqual({
+      issueDraft: {
+        useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
+      },
       runtime: {
         type: "claude-code",
       },
@@ -81,6 +91,9 @@ describe("resolveRepositoryConfig", () => {
         },
       }).ai
     ).toEqual({
+      issueDraft: {
+        useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
+      },
       runtime: {
         type: DEFAULT_REPOSITORY_AI_RUNTIME_TYPE,
       },
@@ -89,6 +102,24 @@ describe("resolveRepositoryConfig", () => {
         model: "gpt-5-mini",
         baseUrl: "https://example.test/v1",
       },
+    });
+  });
+
+  it("defaults and preserves ai.issueDraft.useCodexSuperpowers", () => {
+    expect(resolveRepositoryConfig().ai.issueDraft).toEqual({
+      useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
+    });
+
+    expect(
+      resolveRepositoryConfig({
+        ai: {
+          issueDraft: {
+            useCodexSuperpowers: true,
+          },
+        },
+      }).ai.issueDraft
+    ).toEqual({
+      useCodexSuperpowers: true,
     });
   });
 });
