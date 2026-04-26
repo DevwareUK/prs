@@ -25,6 +25,42 @@ const REPO_ROOT = resolve(__dirname, "../../..");
 const ORIGINAL_ARGV = [...process.argv];
 const cleanupTargets = new Set<string>();
 
+function getRepositoryIssueUrl(issueNumber: number): string {
+  const gitEntryPath = resolve(REPO_ROOT, ".git");
+  let gitConfigPath = resolve(gitEntryPath, "config");
+
+  try {
+    const gitEntryContents = readFileSync(gitEntryPath, "utf8").trim();
+    const gitDirMatch = gitEntryContents.match(/^gitdir:\s*(.+)$/i);
+    if (gitDirMatch?.[1]) {
+      const gitDirPath = resolve(REPO_ROOT, gitDirMatch[1].trim());
+      const commonDirPath = resolve(
+        gitDirPath,
+        readFileSync(resolve(gitDirPath, "commondir"), "utf8").trim()
+      );
+
+      gitConfigPath = existsSync(resolve(commonDirPath, "config"))
+        ? resolve(commonDirPath, "config")
+        : resolve(gitDirPath, "config");
+    }
+  } catch {
+    // `.git` is usually a directory; fall back to `.git/config`.
+  }
+
+  const gitConfig = readFileSync(gitConfigPath, "utf8");
+  const remoteSectionMatch = gitConfig.match(
+    /\[remote\s+"origin"\][\s\S]*?url\s*=\s*(.+?)(?:\r?\n|$)/
+  );
+  const remoteUrl = remoteSectionMatch?.[1]?.trim();
+  const repositorySlug = remoteUrl?.match(/github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/)?.[1];
+
+  if (!repositorySlug) {
+    throw new Error("Expected a GitHub origin remote for CLI integration fixtures.");
+  }
+
+  return `https://github.com/${repositorySlug}/issues/${issueNumber}`;
+}
+
 function buildManagedTestSuggestionBlock(options: {
   title: string;
   priority: "High" | "Medium" | "Low";
@@ -2312,7 +2348,7 @@ describe("CLI integration", () => {
         createFetchResponse({
           title: "Improve release automation",
           body: "Current issue body with a short summary.",
-          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
+          html_url: getRepositoryIssueUrl(issueNumber),
         })
       )
       .mockResolvedValueOnce(
@@ -2477,7 +2513,7 @@ describe("CLI integration", () => {
         createFetchResponse({
           title: "Resume issue refine session",
           body: "<!-- prs:managed-issue -->\n\nOriginal managed issue body.",
-          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
+          html_url: getRepositoryIssueUrl(issueNumber),
         })
       )
       .mockResolvedValueOnce(createFetchResponse([]));
@@ -2592,7 +2628,7 @@ describe("CLI integration", () => {
         createFetchResponse({
           title: "Refresh stale refine session",
           body: "<!-- prs:managed-issue -->\n\nOriginal managed issue body.",
-          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
+          html_url: getRepositoryIssueUrl(issueNumber),
         })
       )
       .mockResolvedValueOnce(createFetchResponse([]));
@@ -2718,7 +2754,7 @@ describe("CLI integration", () => {
         createFetchResponse({
           title: "Switch refine runtime",
           body: "<!-- prs:managed-issue -->\n\nOriginal managed issue body.",
-          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
+          html_url: getRepositoryIssueUrl(issueNumber),
         })
       )
       .mockResolvedValueOnce(createFetchResponse([]));
@@ -2835,7 +2871,7 @@ describe("CLI integration", () => {
         return createFetchResponse({
           number: issueNumber,
           title: "Managed refine title",
-          html_url: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
+          html_url: getRepositoryIssueUrl(issueNumber),
         });
       }
 
@@ -2843,7 +2879,7 @@ describe("CLI integration", () => {
         return createFetchResponse({
           title: "Managed refine title",
           body: "<!-- prs:managed-issue -->\n\n## Summary\nOriginal managed issue body.",
-          html_url: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
+          html_url: getRepositoryIssueUrl(issueNumber),
         });
       }
 
@@ -2916,7 +2952,7 @@ describe("CLI integration", () => {
     ).toMatchObject({
       completionMode: "updated-existing",
       completedIssueNumber: issueNumber,
-      completedIssueUrl: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
+      completedIssueUrl: getRepositoryIssueUrl(issueNumber),
     });
   });
 
@@ -2937,7 +2973,7 @@ describe("CLI integration", () => {
           title: "Customer report about marker text",
           body:
             "The docs literally mention <!-- prs:managed-issue --> in one example, but this source issue is not PRS-managed.",
-          html_url: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
+          html_url: getRepositoryIssueUrl(issueNumber),
         });
       }
 
@@ -2949,7 +2985,7 @@ describe("CLI integration", () => {
         return createFetchResponse({
           number: createdIssueNumber,
           title: "Customer report about marker text refined",
-          html_url: `https://github.com/DevwareUK/git-ai/issues/${createdIssueNumber}`,
+          html_url: getRepositoryIssueUrl(createdIssueNumber),
         });
       }
 
@@ -3032,7 +3068,7 @@ describe("CLI integration", () => {
         return createFetchResponse({
           title: "Customer request",
           body: "Plain issue body from GitHub.",
-          html_url: `https://github.com/DevwareUK/git-ai/issues/${issueNumber}`,
+          html_url: getRepositoryIssueUrl(issueNumber),
         });
       }
 
@@ -3048,7 +3084,7 @@ describe("CLI integration", () => {
         return createFetchResponse({
           number: createdIssueNumber,
           title: "Customer request refined",
-          html_url: `https://github.com/DevwareUK/git-ai/issues/${createdIssueNumber}`,
+          html_url: getRepositoryIssueUrl(createdIssueNumber),
         });
       }
 
@@ -3130,7 +3166,7 @@ describe("CLI integration", () => {
     ).toMatchObject({
       completionMode: "created-linked",
       completedIssueNumber: createdIssueNumber,
-      completedIssueUrl: `https://github.com/DevwareUK/git-ai/issues/${createdIssueNumber}`,
+      completedIssueUrl: getRepositoryIssueUrl(createdIssueNumber),
     });
   });
 
