@@ -8825,6 +8825,7 @@ describe("CLI integration", () => {
     });
 
     process.argv = ["node", "prs", "issue", "prepare", String(issueNumber)];
+    process.env.OPENAI_API_KEY = "test-key";
     process.env.GITHUB_TOKEN = "test-token";
 
     const stdout = captureStdout();
@@ -10034,6 +10035,7 @@ describe("CLI integration", () => {
       );
     vi.stubGlobal("fetch", fetchMock);
     process.env.OPENAI_API_KEY = "test-key";
+    process.env.GITHUB_TOKEN = "test-token";
 
     const { run, spawnSync } = await loadCli({
       execFileSyncImpl: (command, args) => {
@@ -10199,6 +10201,7 @@ describe("CLI integration", () => {
       );
     vi.stubGlobal("fetch", fetchMock);
     process.env.OPENAI_API_KEY = "test-key";
+    process.env.GITHUB_TOKEN = "test-token";
 
     const { run, generatePRDescription, StructuredGenerationError, spawnSync } =
       await loadCli({
@@ -10438,6 +10441,7 @@ describe("CLI integration", () => {
       );
     vi.stubGlobal("fetch", fetchMock);
     process.env.OPENAI_API_KEY = "test-key";
+    process.env.GITHUB_TOKEN = "test-token";
 
     try {
       const { run, spawnSync } = await loadCli({
