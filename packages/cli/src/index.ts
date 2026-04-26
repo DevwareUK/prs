@@ -247,7 +247,34 @@ type GeneratedIssuePullRequest = {
   bodyFilePath?: string;
 };
 
+type IssuePullRequestOutcome =
+  | {
+      status: "created";
+      title: string;
+      url?: string;
+    }
+  | {
+      status: "manual";
+      titleFilePath: string;
+      bodyFilePath: string;
+    }
+  | {
+      status: "skipped";
+      reason: "commit-declined" | "no-changes" | "forge-disabled";
+    };
+
+type IssueRunOutcomeSummary = {
+  issueNumber: number;
+  branchName: string;
+  baseBranch: string;
+  runDir: string;
+  committed: boolean;
+  pullRequest: IssuePullRequestOutcome;
+};
+
 const PRS_MANAGED_ISSUE_MARKER = "<!-- prs:managed-issue -->";
+const ISSUE_RUN_NO_CHANGES_MESSAGE =
+  "The interactive runtime completed without producing any file changes to commit.";
 
 type IssueBatchStatus = "pending" | "running" | "completed" | "failed";
 
@@ -514,7 +541,7 @@ function readHeadDiff(): string {
 function readIssueWorkflowDiff(repoRoot: string): string {
   return readGitDiff(
     ["diff", "HEAD"],
-    "The interactive runtime completed without producing any file changes to commit.",
+    ISSUE_RUN_NO_CHANGES_MESSAGE,
     "HEAD",
     "git diff HEAD requires at least one commit. Create an initial commit before finalizing issue work.",
     {
@@ -2340,6 +2367,23 @@ function updateIssueWorkspaceMetadata(
   );
 }
 
+function recordIssueRunOutcome(
+  workspace: IssueWorkspace,
+  outcome: IssueRunOutcomeSummary
+): void {
+  updateIssueWorkspaceMetadata(workspace, (currentMetadata) => ({
+    ...currentMetadata,
+    outcome: {
+      issueNumber: outcome.issueNumber,
+      branchName: outcome.branchName,
+      baseBranch: outcome.baseBranch,
+      runDir: outcome.runDir,
+      committed: outcome.committed,
+      pullRequest: outcome.pullRequest,
+    },
+  }));
+}
+
 function createIssueSessionState(
   repoRoot: string,
   context: IssueRunContext,
@@ -2629,6 +2673,33 @@ function printManualPrInstructions(
   );
   console.log(`Generated PR title: ${titleFile}`);
   console.log(`Generated PR body: ${bodyFile}`);
+}
+
+function printIssueRunOutcomeSummary(outcome: IssueRunOutcomeSummary): void {
+  console.log("");
+  console.log(`Issue #${outcome.issueNumber} run summary:`);
+  console.log(`  Branch: ${outcome.branchName}`);
+  console.log(`  Base branch: ${outcome.baseBranch}`);
+  console.log(`  Run artifacts: ${outcome.runDir}`);
+  console.log(`  Commit created: ${outcome.committed ? "yes" : "no"}`);
+
+  if (outcome.pullRequest.status === "created") {
+    console.log(
+      outcome.pullRequest.url
+        ? `  Pull request: ${outcome.pullRequest.url}`
+        : "  Pull request: created"
+    );
+    return;
+  }
+
+  if (outcome.pullRequest.status === "manual") {
+    console.log("  Pull request: manual creation required");
+    console.log(`  PR title file: ${outcome.pullRequest.titleFilePath}`);
+    console.log(`  PR body file: ${outcome.pullRequest.bodyFilePath}`);
+    return;
+  }
+
+  console.log(`  Pull request: skipped (${outcome.pullRequest.reason})`);
 }
 
 function formatCommitMessage(title: string, body?: string): string {
@@ -4272,7 +4343,7 @@ async function finalizeIssueRun(
     hasChanges,
     commitGeneratedChanges,
     resolveInitialCommitMessage: async () => proposal.initialMessage,
-    noChangesMessage: "The interactive runtime completed without producing any file changes to commit.",
+    noChangesMessage: ISSUE_RUN_NO_CHANGES_MESSAGE,
   });
   if (!finalized.committed) {
     return {
@@ -4402,6 +4473,20 @@ async function runUnattendedIssueCommand(
       url: createdPullRequest.url,
     },
   }));
+  const outcome: IssueRunOutcomeSummary = {
+    issueNumber: context.issueNumber,
+    branchName: context.branchName,
+    baseBranch: repositoryConfig.baseBranch,
+    runDir,
+    committed: true,
+    pullRequest: {
+      status: "created",
+      title: pullRequest.title,
+      url: createdPullRequest.url,
+    },
+  };
+  recordIssueRunOutcome(context.workspace, outcome);
+  printIssueRunOutcomeSummary(outcome);
 
   return {
     branchName: context.branchName,
@@ -4656,7 +4741,10 @@ async function runIssueCommand(): Promise<void> {
   });
   const forge = getRepositoryForge(repoRoot);
   const runtime = getInteractiveRuntimeByType(selectedRuntime.type);
+  const relativeRunDir = toRepoRelativePath(repoRoot, context.workspace.runDir);
 
+  console.log(`Prepared issue branch ${context.branchName}.`);
+  console.log(`Issue run artifacts: ${relativeRunDir}`);
   console.log(
     context.runtime.invocation === "resume"
       ? `Resuming the saved interactive ${runtime.displayName} session in this terminal...`
@@ -4669,6 +4757,7 @@ async function runIssueCommand(): Promise<void> {
   const runtimeLaunch = runtime.launch(repoRoot, context.workspace, {
     resumeSessionId: context.runtime.sessionId,
   });
+  console.log(`${runtime.displayName} exited; handing control back to prs.`);
   persistIssueSessionState(repoRoot, context, runtimeLaunch.sessionId);
   updateIssueWorkspaceMetadata(context.workspace, (currentMetadata) => ({
     ...currentMetadata,
@@ -4688,14 +4777,50 @@ async function runIssueCommand(): Promise<void> {
   verifyBuild(repoRoot, repositoryConfig.buildCommand, context.workspace.outputLogPath);
 
   const { provider, providerType } = await createProvider(repoRoot);
-  const finalized = await finalizeIssueRun(
-    repoRoot,
-    context.issueNumber,
-    provider,
-    context.workspace.runDir
-  );
+  let finalized: FinalizeIssueRunResult;
+  try {
+    finalized = await finalizeIssueRun(
+      repoRoot,
+      context.issueNumber,
+      provider,
+      context.workspace.runDir
+    );
+  } catch (error: unknown) {
+    if (!(error instanceof Error) || error.message !== ISSUE_RUN_NO_CHANGES_MESSAGE) {
+      throw error;
+    }
+
+    const outcome: IssueRunOutcomeSummary = {
+      issueNumber: context.issueNumber,
+      branchName: context.branchName,
+      baseBranch: repositoryConfig.baseBranch,
+      runDir: relativeRunDir,
+      committed: false,
+      pullRequest: {
+        status: "skipped",
+        reason: "no-changes",
+      },
+    };
+    recordIssueRunOutcome(context.workspace, outcome);
+    console.log(ISSUE_RUN_NO_CHANGES_MESSAGE);
+    printIssueRunOutcomeSummary(outcome);
+    return;
+  }
   if (!finalized.committed) {
+    const outcome: IssueRunOutcomeSummary = {
+      issueNumber: context.issueNumber,
+      branchName: context.branchName,
+      baseBranch: repositoryConfig.baseBranch,
+      runDir: relativeRunDir,
+      committed: false,
+      pullRequest: {
+        status: "skipped",
+        reason: "commit-declined",
+      },
+    };
+    recordIssueRunOutcome(context.workspace, outcome);
     console.log("Skipping pull request creation because no commit was created.");
+    printIssueRunOutcomeSummary(outcome);
     return;
   }
 
@@ -4730,20 +4855,65 @@ async function runIssueCommand(): Promise<void> {
         url: createdPullRequest.url,
       },
     }));
+    const outcome: IssueRunOutcomeSummary = {
+      issueNumber: context.issueNumber,
+      branchName: context.branchName,
+      baseBranch: repositoryConfig.baseBranch,
+      runDir: relativeRunDir,
+      committed: true,
+      pullRequest: {
+        status: "created",
+        title: pullRequest.title,
+        url: createdPullRequest.url,
+      },
+    };
+    recordIssueRunOutcome(context.workspace, outcome);
+    printIssueRunOutcomeSummary(outcome);
     return;
   }
 
   if (forge.type === "github") {
+    const titleFilePath =
+      pullRequest.titleFilePath ?? resolve(context.workspace.runDir, "pull-request-title.txt");
+    const bodyFilePath =
+      pullRequest.bodyFilePath ?? resolve(context.workspace.runDir, "pull-request-body.md");
     printManualPrInstructions(
       repoRoot,
       context.branchName,
       repositoryConfig.baseBranch,
-      pullRequest.titleFilePath ?? resolve(context.workspace.runDir, "pull-request-title.txt"),
-      pullRequest.bodyFilePath ?? resolve(context.workspace.runDir, "pull-request-body.md")
+      titleFilePath,
+      bodyFilePath
     );
+    const outcome: IssueRunOutcomeSummary = {
+      issueNumber: context.issueNumber,
+      branchName: context.branchName,
+      baseBranch: repositoryConfig.baseBranch,
+      runDir: relativeRunDir,
+      committed: true,
+      pullRequest: {
+        status: "manual",
+        titleFilePath: toRepoRelativePath(repoRoot, titleFilePath),
+        bodyFilePath: toRepoRelativePath(repoRoot, bodyFilePath),
+      },
+    };
+    recordIssueRunOutcome(context.workspace, outcome);
+    printIssueRunOutcomeSummary(outcome);
     return;
   }
 
+  const outcome: IssueRunOutcomeSummary = {
+    issueNumber: context.issueNumber,
+    branchName: context.branchName,
+    baseBranch: repositoryConfig.baseBranch,
+    runDir: relativeRunDir,
+    committed: true,
+    pullRequest: {
+      status: "skipped",
+      reason: "forge-disabled",
+    },
+  };
+  recordIssueRunOutcome(context.workspace, outcome);
+  printIssueRunOutcomeSummary(outcome);
   console.log(
     "Pull request creation skipped because repository forge support is disabled by .prs/config.json."
   );

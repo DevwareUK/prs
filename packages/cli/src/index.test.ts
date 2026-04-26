@@ -10001,7 +10001,10 @@ describe("CLI integration", () => {
   });
 
   it("continues with build and commit flow when Codex exits a full issue run", async () => {
+    const beforeRuns = listRunDirectories();
     const issueNumber = 145;
+    const branchName =
+      "feat/issue-145-resume-issue-automation-after-the-codex-session";
     const sessionStateDir = resolve(REPO_ROOT, ".prs", "issues", String(issueNumber));
     const issueWorkspaceDir = resolve(
       REPO_ROOT,
@@ -10036,6 +10039,10 @@ describe("CLI integration", () => {
     vi.stubGlobal("fetch", fetchMock);
     process.env.OPENAI_API_KEY = "test-key";
     process.env.GITHUB_TOKEN = "test-token";
+    const messages: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
+      messages.push(message === undefined ? "" : String(message));
+    });
 
     const { run, spawnSync } = await loadCli({
       execFileSyncImpl: (command, args) => {
@@ -10132,7 +10139,11 @@ describe("CLI integration", () => {
         }
 
         if (command === "gh" && args[0] === "pr" && args[1] === "create") {
-          return { status: 0, stdout: "", stderr: "" };
+          return {
+            status: 0,
+            stdout: "https://github.com/DevwareUK/prs/pull/1450\n",
+            stderr: "",
+          };
         }
 
         throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
@@ -10163,6 +10174,503 @@ describe("CLI integration", () => {
       expect.any(Object)
     );
     expect(fetchMock).toHaveBeenCalledTimes(3);
+    const createdRunDir = listRunDirectories().find(
+      (entry) => !beforeRuns.includes(entry) && /-issue-145$/.test(entry)
+    );
+    expect(createdRunDir).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
+
+    const output = messages.join("\n");
+    expect(output).toContain(`Prepared issue branch ${branchName}.`);
+    expect(output).toContain("Codex exited; handing control back to prs.");
+    expect(output).toContain("Issue #145 run summary:");
+    expect(output).toContain("Pull request: https://github.com/DevwareUK/prs/pull/1450");
+
+    const metadata = JSON.parse(
+      readFileSync(
+        resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string, "metadata.json"),
+        "utf8"
+      )
+    ) as Record<string, unknown>;
+    expect(metadata.outcome).toMatchObject({
+      issueNumber: 145,
+      branchName,
+      baseBranch: "main",
+      committed: true,
+      pullRequest: {
+        status: "created",
+        url: "https://github.com/DevwareUK/prs/pull/1450",
+      },
+    });
+  });
+
+  it("summarizes skipped pull request creation when the issue commit is declined", async () => {
+    const beforeRuns = listRunDirectories();
+    const issueNumber = 1510;
+    const branchName = "feat/issue-1510-decline-generated-issue-commit";
+    const sessionStateDir = resolve(REPO_ROOT, ".prs", "issues", String(issueNumber));
+    const issueWorkspaceDir = resolve(
+      REPO_ROOT,
+      ".prs",
+      "issues",
+      "1510-decline-generated-issue-commit"
+    );
+    rmSync(sessionStateDir, { recursive: true, force: true });
+    rmSync(issueWorkspaceDir, { recursive: true, force: true });
+    cleanupTargets.add(sessionStateDir);
+    cleanupTargets.add(issueWorkspaceDir);
+    let gitStatusCallCount = 0;
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          title: "Decline generated issue commit",
+          body: "The workflow should explain that PR creation is skipped after commit decline.",
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
+        })
+      )
+      .mockResolvedValueOnce(createFetchResponse([]))
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          id: 1510,
+          body: "<!-- prs:issue-plan -->\nGenerated plan.",
+          html_url:
+            `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-1510`,
+          updated_at: "2026-04-26T12:05:00Z",
+        })
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.OPENAI_API_KEY = "test-key";
+    process.env.GITHUB_TOKEN = "test-token";
+    const messages: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
+      messages.push(message === undefined ? "" : String(message));
+    });
+
+    const { run, spawnSync } = await loadCli({
+      readlineAnswers: ["n"],
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          gitStatusCallCount += 1;
+          return gitStatusCallCount === 1 ? "" : " M packages/cli/src/index.ts\n";
+        }
+
+        if (command === "git" && args[0] === "diff" && args[1] === "--name-only") {
+          return "packages/cli/src/index.ts\n";
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "diff" &&
+          args[1] === "HEAD" &&
+          args[2] === "--" &&
+          args[3] === "packages/cli/src/index.ts"
+        ) {
+          return [
+            "diff --git a/packages/cli/src/index.ts b/packages/cli/src/index.ts",
+            "--- a/packages/cli/src/index.ts",
+            "+++ b/packages/cli/src/index.ts",
+            "@@ -1,1 +1,1 @@",
+            '-const state = "before";',
+            '+const state = "after";',
+          ].join("\n");
+        }
+
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/prs.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "gh" && args[0] === "auth" && args[1] === "status") {
+          return { status: 0 };
+        }
+
+        if (command === "gh" && args[0] === "issue" && args[1] === "view") {
+          return {
+            status: 1,
+            error: new Error("force API fallback"),
+          };
+        }
+
+        if (command === "git" && args[0] === "rev-parse") {
+          return { status: 1 };
+        }
+
+        if (command === "git" && args[0] === "checkout" && args[1] === "main") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "pull") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "checkout" && args[1] === "-b") {
+          return { status: 0 };
+        }
+
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "codex") {
+          return { status: 0 };
+        }
+
+        if (command === "pnpm" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "pnpm" && args[0] === "build") {
+          return { status: 0, stdout: "built\n", stderr: "" };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.argv = ["node", "prs", "issue", String(issueNumber)];
+    await run();
+
+    const output = messages.join("\n");
+    expect(output).toContain("Skipping pull request creation because no commit was created.");
+    expect(output).toContain("Pull request: skipped (commit-declined)");
+    expect(spawnSync).not.toHaveBeenCalledWith(
+      "git",
+      expect.arrayContaining(["push"]),
+      expect.any(Object)
+    );
+    const createdRunDir = listRunDirectories().find(
+      (entry) => !beforeRuns.includes(entry) && /-issue-1510$/.test(entry)
+    );
+    expect(createdRunDir).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
+    const metadata = JSON.parse(
+      readFileSync(
+        resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string, "metadata.json"),
+        "utf8"
+      )
+    ) as Record<string, unknown>;
+    expect(metadata.outcome).toMatchObject({
+      issueNumber,
+      branchName,
+      committed: false,
+      pullRequest: {
+        status: "skipped",
+        reason: "commit-declined",
+      },
+    });
+  });
+
+  it("summarizes skipped pull request creation when the issue run produces no changes", async () => {
+    const beforeRuns = listRunDirectories();
+    const issueNumber = 1512;
+    const branchName = "feat/issue-1512-no-generated-issue-changes";
+    const sessionStateDir = resolve(REPO_ROOT, ".prs", "issues", String(issueNumber));
+    const issueWorkspaceDir = resolve(
+      REPO_ROOT,
+      ".prs",
+      "issues",
+      "1512-no-generated-issue-changes"
+    );
+    rmSync(sessionStateDir, { recursive: true, force: true });
+    rmSync(issueWorkspaceDir, { recursive: true, force: true });
+    cleanupTargets.add(sessionStateDir);
+    cleanupTargets.add(issueWorkspaceDir);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          title: "No generated issue changes",
+          body: "The workflow should explain when the runtime leaves nothing to commit.",
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
+        })
+      )
+      .mockResolvedValueOnce(createFetchResponse([]))
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          id: 1512,
+          body: "<!-- prs:issue-plan -->\nGenerated plan.",
+          html_url:
+            `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-1512`,
+          updated_at: "2026-04-26T12:15:00Z",
+        })
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.OPENAI_API_KEY = "test-key";
+    process.env.GITHUB_TOKEN = "test-token";
+    const messages: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
+      messages.push(message === undefined ? "" : String(message));
+    });
+
+    const { run, generateCommitMessage, spawnSync } = await loadCli({
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          return "";
+        }
+
+        if (command === "git" && args[0] === "diff") {
+          return "";
+        }
+
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/prs.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "gh" && args[0] === "auth" && args[1] === "status") {
+          return { status: 0 };
+        }
+
+        if (command === "gh" && args[0] === "issue" && args[1] === "view") {
+          return {
+            status: 1,
+            error: new Error("force API fallback"),
+          };
+        }
+
+        if (command === "git" && args[0] === "rev-parse") {
+          return { status: 1 };
+        }
+
+        if (command === "git" && args[0] === "checkout" && args[1] === "main") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "pull") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "checkout" && args[1] === "-b") {
+          return { status: 0 };
+        }
+
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "codex") {
+          return { status: 0 };
+        }
+
+        if (command === "pnpm" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "pnpm" && args[0] === "build") {
+          return { status: 0, stdout: "built\n", stderr: "" };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.argv = ["node", "prs", "issue", String(issueNumber)];
+    await run();
+
+    const output = messages.join("\n");
+    expect(output).toContain(`Prepared issue branch ${branchName}.`);
+    expect(output).toContain("The interactive runtime completed without producing any file changes to commit.");
+    expect(output).toContain("Pull request: skipped (no-changes)");
+    expect(generateCommitMessage).not.toHaveBeenCalled();
+    expect(spawnSync).not.toHaveBeenCalledWith(
+      "git",
+      expect.arrayContaining(["commit"]),
+      expect.any(Object)
+    );
+    const createdRunDir = listRunDirectories().find(
+      (entry) => !beforeRuns.includes(entry) && /-issue-1512$/.test(entry)
+    );
+    expect(createdRunDir).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
+    const metadata = JSON.parse(
+      readFileSync(
+        resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string, "metadata.json"),
+        "utf8"
+      )
+    ) as Record<string, unknown>;
+    expect(metadata.outcome).toMatchObject({
+      issueNumber,
+      branchName,
+      committed: false,
+      pullRequest: {
+        status: "skipped",
+        reason: "no-changes",
+      },
+    });
+  });
+
+  it("summarizes manual pull request creation when GitHub authentication is unavailable", async () => {
+    const beforeRuns = listRunDirectories();
+    const issueNumber = 1511;
+    const sessionStateDir = resolve(REPO_ROOT, ".prs", "issues", String(issueNumber));
+    const issueWorkspaceDir = resolve(
+      REPO_ROOT,
+      ".prs",
+      "issues",
+      "1511-manual-pr-when-github-auth-is-unavailable"
+    );
+    rmSync(sessionStateDir, { recursive: true, force: true });
+    rmSync(issueWorkspaceDir, { recursive: true, force: true });
+    cleanupTargets.add(sessionStateDir);
+    cleanupTargets.add(issueWorkspaceDir);
+    let gitStatusCallCount = 0;
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          title: "Manual PR when GitHub auth is unavailable",
+          body: "The workflow should preserve manual PR guidance and summarize the outcome.",
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
+        })
+      )
+      .mockResolvedValueOnce(
+        createFetchResponse([
+          {
+            id: 1511,
+            body: "<!-- prs:issue-plan -->\nGenerated plan.",
+            html_url:
+              `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-1511`,
+            updated_at: "2026-04-26T12:10:00Z",
+          },
+        ])
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.OPENAI_API_KEY = "test-key";
+    process.env.GITHUB_TOKEN = "";
+    process.env.GH_TOKEN = "";
+    const messages: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
+      messages.push(message === undefined ? "" : String(message));
+    });
+
+    const { run } = await loadCli({
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          gitStatusCallCount += 1;
+          return gitStatusCallCount === 1 ? "" : " M packages/cli/src/index.ts\n";
+        }
+
+        if (command === "git" && args[0] === "diff" && args[1] === "--name-only") {
+          return "packages/cli/src/index.ts\n";
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "diff" &&
+          args[1] === "HEAD" &&
+          args[2] === "--" &&
+          args[3] === "packages/cli/src/index.ts"
+        ) {
+          return [
+            "diff --git a/packages/cli/src/index.ts b/packages/cli/src/index.ts",
+            "--- a/packages/cli/src/index.ts",
+            "+++ b/packages/cli/src/index.ts",
+            "@@ -1,1 +1,1 @@",
+            '-const auth = "before";',
+            '+const auth = "after";',
+          ].join("\n");
+        }
+
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/prs.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh unavailable") };
+        }
+
+        if (command === "gh" && args[0] === "issue" && args[1] === "view") {
+          return {
+            status: 1,
+            error: new Error("force API fallback"),
+          };
+        }
+
+        if (command === "git" && args[0] === "rev-parse") {
+          return { status: 1 };
+        }
+
+        if (command === "git" && args[0] === "checkout" && args[1] === "main") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "pull") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "checkout" && args[1] === "-b") {
+          return { status: 0 };
+        }
+
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "codex") {
+          return { status: 0 };
+        }
+
+        if (command === "pnpm" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "pnpm" && args[0] === "build") {
+          return { status: 0, stdout: "built\n", stderr: "" };
+        }
+
+        if (command === "git" && args[0] === "add") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "commit") {
+          return { status: 0 };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.argv = ["node", "prs", "issue", String(issueNumber)];
+    await run();
+
+    const output = messages.join("\n");
+    expect(output).toContain("GitHub CLI is unavailable or not authenticated.");
+    expect(output).toContain("Pull request: manual creation required");
+    expect(output).toContain("PR title file: .prs/runs/");
+    const createdRunDir = listRunDirectories().find(
+      (entry) => !beforeRuns.includes(entry) && /-issue-1511$/.test(entry)
+    );
+    expect(createdRunDir).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
+    const metadata = JSON.parse(
+      readFileSync(
+        resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string, "metadata.json"),
+        "utf8"
+      )
+    ) as Record<string, unknown>;
+    expect(metadata.outcome).toMatchObject({
+      issueNumber,
+      committed: true,
+      pullRequest: {
+        status: "manual",
+      },
+    });
   });
 
   it("writes a PR description diagnostic artifact during full issue runs when schema validation fails", async () => {
