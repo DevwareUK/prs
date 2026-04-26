@@ -1940,6 +1940,24 @@ function buildLinkedPrsManagedIssueBody(
   ].join("\n");
 }
 
+function getPrsLinkedSourceIssueNumber(issue: IssueDetails): number | undefined {
+  const trimmedBody = issue.body.trimStart();
+  if (!trimmedBody.startsWith(PRS_MANAGED_ISSUE_MARKER)) {
+    return undefined;
+  }
+
+  const metadataBlock = trimmedBody.slice(0, 500);
+  const match = metadataBlock.match(/^Refined from source issue #(\d+)\.$/m);
+  if (!match) {
+    return undefined;
+  }
+
+  const issueNumber = Number.parseInt(match[1] ?? "", 10);
+  return Number.isSafeInteger(issueNumber) && issueNumber > 0
+    ? issueNumber
+    : undefined;
+}
+
 function parseCreatedIssueUrl(issueUrl: string): { issueNumber: number; issueUrl: string } {
   const normalizedUrl = issueUrl.trim();
   const match = normalizedUrl.match(/^https:\/\/github\.com\/[^/]+\/[^/]+\/issues\/(\d+)$/);
@@ -2797,13 +2815,25 @@ async function finalizeIssueRunUnattended(
   };
 }
 
-function ensureIssueClosingReference(body: string, issueNumber: number): string {
+function ensureIssueClosingReferences(body: string, issueNumbers: number[]): string {
   const trimmedBody = body.trim();
-  if (new RegExp(`\\bcloses\\s+#${issueNumber}\\b`, "i").test(trimmedBody)) {
+  const uniqueIssueNumbers = [...new Set(issueNumbers)].filter(
+    (issueNumber) => Number.isSafeInteger(issueNumber) && issueNumber > 0
+  );
+  const missingReferences = uniqueIssueNumbers.filter(
+    (issueNumber) =>
+      !new RegExp(`\\bcloses\\s+#${issueNumber}\\b`, "i").test(trimmedBody)
+  );
+
+  if (missingReferences.length === 0) {
     return trimmedBody;
   }
 
-  return `${trimmedBody}\n\nCloses #${issueNumber}`;
+  return [
+    trimmedBody,
+    "",
+    ...missingReferences.map((issueNumber) => `Closes #${issueNumber}`),
+  ].join("\n");
 }
 
 function writeIssuePullRequestFiles(
@@ -2894,8 +2924,15 @@ async function generateIssuePullRequest(
     commitMessages: options.commitMessage.content.trim(),
   });
 
+  const linkedSourceIssueNumber = getPrsLinkedSourceIssueNumber(options.issue);
+  const closingIssueNumbers =
+    linkedSourceIssueNumber === undefined ||
+    linkedSourceIssueNumber === options.issueNumber
+      ? [options.issueNumber]
+      : [options.issueNumber, linkedSourceIssueNumber];
+
   const body = mergePRAssistantSection(
-    ensureIssueClosingReference(description.body, options.issueNumber),
+    ensureIssueClosingReferences(description.body, closingIssueNumbers),
     buildPRAssistantSection(assistant)
   );
   const pullRequest: GeneratedIssuePullRequest = {

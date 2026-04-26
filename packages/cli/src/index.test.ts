@@ -11167,6 +11167,406 @@ describe("CLI integration", () => {
     }
   });
 
+  it("adds the linked source issue closing reference for PRS-created linked issues", async () => {
+    const issueNumber = 245;
+    const sourceIssueNumber = 244;
+    const beforeRuns = listRunDirectories();
+    const sessionStateDir = resolve(REPO_ROOT, ".prs", "issues", String(issueNumber));
+    const issueWorkspaceDir = resolve(
+      REPO_ROOT,
+      ".prs",
+      "issues",
+      "245-implement-linked-source-work"
+    );
+    rmSync(sessionStateDir, { recursive: true, force: true });
+    rmSync(issueWorkspaceDir, { recursive: true, force: true });
+    cleanupTargets.add(sessionStateDir);
+    cleanupTargets.add(issueWorkspaceDir);
+
+    let gitStatusCallCount = 0;
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          title: "Implement linked source work",
+          body: [
+            "<!-- prs:managed-issue -->",
+            "",
+            `Refined from source issue #${sourceIssueNumber}.`,
+            "",
+            "## Summary",
+            "Implement the linked source request.",
+          ].join("\n"),
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
+        })
+      )
+      .mockResolvedValueOnce(createFetchResponse([]))
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          id: 9245,
+          body: "<!-- prs:issue-plan -->\nGenerated plan.",
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-9245`,
+          updated_at: "2026-04-26T11:45:00Z",
+        })
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.OPENAI_API_KEY = "test-key";
+    process.env.GITHUB_TOKEN = "test-token";
+
+    const { run, spawnSync } = await loadCli({
+      prDescriptionResult: {
+        title: "feat: implement linked source work",
+        body: "Implements the linked source request.",
+      },
+      prAssistantResult: {
+        summary: "Implements the linked source request.",
+        riskAreas: [],
+        filesChanged: ["packages/cli/src/index.ts"],
+        testingNotes: ["pnpm exec vitest run packages/cli/src/index.test.ts"],
+        rolloutConcerns: [],
+        reviewerChecklist: ["Confirm both linked issues close from the PR body."],
+      },
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          gitStatusCallCount += 1;
+          return gitStatusCallCount === 1 ? "" : " M packages/cli/src/index.ts\n";
+        }
+        if (command === "git" && args[0] === "diff" && args[1] === "--name-only") {
+          return "packages/cli/src/index.ts\n";
+        }
+        if (
+          command === "git" &&
+          args[0] === "diff" &&
+          args[1] === "HEAD" &&
+          args[2] === "--" &&
+          args[3] === "packages/cli/src/index.ts"
+        ) {
+          return "diff --git a/packages/cli/src/index.ts b/packages/cli/src/index.ts";
+        }
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/prs.git\n";
+        }
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") return { status: 0 };
+        if (command === "gh" && args[0] === "auth" && args[1] === "status") {
+          return { status: 0 };
+        }
+        if (command === "gh" && args[0] === "issue" && args[1] === "view") {
+          return { status: 1 };
+        }
+        if (command === "git" && args[0] === "rev-parse") return { status: 1 };
+        if (command === "git" && args[0] === "checkout") return { status: 0 };
+        if (command === "git" && args[0] === "fetch") return { status: 0 };
+        if (command === "git" && args[0] === "merge-base") return { status: 0 };
+        if (command === "git" && args[0] === "add") return { status: 0 };
+        if (command === "git" && args[0] === "commit") return { status: 0 };
+        if (command === "git" && args[0] === "push") {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+        if (command === "codex" && args[0] === "--version") return { status: 0 };
+        if (command === "codex") return { status: 0 };
+        if (command === "pnpm" && args[0] === "--version") return { status: 0 };
+        if (command === "pnpm" && args[0] === "build") return { status: 0 };
+        if (command === "gh" && args[0] === "pr" && args[1] === "create") {
+          return { status: 0 };
+        }
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.argv = ["node", "prs", "issue", String(issueNumber)];
+    await run();
+
+    const createdRunDir = listRunDirectories().find(
+      (entry) => !beforeRuns.includes(entry) && /-issue-245$/.test(entry)
+    );
+    expect(createdRunDir).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
+
+    const prCreateCall = spawnSync.mock.calls.find(
+      ([command, args]) =>
+        command === "gh" &&
+        Array.isArray(args) &&
+        args[0] === "pr" &&
+        args[1] === "create"
+    );
+    expect(prCreateCall).toBeDefined();
+    const prArgs = prCreateCall?.[1] as string[];
+    const prBody = prArgs[prArgs.indexOf("--body") + 1];
+
+    expect(prBody).toContain(`Closes #${issueNumber}`);
+    expect(prBody).toContain(`Closes #${sourceIssueNumber}`);
+  });
+
+  it("does not duplicate existing closing references for PRS-created linked issues", async () => {
+    const issueNumber = 246;
+    const sourceIssueNumber = 244;
+    const beforeRuns = listRunDirectories();
+    const sessionStateDir = resolve(REPO_ROOT, ".prs", "issues", String(issueNumber));
+    const issueWorkspaceDir = resolve(
+      REPO_ROOT,
+      ".prs",
+      "issues",
+      "246-deduplicate-linked-source-work"
+    );
+    rmSync(sessionStateDir, { recursive: true, force: true });
+    rmSync(issueWorkspaceDir, { recursive: true, force: true });
+    cleanupTargets.add(sessionStateDir);
+    cleanupTargets.add(issueWorkspaceDir);
+
+    let gitStatusCallCount = 0;
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          title: "Deduplicate linked source work",
+          body: [
+            "<!-- prs:managed-issue -->",
+            "",
+            `Refined from source issue #${sourceIssueNumber}.`,
+            "",
+            "## Summary",
+            "Implement the linked source request.",
+          ].join("\n"),
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
+        })
+      )
+      .mockResolvedValueOnce(createFetchResponse([]))
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          id: 9246,
+          body: "<!-- prs:issue-plan -->\nGenerated plan.",
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-9246`,
+          updated_at: "2026-04-26T11:46:00Z",
+        })
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.OPENAI_API_KEY = "test-key";
+    process.env.GITHUB_TOKEN = "test-token";
+
+    const { run, spawnSync } = await loadCli({
+      prDescriptionResult: {
+        title: "feat: deduplicate linked source work",
+        body: [
+          "Implements the linked source request.",
+          "",
+          `Closes #${sourceIssueNumber}`,
+        ].join("\n"),
+      },
+      prAssistantResult: {
+        summary: "Implements the linked source request.",
+        riskAreas: [],
+        filesChanged: ["packages/cli/src/index.ts"],
+        testingNotes: ["pnpm exec vitest run packages/cli/src/index.test.ts"],
+        rolloutConcerns: [],
+        reviewerChecklist: ["Confirm duplicate closing references are not added."],
+      },
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          gitStatusCallCount += 1;
+          return gitStatusCallCount === 1 ? "" : " M packages/cli/src/index.ts\n";
+        }
+        if (command === "git" && args[0] === "diff" && args[1] === "--name-only") {
+          return "packages/cli/src/index.ts\n";
+        }
+        if (
+          command === "git" &&
+          args[0] === "diff" &&
+          args[1] === "HEAD" &&
+          args[2] === "--" &&
+          args[3] === "packages/cli/src/index.ts"
+        ) {
+          return "diff --git a/packages/cli/src/index.ts b/packages/cli/src/index.ts";
+        }
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/prs.git\n";
+        }
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") return { status: 0 };
+        if (command === "gh" && args[0] === "auth" && args[1] === "status") {
+          return { status: 0 };
+        }
+        if (command === "gh" && args[0] === "issue" && args[1] === "view") {
+          return { status: 1 };
+        }
+        if (command === "git" && args[0] === "rev-parse") return { status: 1 };
+        if (command === "git" && args[0] === "checkout") return { status: 0 };
+        if (command === "git" && args[0] === "fetch") return { status: 0 };
+        if (command === "git" && args[0] === "merge-base") return { status: 0 };
+        if (command === "git" && args[0] === "add") return { status: 0 };
+        if (command === "git" && args[0] === "commit") return { status: 0 };
+        if (command === "git" && args[0] === "push") {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+        if (command === "codex" && args[0] === "--version") return { status: 0 };
+        if (command === "codex") return { status: 0 };
+        if (command === "pnpm" && args[0] === "--version") return { status: 0 };
+        if (command === "pnpm" && args[0] === "build") return { status: 0 };
+        if (command === "gh" && args[0] === "pr" && args[1] === "create") {
+          return { status: 0 };
+        }
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.argv = ["node", "prs", "issue", String(issueNumber)];
+    await run();
+
+    const createdRunDir = listRunDirectories().find(
+      (entry) => !beforeRuns.includes(entry) && /-issue-246$/.test(entry)
+    );
+    expect(createdRunDir).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
+
+    const prCreateCall = spawnSync.mock.calls.find(
+      ([command, args]) =>
+        command === "gh" &&
+        Array.isArray(args) &&
+        args[0] === "pr" &&
+        args[1] === "create"
+    );
+    expect(prCreateCall).toBeDefined();
+    const prArgs = prCreateCall?.[1] as string[];
+    const prBody = prArgs[prArgs.indexOf("--body") + 1];
+
+    expect(prBody.match(new RegExp(`Closes #${issueNumber}`, "g"))).toHaveLength(1);
+    expect(prBody.match(new RegExp(`Closes #${sourceIssueNumber}`, "g"))).toHaveLength(1);
+  });
+
+  it("ignores linked source issue text in non-managed issues", async () => {
+    const issueNumber = 247;
+    const sourceIssueNumber = 244;
+    const beforeRuns = listRunDirectories();
+    const sessionStateDir = resolve(REPO_ROOT, ".prs", "issues", String(issueNumber));
+    const issueWorkspaceDir = resolve(
+      REPO_ROOT,
+      ".prs",
+      "issues",
+      "247-ignore-freeform-linked-source-text"
+    );
+    rmSync(sessionStateDir, { recursive: true, force: true });
+    rmSync(issueWorkspaceDir, { recursive: true, force: true });
+    cleanupTargets.add(sessionStateDir);
+    cleanupTargets.add(issueWorkspaceDir);
+
+    let gitStatusCallCount = 0;
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          title: "Ignore freeform linked source text",
+          body: [
+            `Refined from source issue #${sourceIssueNumber}.`,
+            "",
+            "This is ordinary issue text, not PRS-owned metadata.",
+          ].join("\n"),
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
+        })
+      )
+      .mockResolvedValueOnce(createFetchResponse([]))
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          id: 9247,
+          body: "<!-- prs:issue-plan -->\nGenerated plan.",
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-9247`,
+          updated_at: "2026-04-26T11:47:00Z",
+        })
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.OPENAI_API_KEY = "test-key";
+    process.env.GITHUB_TOKEN = "test-token";
+
+    const { run, spawnSync } = await loadCli({
+      prDescriptionResult: {
+        title: "feat: ignore freeform linked source text",
+        body: "Implements the ordinary issue request.",
+      },
+      prAssistantResult: {
+        summary: "Implements the ordinary issue request.",
+        riskAreas: [],
+        filesChanged: ["packages/cli/src/index.ts"],
+        testingNotes: ["pnpm exec vitest run packages/cli/src/index.test.ts"],
+        rolloutConcerns: [],
+        reviewerChecklist: ["Confirm non-managed metadata is ignored."],
+      },
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          gitStatusCallCount += 1;
+          return gitStatusCallCount === 1 ? "" : " M packages/cli/src/index.ts\n";
+        }
+        if (command === "git" && args[0] === "diff" && args[1] === "--name-only") {
+          return "packages/cli/src/index.ts\n";
+        }
+        if (
+          command === "git" &&
+          args[0] === "diff" &&
+          args[1] === "HEAD" &&
+          args[2] === "--" &&
+          args[3] === "packages/cli/src/index.ts"
+        ) {
+          return "diff --git a/packages/cli/src/index.ts b/packages/cli/src/index.ts";
+        }
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/prs.git\n";
+        }
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") return { status: 0 };
+        if (command === "gh" && args[0] === "auth" && args[1] === "status") {
+          return { status: 0 };
+        }
+        if (command === "gh" && args[0] === "issue" && args[1] === "view") {
+          return { status: 1 };
+        }
+        if (command === "git" && args[0] === "rev-parse") return { status: 1 };
+        if (command === "git" && args[0] === "checkout") return { status: 0 };
+        if (command === "git" && args[0] === "fetch") return { status: 0 };
+        if (command === "git" && args[0] === "merge-base") return { status: 0 };
+        if (command === "git" && args[0] === "add") return { status: 0 };
+        if (command === "git" && args[0] === "commit") return { status: 0 };
+        if (command === "git" && args[0] === "push") {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+        if (command === "codex" && args[0] === "--version") return { status: 0 };
+        if (command === "codex") return { status: 0 };
+        if (command === "pnpm" && args[0] === "--version") return { status: 0 };
+        if (command === "pnpm" && args[0] === "build") return { status: 0 };
+        if (command === "gh" && args[0] === "pr" && args[1] === "create") {
+          return { status: 0 };
+        }
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.argv = ["node", "prs", "issue", String(issueNumber)];
+    await run();
+
+    const createdRunDir = listRunDirectories().find(
+      (entry) => !beforeRuns.includes(entry) && /-issue-247$/.test(entry)
+    );
+    expect(createdRunDir).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
+
+    const prCreateCall = spawnSync.mock.calls.find(
+      ([command, args]) =>
+        command === "gh" &&
+        Array.isArray(args) &&
+        args[0] === "pr" &&
+        args[1] === "create"
+    );
+    expect(prCreateCall).toBeDefined();
+    const prArgs = prCreateCall?.[1] as string[];
+    const prBody = prArgs[prArgs.indexOf("--body") + 1];
+
+    expect(prBody).toContain(`Closes #${issueNumber}`);
+    expect(prBody).not.toContain(`Closes #${sourceIssueNumber}`);
+  });
+
   it("fails issue preparation clearly when fast-forwarding the configured base branch fails", async () => {
     const issueNumber = 146;
     const fetchMock = vi
