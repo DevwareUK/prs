@@ -11,8 +11,10 @@ import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  createIssuePlanWorkspace,
   createIssueRefineWorkspace,
   formatRunTimestamp,
+  getIssuePlanRunDir,
   getIssueRefineSessionStateFilePath,
   getIssueRefineRunDir,
   loadIssueRefineSessionState,
@@ -909,6 +911,8 @@ async function loadCli(options: {
   const generateIssueResolutionPlan = vi.fn();
   if (options.issueResolutionPlanResult) {
     generateIssueResolutionPlan.mockResolvedValue(options.issueResolutionPlanResult);
+  } else {
+    generateIssueResolutionPlan.mockResolvedValue(createIssueResolutionPlanResult());
   }
   const generateCommitMessage = vi.fn();
   generateCommitMessage.mockResolvedValue(
@@ -1402,6 +1406,27 @@ describe("CLI integration", () => {
       promptFilePath: expect.stringMatching(/prompt\.md$/),
       metadataFilePath: expect.stringMatching(/metadata\.json$/),
       outputLogPath: expect.stringMatching(/output\.log$/),
+    });
+  });
+
+  it("creates issue plan workspaces with timestamped run artifacts", async () => {
+    const repoRoot = createTempRepoRoot();
+    const date = new Date("2026-04-26T10:11:12.345Z");
+
+    expect(getIssuePlanRunDir(repoRoot, 42, date)).toBe(
+      resolve(repoRoot, ".prs", "runs", `${formatRunTimestamp(date)}-issue-plan-42`)
+    );
+
+    const workspace = createIssuePlanWorkspace(repoRoot, 42);
+
+    expect(existsSync(workspace.runDir)).toBe(true);
+    expect(workspace).toMatchObject({
+      runDir: expect.stringMatching(/\.prs\/runs\/.+-issue-plan-42$/),
+      promptFilePath: expect.stringMatching(/prompt\.md$/),
+      metadataFilePath: expect.stringMatching(/metadata\.json$/),
+      outputLogPath: expect.stringMatching(/output\.log$/),
+      superpowersSpecFilePath: expect.stringMatching(/superpowers-spec\.md$/),
+      superpowersPlanFilePath: expect.stringMatching(/superpowers-plan\.md$/),
     });
   });
 
@@ -3966,6 +3991,10 @@ describe("CLI integration", () => {
           return { status: 1, error: new Error("gh is unavailable") };
         }
 
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 1, error: new Error("codex is unavailable") };
+        }
+
         throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
       },
     });
@@ -6391,6 +6420,7 @@ describe("CLI integration", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { run } = await loadCli({
+      issueResolutionPlanResult: createIssueResolutionPlanResult(),
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "status") {
           return "";
@@ -6405,6 +6435,10 @@ describe("CLI integration", () => {
       spawnSyncImpl: (command, args) => {
         if (command === "gh" && args[0] === "--version") {
           return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 1, error: new Error("codex is unavailable") };
         }
 
         throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
@@ -6456,6 +6490,7 @@ describe("CLI integration", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { run } = await loadCli({
+      issueResolutionPlanResult: createIssueResolutionPlanResult(),
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "status") {
           return "";
@@ -6470,6 +6505,10 @@ describe("CLI integration", () => {
       spawnSyncImpl: (command, args) => {
         if (command === "gh" && args[0] === "--version") {
           return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 1, error: new Error("codex is unavailable") };
         }
 
         throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
@@ -6515,6 +6554,7 @@ describe("CLI integration", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { run } = await loadCli({
+      issueResolutionPlanResult: createIssueResolutionPlanResult(),
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "status") {
           return "";
@@ -6529,6 +6569,10 @@ describe("CLI integration", () => {
       spawnSyncImpl: (command, args) => {
         if (command === "gh" && args[0] === "--version") {
           return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 1, error: new Error("codex is unavailable") };
         }
 
         throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
@@ -7950,6 +7994,10 @@ describe("CLI integration", () => {
           return { status: 1, error: new Error("gh is unavailable") };
         }
 
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 1, error: new Error("codex is unavailable") };
+        }
+
         throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
       },
     });
@@ -8097,6 +8145,10 @@ describe("CLI integration", () => {
           return { status: 1, error: new Error("gh is unavailable") };
         }
 
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 1, error: new Error("codex is unavailable") };
+        }
+
         throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
       },
     });
@@ -8126,6 +8178,121 @@ describe("CLI integration", () => {
     });
     expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toMatchObject({
       body: expect.stringContaining("### Done definition"),
+    });
+  });
+
+  it("creates a managed issue plan comment from a Superpowers plan artifact", async () => {
+    const beforeRuns = listRunDirectories();
+    const issueNumber = 42;
+    let runtimePrompt = "";
+    createMockCodexSuperpowersHome();
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url.includes(`/issues/${issueNumber}/comments?`)) {
+        return createFetchResponse([]);
+      }
+
+      if (url.endsWith(`/issues/${issueNumber}`)) {
+        return createFetchResponse({
+          title: "Add Superpowers issue plans",
+          body: "Create implementation plans through Codex Superpowers.",
+          html_url: getRepositoryIssueUrl(issueNumber),
+        });
+      }
+
+      if (url.endsWith(`/issues/${issueNumber}/comments`) && init?.method === "POST") {
+        return createFetchResponse({
+          id: 90210,
+          body: JSON.parse(String(init.body)).body,
+          html_url:
+            `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-90210`,
+          updated_at: "2026-04-26T10:20:00Z",
+        });
+      }
+
+      throw new Error(`Unexpected fetch call: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await withRepositoryConfig(
+      JSON.stringify(
+        {
+          ai: {
+            issue: {
+              useCodexSuperpowers: true,
+            },
+            runtime: {
+              type: "codex",
+            },
+          },
+        },
+        null,
+        2
+      ),
+      async () => {
+        const { run, generateIssueResolutionPlan } = await loadCli({
+          execFileSyncImpl: (command, args) => {
+            if (command === "git" && args[0] === "remote") {
+              return "git@github.com:DevwareUK/prs.git\n";
+            }
+
+            throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+          },
+          spawnSyncImpl: (command, args) => {
+            if (command === "gh" && args[0] === "--version") {
+              return { status: 1, error: new Error("gh is unavailable") };
+            }
+
+            if (command === "codex" && args[0] === "--version") {
+              return { status: 0 };
+            }
+
+            if (command === "codex") {
+              const { metadata, runDir } = readLatestRunMetadata();
+              runtimePrompt = readFileSync(
+                resolve(REPO_ROOT, metadata.promptFile as string),
+                "utf8"
+              );
+              writeFileSync(
+                resolve(REPO_ROOT, metadata.runDir as string, "superpowers-plan.md"),
+                "# Superpowers Plan\n\n- Use the run-local implementation plan.\n",
+                "utf8"
+              );
+              cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", runDir));
+              return { status: 0 };
+            }
+
+            throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+          },
+        });
+
+        process.env.GH_TOKEN = "";
+        process.env.GITHUB_TOKEN = "test-token";
+        process.argv = ["node", "prs", "issue", "plan", String(issueNumber)];
+        await run();
+
+        expect(generateIssueResolutionPlan).not.toHaveBeenCalled();
+      }
+    );
+
+    const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
+    expect(createdRunDir).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
+
+    expect(runtimePrompt).toContain("use `superpowers:brainstorming`");
+    expect(runtimePrompt).toContain("use `superpowers:writing-plans`");
+    expect(runtimePrompt).toContain(`Write the Superpowers spec artifact to \`.prs/runs/${createdRunDir}/superpowers-spec.md\`.`);
+    expect(runtimePrompt).toContain(`Write the Superpowers plan artifact to \`.prs/runs/${createdRunDir}/superpowers-plan.md\`.`);
+
+    const planCommentCall = fetchMock.mock.calls.find(
+      ([input, init]) =>
+        String(input).endsWith(`/issues/${issueNumber}/comments`) &&
+        (init as RequestInit | undefined)?.method === "POST"
+    );
+    expect(planCommentCall).toBeDefined();
+    expect(JSON.parse(String((planCommentCall?.[1] as RequestInit).body))).toEqual({
+      body: "<!-- prs:issue-plan -->\n# Superpowers Plan\n\n- Use the run-local implementation plan.\n",
     });
   });
 
@@ -8283,6 +8450,7 @@ describe("CLI integration", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { run } = await loadCli({
+      issueResolutionPlanResult: createIssueResolutionPlanResult(),
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "status") {
           return "";
@@ -8297,6 +8465,10 @@ describe("CLI integration", () => {
       spawnSyncImpl: (command, args) => {
         if (command === "gh" && args[0] === "--version") {
           return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 1, error: new Error("codex is unavailable") };
         }
 
         if (
@@ -8444,20 +8616,171 @@ describe("CLI integration", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("creates a managed issue plan comment before issue prepare writes the snapshot", async () => {
+    const issueNumber = 91235;
+    const issueTitle = "Prepare missing issue plan fixture";
+    const gitCommands: string[][] = [];
+    const issuePlan = {
+      ...createIssueResolutionPlanResult(),
+      summary: "Generated plan summary for prepare.",
+    };
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url.endsWith(`/issues/${issueNumber}`)) {
+        return createFetchResponse({
+          title: issueTitle,
+          body: "Ensure missing plans are created before snapshots.",
+          html_url: getRepositoryIssueUrl(issueNumber),
+        });
+      }
+
+      if (url.includes(`/issues/${issueNumber}/comments?`)) {
+        return createFetchResponse([]);
+      }
+
+      if (url.endsWith(`/issues/${issueNumber}/comments`) && init?.method === "POST") {
+        return createFetchResponse({
+          id: 614,
+          body: JSON.parse(String(init.body)).body,
+          html_url:
+            `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-614`,
+          updated_at: "2026-04-26T10:35:00Z",
+        });
+      }
+
+      throw new Error(`Unexpected fetch call: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { run, generateIssueResolutionPlan } = await loadCli({
+      issueResolutionPlanResult: issuePlan,
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          return "";
+        }
+
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/prs.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 1, error: new Error("codex is unavailable") };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "rev-parse" &&
+          args[1] === "--verify" &&
+          args[2] === "refs/heads/main"
+        ) {
+          gitCommands.push(args);
+          return { status: 0, stdout: "main-local-tip\n", stderr: "" };
+        }
+
+        if (command === "git" && args[0] === "fetch") {
+          gitCommands.push(args);
+          return { status: 0 };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "rev-parse" &&
+          args[1] === "--verify" &&
+          args[2] === "refs/remotes/origin/main"
+        ) {
+          gitCommands.push(args);
+          return { status: 0, stdout: "main-remote-tip\n", stderr: "" };
+        }
+
+        if (command === "git" && args[0] === "rev-parse") {
+          gitCommands.push(args);
+          return { status: 1 };
+        }
+
+        if (command === "git" && args[0] === "checkout") {
+          gitCommands.push(args);
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "merge-base") {
+          gitCommands.push(args);
+          return { status: 0 };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.env.OPENAI_API_KEY = "test-key";
+    process.env.GH_TOKEN = "";
+    process.env.GITHUB_TOKEN = "test-token";
+    process.argv = ["node", "prs", "issue", "prepare", String(issueNumber)];
+
+    const stdout = captureStdout();
+    await run();
+
+    const output = parseJsonPayloadFromOutput(stdout.output()) as {
+      issueFile: string;
+      runDir: string;
+    };
+    const issueFilePath = resolve(REPO_ROOT, output.issueFile);
+    const runDirPath = resolve(REPO_ROOT, output.runDir);
+    cleanupTargets.add(dirname(issueFilePath));
+    cleanupTargets.add(runDirPath);
+
+    expect(generateIssueResolutionPlan).toHaveBeenCalledWith(expect.any(Object), {
+      issueNumber,
+      issueTitle,
+      issueBody: "Ensure missing plans are created before snapshots.",
+      issueUrl: getRepositoryIssueUrl(issueNumber),
+    });
+    expect(readFileSync(issueFilePath, "utf8")).toContain("## Resolution Plan");
+    expect(readFileSync(issueFilePath, "utf8")).toContain(
+      `Latest editable plan comment: https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-614`
+    );
+    expect(readFileSync(issueFilePath, "utf8")).toContain(
+      "Generated plan summary for prepare."
+    );
+  });
+
   it("writes local issue prompts with plain-language next steps", async () => {
     const issueNumber = 91235;
     const issueTitle = "Local issue prompt uses conversational completion guidance";
 
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        createFetchResponse({
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith(`/issues/${issueNumber}`)) {
+        return createFetchResponse({
           title: issueTitle,
           body: "Ensure the local issue prompt does not require a separate /exit.",
           html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
-        })
-      )
-      .mockResolvedValueOnce(createFetchResponse([]));
+        });
+      }
+
+      if (url.includes(`/issues/${issueNumber}/comments?`)) {
+        return createFetchResponse([]);
+      }
+
+      if (url.endsWith(`/issues/${issueNumber}/comments`) && init?.method === "POST") {
+        return createFetchResponse({
+          id: 616,
+          body: JSON.parse(String(init.body)).body,
+          html_url:
+            `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-616`,
+          updated_at: "2026-04-26T10:55:00Z",
+        });
+      }
+
+      throw new Error(`Unexpected fetch call: ${url}`);
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     const { run } = await loadCli({
@@ -8475,6 +8798,10 @@ describe("CLI integration", () => {
       spawnSyncImpl: (command, args) => {
         if (command === "gh" && args[0] === "--version") {
           return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 1, error: new Error("codex is unavailable") };
         }
 
         if (command === "git" && args[0] === "rev-parse") {
@@ -8498,6 +8825,7 @@ describe("CLI integration", () => {
     });
 
     process.argv = ["node", "prs", "issue", "prepare", String(issueNumber)];
+    process.env.GITHUB_TOKEN = "test-token";
 
     const stdout = captureStdout();
     await run();
@@ -8522,11 +8850,12 @@ describe("CLI integration", () => {
     );
     expect(readFileSync(promptFilePath, "utf8")).not.toContain("[1] Continue refining");
     expect(readFileSync(promptFilePath, "utf8")).not.toContain("/commit");
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it("runs issue batches sequentially, records batch progress, and resumes from the first incomplete issue", async () => {
     const beforeRuns = listRunDirectories();
+    createMockCodexHome();
     const issueNumbers = [123, 124];
     const issueTitles = new Map([
       [123, "Batch queue first issue"],
@@ -8566,7 +8895,7 @@ describe("CLI integration", () => {
     const codexAttempts = new Map<number, number>();
     let activeIssueNumber: number | undefined;
 
-    const fetchMock = vi.fn(async (input: string | URL) => {
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
       const url = String(input);
       const issueMatch = url.match(/\/issues\/(\d+)$/);
       if (issueMatch) {
@@ -8582,11 +8911,24 @@ describe("CLI integration", () => {
         return createFetchResponse([]);
       }
 
+      const planCommentMatch = url.match(/\/issues\/(\d+)\/comments$/);
+      if (planCommentMatch && init?.method === "POST") {
+        const issueNumber = Number.parseInt(planCommentMatch[1] ?? "", 10);
+        return createFetchResponse({
+          id: 7000 + issueNumber,
+          body: JSON.parse(String(init.body)).body,
+          html_url:
+            `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-${7000 + issueNumber}`,
+          updated_at: "2026-04-26T10:45:00Z",
+        });
+      }
+
       throw new Error(`Unexpected fetch call: ${url}`);
     });
     vi.stubGlobal("fetch", fetchMock);
 
     const { run } = await loadCli({
+      issueResolutionPlanResult: createIssueResolutionPlanResult(),
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "status") {
           return statusResponses.shift() ?? "";
@@ -8750,6 +9092,7 @@ describe("CLI integration", () => {
 
   it("lets a batch-started unattended issue continue independently through the single-issue command", async () => {
     const beforeRuns = listRunDirectories();
+    createMockCodexHome();
     const issueTitles = new Map([
       [223, "Independent batch queue first issue"],
       [224, "Independent batch queue second issue"],
@@ -8784,7 +9127,7 @@ describe("CLI integration", () => {
     const gitCommands: string[][] = [];
     const codexAttempts = new Map<number, number>();
 
-    const fetchMock = vi.fn(async (input: string | URL) => {
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
       const url = String(input);
       const issueMatch = url.match(/\/issues\/(\d+)$/);
       if (issueMatch) {
@@ -8800,11 +9143,24 @@ describe("CLI integration", () => {
         return createFetchResponse([]);
       }
 
+      const planCommentMatch = url.match(/\/issues\/(\d+)\/comments$/);
+      if (planCommentMatch && init?.method === "POST") {
+        const issueNumber = Number.parseInt(planCommentMatch[1] ?? "", 10);
+        return createFetchResponse({
+          id: 8000 + issueNumber,
+          body: JSON.parse(String(init.body)).body,
+          html_url:
+            `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-${8000 + issueNumber}`,
+          updated_at: "2026-04-26T10:50:00Z",
+        });
+      }
+
       throw new Error(`Unexpected fetch call: ${url}`);
     });
     vi.stubGlobal("fetch", fetchMock);
 
     const { run } = await loadCli({
+      issueResolutionPlanResult: createIssueResolutionPlanResult(),
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "status") {
           return statusResponses.shift() ?? "";
@@ -8957,22 +9313,44 @@ describe("CLI integration", () => {
     cleanupTargets.add(sessionStateDir);
     cleanupTargets.add(issueWorkspaceDir);
 
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        createFetchResponse({
+    const issuePlan = {
+      ...createIssueResolutionPlanResult(),
+      summary: "Generated plan summary for full issue execution.",
+    };
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url.endsWith(`/issues/${issueNumber}`)) {
+        return createFetchResponse({
           title: issueTitle,
           body: "Persist the session id after the first full issue run.",
           html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
-        })
-      )
-      .mockResolvedValueOnce(createFetchResponse([]));
+        });
+      }
+
+      if (url.includes(`/issues/${issueNumber}/comments?`)) {
+        return createFetchResponse([]);
+      }
+
+      if (url.endsWith(`/issues/${issueNumber}/comments`) && init?.method === "POST") {
+        return createFetchResponse({
+          id: 615,
+          body: JSON.parse(String(init.body)).body,
+          html_url:
+            `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-615`,
+          updated_at: "2026-04-26T10:40:00Z",
+        });
+      }
+
+      throw new Error(`Unexpected fetch call: ${url}`);
+    });
     vi.stubGlobal("fetch", fetchMock);
     process.env.OPENAI_API_KEY = "test-key";
     process.env.GH_TOKEN = "";
-    process.env.GITHUB_TOKEN = "";
+    process.env.GITHUB_TOKEN = "test-token";
 
     const { run } = await loadCli({
+      issueResolutionPlanResult: issuePlan,
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "status") {
           gitStatusCallCount += 1;
@@ -9057,6 +9435,18 @@ describe("CLI integration", () => {
           return { status: 0 };
         }
 
+        if (command === "git" && args[0] === "push") {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (command === "gh" && args[0] === "pr" && args[1] === "create") {
+          return {
+            status: 0,
+            stdout: "https://github.com/DevwareUK/prs/pull/1480\n",
+            stderr: "",
+          };
+        }
+
         throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
       },
     });
@@ -9110,7 +9500,21 @@ describe("CLI integration", () => {
         sessionId,
       },
     });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const issueFilePath = resolve(
+      REPO_ROOT,
+      ".prs",
+      "issues",
+      `${issueNumber}-track-resumable-codex-issue-sessions`,
+      "issue.md"
+    );
+    expect(readFileSync(issueFilePath, "utf8")).toContain("## Resolution Plan");
+    expect(readFileSync(issueFilePath, "utf8")).toContain(
+      `Latest editable plan comment: https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-615`
+    );
+    expect(readFileSync(issueFilePath, "utf8")).toContain(
+      "Generated plan summary for full issue execution."
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it("resumes the saved Codex session for later full issue runs", async () => {
@@ -9167,7 +9571,17 @@ describe("CLI integration", () => {
           html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
         })
       )
-      .mockResolvedValueOnce(createFetchResponse([]));
+      .mockResolvedValueOnce(
+        createFetchResponse([
+          {
+            id: 9149,
+            body: "<!-- prs:issue-plan -->\nResume plan.",
+            html_url:
+              `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-9149`,
+            updated_at: "2026-04-26T11:00:00Z",
+          },
+        ])
+      );
     vi.stubGlobal("fetch", fetchMock);
     process.env.OPENAI_API_KEY = "test-key";
     process.env.GH_TOKEN = "";
@@ -9413,7 +9827,7 @@ describe("CLI integration", () => {
       expect.arrayContaining(["resume", "019d5002-0000-7111-8222-933344445555"]),
       expect.any(Object)
     );
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("accepts legacy unattended issue session state without runtimeType", async () => {
@@ -9464,7 +9878,17 @@ describe("CLI integration", () => {
           html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
         })
       )
-      .mockResolvedValueOnce(createFetchResponse([]));
+      .mockResolvedValueOnce(
+        createFetchResponse([
+          {
+            id: 9151,
+            body: "<!-- prs:issue-plan -->\nLegacy unattended plan.",
+            html_url:
+              `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-9151`,
+            updated_at: "2026-04-26T11:05:00Z",
+          },
+        ])
+      );
     vi.stubGlobal("fetch", fetchMock);
 
     const { run } = await loadCli({
@@ -9598,7 +10022,16 @@ describe("CLI integration", () => {
           html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
         })
       )
-      .mockResolvedValueOnce(createFetchResponse([]));
+      .mockResolvedValueOnce(createFetchResponse([]))
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          id: 9145,
+          body: "<!-- prs:issue-plan -->\nGenerated plan.",
+          html_url:
+            `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-9145`,
+          updated_at: "2026-04-26T11:10:00Z",
+        })
+      );
     vi.stubGlobal("fetch", fetchMock);
     process.env.OPENAI_API_KEY = "test-key";
 
@@ -9727,7 +10160,7 @@ describe("CLI integration", () => {
       ["commit", "-F", expect.stringContaining("commit-message.txt")],
       expect.any(Object)
     );
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it("writes a PR description diagnostic artifact during full issue runs when schema validation fails", async () => {
@@ -9754,7 +10187,16 @@ describe("CLI integration", () => {
           html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
         })
       )
-      .mockResolvedValueOnce(createFetchResponse([]));
+      .mockResolvedValueOnce(createFetchResponse([]))
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          id: 9147,
+          body: "<!-- prs:issue-plan -->\nGenerated plan.",
+          html_url:
+            `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-9147`,
+          updated_at: "2026-04-26T11:15:00Z",
+        })
+      );
     vi.stubGlobal("fetch", fetchMock);
     process.env.OPENAI_API_KEY = "test-key";
 
@@ -9887,7 +10329,9 @@ describe("CLI integration", () => {
     }
 
     expect(caughtError).toBeInstanceOf(Error);
-    const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
+    const createdRunDir = listRunDirectories().find(
+      (entry) => !beforeRuns.includes(entry) && /-issue-147$/.test(entry)
+    );
     expect(createdRunDir).toBeDefined();
     cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
 
@@ -9939,7 +10383,7 @@ describe("CLI integration", () => {
         encoding: "utf8",
       })
     );
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it("uses repository config for issue build verification and pull request base branch", async () => {
@@ -9982,7 +10426,16 @@ describe("CLI integration", () => {
           html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
         })
       )
-      .mockResolvedValueOnce(createFetchResponse([]));
+      .mockResolvedValueOnce(createFetchResponse([]))
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          id: 9144,
+          body: "<!-- prs:issue-plan -->\nGenerated plan.",
+          html_url:
+            `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-9144`,
+          updated_at: "2026-04-26T11:20:00Z",
+        })
+      );
     vi.stubGlobal("fetch", fetchMock);
     process.env.OPENAI_API_KEY = "test-key";
 
@@ -10300,7 +10753,7 @@ describe("CLI integration", () => {
     await expect(run()).rejects.toThrow(
       'Failed to fast-forward base branch "main" to origin/main.'
     );
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("fails clearly when .prs/config.json contains malformed JSON", async () => {

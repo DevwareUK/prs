@@ -79,11 +79,13 @@ import {
   type InteractiveRuntimeType,
 } from "./runtime";
 import {
+  createIssuePlanWorkspace,
   createIssueRefineWorkspace,
   formatRunTimestamp,
   getIssueBatchRunDir,
   getIssueBatchStateDir,
   getIssueBatchStateFilePath,
+  type IssuePlanWorkspace,
   type IssueRefineSessionState,
   type IssueRefineWorkspace,
   getIssueSessionStateFilePath,
@@ -1287,7 +1289,8 @@ async function publishSuperpowersPlanArtifact(options: {
   issueNumber: number;
   planFilePath: string;
   outputLogPath: string;
-}): Promise<void> {
+  existingPlanComment?: IssuePlanComment | null;
+}): Promise<IssuePlanComment | undefined> {
   const planFile = toRepoRelativePath(options.repoRoot, options.planFilePath);
 
   if (!existsSync(options.planFilePath)) {
@@ -1295,7 +1298,7 @@ async function publishSuperpowersPlanArtifact(options: {
       options.outputLogPath,
       `Superpowers plan publication skipped because ${planFile} does not exist.`
     );
-    return;
+    return undefined;
   }
 
   const planMarkdown = readFileSync(options.planFilePath, "utf8").trim();
@@ -1304,13 +1307,14 @@ async function publishSuperpowersPlanArtifact(options: {
       options.outputLogPath,
       `Superpowers plan publication skipped because ${planFile} is empty.`
     );
-    return;
+    return undefined;
   }
 
   const renderedPlan = formatSuperpowersPlanArtifactComment(planMarkdown);
-  const existingPlanComment = await options.forge.fetchIssuePlanComment(
-    options.issueNumber
-  );
+  const existingPlanComment =
+    options.existingPlanComment === undefined
+      ? await options.forge.fetchIssuePlanComment(options.issueNumber)
+      : options.existingPlanComment ?? undefined;
 
   if (existingPlanComment) {
     const comment = await options.forge.updateIssuePlanComment(
@@ -1321,7 +1325,7 @@ async function publishSuperpowersPlanArtifact(options: {
       options.outputLogPath,
       `Updated issue resolution plan comment from Superpowers plan: ${comment.url}`
     );
-    return;
+    return comment;
   }
 
   const comment = await options.forge.createIssuePlanComment(
@@ -1332,6 +1336,7 @@ async function publishSuperpowersPlanArtifact(options: {
     options.outputLogPath,
     `Created issue resolution plan comment from Superpowers plan: ${comment.url}`
   );
+  return comment;
 }
 
 function formatNumberedMarkdownList(items: string[]): string {
@@ -3718,44 +3723,326 @@ async function runIssueRefineCommand(issueNumber: number): Promise<void> {
   }
 }
 
+type IssuePlanResolutionMode = "explicit-plan-command" | "execution-preflight";
+
+function buildIssuePlanRuntimePrompt(input: {
+  repoRoot: string;
+  workspace: IssuePlanWorkspace;
+  issueNumber: number;
+  issue: IssueDetails;
+}): string {
+  const runDir = toRepoRelativePath(input.repoRoot, input.workspace.runDir);
+  const superpowersSpecFile = toRepoRelativePath(
+    input.repoRoot,
+    input.workspace.superpowersSpecFilePath
+  );
+  const superpowersPlanFile = toRepoRelativePath(
+    input.repoRoot,
+    input.workspace.superpowersPlanFilePath
+  );
+
+  return [
+    "You are working in the current repository.",
+    "",
+    `Create an implementation plan for GitHub issue #${input.issueNumber}.`,
+    "",
+    "Current issue title:",
+    input.issue.title,
+    "",
+    "Current issue URL:",
+    input.issue.url,
+    "",
+    "Current issue body:",
+    input.issue.body.trim() || "(No issue body provided.)",
+    "",
+    `Write the Superpowers spec artifact to \`${superpowersSpecFile}\`.`,
+    `Write the Superpowers plan artifact to \`${superpowersPlanFile}\`.`,
+    `Use \`${runDir}\` for run artifacts created by this workflow.`,
+    "",
+    "Instructions to the coding agent:",
+    "- inspect the repository only as needed to make an implementation-ready plan",
+    "- use `superpowers:brainstorming` first for clarification and scope shaping",
+    "- use `superpowers:writing-plans` discipline to create the implementation plan",
+    "- override the normal Superpowers spec/plan continuation for this workflow",
+    "- keep any intermediate Superpowers docs inside the provided `.prs/runs/...` directory",
+    "- write any Superpowers brainstorming/spec artifact only to the provided spec path",
+    "- write any Superpowers writing-plans artifact only to the provided plan path",
+    "- do not create `docs/superpowers/specs/...` documents",
+    "- do not create `docs/superpowers/plans/...` documents",
+    "- write only the run-local Superpowers artifacts needed for this plan workflow",
+    "- make the plan concrete enough for an implementation agent to execute task by task",
+    "- do not create or update GitHub issues or comments directly",
+    "- do not modify unrelated repository files",
+    "- do not modify `.prs/` except for the provided local workflow artifacts",
+    "",
+    "When the plan artifact is complete and saved, stop.",
+  ].join("\n");
+}
+
+function writeIssuePlanWorkspaceFiles(
+  repoRoot: string,
+  workspace: IssuePlanWorkspace,
+  runtimeType: InteractiveRuntimeType,
+  issueNumber: number,
+  issue: IssueDetails
+): void {
+  const createdAt = new Date().toISOString();
+  const runtime = getInteractiveRuntimeByType(runtimeType);
+  const prompt = buildIssuePlanRuntimePrompt({
+    repoRoot,
+    workspace,
+    issueNumber,
+    issue,
+  });
+
+  writeFileSync(workspace.promptFilePath, `${prompt}\n`, "utf8");
+  writeFileSync(
+    workspace.metadataFilePath,
+    `${JSON.stringify(
+      {
+        createdAt,
+        flow: "issue-plan",
+        issueNumber,
+        issueTitle: issue.title,
+        issueUrl: issue.url,
+        promptFile: toRepoRelativePath(repoRoot, workspace.promptFilePath),
+        outputLog: toRepoRelativePath(repoRoot, workspace.outputLogPath),
+        runDir: toRepoRelativePath(repoRoot, workspace.runDir),
+        superpowers: {
+          enabled: true,
+          specFile: toRepoRelativePath(repoRoot, workspace.superpowersSpecFilePath),
+          planFile: toRepoRelativePath(repoRoot, workspace.superpowersPlanFilePath),
+        },
+        runtime: {
+          type: runtime.type,
+          displayName: runtime.displayName,
+          command: runtime.metadata.command,
+          sandboxMode: runtime.metadata.sandboxMode,
+          approvalPolicy: runtime.metadata.approvalPolicy,
+        },
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+  writeFileSync(
+    workspace.outputLogPath,
+    [
+      "# prs issue plan run log",
+      "",
+      `Created: ${createdAt}`,
+      `Issue number: ${issueNumber}`,
+      `Issue URL: ${issue.url}`,
+      `Prompt file: ${toRepoRelativePath(repoRoot, workspace.promptFilePath)}`,
+      `Superpowers spec file: ${toRepoRelativePath(repoRoot, workspace.superpowersSpecFilePath)}`,
+      `Superpowers plan file: ${toRepoRelativePath(repoRoot, workspace.superpowersPlanFilePath)}`,
+      `Runtime: ${runtime.displayName}`,
+      "",
+    ].join("\n"),
+    "utf8"
+  );
+}
+
+function shouldUseSuperpowersIssuePlan(options: {
+  repoRoot: string;
+  runtimeType: InteractiveRuntimeType;
+}): { useSuperpowers: true } | { useSuperpowers: false; reason: string } {
+  const repositoryConfig = getRepositoryConfig(options.repoRoot);
+
+  if (!repositoryConfig.ai.issue.useCodexSuperpowers) {
+    return {
+      useSuperpowers: false,
+      reason:
+        "Superpowers-backed issue plan generation is disabled; using structured provider issue plan generation.",
+    };
+  }
+
+  if (options.runtimeType !== "codex") {
+    const runtime = getInteractiveRuntimeByType(options.runtimeType);
+    return {
+      useSuperpowers: false,
+      reason: `Superpowers-backed issue plan generation requires Codex, but the selected runtime is ${runtime.displayName}; using structured provider issue plan generation.`,
+    };
+  }
+
+  if (!isCodexSuperpowersAvailable()) {
+    return {
+      useSuperpowers: false,
+      reason:
+        "Codex Superpowers is not available in the current Codex installation; using structured provider issue plan generation.",
+    };
+  }
+
+  const runtimeAvailability = getInteractiveRuntimeByType("codex").checkAvailability();
+  if (!runtimeAvailability.available) {
+    return {
+      useSuperpowers: false,
+      reason: `Codex is unavailable because ${runtimeAvailability.reason}; using structured provider issue plan generation.`,
+    };
+  }
+
+  return { useSuperpowers: true };
+}
+
+async function createStructuredIssuePlanComment(options: {
+  repoRoot: string;
+  forge: RepositoryForge;
+  issueNumber: number;
+  issue: IssueDetails;
+  existingPlanComment?: IssuePlanComment;
+  mode: IssuePlanResolutionMode;
+}): Promise<IssuePlanComment> {
+  const { provider } = await createProvider(options.repoRoot);
+  const plan = await generateIssueResolutionPlan(provider, {
+    issueNumber: options.issueNumber,
+    issueTitle: options.issue.title,
+    issueBody: options.issue.body,
+    issueUrl: options.issue.url,
+  });
+  const renderedPlan = renderIssueResolutionPlanComment(options.issueNumber, plan);
+
+  if (options.existingPlanComment) {
+    const comment = await options.forge.updateIssuePlanComment(
+      options.existingPlanComment.id,
+      renderedPlan
+    );
+    if (options.mode === "explicit-plan-command") {
+      console.log(`Refreshed issue resolution plan comment: ${comment.url}`);
+    }
+    return comment;
+  }
+
+  const comment = await options.forge.createIssuePlanComment(
+    options.issueNumber,
+    renderedPlan
+  );
+  console.log(
+    options.mode === "execution-preflight"
+      ? `Created issue resolution plan comment before issue execution: ${comment.url}`
+      : `Created issue resolution plan comment: ${comment.url}`
+  );
+  return comment;
+}
+
+async function createSuperpowersIssuePlanComment(options: {
+  repoRoot: string;
+  forge: RepositoryForge;
+  issueNumber: number;
+  issue: IssueDetails;
+  existingPlanComment?: IssuePlanComment;
+}): Promise<IssuePlanComment | undefined> {
+  const workspace = createIssuePlanWorkspace(options.repoRoot, options.issueNumber);
+  writeIssuePlanWorkspaceFiles(
+    options.repoRoot,
+    workspace,
+    "codex",
+    options.issueNumber,
+    options.issue
+  );
+
+  console.log("Creating issue resolution plan with Codex Superpowers...");
+  const runtime = getInteractiveRuntimeByType("codex");
+  runtime.launch(options.repoRoot, workspace);
+
+  const comment = await publishSuperpowersPlanArtifact({
+    repoRoot: options.repoRoot,
+    forge: options.forge,
+    issueNumber: options.issueNumber,
+    planFilePath: workspace.superpowersPlanFilePath,
+    outputLogPath: workspace.outputLogPath,
+    existingPlanComment: options.existingPlanComment ?? null,
+  });
+
+  if (!comment) {
+    console.log(
+      "Codex Superpowers did not produce a non-empty issue plan artifact; using structured provider issue plan generation."
+    );
+  }
+
+  return comment;
+}
+
+async function resolveIssuePlanComment(options: {
+  repoRoot: string;
+  forge: RepositoryForge;
+  issueNumber: number;
+  refresh: boolean;
+  mode: IssuePlanResolutionMode;
+  issue?: IssueDetails;
+  runtimeType?: InteractiveRuntimeType;
+}): Promise<IssuePlanComment> {
+  const existingPlanComment = await options.forge.fetchIssuePlanComment(
+    options.issueNumber
+  );
+
+  if (existingPlanComment && !options.refresh) {
+    if (options.mode === "explicit-plan-command") {
+      console.log(
+        `Using existing issue resolution plan comment: ${existingPlanComment.url}`
+      );
+      console.log("Re-run with `--refresh` to regenerate the managed plan comment.");
+    }
+    return existingPlanComment;
+  }
+
+  if (!options.issue) {
+    console.log(`Fetching issue #${options.issueNumber}...`);
+  }
+  const issue = options.issue ?? (await options.forge.fetchIssueDetails(options.issueNumber));
+  const repositoryConfig = getRepositoryConfig(options.repoRoot);
+  const runtimeType = options.runtimeType ?? repositoryConfig.ai.runtime.type;
+  const superpowersDecision = shouldUseSuperpowersIssuePlan({
+    repoRoot: options.repoRoot,
+    runtimeType,
+  });
+
+  if (superpowersDecision.useSuperpowers) {
+    const comment = await createSuperpowersIssuePlanComment({
+      repoRoot: options.repoRoot,
+      forge: options.forge,
+      issueNumber: options.issueNumber,
+      issue,
+      existingPlanComment: existingPlanComment,
+    });
+    if (comment) {
+      return comment;
+    }
+  } else {
+    console.log(superpowersDecision.reason);
+  }
+
+  return createStructuredIssuePlanComment({
+    repoRoot: options.repoRoot,
+    forge: options.forge,
+    issueNumber: options.issueNumber,
+    issue,
+    existingPlanComment,
+    mode: options.mode,
+  });
+}
+
 async function runIssuePlanCommand(
   issueNumber: number,
   options: { refresh: boolean }
 ): Promise<void> {
   const repoRoot = getDefaultRepoRoot();
   const forge = getRepositoryForge(repoRoot);
-  const existingPlanComment = await forge.fetchIssuePlanComment(issueNumber);
-
-  if (existingPlanComment && !options.refresh) {
-    console.log(
-      `Using existing issue resolution plan comment: ${existingPlanComment.url}`
+  if (forge.type === "none") {
+    throw new Error(
+      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
     );
-    console.log("Re-run with `--refresh` to regenerate the managed plan comment.");
-    return;
   }
+  const repositoryConfig = getRepositoryConfig(repoRoot);
 
-  console.log(`Fetching issue #${issueNumber}...`);
-  const issue = await forge.fetchIssueDetails(issueNumber);
-  const { provider } = await createProvider(repoRoot);
-  const plan = await generateIssueResolutionPlan(provider, {
+  await resolveIssuePlanComment({
+    repoRoot,
+    forge,
     issueNumber,
-    issueTitle: issue.title,
-    issueBody: issue.body,
-    issueUrl: issue.url,
+    refresh: options.refresh,
+    mode: "explicit-plan-command",
+    runtimeType: repositoryConfig.ai.runtime.type,
   });
-  const renderedPlan = renderIssueResolutionPlanComment(issueNumber, plan);
-
-  if (existingPlanComment) {
-    const comment = await forge.updateIssuePlanComment(
-      existingPlanComment.id,
-      renderedPlan
-    );
-    console.log(`Refreshed issue resolution plan comment: ${comment.url}`);
-    return;
-  }
-
-  const comment = await forge.createIssuePlanComment(issueNumber, renderedPlan);
-  console.log(`Created issue resolution plan comment: ${comment.url}`);
 }
 
 async function prepareIssueRun(
@@ -3789,8 +4076,17 @@ async function prepareIssueRun(
   ensureCleanWorkingTree(repoRoot);
   console.log(`Fetching issue #${issueNumber}...`);
   const issue = await forge.fetchIssueDetails(issueNumber);
-  const planComment = await forge.fetchIssuePlanComment(issueNumber);
   const sessionStateFilePath = getIssueSessionStateFilePath(repoRoot, issueNumber);
+  const resolvePlanCommentForRun = () =>
+    resolveIssuePlanComment({
+      repoRoot,
+      forge,
+      issueNumber,
+      refresh: false,
+      mode: "execution-preflight",
+      issue,
+      runtimeType: runtime.type,
+    });
   const existingSessionState =
     options.allowResume && mode !== "github-action"
       ? loadIssueSessionState(repoRoot, issueNumber)
@@ -3841,6 +4137,7 @@ async function prepareIssueRun(
     }
 
     switchToExistingIssueBranch(repoRoot, existingSessionState.branchName);
+    const planComment = await resolvePlanCommentForRun();
     const workspace = createIssueWorkspace(
       repoRoot,
       issueNumber,
@@ -3880,6 +4177,7 @@ async function prepareIssueRun(
   const branchName = createIssueBranchName(issueNumber, issue.title);
   ensureBranchDoesNotExist(repoRoot, branchName);
   syncIssueBaseBranch(repoRoot, repositoryConfig.baseBranch, baseBranchPreflight);
+  const planComment = await resolvePlanCommentForRun();
   const workspace = createIssueWorkspace(repoRoot, issueNumber, issue);
   writeIssueWorkspaceFiles(
     repoRoot,

@@ -128,6 +128,28 @@ export function getIssueRefineRunDir(
   );
 }
 
+export function getIssuePlanRunDir(
+  repoRoot: string,
+  issueNumber: number,
+  date = new Date()
+): string {
+  return resolve(
+    repoRoot,
+    REPOSITORY_STATE_DIRECTORY,
+    "runs",
+    `${formatRunTimestamp(date)}-issue-plan-${issueNumber}`
+  );
+}
+
+export type IssuePlanWorkspace = {
+  runDir: string;
+  promptFilePath: string;
+  metadataFilePath: string;
+  outputLogPath: string;
+  superpowersSpecFilePath: string;
+  superpowersPlanFilePath: string;
+};
+
 export type IssueRefineWorkspace = {
   runDir: string;
   draftFilePath: string;
@@ -137,6 +159,23 @@ export type IssueRefineWorkspace = {
   superpowersSpecFilePath: string;
   superpowersPlanFilePath: string;
 };
+
+export function createIssuePlanWorkspace(
+  repoRoot: string,
+  issueNumber: number
+): IssuePlanWorkspace {
+  const runDir = getIssuePlanRunDir(repoRoot, issueNumber);
+  mkdirSync(runDir, { recursive: true });
+
+  return {
+    runDir,
+    promptFilePath: resolve(runDir, "prompt.md"),
+    metadataFilePath: resolve(runDir, "metadata.json"),
+    outputLogPath: resolve(runDir, "output.log"),
+    superpowersSpecFilePath: resolve(runDir, "superpowers-spec.md"),
+    superpowersPlanFilePath: resolve(runDir, "superpowers-plan.md"),
+  };
+}
 
 export type IssueRefineSessionState = {
   issueNumber: number;
