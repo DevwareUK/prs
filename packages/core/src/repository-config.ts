@@ -27,13 +27,18 @@ export function resolveRepositoryConfig(
   config?: RepositoryConfigType
 ): ResolvedRepositoryConfigType {
   const parsedConfig = RepositoryConfig.parse(config ?? {});
+  const useCodexSuperpowers =
+    parsedConfig.ai?.issue?.useCodexSuperpowers ??
+    parsedConfig.ai?.issueDraft?.useCodexSuperpowers ??
+    DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS;
 
   return ResolvedRepositoryConfig.parse({
     ai: {
+      issue: {
+        useCodexSuperpowers,
+      },
       issueDraft: {
-        useCodexSuperpowers:
-          parsedConfig.ai?.issueDraft?.useCodexSuperpowers ??
-          DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
+        useCodexSuperpowers,
       },
       runtime: parsedConfig.ai?.runtime ?? {
         type: DEFAULT_REPOSITORY_AI_RUNTIME_TYPE,

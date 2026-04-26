@@ -64,8 +64,11 @@ describe("config helpers", () => {
       repoRoot,
       JSON.stringify({
         ai: {
-          issueDraft: {
+          issue: {
             useCodexSuperpowers: true,
+          },
+          issueDraft: {
+            useCodexSuperpowers: false,
           },
           runtime: {
             type: "claude-code",
@@ -81,8 +84,11 @@ describe("config helpers", () => {
 
     expect(loadRepositoryConfig(repoRoot)).toEqual({
       ai: {
-        issueDraft: {
+        issue: {
           useCodexSuperpowers: true,
+        },
+        issueDraft: {
+          useCodexSuperpowers: false,
         },
         runtime: {
           type: "claude-code",
@@ -123,6 +129,9 @@ describe("config helpers", () => {
 
     expect(loadResolvedRepositoryConfig(repoRoot)).toEqual({
       ai: {
+        issue: {
+          useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
+        },
         issueDraft: {
           useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
         },
@@ -150,8 +159,11 @@ describe("config helpers", () => {
       repoRoot,
       JSON.stringify({
         ai: {
-          issueDraft: {
+          issue: {
             useCodexSuperpowers: true,
+          },
+          issueDraft: {
+            useCodexSuperpowers: false,
           },
           runtime: {
             type: "claude-code",
@@ -166,6 +178,9 @@ describe("config helpers", () => {
     );
 
     expect(loadResolvedRepositoryConfig(repoRoot).ai).toEqual({
+      issue: {
+        useCodexSuperpowers: true,
+      },
       issueDraft: {
         useCodexSuperpowers: true,
       },

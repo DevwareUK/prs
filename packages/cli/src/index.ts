@@ -1264,6 +1264,76 @@ function stripIssuePlanCommentMarker(body: string): string {
     .trim();
 }
 
+function formatSuperpowersPlanArtifactComment(planMarkdown: string): string {
+  const trimmed = planMarkdown.trim();
+  if (trimmed.startsWith(ISSUE_PLAN_COMMENT_MARKER)) {
+    return `${trimmed}\n`;
+  }
+
+  return `${ISSUE_PLAN_COMMENT_MARKER}\n${trimmed}\n`;
+}
+
+function logSuperpowersPlanPublicationMessage(
+  outputLogPath: string,
+  message: string
+): void {
+  console.log(message);
+  appendFileSync(outputLogPath, `${message}\n`, "utf8");
+}
+
+async function publishSuperpowersPlanArtifact(options: {
+  repoRoot: string;
+  forge: RepositoryForge;
+  issueNumber: number;
+  planFilePath: string;
+  outputLogPath: string;
+}): Promise<void> {
+  const planFile = toRepoRelativePath(options.repoRoot, options.planFilePath);
+
+  if (!existsSync(options.planFilePath)) {
+    logSuperpowersPlanPublicationMessage(
+      options.outputLogPath,
+      `Superpowers plan publication skipped because ${planFile} does not exist.`
+    );
+    return;
+  }
+
+  const planMarkdown = readFileSync(options.planFilePath, "utf8").trim();
+  if (!planMarkdown) {
+    logSuperpowersPlanPublicationMessage(
+      options.outputLogPath,
+      `Superpowers plan publication skipped because ${planFile} is empty.`
+    );
+    return;
+  }
+
+  const renderedPlan = formatSuperpowersPlanArtifactComment(planMarkdown);
+  const existingPlanComment = await options.forge.fetchIssuePlanComment(
+    options.issueNumber
+  );
+
+  if (existingPlanComment) {
+    const comment = await options.forge.updateIssuePlanComment(
+      existingPlanComment.id,
+      renderedPlan
+    );
+    logSuperpowersPlanPublicationMessage(
+      options.outputLogPath,
+      `Updated issue resolution plan comment from Superpowers plan: ${comment.url}`
+    );
+    return;
+  }
+
+  const comment = await options.forge.createIssuePlanComment(
+    options.issueNumber,
+    renderedPlan
+  );
+  logSuperpowersPlanPublicationMessage(
+    options.outputLogPath,
+    `Created issue resolution plan comment from Superpowers plan: ${comment.url}`
+  );
+}
+
 function formatNumberedMarkdownList(items: string[]): string {
   return items.map((item, index) => `${index + 1}. ${item}`).join("\n");
 }
@@ -1511,14 +1581,42 @@ function buildIssueRefineRuntimePrompt(input: {
   issueNumber: number;
   requestedChanges?: string;
   comments: RepositoryComment[];
+  useCodexSuperpowers: boolean;
 }): string {
   const draftFile = toRepoRelativePath(input.repoRoot, input.workspace.draftFilePath);
   const runDir = toRepoRelativePath(input.repoRoot, input.workspace.runDir);
+  const superpowersSpecFile = toRepoRelativePath(
+    input.repoRoot,
+    input.workspace.superpowersSpecFilePath
+  );
+  const superpowersPlanFile = toRepoRelativePath(
+    input.repoRoot,
+    input.workspace.superpowersPlanFilePath
+  );
   const requestedChangesSection = input.requestedChanges
     ? [
         "What changes should be made to the specification?",
         input.requestedChanges,
         "",
+      ]
+    : [];
+
+  const superpowersArtifactInstructions = input.useCodexSuperpowers
+    ? [
+        `Write the Superpowers spec artifact to \`${superpowersSpecFile}\`.`,
+        `Write the Superpowers plan artifact to \`${superpowersPlanFile}\`.`,
+      ]
+    : [];
+  const superpowersAgentInstructions = input.useCodexSuperpowers
+    ? [
+        "- use `superpowers:brainstorming` first for clarification and scope shaping",
+        "- use `superpowers:writing-plans` discipline to make the refined issue implementation-ready",
+        "- override the normal Superpowers spec/plan continuation for this workflow",
+        "- keep any intermediate Superpowers docs inside the provided `.prs/runs/...` directory",
+        "- write any Superpowers brainstorming/spec artifact only to the provided spec path",
+        "- write any Superpowers writing-plans artifact only to the provided plan path",
+        "- do not create `docs/superpowers/specs/...` documents",
+        "- do not create `docs/superpowers/plans/...` documents",
       ]
     : [];
 
@@ -1541,12 +1639,14 @@ function buildIssueRefineRuntimePrompt(input: {
     formatIssueRefineComments(input.comments),
     "",
     `Write the refined markdown to \`${draftFile}\`.`,
+    ...superpowersArtifactInstructions,
     `Use \`${runDir}\` for run artifacts created by this workflow.`,
     "",
     "Instructions to the coding agent:",
     "- inspect the repository only as needed to refine the specification",
     "- keep the refined draft grounded in the current repository structure and existing patterns",
     "- treat issue comments as context, not as the canonical spec",
+    ...superpowersAgentInstructions,
     "- write an implementation-ready Markdown issue draft with a top-level title heading and concrete sections when they add value",
     "- write the completed draft to the provided draft path before exiting",
     "- do not create or update GitHub issues directly",
@@ -1584,6 +1684,7 @@ function writeIssueRefineWorkspaceFiles(
   comments: RepositoryComment[],
   requestedChanges: string | undefined,
   runtimeInvocation: "new" | "resume",
+  useCodexSuperpowers: boolean,
   sessionId?: string,
   warnings: string[] = []
 ): void {
@@ -1596,7 +1697,17 @@ function writeIssueRefineWorkspaceFiles(
     issueNumber,
     requestedChanges,
     comments,
+    useCodexSuperpowers,
   });
+  const superpowersMetadata = useCodexSuperpowers
+    ? {
+        enabled: true,
+        specFile: toRepoRelativePath(repoRoot, workspace.superpowersSpecFilePath),
+        planFile: toRepoRelativePath(repoRoot, workspace.superpowersPlanFilePath),
+      }
+    : {
+        enabled: false,
+      };
 
   writeFileSync(workspace.promptFilePath, `${prompt}\n`, "utf8");
   writeFileSync(
@@ -1615,6 +1726,7 @@ function writeIssueRefineWorkspaceFiles(
         promptFile: toRepoRelativePath(repoRoot, workspace.promptFilePath),
         outputLog: toRepoRelativePath(repoRoot, workspace.outputLogPath),
         runDir: toRepoRelativePath(repoRoot, workspace.runDir),
+        superpowers: superpowersMetadata,
         runtime: {
           type: runtime.type,
           displayName: runtime.displayName,
@@ -1641,6 +1753,12 @@ function writeIssueRefineWorkspaceFiles(
       `Issue URL: ${issue.url}`,
       `Draft file: ${toRepoRelativePath(repoRoot, workspace.draftFilePath)}`,
       `Prompt file: ${toRepoRelativePath(repoRoot, workspace.promptFilePath)}`,
+      ...(useCodexSuperpowers
+        ? [
+            `Superpowers spec file: ${toRepoRelativePath(repoRoot, workspace.superpowersSpecFilePath)}`,
+            `Superpowers plan file: ${toRepoRelativePath(repoRoot, workspace.superpowersPlanFilePath)}`,
+          ]
+        : []),
       `Runtime: ${runtime.displayName}`,
       `Runtime invocation: ${runtimeInvocation}`,
       ...(sessionId ? [`Runtime session: ${sessionId}`] : []),
@@ -1738,6 +1856,8 @@ function createIssueRefineWorkspaceFromState(
     promptFilePath: state.promptFile,
     metadataFilePath: resolve(state.runDir, "metadata.json"),
     outputLogPath: state.outputLog,
+    superpowersSpecFilePath: resolve(state.runDir, "superpowers-spec.md"),
+    superpowersPlanFilePath: resolve(state.runDir, "superpowers-plan.md"),
   };
 }
 
@@ -3256,16 +3376,16 @@ async function runIssueDraftCommand(): Promise<void> {
   });
   const shouldUseCodexSuperpowers =
     runtime.type === "codex" &&
-    repositoryConfig.ai.issueDraft.useCodexSuperpowers &&
+    repositoryConfig.ai.issue.useCodexSuperpowers &&
     isCodexSuperpowersAvailable();
 
   if (
     runtime.type === "codex" &&
-    repositoryConfig.ai.issueDraft.useCodexSuperpowers &&
+    repositoryConfig.ai.issue.useCodexSuperpowers &&
     !shouldUseCodexSuperpowers
   ) {
     console.log(
-      "Codex Superpowers-backed issue drafting is enabled in .prs/config.json, but Superpowers is not available in the current Codex installation. Falling back to the standard issue-draft prompt."
+      "Codex Superpowers-backed issue workflows are enabled in .prs/config.json, but Superpowers is not available in the current Codex installation. Falling back to the standard issue-draft prompt."
     );
   }
 
@@ -3328,6 +3448,16 @@ async function runIssueDraftCommand(): Promise<void> {
   const parsedDraft = parseIssueDraftDocument(reviewedDraft.content);
   const issueUrl = await forge.createDraftIssue(parsedDraft.title, parsedDraft.body);
   console.log(`Created issue: ${issueUrl}`);
+  if (shouldUseCodexSuperpowers) {
+    const createdIssue = parseCreatedIssueUrl(issueUrl);
+    await publishSuperpowersPlanArtifact({
+      repoRoot,
+      forge,
+      issueNumber: createdIssue.issueNumber,
+      planFilePath: workspace.superpowersPlanFilePath,
+      outputLogPath: workspace.outputLogPath,
+    });
+  }
 }
 
 async function runIssueRefineCommand(issueNumber: number): Promise<void> {
@@ -3339,6 +3469,20 @@ async function runIssueRefineCommand(issueNumber: number): Promise<void> {
       console.log(message);
     },
   });
+  const shouldUseCodexSuperpowers =
+    runtime.type === "codex" &&
+    repositoryConfig.ai.issue.useCodexSuperpowers &&
+    isCodexSuperpowersAvailable();
+
+  if (
+    runtime.type === "codex" &&
+    repositoryConfig.ai.issue.useCodexSuperpowers &&
+    !shouldUseCodexSuperpowers
+  ) {
+    console.log(
+      "Codex Superpowers-backed issue workflows are enabled in .prs/config.json, but Superpowers is not available in the current Codex installation. Falling back to the standard issue-refine prompt."
+    );
+  }
 
   console.log(`Fetching issue #${issueNumber}...`);
   const issue = await forge.fetchIssueDetails(issueNumber);
@@ -3404,6 +3548,7 @@ async function runIssueRefineCommand(issueNumber: number): Promise<void> {
     comments,
     requestedChanges,
     runtimeInvocation,
+    shouldUseCodexSuperpowers,
     sessionId,
     warnings
   );
@@ -3531,6 +3676,15 @@ async function runIssueRefineCommand(issueNumber: number): Promise<void> {
       }
     );
     console.log(`Updated issue: ${updatedIssue.url}`);
+    if (shouldUseCodexSuperpowers) {
+      await publishSuperpowersPlanArtifact({
+        repoRoot,
+        forge,
+        issueNumber: updatedIssue.number,
+        planFilePath: workspace.superpowersPlanFilePath,
+        outputLogPath: workspace.outputLogPath,
+      });
+    }
     return;
   }
 
@@ -3553,6 +3707,15 @@ async function runIssueRefineCommand(issueNumber: number): Promise<void> {
     }
   );
   console.log(`Created linked issue: ${linkedIssue.issueUrl}`);
+  if (shouldUseCodexSuperpowers) {
+    await publishSuperpowersPlanArtifact({
+      repoRoot,
+      forge,
+      issueNumber: linkedIssue.issueNumber,
+      planFilePath: workspace.superpowersPlanFilePath,
+      outputLogPath: workspace.outputLogPath,
+    });
+  }
 }
 
 async function runIssuePlanCommand(

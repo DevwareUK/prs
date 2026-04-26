@@ -16144,6 +16144,7 @@ var require_dist = __commonJS({
       REPOSITORY_STATE_DIRECTORY: () => REPOSITORY_STATE_DIRECTORY,
       RepositoryAiConfig: () => RepositoryAiConfig,
       RepositoryAiContextConfig: () => RepositoryAiContextConfig,
+      RepositoryAiIssueConfig: () => RepositoryAiIssueConfig,
       RepositoryAiIssueDraftConfig: () => RepositoryAiIssueDraftConfig,
       RepositoryAiProviderConfig: () => RepositoryAiProviderConfig,
       RepositoryAiProviderType: () => RepositoryAiProviderType,
@@ -16477,6 +16478,9 @@ var require_dist = __commonJS({
     var RepositoryAiIssueDraftConfig = import_zod9.z.object({
       useCodexSuperpowers: import_zod9.z.boolean().optional()
     });
+    var RepositoryAiIssueConfig = import_zod9.z.object({
+      useCodexSuperpowers: import_zod9.z.boolean().optional()
+    });
     var RepositoryAiProviderType = import_zod9.z.enum(["openai", "bedrock-claude"]);
     var RepositoryOpenAiProviderConfig = import_zod9.z.object({
       type: import_zod9.z.literal("openai"),
@@ -16493,6 +16497,7 @@ var require_dist = __commonJS({
       RepositoryBedrockClaudeProviderConfig
     ]);
     var RepositoryAiConfig = import_zod9.z.object({
+      issue: RepositoryAiIssueConfig.optional(),
       issueDraft: RepositoryAiIssueDraftConfig.optional(),
       runtime: RepositoryAiRuntimeConfig.optional(),
       provider: RepositoryAiProviderConfig.optional()
@@ -16507,6 +16512,9 @@ var require_dist = __commonJS({
     });
     var ResolvedRepositoryConfig = import_zod9.z.object({
       ai: import_zod9.z.object({
+        issue: import_zod9.z.object({
+          useCodexSuperpowers: import_zod9.z.boolean()
+        }),
         issueDraft: import_zod9.z.object({
           useCodexSuperpowers: import_zod9.z.boolean()
         }),
@@ -16996,10 +17004,14 @@ ${formatValidationIssues(validationIssues)}`,
     }
     function resolveRepositoryConfig(config) {
       const parsedConfig = import_contracts32.RepositoryConfig.parse(config ?? {});
+      const useCodexSuperpowers = parsedConfig.ai?.issue?.useCodexSuperpowers ?? parsedConfig.ai?.issueDraft?.useCodexSuperpowers ?? DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS;
       return import_contracts32.ResolvedRepositoryConfig.parse({
         ai: {
+          issue: {
+            useCodexSuperpowers
+          },
           issueDraft: {
-            useCodexSuperpowers: parsedConfig.ai?.issueDraft?.useCodexSuperpowers ?? DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS
+            useCodexSuperpowers
           },
           runtime: parsedConfig.ai?.runtime ?? {
             type: DEFAULT_REPOSITORY_AI_RUNTIME_TYPE

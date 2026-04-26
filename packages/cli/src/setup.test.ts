@@ -179,7 +179,7 @@ describe("setup command", () => {
       JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
     ).toEqual({
       ai: {
-        issueDraft: {
+        issue: {
           useCodexSuperpowers: false,
         },
         runtime: {
@@ -259,7 +259,7 @@ describe("setup command", () => {
       JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
     ).toEqual({
       ai: {
-        issueDraft: {
+        issue: {
           useCodexSuperpowers: false,
         },
         runtime: {
@@ -393,7 +393,7 @@ describe("setup command", () => {
       JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
     ).toEqual({
       ai: {
-        issueDraft: {
+        issue: {
           useCodexSuperpowers: false,
         },
         runtime: {
@@ -451,7 +451,7 @@ describe("setup command", () => {
       JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
     ).toEqual({
       ai: {
-        issueDraft: {
+        issue: {
           useCodexSuperpowers: false,
         },
         provider: {
@@ -601,16 +601,16 @@ describe("setup command", () => {
       JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
     ).toMatchObject({
       ai: {
-        issueDraft: {
+        issue: {
           useCodexSuperpowers: true,
         },
       },
     });
     expect(messages.join("\n")).toContain(
-      "Suggested Codex Superpowers-backed issue drafting: enabled"
+      "Suggested Codex Superpowers-backed issue workflows: enabled"
     );
     expect(messages.join("\n")).toContain(
-      "Configured Codex Superpowers-backed issue drafting: enabled"
+      "Configured Codex Superpowers-backed issue workflows: enabled"
     );
   });
 
@@ -663,6 +663,9 @@ describe("setup command", () => {
       JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
     ).toMatchObject({
       ai: {
+        issue: {
+          useCodexSuperpowers: false,
+        },
         issueDraft: {
           useCodexSuperpowers: false,
         },
