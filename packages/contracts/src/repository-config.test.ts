@@ -2,6 +2,36 @@ import { describe, expect, it } from "vitest";
 import { RepositoryConfig, ResolvedRepositoryConfig } from "./repository-config";
 
 describe("repository config schema", () => {
+  it("accepts ai.issue.useCodexSuperpowers as a boolean", () => {
+    expect(
+      RepositoryConfig.parse({
+        ai: {
+          issue: {
+            useCodexSuperpowers: true,
+          },
+        },
+      })
+    ).toEqual({
+      ai: {
+        issue: {
+          useCodexSuperpowers: true,
+        },
+      },
+    });
+  });
+
+  it("requires ai.issue.useCodexSuperpowers to be a boolean when present", () => {
+    expect(() =>
+      RepositoryConfig.parse({
+        ai: {
+          issue: {
+            useCodexSuperpowers: "yes",
+          },
+        },
+      })
+    ).toThrow();
+  });
+
   it("accepts ai.issueDraft.useCodexSuperpowers as a boolean", () => {
     expect(
       RepositoryConfig.parse({
@@ -36,6 +66,9 @@ describe("repository config schema", () => {
     expect(() =>
       ResolvedRepositoryConfig.parse({
         ai: {
+          issueDraft: {
+            useCodexSuperpowers: false,
+          },
           runtime: {
             type: "codex",
           },

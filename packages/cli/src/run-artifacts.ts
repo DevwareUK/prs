@@ -134,6 +134,8 @@ export type IssueRefineWorkspace = {
   promptFilePath: string;
   metadataFilePath: string;
   outputLogPath: string;
+  superpowersSpecFilePath: string;
+  superpowersPlanFilePath: string;
 };
 
 export type IssueRefineSessionState = {
@@ -164,6 +166,8 @@ export function createIssueRefineWorkspace(
     promptFilePath: resolve(runDir, "prompt.md"),
     metadataFilePath: resolve(runDir, "metadata.json"),
     outputLogPath: resolve(runDir, "output.log"),
+    superpowersSpecFilePath: resolve(runDir, "superpowers-spec.md"),
+    superpowersPlanFilePath: resolve(runDir, "superpowers-plan.md"),
   };
 }
 

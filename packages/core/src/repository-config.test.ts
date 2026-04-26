@@ -18,6 +18,9 @@ describe("resolveRepositoryConfig", () => {
 
     expect(resolved.baseBranch).toBe("develop");
     expect(resolved.ai).toEqual({
+      issue: {
+        useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
+      },
       issueDraft: {
         useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
       },
@@ -45,6 +48,9 @@ describe("resolveRepositoryConfig", () => {
     });
 
     expect(resolved.ai).toEqual({
+      issue: {
+        useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
+      },
       issueDraft: {
         useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
       },
@@ -69,6 +75,9 @@ describe("resolveRepositoryConfig", () => {
         },
       }).ai
     ).toEqual({
+      issue: {
+        useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
+      },
       issueDraft: {
         useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
       },
@@ -91,6 +100,9 @@ describe("resolveRepositoryConfig", () => {
         },
       }).ai
     ).toEqual({
+      issue: {
+        useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
+      },
       issueDraft: {
         useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
       },
@@ -106,7 +118,7 @@ describe("resolveRepositoryConfig", () => {
   });
 
   it("defaults and preserves ai.issueDraft.useCodexSuperpowers", () => {
-    expect(resolveRepositoryConfig().ai.issueDraft).toEqual({
+    expect(resolveRepositoryConfig().ai.issue).toEqual({
       useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
     });
 
@@ -117,9 +129,26 @@ describe("resolveRepositoryConfig", () => {
             useCodexSuperpowers: true,
           },
         },
-      }).ai.issueDraft
+      }).ai.issue
     ).toEqual({
       useCodexSuperpowers: true,
+    });
+  });
+
+  it("prefers ai.issue.useCodexSuperpowers over the legacy draft-only setting", () => {
+    expect(
+      resolveRepositoryConfig({
+        ai: {
+          issue: {
+            useCodexSuperpowers: false,
+          },
+          issueDraft: {
+            useCodexSuperpowers: true,
+          },
+        },
+      }).ai.issue
+    ).toEqual({
+      useCodexSuperpowers: false,
     });
   });
 });

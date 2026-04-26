@@ -67,8 +67,8 @@ type RepositoryInspection = {
   suggestedBaseBranchSource: string;
   suggestedBuildCommand: string[];
   suggestedBuildCommandSource: string;
-  suggestedIssueDraftUseCodexSuperpowers: boolean;
-  suggestedIssueDraftUseCodexSuperpowersSource: string;
+  suggestedIssueUseCodexSuperpowers: boolean;
+  suggestedIssueUseCodexSuperpowersSource: string;
   suggestedForgeTypeSource: string;
   suggestedRuntimeType: RuntimeType;
   suggestedRuntimeTypeSource: string;
@@ -86,7 +86,7 @@ type SetupAnswers = {
   buildCommand: string[];
   excludePaths: string[];
   forgeType: ForgeType;
-  issueDraftUseCodexSuperpowers: boolean;
+  issueUseCodexSuperpowers: boolean;
   runtimeType: RuntimeType;
   installGitHubWorkflows: boolean;
   updateAgents: boolean;
@@ -443,10 +443,12 @@ function detectRuntimeType(
   };
 }
 
-function detectIssueDraftUseCodexSuperpowers(
+function detectIssueUseCodexSuperpowers(
   existingConfig?: RepositoryConfigType
 ): DetectionResult<boolean> {
-  const existingValue = existingConfig?.ai?.issueDraft?.useCodexSuperpowers;
+  const existingValue =
+    existingConfig?.ai?.issue?.useCodexSuperpowers ??
+    existingConfig?.ai?.issueDraft?.useCodexSuperpowers;
   if (typeof existingValue === "boolean") {
     return {
       value: existingValue,
@@ -1279,7 +1281,7 @@ function inspectRepository(
   const buildCommand = detectBuildCommand(repoRoot, existingConfig, packageJson, composerJson);
   const baseBranch = detectBaseBranch(repoRoot, existingConfig);
   const forgeType = detectForgeType(repoRoot, existingConfig);
-  const issueDraftUseCodexSuperpowers = detectIssueDraftUseCodexSuperpowers(existingConfig);
+  const issueUseCodexSuperpowers = detectIssueUseCodexSuperpowers(existingConfig);
   const runtimeType = detectRuntimeType(existingConfig);
   const actionableGitHubWorkflowIds = findActionableGitHubWorkflowIds(repoRoot);
   const missingGitHubWorkflowIds = findMissingGitHubWorkflowIds(repoRoot);
@@ -1312,8 +1314,8 @@ function inspectRepository(
     suggestedBaseBranchSource: baseBranch.source,
     suggestedBuildCommand: buildCommand.value,
     suggestedBuildCommandSource: buildCommand.source,
-    suggestedIssueDraftUseCodexSuperpowers: issueDraftUseCodexSuperpowers.value,
-    suggestedIssueDraftUseCodexSuperpowersSource: issueDraftUseCodexSuperpowers.source,
+    suggestedIssueUseCodexSuperpowers: issueUseCodexSuperpowers.value,
+    suggestedIssueUseCodexSuperpowersSource: issueUseCodexSuperpowers.source,
     suggestedForgeTypeSource: forgeType.source,
     suggestedRuntimeType: runtimeType.value,
     suggestedRuntimeTypeSource: runtimeType.source,
@@ -1534,8 +1536,8 @@ function buildRepositoryConfig(
 
   const aiConfig: NonNullable<RepositoryConfigType["ai"]> = {
     ...(existingConfig?.ai ?? {}),
-    issueDraft: {
-      useCodexSuperpowers: answers.issueDraftUseCodexSuperpowers,
+    issue: {
+      useCodexSuperpowers: answers.issueUseCodexSuperpowers,
     },
     runtime: {
       type: answers.runtimeType,
@@ -1630,9 +1632,9 @@ function logInspection(repoRoot: string, inspection: RepositoryInspection): void
     `Suggested interactive runtime: ${inspection.suggestedRuntimeType} (${inspection.suggestedRuntimeTypeSource})`
   );
   console.log(
-    `Suggested Codex Superpowers-backed issue drafting: ${
-      inspection.suggestedIssueDraftUseCodexSuperpowers ? "enabled" : "disabled"
-    } (${inspection.suggestedIssueDraftUseCodexSuperpowersSource})`
+    `Suggested Codex Superpowers-backed issue workflows: ${
+      inspection.suggestedIssueUseCodexSuperpowers ? "enabled" : "disabled"
+    } (${inspection.suggestedIssueUseCodexSuperpowersSource})`
   );
   console.log(
     `Suggested extra AI context exclusions: ${renderList(inspection.suggestedExcludePaths)}`
@@ -1662,7 +1664,7 @@ function buildRecommendedAnswers(inspection: RepositoryInspection): Omit<
     buildCommand: inspection.suggestedBuildCommand,
     excludePaths: inspection.suggestedExcludePaths,
     forgeType: inspection.suggestedForgeType,
-    issueDraftUseCodexSuperpowers: inspection.suggestedIssueDraftUseCodexSuperpowers,
+    issueUseCodexSuperpowers: inspection.suggestedIssueUseCodexSuperpowers,
     runtimeType: inspection.suggestedRuntimeType,
   };
 }
@@ -1699,7 +1701,7 @@ async function collectCustomSetupAnswers(
     buildCommand,
     excludePaths,
     forgeType,
-    issueDraftUseCodexSuperpowers: inspection.suggestedIssueDraftUseCodexSuperpowers,
+    issueUseCodexSuperpowers: inspection.suggestedIssueUseCodexSuperpowers,
     runtimeType,
   };
 }
@@ -1802,8 +1804,8 @@ export async function runSetupCommand(options: {
   );
   console.log(`Configured interactive runtime: ${answers.runtimeType}`);
   console.log(
-    `Configured Codex Superpowers-backed issue drafting: ${
-      answers.issueDraftUseCodexSuperpowers ? "enabled" : "disabled"
+    `Configured Codex Superpowers-backed issue workflows: ${
+      answers.issueUseCodexSuperpowers ? "enabled" : "disabled"
     }`
   );
   console.log(`Configured forge integration: ${answers.forgeType}`);

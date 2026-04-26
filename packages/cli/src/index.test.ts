@@ -380,6 +380,7 @@ function parseMockRepositoryConfig(value?: unknown): Record<string, unknown> {
   const config = (value ?? {}) as {
     ai?: {
       runtime?: { type?: unknown };
+      issue?: { useCodexSuperpowers?: unknown };
       issueDraft?: { useCodexSuperpowers?: unknown };
       provider?: {
         type?: unknown;
@@ -457,6 +458,17 @@ function parseMockRepositoryConfig(value?: unknown): Record<string, unknown> {
         typeof config.ai.issueDraft.useCodexSuperpowers !== "boolean")
     ) {
       throw new Error("ai.issueDraft.useCodexSuperpowers must be a boolean");
+    }
+  }
+
+  if (config.ai?.issue !== undefined) {
+    if (
+      typeof config.ai.issue !== "object" ||
+      config.ai.issue === null ||
+      (config.ai.issue.useCodexSuperpowers !== undefined &&
+        typeof config.ai.issue.useCodexSuperpowers !== "boolean")
+    ) {
+      throw new Error("ai.issue.useCodexSuperpowers must be a boolean");
     }
   }
 
@@ -701,6 +713,23 @@ function createMockCodexHome(): string {
   mkdirSync(resolve(codexHome, "sessions"), { recursive: true });
   cleanupTargets.add(codexHome);
   process.env.CODEX_HOME = codexHome;
+  return codexHome;
+}
+
+function createMockCodexSuperpowersHome(): string {
+  const codexHome = createMockCodexHome();
+  const pluginRoot = resolve(
+    codexHome,
+    "plugins",
+    "cache",
+    "openai-curated",
+    "superpowers",
+    "test-version"
+  );
+  mkdirSync(resolve(pluginRoot, "skills", "brainstorming"), { recursive: true });
+  mkdirSync(resolve(pluginRoot, "skills", "writing-plans"), { recursive: true });
+  writeFileSync(resolve(pluginRoot, "skills", "brainstorming", "SKILL.md"), "# test\n");
+  writeFileSync(resolve(pluginRoot, "skills", "writing-plans", "SKILL.md"), "# test\n");
   return codexHome;
 }
 
@@ -1094,6 +1123,7 @@ async function loadCli(options: {
     resolveRepositoryConfig: vi.fn((config?: {
       ai?: {
         runtime?: { type?: "codex" | "claude-code" };
+        issue?: { useCodexSuperpowers?: boolean };
         issueDraft?: { useCodexSuperpowers?: boolean };
         provider?:
           | { type?: "openai"; model?: string; baseUrl?: string }
@@ -1105,8 +1135,17 @@ async function loadCli(options: {
       forge?: { type?: "github" | "none" };
     }) => ({
       ai: {
+        issue: {
+          useCodexSuperpowers:
+            config?.ai?.issue?.useCodexSuperpowers ??
+            config?.ai?.issueDraft?.useCodexSuperpowers ??
+            false,
+        },
         issueDraft: {
-          useCodexSuperpowers: config?.ai?.issueDraft?.useCodexSuperpowers ?? false,
+          useCodexSuperpowers:
+            config?.ai?.issue?.useCodexSuperpowers ??
+            config?.ai?.issueDraft?.useCodexSuperpowers ??
+            false,
         },
         runtime: config?.ai?.runtime ?? {
           type: "codex",
@@ -2449,6 +2488,162 @@ describe("CLI integration", () => {
       ),
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("adds Superpowers instructions to issue refine runs and publishes the plan artifact", async () => {
+    const beforeRuns = listRunDirectories();
+    const issueNumber = 155;
+    let runtimePrompt = "";
+    let outputLog = "";
+    let runtimeMetadata:
+      | {
+          superpowers?: {
+            enabled?: boolean;
+            specFile?: string;
+            planFile?: string;
+          };
+        }
+      | undefined;
+    createMockCodexSuperpowersHome();
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url.endsWith(`/issues/${issueNumber}`) && init?.method === "PATCH") {
+        return createFetchResponse({
+          number: issueNumber,
+          title: "Superpowers refine title",
+          html_url: getRepositoryIssueUrl(issueNumber),
+        });
+      }
+
+      if (url.endsWith(`/issues/${issueNumber}`)) {
+        return createFetchResponse({
+          title: "Superpowers refine title",
+          body: "<!-- prs:managed-issue -->\n\nOriginal managed issue body.",
+          html_url: getRepositoryIssueUrl(issueNumber),
+        });
+      }
+
+      if (url.includes(`/issues/${issueNumber}/comments?`)) {
+        return createFetchResponse([]);
+      }
+
+      if (url.endsWith(`/issues/${issueNumber}/comments`) && init?.method === "POST") {
+        return createFetchResponse({
+          id: 9155,
+          body: "<!-- prs:issue-plan -->\n## Refine Plan",
+          html_url:
+            `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-9155`,
+          updated_at: "2026-04-26T09:35:00Z",
+        });
+      }
+
+      throw new Error(`Unexpected fetch call: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await withRepositoryConfig(
+      JSON.stringify(
+        {
+          ai: {
+            issue: {
+              useCodexSuperpowers: true,
+            },
+          },
+        },
+        null,
+        2
+      ),
+      async () => {
+        const { run } = await loadCli({
+          readlineAnswers: ["Make it implementation ready.", "y"],
+          execFileSyncImpl: (command, args) => {
+            if (command === "git" && args[0] === "remote") {
+              return "git@github.com:DevwareUK/prs.git\n";
+            }
+
+            throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+          },
+          spawnSyncImpl: (command, args) => {
+            if (command === "gh" && args[0] === "--version") {
+              return { status: 1, error: new Error("gh is unavailable") };
+            }
+
+            if (command === "codex" && args[0] === "--version") {
+              return { status: 0 };
+            }
+
+            if (command === "codex") {
+              const { metadata, runDir } = readLatestRunMetadata();
+              runtimePrompt = readFileSync(
+                resolve(REPO_ROOT, metadata.promptFile as string),
+                "utf8"
+              );
+              runtimeMetadata = JSON.parse(
+                readFileSync(resolve(REPO_ROOT, metadata.runDir as string, "metadata.json"), "utf8")
+              ) as typeof runtimeMetadata;
+              outputLog = readFileSync(
+                resolve(REPO_ROOT, metadata.outputLog as string),
+                "utf8"
+              );
+              writeFileSync(
+                resolve(REPO_ROOT, metadata.draftFile as string),
+                "# Superpowers refine title\n\n## Summary\nRefined body.\n",
+                "utf8"
+              );
+              writeFileSync(
+                resolve(REPO_ROOT, metadata.runDir as string, "superpowers-plan.md"),
+                "## Refine Plan\n\n- Apply the refined work.\n",
+                "utf8"
+              );
+              cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", runDir));
+              return { status: 0 };
+            }
+
+            throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+          },
+        });
+
+        process.env.GH_TOKEN = "";
+        process.env.GITHUB_TOKEN = "test-token";
+        process.argv = ["node", "prs", "issue", "refine", String(issueNumber)];
+        await run();
+      }
+    );
+
+    const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
+    expect(createdRunDir).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "issues", String(issueNumber)));
+
+    const expectedSpecFile = `.prs/runs/${createdRunDir}/superpowers-spec.md`;
+    const expectedPlanFile = `.prs/runs/${createdRunDir}/superpowers-plan.md`;
+
+    expect(runtimePrompt).toContain("use `superpowers:brainstorming` first");
+    expect(runtimePrompt).toContain("use `superpowers:writing-plans` discipline");
+    expect(runtimePrompt).toContain(`Write the Superpowers spec artifact to \`${expectedSpecFile}\`.`);
+    expect(runtimePrompt).toContain(`Write the Superpowers plan artifact to \`${expectedPlanFile}\`.`);
+    expect(runtimePrompt).toContain("do not create `docs/superpowers/specs/");
+    expect(runtimePrompt).toContain("do not create `docs/superpowers/plans/");
+    expect(runtimeMetadata).toMatchObject({
+      superpowers: {
+        enabled: true,
+        specFile: expectedSpecFile,
+        planFile: expectedPlanFile,
+      },
+    });
+    expect(outputLog).toContain(`Superpowers spec file: ${expectedSpecFile}`);
+    expect(outputLog).toContain(`Superpowers plan file: ${expectedPlanFile}`);
+
+    const planCommentCall = fetchMock.mock.calls.find(
+      ([input, init]) =>
+        String(input).endsWith(`/issues/${issueNumber}/comments`) &&
+        (init as RequestInit | undefined)?.method === "POST"
+    );
+    expect(planCommentCall).toBeDefined();
+    expect(JSON.parse(String(planCommentCall?.[1] && (planCommentCall[1] as RequestInit).body))).toEqual({
+      body: "<!-- prs:issue-plan -->\n## Refine Plan\n\n- Apply the refined work.\n",
+    });
   });
 
   it("resumes the saved Codex issue refine session when it is still tracked", async () => {
@@ -6590,7 +6785,7 @@ describe("CLI integration", () => {
       JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
     ).toEqual({
       ai: {
-        issueDraft: {
+        issue: {
           useCodexSuperpowers: false,
         },
         runtime: {
@@ -6693,7 +6888,7 @@ describe("CLI integration", () => {
       JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
     ).toEqual({
       ai: {
-        issueDraft: {
+        issue: {
           useCodexSuperpowers: false,
         },
         runtime: {
@@ -7053,6 +7248,214 @@ describe("CLI integration", () => {
     expect(outputLog).toContain(`Superpowers plan file: ${expectedPlanFile}`);
   });
 
+  it("creates a managed issue plan comment from a Superpowers draft plan artifact", async () => {
+    const beforeDrafts = listIssueDraftFiles();
+    const beforeRuns = listRunDirectories();
+    const createdIssueNumber = 101;
+    createMockCodexSuperpowersHome();
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url.endsWith("/issues") && init?.method === "POST") {
+        return createFetchResponse({
+          number: createdIssueNumber,
+          title: "Superpowers draft title",
+          html_url: getRepositoryIssueUrl(createdIssueNumber),
+        });
+      }
+
+      if (url.includes(`/issues/${createdIssueNumber}/comments?`)) {
+        return createFetchResponse([]);
+      }
+
+      if (url.endsWith(`/issues/${createdIssueNumber}/comments`) && init?.method === "POST") {
+        return createFetchResponse({
+          id: 9001,
+          body: "<!-- prs:issue-plan -->\n## Superpowers Plan",
+          html_url:
+            `https://github.com/DevwareUK/prs/issues/${createdIssueNumber}#issuecomment-9001`,
+          updated_at: "2026-04-26T09:30:00Z",
+        });
+      }
+
+      throw new Error(`Unexpected fetch call: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await withRepositoryConfig(
+      JSON.stringify(
+        {
+          ai: {
+            issue: {
+              useCodexSuperpowers: true,
+            },
+          },
+        },
+        null,
+        2
+      ),
+      async () => {
+        const { run } = await loadCli({
+          readlineAnswers: ["Draft a Superpowers issue.", "y"],
+          execFileSyncImpl: (command, args) => {
+            if (command === "git" && args[0] === "remote") {
+              return "git@github.com:DevwareUK/prs.git\n";
+            }
+
+            throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+          },
+          spawnSyncImpl: (command, args) => {
+            if (command === "gh" && args[0] === "--version") {
+              return { status: 1, error: new Error("gh is unavailable") };
+            }
+
+            if (command === "codex" && args[0] === "--version") {
+              return { status: 0 };
+            }
+
+            if (command === "codex") {
+              const { metadata, runDir } = readLatestRunMetadata();
+              writeFileSync(
+                resolve(REPO_ROOT, metadata.draftFile as string),
+                "# Superpowers draft title\n\n## Summary\nDraft body.\n",
+                "utf8"
+              );
+              writeFileSync(
+                resolve(REPO_ROOT, metadata.runDir as string, "superpowers-plan.md"),
+                "## Superpowers Plan\n\n- Publish this plan.\n",
+                "utf8"
+              );
+              cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", runDir));
+              return { status: 0 };
+            }
+
+            throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+          },
+        });
+
+        process.env.GH_TOKEN = "";
+        process.env.GITHUB_TOKEN = "test-token";
+        process.argv = ["node", "prs", "issue", "draft"];
+        await run();
+      }
+    );
+
+    const createdDraft = listIssueDraftFiles().find((entry) => !beforeDrafts.includes(entry));
+    expect(createdDraft).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "issues", createdDraft as string));
+
+    const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
+    expect(createdRunDir).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
+
+    const planCommentCall = fetchMock.mock.calls.find(
+      ([input, init]) =>
+        String(input).endsWith(`/issues/${createdIssueNumber}/comments`) &&
+        (init as RequestInit | undefined)?.method === "POST"
+    );
+    expect(planCommentCall).toBeDefined();
+    expect(JSON.parse(String(planCommentCall?.[1] && (planCommentCall[1] as RequestInit).body))).toEqual({
+      body: "<!-- prs:issue-plan -->\n## Superpowers Plan\n\n- Publish this plan.\n",
+    });
+  });
+
+  it("skips Superpowers draft plan publication when the plan artifact is missing", async () => {
+    const beforeDrafts = listIssueDraftFiles();
+    const beforeRuns = listRunDirectories();
+    const createdIssueNumber = 102;
+    const messages: string[] = [];
+    createMockCodexSuperpowersHome();
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url.endsWith("/issues") && init?.method === "POST") {
+        return createFetchResponse({
+          number: createdIssueNumber,
+          title: "Missing plan draft title",
+          html_url: getRepositoryIssueUrl(createdIssueNumber),
+        });
+      }
+
+      throw new Error(`Unexpected fetch call: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await withRepositoryConfig(
+      JSON.stringify(
+        {
+          ai: {
+            issue: {
+              useCodexSuperpowers: true,
+            },
+          },
+        },
+        null,
+        2
+      ),
+      async () => {
+        const { run } = await loadCli({
+          readlineAnswers: ["Draft a Superpowers issue without a plan.", "y"],
+          execFileSyncImpl: (command, args) => {
+            if (command === "git" && args[0] === "remote") {
+              return "git@github.com:DevwareUK/prs.git\n";
+            }
+
+            throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+          },
+          spawnSyncImpl: (command, args) => {
+            if (command === "gh" && args[0] === "--version") {
+              return { status: 1, error: new Error("gh is unavailable") };
+            }
+
+            if (command === "codex" && args[0] === "--version") {
+              return { status: 0 };
+            }
+
+            if (command === "codex") {
+              const { metadata, runDir } = readLatestRunMetadata();
+              writeFileSync(
+                resolve(REPO_ROOT, metadata.draftFile as string),
+                "# Missing plan draft title\n\n## Summary\nDraft body.\n",
+                "utf8"
+              );
+              cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", runDir));
+              return { status: 0 };
+            }
+
+            throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+          },
+        });
+
+        vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
+          messages.push(String(message ?? ""));
+        });
+        process.env.GH_TOKEN = "";
+        process.env.GITHUB_TOKEN = "test-token";
+        process.argv = ["node", "prs", "issue", "draft"];
+        await run();
+      }
+    );
+
+    const createdDraft = listIssueDraftFiles().find((entry) => !beforeDrafts.includes(entry));
+    expect(createdDraft).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "issues", createdDraft as string));
+
+    const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
+    expect(createdRunDir).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
+
+    expect(messages.join("\n")).toContain(
+      `Superpowers plan publication skipped because .prs/runs/${createdRunDir}/superpowers-plan.md does not exist.`
+    );
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      expect.stringContaining(`/issues/${createdIssueNumber}/comments`),
+      expect.any(Object)
+    );
+    expect(
+      readFileSync(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string, "output.log"), "utf8")
+    ).toContain("Superpowers plan publication skipped");
+  });
+
   it("falls back to the standard Codex draft prompt when Superpowers is configured but unavailable", async () => {
     const beforeDrafts = listIssueDraftFiles();
     const beforeRuns = listRunDirectories();
@@ -7105,7 +7508,7 @@ describe("CLI integration", () => {
         });
         await run();
         expect(messages.join("\n")).toContain(
-          "Codex Superpowers-backed issue drafting is enabled in .prs/config.json, but Superpowers is not available in the current Codex installation. Falling back to the standard issue-draft prompt."
+          "Codex Superpowers-backed issue workflows are enabled in .prs/config.json, but Superpowers is not available in the current Codex installation. Falling back to the standard issue-draft prompt."
         );
         expect(stdout.output()).toContain("# Draft");
       }
