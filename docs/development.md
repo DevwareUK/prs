@@ -214,7 +214,7 @@ Vitest is the default repository test runner. Tests live alongside the packages 
 This repository includes these GitHub workflows:
 
 - `.github/workflows/test.yml`: builds the workspace and runs `pnpm test` on pushes to `main` and on pull requests
-- `.github/workflows/pr-review.yml`: generates an AI PR pre-review signal, updates a managed PR comment, and posts only high-confidence inline review comments on changed lines
+- `.github/workflows/pr-review.yml`: generates an AI PR pre-review signal, updates a managed PR comment, reconciles previous PRS-authored inline review threads, and posts only non-duplicate high-confidence inline review comments on changed lines
 - `.github/workflows/pr-assistant.yml`: updates the pull request body with a managed PR assistant section
 - `.github/workflows/test-suggestions.yml`: creates or updates a managed PR comment with suggested automated test coverage
 - `.github/workflows/issue-to-pr.yml`: manual issue-to-PR automation that prepares issue context, runs Codex in GitHub Actions, builds the repository, commits generated changes, and opens or reuses a PR
