@@ -83,7 +83,7 @@ prs setup --update-skills
 
 Runs a guided repository setup flow for the current Git repository. The command inspects the repo, suggests defaults for `baseBranch`, `forge.type`, `ai.runtime.type`, `ai.issue.useCodexSuperpowers`, `buildCommand`, and extra `aiContext.excludePaths`, prints the detection source for each suggestion, warns when it had to fall back because signals were missing or conflicting, and first offers a one-confirmation "use the recommended setup" path before dropping into per-field prompts when you want to customize values. It writes `.prs/config.json`, preserves any existing `ai.provider` settings already present in that file, preserves an existing explicit `ai.issue.useCodexSuperpowers` value on reruns, treats legacy `ai.issueDraft.useCodexSuperpowers` as a backward-compatible input, ensures `.prs/` is gitignored, and only touches `AGENTS.md` when you explicitly opt in to a minimal scaffold for non-obvious repository guidance.
 
-`prs setup --update-skills` skips repository setup prompts and only refreshes managed Codex skills. It is equivalent to `prs update skills`.
+`prs setup` does not install or refresh global Codex skills during repository setup. `prs setup --update-skills` skips repository setup prompts and only refreshes managed Codex skills. It is equivalent to `prs update skills`.
 
 When Codex is available locally, setup also checks whether the Superpowers plugin is present under the active `CODEX_HOME` and reports whether Codex Superpowers-backed issue workflows were enabled or disabled. Setup does not install Codex plugins for you.
 

@@ -74,7 +74,7 @@ cd /path/to/your-repo
 prs setup
 ```
 
-After upgrading the CLI, refresh the managed Codex `/prs` skills without rerunning repository setup:
+Install or refresh the global managed Codex `/prs` skills after installing or upgrading the CLI:
 
 ```bash
 prs update skills

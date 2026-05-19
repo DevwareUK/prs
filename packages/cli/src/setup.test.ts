@@ -229,25 +229,23 @@ describe("setup command", () => {
     expect(testSuggestionsWorkflow).toContain("updateComment");
     expect(testSuggestionsWorkflow).toContain("createComment");
     expect(messages.join("\n")).toContain(
-      "Installed prs Codex skills: 11; updated: 0; unchanged: 0; skipped: 0"
+      "Unified Codex entrypoint after skills are installed: /prs"
     );
     expect(messages.join("\n")).toContain(
-      "Codex fallback CLI: /usr/local/bin/node /Users/tester/Projects/prs/packages/cli/dist/index.js"
-    );
-    expect(messages.join("\n")).toContain("Unified Codex entrypoint: /prs");
-    expect(messages.join("\n")).toContain(
-      "Use the managed `prs` Codex skill as the /prs router."
+      "Use the managed `prs` Codex skill as the /prs router once global skills are current."
     );
     expect(messages.join("\n")).toContain(
       "Workflow audit artifacts publish to GitHub; generated Superpowers docs are not committed."
     );
+    expect(messages.join("\n")).not.toContain("Installed prs Codex skills:");
+    expect(messages.join("\n")).not.toContain("Codex fallback CLI:");
+    expect(messages.join("\n")).toContain(
+      "Run `prs update skills` after installing or upgrading the CLI to refresh the global Codex /prs skills."
+    );
     expect(existsSync(resolve(codexHome, "skills", "prs-start-issue-work", "SKILL.md"))).toBe(
-      true
+      false
     );
-    expect(existsSync(resolve(codexHome, "skills", "prs", "SKILL.md"))).toBe(true);
-    expect(readFileSync(resolve(codexHome, "skills", "prs", "SKILL.md"), "utf8")).toContain(
-      "/usr/local/bin/node /Users/tester/Projects/prs/packages/cli/dist/index.js <args>"
-    );
+    expect(existsSync(resolve(codexHome, "skills", "prs", "SKILL.md"))).toBe(false);
     expect(messages.join("\n")).toContain(
       "Recommended launch path: GitHub forge, OpenAI provider, and Codex runtime."
     );
