@@ -37,6 +37,7 @@ export function createPullRequestFixTestsWorkspace(
 function buildPullRequestFixTestsRuntimePrompt(
   repoRoot: string,
   workspace: PullRequestFixTestsWorkspace,
+  prNumber: number,
   buildCommand: string[]
 ): string {
   const snapshotFile = toRepoRelativePath(repoRoot, workspace.snapshotFilePath);
@@ -59,6 +60,8 @@ function buildPullRequestFixTestsRuntimePrompt(
     "- preserve current behavior outside the selected testing scope",
     "- verify each selected test suggestion is addressed before finishing",
     `- run \`${formatCommandForDisplay(buildCommand)}\` before finishing if code changes are made`,
+    `- after verification passes and reviewed changes are committed, run \`prs tool pr push-reviewed ${prNumber} --json\` to push the PR branch through the guarded ahead/behind check`,
+    "- if that guarded push reports a divergence or failure, keep the local commit and report the failure clearly",
     "- do not modify `.prs/` unless needed for local workflow artifacts",
     "- do not commit `.prs/` files",
     "",
@@ -79,6 +82,7 @@ export function writePullRequestFixTestsWorkspaceFiles(
   const prompt = buildPullRequestFixTestsRuntimePrompt(
     repoRoot,
     workspace,
+    pullRequest.number,
     buildCommand
   );
 

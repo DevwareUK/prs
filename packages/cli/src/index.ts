@@ -151,6 +151,7 @@ import {
 } from "./workflows/pr-prepare-review/run";
 import { runPrResolveConflictsCommand } from "./workflows/pr-resolve-conflicts/run";
 import { runPrFixTestsCommand } from "./workflows/pr-fix-tests/run";
+import { pushReviewedPullRequestUpdates } from "./workflows/pull-request-reviewed-updates";
 
 export { parseSetupCommandArgs };
 export { parseAuditCommandArgs } from "./commands/audit";
@@ -381,6 +382,7 @@ const TOP_LEVEL_HELP = [
   "  prs tool pr list [--actionable] --json",
   "  prs tool pr ready <pr-number> [--all] --json",
   "  prs tool pr prepare-review <pr-number> --json",
+  "  prs tool pr push-reviewed <pr-number> --json",
   "  prs tool pr fix-comments <pr-number> [--selection <value>] --json",
   "  prs tool pr fix-failing-tests <pr-number> --json",
   "  prs tool pr fix-tests <pr-number> [--selection <value>] --json",
@@ -4080,6 +4082,63 @@ async function runToolCommand(): Promise<void> {
     }
 
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (toolCommand.kind === "pr-push-reviewed") {
+    const originalConsoleLog = console.log;
+    console.log = (...values: unknown[]) => {
+      process.stderr.write(`${values.map((value) => String(value)).join(" ")}\n`);
+    };
+
+    try {
+      ensureCleanWorkingTree(repoRoot);
+      const forge = getRepositoryForge(repoRoot);
+      const pullRequest = await forge.fetchPullRequestDetails(toolCommand.prNumber);
+      const runDir = resolve(
+        repoRoot,
+        ".prs",
+        "runs",
+        `${formatRunTimestamp()}-pr-${pullRequest.number}-push-reviewed`
+      );
+      mkdirSync(runDir, { recursive: true });
+      const outputLogPath = resolve(runDir, "output.log");
+      const createdAt = new Date().toISOString();
+      writeFileSync(
+        outputLogPath,
+        [
+          "# prs tool pr push-reviewed run log",
+          "",
+          `Created: ${createdAt}`,
+          `Pull request: #${pullRequest.number} ${pullRequest.title}`,
+          `Head branch: ${pullRequest.headRefName}`,
+          "",
+        ].join("\n"),
+        "utf8"
+      );
+      const pushResult = pushReviewedPullRequestUpdates(
+        repoRoot,
+        outputLogPath,
+        pullRequest.headRefName
+      );
+
+      process.stdout.write(
+        `${JSON.stringify(
+          {
+            status: pushResult.status,
+            prNumber: pullRequest.number,
+            headRefName: pullRequest.headRefName,
+            remoteRef: pushResult.remoteRef,
+            runDir: toRepoRelativePath(repoRoot, runDir),
+            outputLogPath: toRepoRelativePath(repoRoot, outputLogPath),
+          },
+          null,
+          2
+        )}\n`
+      );
+    } finally {
+      console.log = originalConsoleLog;
+    }
     return;
   }
 

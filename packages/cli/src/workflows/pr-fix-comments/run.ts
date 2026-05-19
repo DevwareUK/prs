@@ -545,7 +545,7 @@ export async function runPrFixCommentsCommand(
     return;
   }
 
-  pushReviewedPullRequestUpdates(
+  const pushResult = pushReviewedPullRequestUpdates(
     options.repoRoot,
     workspace.outputLogPath,
     pullRequest.headRefName
@@ -556,7 +556,7 @@ export async function runPrFixCommentsCommand(
     pullRequest,
     selectedTasks,
     commitSha,
-    pushStatus: "pushed",
+    pushStatus: pushResult.status,
   });
   await acknowledgeAddressedReviewThreads({
     forge: options.forge,
