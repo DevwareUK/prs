@@ -37,6 +37,7 @@ export function createPullRequestFixWorkspace(
 function buildPullRequestFixRuntimePrompt(
   repoRoot: string,
   workspace: PullRequestFixWorkspace,
+  prNumber: number,
   buildCommand: string[]
 ): string {
   const snapshotFile = toRepoRelativePath(repoRoot, workspace.snapshotFilePath);
@@ -58,6 +59,8 @@ function buildPullRequestFixRuntimePrompt(
     "- follow existing architecture patterns",
     "- verify each selected review thread or grouped task is fully addressed before finishing",
     `- run \`${formatCommandForDisplay(buildCommand)}\` before finishing if code changes are made`,
+    `- after verification passes and reviewed changes are committed, run \`prs tool pr push-reviewed ${prNumber} --json\` to push the PR branch through the guarded ahead/behind check`,
+    "- if that guarded push reports a divergence or failure, keep the local commit and report the failure clearly",
     "- do not modify `.prs/` unless needed for local workflow artifacts",
     "- do not commit `.prs/` files",
     "",
@@ -74,7 +77,12 @@ export function writePullRequestFixWorkspaceFiles(
   linkedIssues: PullRequestLinkedIssueContext[]
 ): void {
   const createdAt = new Date().toISOString();
-  const prompt = buildPullRequestFixRuntimePrompt(repoRoot, workspace, buildCommand);
+  const prompt = buildPullRequestFixRuntimePrompt(
+    repoRoot,
+    workspace,
+    pullRequest.number,
+    buildCommand
+  );
   const selectedComments = tasks.flatMap((task) => task.comments);
 
   writeFileSync(

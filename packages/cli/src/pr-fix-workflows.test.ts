@@ -7,12 +7,195 @@ import {
   buildManagedTestSuggestionBlock,
   createIssueResolutionPlanResult,
   createFetchResponse,
+  captureStdout,
+  parseJsonPayloadFromOutput,
   listRunDirectories,
   withRepositoryConfig,
   loadCli,
 } from "./index-test-support";
 
 describe("PR fix workflows", () => {
+  it("pushes reviewed PR updates through a deterministic guarded tool", async () => {
+    const beforeRuns = listRunDirectories();
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      createFetchResponse({
+        number: 118,
+        title: "Push reviewed fixes",
+        body: "",
+        html_url: "https://github.com/DevwareUK/prs/pull/118",
+        base: { ref: "main" },
+        head: { ref: "feat/reviewed-fixes" },
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const stdout = captureStdout();
+
+    const { run, spawnSync } = await loadCli({
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          return "";
+        }
+
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/prs.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "fetch" &&
+          args[1] === "origin" &&
+          args[2] === "feat/reviewed-fixes"
+        ) {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "rev-parse" &&
+          args[1] === "origin/feat/reviewed-fixes"
+        ) {
+          return { status: 0, stdout: "remote-tip\n", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "rev-list" &&
+          args[1] === "--left-right" &&
+          args[2] === "--count" &&
+          args[3] === "origin/feat/reviewed-fixes...HEAD"
+        ) {
+          return { status: 0, stdout: "0 1\n", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "push" &&
+          args[1] === "origin" &&
+          args[2] === "HEAD:feat/reviewed-fixes"
+        ) {
+          return { status: 0, stdout: "pushed\n", stderr: "" };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.argv = ["node", "prs", "tool", "pr", "push-reviewed", "118", "--json"];
+
+    await run();
+
+    const output = parseJsonPayloadFromOutput<{
+      status: string;
+      prNumber: number;
+      headRefName: string;
+      outputLogPath: string;
+    }>(stdout.output());
+    expect(output).toMatchObject({
+      status: "pushed",
+      prNumber: 118,
+      headRefName: "feat/reviewed-fixes",
+    });
+    expect(output.outputLogPath).toContain("-pr-118-push-reviewed/output.log");
+    const createdRun = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
+    expect(createdRun).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRun as string));
+    expect(spawnSync).toHaveBeenCalledWith(
+      "git",
+      ["push", "origin", "HEAD:feat/reviewed-fixes"],
+      expect.any(Object)
+    );
+  });
+
+  it("reports reviewed PR updates that are already up to date without pushing", async () => {
+    const beforeRuns = listRunDirectories();
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      createFetchResponse({
+        number: 119,
+        title: "Reviewed fixes already pushed",
+        body: "",
+        html_url: "https://github.com/DevwareUK/prs/pull/119",
+        base: { ref: "main" },
+        head: { ref: "feat/already-pushed" },
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const stdout = captureStdout();
+
+    const { run, spawnSync } = await loadCli({
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          return "";
+        }
+
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/prs.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "fetch" &&
+          args[1] === "origin" &&
+          args[2] === "feat/already-pushed"
+        ) {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "rev-parse" &&
+          args[1] === "origin/feat/already-pushed"
+        ) {
+          return { status: 0, stdout: "remote-tip\n", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "rev-list" &&
+          args[1] === "--left-right" &&
+          args[2] === "--count" &&
+          args[3] === "origin/feat/already-pushed...HEAD"
+        ) {
+          return { status: 0, stdout: "0 0\n", stderr: "" };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.argv = ["node", "prs", "tool", "pr", "push-reviewed", "119", "--json"];
+
+    await run();
+
+    expect(parseJsonPayloadFromOutput(stdout.output())).toMatchObject({
+      status: "already-up-to-date",
+      prNumber: 119,
+      headRefName: "feat/already-pushed",
+    });
+    const createdRun = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
+    expect(createdRun).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRun as string));
+    expect(
+      spawnSync.mock.calls.some(
+        ([command, args]) =>
+          command === "git" && Array.isArray(args) && args[0] === "push"
+      )
+    ).toBe(false);
+  });
+
   it("prepares pr fix-comments artifacts without launching a nested runtime", async () => {
     const beforeRuns = listRunDirectories();
     let gitStatusCallCount = 0;
@@ -128,6 +311,12 @@ describe("PR fix workflows", () => {
     expect(readFileSync(promptFilePath, "utf8")).toContain("✅ Implementation complete");
     expect(readFileSync(promptFilePath, "utf8")).toContain(
       "continue by giving further instruction or type `/exit`"
+    );
+    expect(readFileSync(promptFilePath, "utf8")).toContain(
+      "after verification passes and reviewed changes are committed"
+    );
+    expect(readFileSync(promptFilePath, "utf8")).toContain(
+      "prs tool pr push-reviewed 88 --json"
     );
     expect(readFileSync(promptFilePath, "utf8")).not.toContain("[2] Commit changes");
     expect(readFileSync(promptFilePath, "utf8")).not.toContain("/commit");
@@ -470,6 +659,12 @@ describe("PR fix workflows", () => {
     expect(readFileSync(promptFilePath, "utf8")).toContain(
       "continue by giving further instruction or type `/exit`"
     );
+    expect(readFileSync(promptFilePath, "utf8")).toContain(
+      "after verification passes and reviewed changes are committed"
+    );
+    expect(readFileSync(promptFilePath, "utf8")).toContain(
+      "prs tool pr push-reviewed 91 --json"
+    );
     expect(readFileSync(promptFilePath, "utf8")).not.toContain("[2] Commit changes");
     expect(readFileSync(promptFilePath, "utf8")).not.toContain("/commit");
     expect(readFileSync(outputLogPath, "utf8")).toContain("# prs pr fix-tests run log");
@@ -618,6 +813,12 @@ describe("PR fix workflows", () => {
       "keep code changes focused on fixing the captured failing tests"
     );
     expect(readFileSync(promptFilePath, "utf8")).toContain("✅ Implementation complete");
+    expect(readFileSync(promptFilePath, "utf8")).toContain(
+      "after verification passes and reviewed changes are committed"
+    );
+    expect(readFileSync(promptFilePath, "utf8")).toContain(
+      "prs tool pr push-reviewed 95 --json"
+    );
     expect(readFileSync(outputLogPath, "utf8")).toContain(
       "# prs pr fix-failing-tests run log"
     );

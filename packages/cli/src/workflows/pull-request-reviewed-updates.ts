@@ -4,6 +4,18 @@ function resolvePullRequestHeadRemoteRef(headRefName: string): string {
   return `origin/${headRefName}`;
 }
 
+export type PushReviewedPullRequestUpdatesResult =
+  | {
+      status: "pushed";
+      headRefName: string;
+      remoteRef: string;
+    }
+  | {
+      status: "already-up-to-date";
+      headRefName: string;
+      remoteRef: string;
+    };
+
 function getAheadBehindCounts(
   repoRoot: string,
   outputLogPath: string,
@@ -36,7 +48,7 @@ export function pushReviewedPullRequestUpdates(
   repoRoot: string,
   outputLogPath: string,
   headRefName: string
-): void {
+): PushReviewedPullRequestUpdatesResult {
   const remoteRef = resolvePullRequestHeadRemoteRef(headRefName);
 
   console.log(`Fetching latest ${remoteRef} before checking push status...`);
@@ -71,7 +83,11 @@ export function pushReviewedPullRequestUpdates(
   const { ahead, behind } = getAheadBehindCounts(repoRoot, outputLogPath, remoteRef);
   if (ahead === 0) {
     console.log(`Reviewed updates already match ${remoteRef}; skipping push.`);
-    return;
+    return {
+      status: "already-up-to-date",
+      headRefName,
+      remoteRef,
+    };
   }
 
   if (behind > 0) {
@@ -97,4 +113,10 @@ export function pushReviewedPullRequestUpdates(
   if (pushResult.status !== 0) {
     throw new Error(`Failed to push reviewed updates to ${remoteRef}. Local commits were kept.`);
   }
+
+  return {
+    status: "pushed",
+    headRefName,
+    remoteRef,
+  };
 }

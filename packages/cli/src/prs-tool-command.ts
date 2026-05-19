@@ -13,6 +13,7 @@ export type PrsToolCommand =
     }
   | { kind: "pr-list"; actionable: boolean; json: boolean }
   | { kind: "pr-prepare-review"; prNumber: number; json: boolean }
+  | { kind: "pr-push-reviewed"; prNumber: number; json: boolean }
   | {
       kind: "pr-fix-comments" | "pr-fix-failing-tests" | "pr-fix-tests";
       prNumber: number;
@@ -32,6 +33,7 @@ export function renderPrsToolCommandHelp(): string {
     "                        [--force-prs-managed]",
     "  prs tool pr list [--actionable] --json",
     "  prs tool pr prepare-review <pr-number> --json",
+    "  prs tool pr push-reviewed <pr-number> --json",
     "  prs tool pr fix-comments <pr-number> [--selection <value>] --json",
     "  prs tool pr fix-failing-tests <pr-number> --json",
     "  prs tool pr fix-tests <pr-number> [--selection <value>] --json",
@@ -269,6 +271,22 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
     }
 
     return { kind: "pr-prepare-review", prNumber, json: true };
+  }
+
+  if (command === "push-reviewed") {
+    if (rest.length > 0) {
+      throw new Error(renderPrsToolCommandHelp());
+    }
+    if (!third || third === "--json") {
+      throw new Error(renderPrsToolCommandHelp());
+    }
+
+    const prNumber = parseToolNumber(third, "pr");
+    if (fourth !== "--json") {
+      throw new Error(renderPrsToolCommandHelp());
+    }
+
+    return { kind: "pr-push-reviewed", prNumber, json: true };
   }
 
   if (

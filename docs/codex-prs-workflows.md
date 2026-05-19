@@ -30,9 +30,12 @@ prs issue <number> [--mode <interactive|unattended>]
 prs issue <number> <number> [...number] [--mode unattended]
 prs issue prepare <number> [--mode <local|github-action>]
 prs issue finalize <number>
+prs tool pr push-reviewed <pr-number> --json
 ```
 
 For `/prs create` and `/prs create issue`, keep drafting in the active Codex conversation. The skill should inspect the repository, ask any necessary clarifying questions, write the issue draft or issue-set manifest itself, and call `prs issue draft --draft-file <path>` or `prs issue draft --issue-set-file <path>` only to persist artifacts, preview the result, and create GitHub issues after approval. Use `prs issue draft --runtime` only when a human explicitly wants a separate drafting session with prompt-file context.
+
+For `/prs pr <number> fix-comments`, `/prs pr <number> fix-failing-tests`, and `/prs pr <number> fix-tests`, keep the fix work in the active Codex conversation. The skill should run the deterministic `prs tool pr fix-* <number> --json` preparation command, read the returned prompt and snapshot, apply the selected fixes, run configured verification, commit reviewed changes, and then run `prs tool pr push-reviewed <number> --json`. That final tool fetches the PR head, checks ahead/behind status, and pushes only when `HEAD` is ahead and not behind `origin/<pr-head-branch>`.
 
 When the Codex skill alias `/prs issue <number> --all` is requested, treat it as an operator workflow rather than a literal CLI flag. The intended end-to-end path is:
 

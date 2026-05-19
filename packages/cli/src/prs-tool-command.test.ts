@@ -95,6 +95,14 @@ describe("prs tool command parser", () => {
     });
   });
 
+  it("parses PR guarded push JSON command", () => {
+    expect(parsePrsToolCommandArgs(["pr", "push-reviewed", "115", "--json"])).toEqual({
+      kind: "pr-push-reviewed",
+      prNumber: 115,
+      json: true,
+    });
+  });
+
   it("parses skill-first PR fix preparation JSON commands", () => {
     expect(parsePrsToolCommandArgs(["pr", "fix-comments", "115", "--json"])).toEqual({
       kind: "pr-fix-comments",
