@@ -45,7 +45,7 @@ prs setup
 
 `prs setup` detects the repository root, suggests repo-aware defaults for the base branch, verification command, forge, Codex-first runtime, the Codex-only `ai.issue.useCodexSuperpowers` flag, and extra AI exclusions, then offers a fast "use the recommended setup" confirmation path. It writes `.prs/config.json`, ensures `.prs/` is gitignored, can optionally add a minimal `AGENTS.md` scaffold for repo-specific agent guidance, and for GitHub repositories can also install the recommended PR-focused workflows under `.github/workflows/prs-*.yml`. When setup finds managed legacy `git-ai-*.yml` workflow files, it migrates them to the new `prs-*.yml` filenames instead of leaving duplicate managed files behind. When setup cannot determine a value confidently, it prints an explicit warning before asking you to confirm or replace the suggestion.
 
-`prs setup` also installs or refreshes managed Codex `/prs` skills. After upgrading the CLI, run `prs update skills` or `prs setup --update-skills` to refresh only those managed skills without changing repository setup.
+`prs setup` does not install or refresh global Codex `/prs` skills. After installing or upgrading the CLI, run `prs update skills` or `prs setup --update-skills` to install or refresh those managed skills without changing repository setup.
 
 The setup flow also makes the recommended launch path explicit: GitHub forge, OpenAI provider, and Codex runtime first. `bedrock-claude` and `claude-code` stay available as advanced customization paths after the default GitHub/OpenAI/Codex path is working.
 

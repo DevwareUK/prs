@@ -2007,9 +2007,6 @@ export async function runSetupCommand(options: {
     upsertAgentsSection(options.repoRoot, renderAgentsSection());
   }
 
-  const cliFallbackCommand = options.cliFallbackCommand ?? resolveCurrentCliFallbackCommand();
-  const installedSkills = refreshManagedCodexSkills({ cliFallbackCommand });
-
   console.log("");
   console.log(`Wrote ${getRepositoryConfigPath(options.repoRoot)}.`);
   console.log(`Configured base branch: ${answers.baseBranch}`);
@@ -2050,15 +2047,13 @@ export async function runSetupCommand(options: {
     console.log(`Updated ${resolve(options.repoRoot, "AGENTS.md")}.`);
   }
 
+  console.log("Unified Codex entrypoint after skills are installed: /prs");
   console.log(
-    `Installed prs Codex skills: ${installedSkills.installed}; updated: ${installedSkills.updated}; unchanged: ${installedSkills.unchanged}; skipped: ${installedSkills.skipped.length}`
+    "Run `prs update skills` after installing or upgrading the CLI to refresh the global Codex /prs skills."
   );
-  if (cliFallbackCommand && cliFallbackCommand.length > 0) {
-    console.log(`Codex fallback CLI: ${formatCommandForDisplay(cliFallbackCommand)}`);
-  }
-  console.log(`Codex skills root: ${installedSkills.root}`);
-  console.log("Unified Codex entrypoint: /prs");
-  console.log("Use the managed `prs` Codex skill as the /prs router.");
+  console.log(
+    "Use the managed `prs` Codex skill as the /prs router once global skills are current."
+  );
   console.log(
     "Workflow audit artifacts publish to GitHub; generated Superpowers docs are not committed."
   );
