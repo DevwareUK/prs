@@ -196,7 +196,7 @@ describe("PR fix workflows", () => {
     ).toBe(false);
   });
 
-  it("runs pr fix-comments, writes run artifacts, verifies the build, and commits the result", async () => {
+  it("prepares pr fix-comments artifacts without launching a nested runtime", async () => {
     const beforeRuns = listRunDirectories();
     let gitStatusCallCount = 0;
     const fetchMock = vi
@@ -253,11 +253,11 @@ describe("PR fix workflows", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { run, spawnSync } = await loadCli({
-      readlineAnswers: ["all", "y"],
+      readlineAnswers: ["all"],
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "status") {
           gitStatusCallCount += 1;
-          return gitStatusCallCount === 1 ? "" : " M packages/cli/src/index.ts\n";
+          return "";
         }
 
         if (command === "git" && args[0] === "remote") {
@@ -272,63 +272,15 @@ describe("PR fix workflows", () => {
         }
 
         if (command === "codex" && args[0] === "--version") {
-          return { status: 0 };
+          throw new Error("prs pr fix-comments must not check Codex availability");
         }
 
         if (command === "codex") {
-          return { status: 0 };
+          throw new Error("prs pr fix-comments must not launch Codex");
         }
 
         if (command === "pnpm" && args[0] === "--version") {
           return { status: 0 };
-        }
-
-        if (command === "pnpm" && args[0] === "build") {
-          return { status: 0, stdout: "built\n", stderr: "" };
-        }
-
-        if (command === "git" && args[0] === "add") {
-          return { status: 0 };
-        }
-
-        if (command === "git" && args[0] === "commit") {
-          return { status: 0 };
-        }
-
-        if (
-          command === "git" &&
-          args[0] === "fetch" &&
-          args[1] === "origin" &&
-          args[2] === "feat/pr-fix-comments"
-        ) {
-          return { status: 0, stdout: "", stderr: "" };
-        }
-
-        if (
-          command === "git" &&
-          args[0] === "rev-parse" &&
-          args[1] === "origin/feat/pr-fix-comments"
-        ) {
-          return { status: 0, stdout: "head-tip-88\n", stderr: "" };
-        }
-
-        if (
-          command === "git" &&
-          args[0] === "rev-list" &&
-          args[1] === "--left-right" &&
-          args[2] === "--count" &&
-          args[3] === "origin/feat/pr-fix-comments...HEAD"
-        ) {
-          return { status: 0, stdout: "0 1\n", stderr: "" };
-        }
-
-        if (
-          command === "git" &&
-          args[0] === "push" &&
-          args[1] === "origin" &&
-          args[2] === "HEAD:feat/pr-fix-comments"
-        ) {
-          return { status: 0, stdout: "pushed\n", stderr: "" };
         }
 
         throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
@@ -369,12 +321,8 @@ describe("PR fix workflows", () => {
     expect(readFileSync(promptFilePath, "utf8")).not.toContain("[2] Commit changes");
     expect(readFileSync(promptFilePath, "utf8")).not.toContain("/commit");
     expect(readFileSync(outputLogPath, "utf8")).toContain("# prs pr fix-comments run log");
-    expect(readFileSync(outputLogPath, "utf8")).toContain(
-      "$ git fetch origin feat/pr-fix-comments"
-    );
-    expect(readFileSync(outputLogPath, "utf8")).toContain(
-      "$ git push origin HEAD:feat/pr-fix-comments"
-    );
+    expect(readFileSync(outputLogPath, "utf8")).not.toContain("$ git fetch");
+    expect(readFileSync(outputLogPath, "utf8")).not.toContain("$ git push");
     expect(JSON.parse(readFileSync(metadataFilePath, "utf8"))).toMatchObject({
       prNumber: 88,
       prTitle: "Tighten PR review comment fixing flow",
@@ -390,12 +338,17 @@ describe("PR fix workflows", () => {
       ],
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(spawnSync).toHaveBeenCalledWith(
+    expect(spawnSync).not.toHaveBeenCalledWith(
+      "codex",
+      expect.any(Array),
+      expect.any(Object)
+    );
+    expect(spawnSync).not.toHaveBeenCalledWith(
       "git",
       ["commit", "-F", expect.stringContaining("commit-message.txt")],
       expect.any(Object)
     );
-    expect(spawnSync).toHaveBeenCalledWith(
+    expect(spawnSync).not.toHaveBeenCalledWith(
       "git",
       ["push", "origin", "HEAD:feat/pr-fix-comments"],
       expect.any(Object)
@@ -559,7 +512,7 @@ describe("PR fix workflows", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
-  it("runs pr fix-tests, writes run artifacts, verifies the build, and commits the result", async () => {
+  it("prepares pr fix-tests artifacts without launching a nested runtime", async () => {
     const beforeRuns = listRunDirectories();
     let gitStatusCallCount = 0;
     process.env.GH_TOKEN = "";
@@ -632,24 +585,14 @@ describe("PR fix workflows", () => {
           },
         ])
       );
-    fetchMock.mockResolvedValueOnce(
-      createFetchResponse({
-        id: 801,
-        body: "updated",
-        html_url: "https://github.com/DevwareUK/prs/issues/91#issuecomment-801",
-        created_at: "2026-03-19T10:00:00Z",
-        updated_at: "2026-03-19T10:10:00Z",
-        user: { login: "github-actions[bot]", type: "Bot" },
-      })
-    );
     vi.stubGlobal("fetch", fetchMock);
 
     const { run, spawnSync } = await loadCli({
-      readlineAnswers: ["2", "y"],
+      readlineAnswers: ["2"],
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "status") {
           gitStatusCallCount += 1;
-          return gitStatusCallCount === 1 ? "" : " M packages/cli/src/index.test.ts\n";
+          return "";
         }
 
         if (command === "git" && args[0] === "remote") {
@@ -664,71 +607,15 @@ describe("PR fix workflows", () => {
         }
 
         if (command === "codex" && args[0] === "--version") {
-          return { status: 0 };
+          throw new Error("prs pr fix-tests must not check Codex availability");
         }
 
         if (command === "codex") {
-          return { status: 0 };
+          throw new Error("prs pr fix-tests must not launch Codex");
         }
 
         if (command === "pnpm" && args[0] === "--version") {
           return { status: 0 };
-        }
-
-        if (command === "pnpm" && args[0] === "build") {
-          return { status: 0, stdout: "built\n", stderr: "" };
-        }
-
-        if (command === "git" && args[0] === "add") {
-          return { status: 0 };
-        }
-
-        if (command === "git" && args[0] === "commit") {
-          return { status: 0 };
-        }
-
-        if (
-          command === "git" &&
-          args[0] === "fetch" &&
-          args[1] === "origin" &&
-          args[2] === "feat/pr-fix-tests"
-        ) {
-          return { status: 0, stdout: "", stderr: "" };
-        }
-
-        if (
-          command === "git" &&
-          args[0] === "rev-parse" &&
-          args[1] === "HEAD"
-        ) {
-          return { status: 0, stdout: "fixed-tests-head-sha\n", stderr: "" };
-        }
-
-        if (
-          command === "git" &&
-          args[0] === "rev-parse" &&
-          args[1] === "origin/feat/pr-fix-tests"
-        ) {
-          return { status: 0, stdout: "head-tip-91\n", stderr: "" };
-        }
-
-        if (
-          command === "git" &&
-          args[0] === "rev-list" &&
-          args[1] === "--left-right" &&
-          args[2] === "--count" &&
-          args[3] === "origin/feat/pr-fix-tests...HEAD"
-        ) {
-          return { status: 0, stdout: "0 1\n", stderr: "" };
-        }
-
-        if (
-          command === "git" &&
-          args[0] === "push" &&
-          args[1] === "origin" &&
-          args[2] === "HEAD:feat/pr-fix-tests"
-        ) {
-          return { status: 0, stdout: "pushed\n", stderr: "" };
         }
 
         throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
@@ -781,12 +668,8 @@ describe("PR fix workflows", () => {
     expect(readFileSync(promptFilePath, "utf8")).not.toContain("[2] Commit changes");
     expect(readFileSync(promptFilePath, "utf8")).not.toContain("/commit");
     expect(readFileSync(outputLogPath, "utf8")).toContain("# prs pr fix-tests run log");
-    expect(readFileSync(outputLogPath, "utf8")).toContain(
-      "$ git fetch origin feat/pr-fix-tests"
-    );
-    expect(readFileSync(outputLogPath, "utf8")).toContain(
-      "$ git push origin HEAD:feat/pr-fix-tests"
-    );
+    expect(readFileSync(outputLogPath, "utf8")).not.toContain("$ git fetch");
+    expect(readFileSync(outputLogPath, "utf8")).not.toContain("$ git push");
     expect(JSON.parse(readFileSync(metadataFilePath, "utf8"))).toMatchObject({
       prNumber: 91,
       prTitle: "Close the AI test suggestions implementation loop",
@@ -813,19 +696,24 @@ describe("PR fix workflows", () => {
       likelyLocations: ["packages/cli/src/index.test.ts"],
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(spawnSync).toHaveBeenCalledWith(
+    expect(spawnSync).not.toHaveBeenCalledWith(
+      "codex",
+      expect.any(Array),
+      expect.any(Object)
+    );
+    expect(spawnSync).not.toHaveBeenCalledWith(
       "git",
       ["commit", "-F", expect.stringContaining("commit-message.txt")],
       expect.any(Object)
     );
-    expect(spawnSync).toHaveBeenCalledWith(
+    expect(spawnSync).not.toHaveBeenCalledWith(
       "git",
       ["push", "origin", "HEAD:feat/pr-fix-tests"],
       expect.any(Object)
     );
   });
 
-  it("runs pr fix-failing-tests, captures failing output, verifies the fix, and commits the result", async () => {
+  it("prepares pr fix-failing-tests artifacts without launching a nested runtime", async () => {
     const beforeRuns = listRunDirectories();
     let buildCallCount = 0;
     let gitStatusCallCount = 0;
@@ -851,11 +739,11 @@ describe("PR fix workflows", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { run, spawnSync } = await loadCli({
-      readlineAnswers: ["y"],
+      readlineAnswers: [],
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "status") {
           gitStatusCallCount += 1;
-          return gitStatusCallCount === 1 ? "" : " M packages/cli/src/index.ts\n";
+          return "";
         }
 
         if (command === "git" && args[0] === "remote") {
@@ -870,11 +758,11 @@ describe("PR fix workflows", () => {
         }
 
         if (command === "codex" && args[0] === "--version") {
-          return { status: 0 };
+          throw new Error("prs pr fix-failing-tests must not check Codex availability");
         }
 
         if (command === "codex") {
-          return { status: 0 };
+          throw new Error("prs pr fix-failing-tests must not launch Codex");
         }
 
         if (command === "pnpm" && args[0] === "--version") {
@@ -883,57 +771,11 @@ describe("PR fix workflows", () => {
 
         if (command === "pnpm" && args[0] === "build") {
           buildCallCount += 1;
-          return buildCallCount === 1
-            ? {
-                status: 1,
-                stdout: "FAIL packages/cli/src/index.test.ts\n",
-                stderr: "expected true to be false\n",
-              }
-            : { status: 0, stdout: "built\n", stderr: "" };
-        }
-
-        if (command === "git" && args[0] === "add") {
-          return { status: 0 };
-        }
-
-        if (command === "git" && args[0] === "commit") {
-          return { status: 0 };
-        }
-
-        if (
-          command === "git" &&
-          args[0] === "fetch" &&
-          args[1] === "origin" &&
-          args[2] === "feat/pr-failing-tests"
-        ) {
-          return { status: 0, stdout: "", stderr: "" };
-        }
-
-        if (
-          command === "git" &&
-          args[0] === "rev-parse" &&
-          args[1] === "origin/feat/pr-failing-tests"
-        ) {
-          return { status: 0, stdout: "head-tip-95\n", stderr: "" };
-        }
-
-        if (
-          command === "git" &&
-          args[0] === "rev-list" &&
-          args[1] === "--left-right" &&
-          args[2] === "--count" &&
-          args[3] === "origin/feat/pr-failing-tests...HEAD"
-        ) {
-          return { status: 0, stdout: "0 1\n", stderr: "" };
-        }
-
-        if (
-          command === "git" &&
-          args[0] === "push" &&
-          args[1] === "origin" &&
-          args[2] === "HEAD:feat/pr-failing-tests"
-        ) {
-          return { status: 0, stdout: "pushed\n", stderr: "" };
+          return {
+            status: 1,
+            stdout: "FAIL packages/cli/src/index.test.ts\n",
+            stderr: "expected true to be false\n",
+          };
         }
 
         throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
@@ -984,7 +826,7 @@ describe("PR fix workflows", () => {
     expect(readFileSync(outputLogPath, "utf8")).toContain(
       "FAIL packages/cli/src/index.test.ts"
     );
-    expect(readFileSync(outputLogPath, "utf8")).toContain("built");
+    expect(readFileSync(outputLogPath, "utf8")).not.toContain("built");
     expect(JSON.parse(readFileSync(metadataFilePath, "utf8"))).toMatchObject({
       prNumber: 95,
       prTitle: "Repair failing PR verification",
@@ -1007,13 +849,18 @@ describe("PR fix workflows", () => {
       },
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(buildCallCount).toBe(2);
-    expect(spawnSync).toHaveBeenCalledWith(
+    expect(buildCallCount).toBe(1);
+    expect(spawnSync).not.toHaveBeenCalledWith(
+      "codex",
+      expect.any(Array),
+      expect.any(Object)
+    );
+    expect(spawnSync).not.toHaveBeenCalledWith(
       "git",
       ["commit", "-F", expect.stringContaining("commit-message.txt")],
       expect.any(Object)
     );
-    expect(spawnSync).toHaveBeenCalledWith(
+    expect(spawnSync).not.toHaveBeenCalledWith(
       "git",
       ["push", "origin", "HEAD:feat/pr-failing-tests"],
       expect.any(Object)
@@ -1114,7 +961,7 @@ describe("PR fix workflows", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("stops pr fix-failing-tests before commit when final verification still fails", async () => {
+  it("prepares pr fix-failing-tests without running final verification", async () => {
     const beforeRuns = listRunDirectories();
     let buildCallCount = 0;
     const fetchMock = vi.fn().mockResolvedValueOnce(
@@ -1147,11 +994,11 @@ describe("PR fix workflows", () => {
         }
 
         if (command === "codex" && args[0] === "--version") {
-          return { status: 0 };
+          throw new Error("prs pr fix-failing-tests must not check Codex availability");
         }
 
         if (command === "codex") {
-          return { status: 0 };
+          throw new Error("prs pr fix-failing-tests must not launch Codex");
         }
 
         if (command === "pnpm" && args[0] === "--version") {
@@ -1160,9 +1007,7 @@ describe("PR fix workflows", () => {
 
         if (command === "pnpm" && args[0] === "build") {
           buildCallCount += 1;
-          return buildCallCount === 1
-            ? { status: 1, stdout: "FAIL before runtime\n", stderr: "before\n" }
-            : { status: 1, stdout: "FAIL after runtime\n", stderr: "after\n" };
+          return { status: 1, stdout: "FAIL before runtime\n", stderr: "before\n" };
         }
 
         throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
@@ -1171,16 +1016,19 @@ describe("PR fix workflows", () => {
 
     process.argv = ["node", "prs", "pr", "fix-failing-tests", "97"];
 
-    await expect(run()).rejects.toThrow("Build failed. Changes were not committed.");
+    await run();
 
     const createdRun = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
     expect(createdRun).toBeDefined();
     const runDirPath = resolve(REPO_ROOT, ".prs", "runs", createdRun as string);
     cleanupTargets.add(runDirPath);
     expect(readFileSync(resolve(runDirPath, "output.log"), "utf8")).toContain(
+      "FAIL before runtime"
+    );
+    expect(readFileSync(resolve(runDirPath, "output.log"), "utf8")).not.toContain(
       "FAIL after runtime"
     );
-    expect(buildCallCount).toBe(2);
+    expect(buildCallCount).toBe(1);
     expect(
       spawnSync.mock.calls.some(
         ([command, args]) =>
