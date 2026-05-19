@@ -127,7 +127,12 @@ export type PrReadyPullRequestContext = {
     | {
         status: "available";
         totalCount: number;
+        totalThreadCount: number;
         actionableThreadCount: number;
+        handledThreadCount: number;
+        duplicateThreadCount: number;
+        resolvedThreadCount: number;
+        outdatedThreadCount: number;
         topThreads: Array<{
           path: string;
           lineRange: string;
@@ -751,16 +756,24 @@ async function collectPullRequestContext(
       threadDetails === undefined
         ? await forge.fetchPullRequestReviewComments(pullRequest.number)
         : threadDetails.flatMap((thread) => thread.comments);
-    const threads = filterActionablePullRequestReviewThreads(
+    const reviewThreads =
       threadDetails === undefined
         ? buildPullRequestReviewThreads(comments)
-        : buildPullRequestReviewThreadsFromDetails(threadDetails)
-    ).threads;
+        : buildPullRequestReviewThreadsFromDetails(threadDetails);
+    const filteredThreads = filterActionablePullRequestReviewThreads(reviewThreads, {
+      currentHeadSha: pullRequest.headSha,
+    });
+    const threads = filteredThreads.threads;
     reviewThreadsForSummary = threads;
     context.reviewComments = {
       status: "available",
       totalCount: comments.length,
+      totalThreadCount: reviewThreads.length,
       actionableThreadCount: threads.length,
+      handledThreadCount: filteredThreads.skipped.stalePrsAuthored,
+      duplicateThreadCount: filteredThreads.skipped.duplicatePrsAuthored,
+      resolvedThreadCount: filteredThreads.skipped.resolved,
+      outdatedThreadCount: filteredThreads.skipped.outdated,
       topThreads: threads.slice(0, 5).map((thread) => ({
         path: thread.path,
         lineRange: formatReviewCommentLineRange(thread.startLine, thread.endLine),

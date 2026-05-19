@@ -14,6 +14,7 @@ export type LatestSuccessfulPullRequestFix = {
 
 export type PullRequestReviewThreadFilterContext = {
   latestSuccessfulFix?: LatestSuccessfulPullRequestFix;
+  currentHeadSha?: string;
 };
 
 export type PullRequestReviewThreadFilterResult = {
@@ -22,6 +23,7 @@ export type PullRequestReviewThreadFilterResult = {
     resolved: number;
     outdated: number;
     stalePrsAuthored: number;
+    duplicatePrsAuthored: number;
   };
 };
 
@@ -184,30 +186,29 @@ function isPrsAuthoredThread(thread: PullRequestReviewThread): boolean {
     : isPrsAuthoredReviewComment(thread.rootComment);
 }
 
-function dedupeThreadsByPrsFindingKey(
-  threads: PullRequestReviewThread[]
-): PullRequestReviewThread[] {
-  const seenKeys = new Set<string>();
-  const dedupedThreads: PullRequestReviewThread[] = [];
+function getPrsInlineReviewThreadFindingKey(
+  thread: PullRequestReviewThread
+): string | undefined {
+  return thread.actionableComments
+    .map(getPrsInlineReviewFindingKey)
+    .find((key): key is string => Boolean(key));
+}
 
-  for (const thread of threads) {
-    const metadataKeys = thread.actionableComments
-      .map(getPrsInlineReviewFindingKey)
-      .filter((key): key is string => Boolean(key));
-    const dedupeKey = metadataKeys[0];
-
-    if (dedupeKey) {
-      if (seenKeys.has(dedupeKey)) {
-        continue;
-      }
-
-      seenKeys.add(dedupeKey);
-    }
-
-    dedupedThreads.push(thread);
+function isPrsAuthoredThreadFromOlderHead(
+  thread: PullRequestReviewThread,
+  currentHeadSha: string | undefined
+): boolean {
+  if (!currentHeadSha?.trim() || !isPrsAuthoredThread(thread)) {
+    return false;
   }
 
-  return dedupedThreads;
+  const comments =
+    thread.actionableComments.length > 0 ? thread.actionableComments : [thread.rootComment];
+  const commitOids = comments
+    .map((comment) => comment.commitOid?.trim())
+    .filter((commitOid): commitOid is string => Boolean(commitOid));
+
+  return commitOids.length > 0 && !commitOids.includes(currentHeadSha);
 }
 
 export function filterActionablePullRequestReviewThreads(
@@ -218,14 +219,16 @@ export function filterActionablePullRequestReviewThreads(
     resolved: 0,
     outdated: 0,
     stalePrsAuthored: 0,
+    duplicatePrsAuthored: 0,
   };
   const latestFixTimestamp =
     context.latestSuccessfulFix === undefined
       ? undefined
       : Date.parse(context.latestSuccessfulFix.completedAt);
   const actionableThreads: PullRequestReviewThread[] = [];
+  const seenPrsFindingKeys = new Set<string>();
 
-  for (const thread of dedupeThreadsByPrsFindingKey(threads)) {
+  for (const thread of threads) {
     if (thread.isResolved) {
       skipped.resolved += 1;
       continue;
@@ -233,6 +236,11 @@ export function filterActionablePullRequestReviewThreads(
 
     if (thread.isOutdated) {
       skipped.outdated += 1;
+      continue;
+    }
+
+    if (isPrsAuthoredThreadFromOlderHead(thread, context.currentHeadSha)) {
+      skipped.stalePrsAuthored += 1;
       continue;
     }
 
@@ -244,6 +252,15 @@ export function filterActionablePullRequestReviewThreads(
     ) {
       skipped.stalePrsAuthored += 1;
       continue;
+    }
+
+    const prsFindingKey = getPrsInlineReviewThreadFindingKey(thread);
+    if (prsFindingKey) {
+      if (seenPrsFindingKeys.has(prsFindingKey)) {
+        skipped.duplicatePrsAuthored += 1;
+        continue;
+      }
+      seenPrsFindingKeys.add(prsFindingKey);
     }
 
     actionableThreads.push(thread);

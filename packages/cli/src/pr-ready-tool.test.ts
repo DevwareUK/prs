@@ -28,6 +28,7 @@ function createPullRequest(): PullRequestDetails {
     url: "https://github.com/DevwareUK/bos/pull/115",
     baseRefName: "main",
     headRefName: "codex/sales-menu-images",
+    headSha: "current-head",
   };
 }
 
@@ -627,6 +628,147 @@ describe("PR ready tool", () => {
               author: "reviewer-d",
             },
           ],
+        },
+      ],
+    });
+  });
+
+  it("reports actionable, handled, duplicate, resolved, and outdated review thread counts", async () => {
+    const repoRoot = createRepo();
+    const { runCommand } = createCommandRecorder({ containsBase: true });
+    const botCommentBody =
+      "Handle product lookup failure.\n\n<!-- prs:pr-review-inline {\"findingKey\":\"lookup-products\"} -->";
+    const duplicateBotCommentBody =
+      "Product lookup failures still need a guard.\n\n<!-- prs:pr-review-inline {\"findingKey\":\"lookup-products\"} -->";
+
+    const result = await readyPullRequestTool({
+      all: false,
+      forge: createForge({
+        fetchPullRequestReviewThreads: vi.fn().mockResolvedValue([
+          {
+            threadId: 1,
+            nodeId: "PRRT_old",
+            isResolved: false,
+            isOutdated: false,
+            comments: [
+              {
+                id: 301,
+                body: botCommentBody,
+                path: "src/product.ts",
+                line: 12,
+                url: "https://github.com/DevwareUK/bos/pull/115#discussion_r301",
+                author: "github-actions[bot]",
+                authorIsBot: true,
+                createdAt: "2026-05-13T09:00:00Z",
+                updatedAt: "2026-05-13T09:00:00Z",
+                commitOid: "old-head",
+              },
+            ],
+          },
+          {
+            threadId: 2,
+            nodeId: "PRRT_current",
+            isResolved: false,
+            isOutdated: false,
+            comments: [
+              {
+                id: 302,
+                body: botCommentBody,
+                path: "src/product.ts",
+                line: 18,
+                url: "https://github.com/DevwareUK/bos/pull/115#discussion_r302",
+                author: "github-actions[bot]",
+                authorIsBot: true,
+                createdAt: "2026-05-13T10:00:00Z",
+                updatedAt: "2026-05-13T10:00:00Z",
+                commitOid: "current-head",
+              },
+            ],
+          },
+          {
+            threadId: 3,
+            nodeId: "PRRT_duplicate",
+            isResolved: false,
+            isOutdated: false,
+            comments: [
+              {
+                id: 303,
+                body: duplicateBotCommentBody,
+                path: "src/product.ts",
+                line: 19,
+                url: "https://github.com/DevwareUK/bos/pull/115#discussion_r303",
+                author: "github-actions[bot]",
+                authorIsBot: true,
+                createdAt: "2026-05-13T10:05:00Z",
+                updatedAt: "2026-05-13T10:05:00Z",
+                commitOid: "current-head",
+              },
+            ],
+          },
+          {
+            threadId: 4,
+            nodeId: "PRRT_resolved",
+            isResolved: true,
+            isOutdated: false,
+            comments: [
+              {
+                id: 304,
+                body: "Resolved bot feedback.",
+                path: "src/product.ts",
+                line: 22,
+                url: "https://github.com/DevwareUK/bos/pull/115#discussion_r304",
+                author: "github-actions[bot]",
+                authorIsBot: true,
+                createdAt: "2026-05-13T10:10:00Z",
+                updatedAt: "2026-05-13T10:10:00Z",
+                commitOid: "current-head",
+              },
+            ],
+          },
+          {
+            threadId: 5,
+            nodeId: "PRRT_outdated",
+            isResolved: false,
+            isOutdated: true,
+            comments: [
+              {
+                id: 305,
+                body: "Outdated bot feedback.",
+                path: "src/product.ts",
+                line: 24,
+                url: "https://github.com/DevwareUK/bos/pull/115#discussion_r305",
+                author: "github-actions[bot]",
+                authorIsBot: true,
+                createdAt: "2026-05-13T10:15:00Z",
+                updatedAt: "2026-05-13T10:15:00Z",
+                commitOid: "current-head",
+              },
+            ],
+          },
+        ]),
+      }),
+      prNumber: 115,
+      repoRoot,
+      runCommand,
+      ensureCleanWorkingTree: vi.fn(),
+      ensureVerificationCommandAvailable: vi.fn(),
+      buildCommand: ["pnpm", "build"],
+    });
+
+    expect(result.prContext.reviewComments).toMatchObject({
+      status: "available",
+      totalCount: 5,
+      totalThreadCount: 5,
+      actionableThreadCount: 1,
+      handledThreadCount: 1,
+      duplicateThreadCount: 1,
+      resolvedThreadCount: 1,
+      outdatedThreadCount: 1,
+      topThreads: [
+        {
+          path: "src/product.ts",
+          lineRange: "18",
+          url: "https://github.com/DevwareUK/bos/pull/115#discussion_r302",
         },
       ],
     });
