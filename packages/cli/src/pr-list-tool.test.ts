@@ -108,4 +108,71 @@ describe("PR list tool", () => {
       ],
     });
   });
+
+  it("skips pull requests without usable GitHub URLs", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({ login: "me" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue([
+          {
+            number: 10,
+            title: "Valid PR",
+            html_url: "https://github.com/DevwareUK/prs/pull/10",
+            user: { login: "me" },
+            assignees: [],
+            requested_reviewers: [],
+            head: { ref: "codex/valid-pr" },
+            labels: [],
+            updated_at: "2026-05-10T10:00:00Z",
+            mergeable: true,
+          },
+          {
+            number: 11,
+            title: "Malformed URL",
+            html_url: "not-a-github-url",
+            user: { login: "me" },
+            assignees: [],
+            requested_reviewers: [],
+            head: { ref: "codex/malformed-url" },
+            labels: [],
+            updated_at: "2026-05-11T10:00:00Z",
+            mergeable: true,
+          },
+          {
+            number: 12,
+            title: "Missing URL",
+            user: { login: "me" },
+            assignees: [],
+            requested_reviewers: [],
+            head: { ref: "codex/missing-url" },
+            labels: [],
+            updated_at: "2026-05-12T10:00:00Z",
+            mergeable: true,
+          },
+        ]),
+      });
+
+    await expect(
+      listPullRequestsTool({
+        actionable: false,
+        env: { GITHUB_TOKEN: "token" },
+        fetchImpl,
+        repoRoot: "/repo",
+        runCommand: () => "git@github.com:DevwareUK/prs.git",
+      })
+    ).resolves.toMatchObject({
+      status: "ready",
+      pullRequests: [
+        {
+          number: 10,
+          url: "https://github.com/DevwareUK/prs/pull/10",
+        },
+      ],
+    });
+  });
 });

@@ -136,4 +136,78 @@ describe("issue list tool", () => {
       ],
     });
   });
+
+  it("skips issues without usable GitHub URLs", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({ login: "me" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue([
+          {
+            number: 1,
+            title: "Valid issue",
+            html_url: "https://github.com/DevwareUK/prs/issues/1",
+            user: { login: "me" },
+            assignees: [],
+            labels: [],
+            updated_at: "2026-05-10T10:00:00Z",
+          },
+          {
+            number: 2,
+            title: "Malformed URL",
+            html_url: "not-a-github-url",
+            user: { login: "me" },
+            assignees: [],
+            labels: [],
+            updated_at: "2026-05-11T10:00:00Z",
+          },
+          {
+            number: 3,
+            title: "Missing URL",
+            user: { login: "me" },
+            assignees: [],
+            labels: [],
+            updated_at: "2026-05-12T10:00:00Z",
+          },
+        ]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue([]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue([]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue([]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue([]),
+      });
+
+    await expect(
+      listIssuesTool({
+        actionable: false,
+        env: { GH_TOKEN: "token" },
+        fetchImpl,
+        repoRoot: "/repo",
+        runCommand: () => "git@github.com:DevwareUK/prs.git",
+      })
+    ).resolves.toMatchObject({
+      status: "ready",
+      issues: [
+        {
+          number: 1,
+          url: "https://github.com/DevwareUK/prs/issues/1",
+        },
+      ],
+    });
+  });
 });

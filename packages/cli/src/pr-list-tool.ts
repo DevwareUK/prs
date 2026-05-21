@@ -96,6 +96,10 @@ function isConflictState(value: unknown): boolean {
   return value === false || value === "dirty" || value === "blocked";
 }
 
+function isCanonicalGitHubPullRequestUrl(value: string | undefined): value is string {
+  return Boolean(value?.match(/^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+$/));
+}
+
 function normalizePullRequest(payload: {
   number?: number;
   title?: string;
@@ -112,7 +116,7 @@ function normalizePullRequest(payload: {
   if (
     !payload.number ||
     !payload.title ||
-    !payload.html_url ||
+    !isCanonicalGitHubPullRequestUrl(payload.html_url) ||
     !payload.user?.login ||
     !payload.head?.ref ||
     !payload.updated_at
