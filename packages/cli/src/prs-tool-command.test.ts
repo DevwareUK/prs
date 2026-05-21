@@ -95,6 +95,35 @@ describe("prs tool command parser", () => {
     });
   });
 
+  it("parses PR local Codex review JSON command", () => {
+    expect(parsePrsToolCommandArgs(["pr", "review", "115", "--json"])).toEqual({
+      kind: "pr-review",
+      prNumber: 115,
+      json: true,
+    });
+  });
+
+  it("parses PR local Codex review publish JSON command", () => {
+    expect(
+      parsePrsToolCommandArgs([
+        "pr",
+        "publish-review",
+        "115",
+        "--report",
+        ".prs/runs/review/codex-pr-review.md",
+        "--comments",
+        ".prs/runs/review/codex-pr-review-comments.json",
+        "--json",
+      ])
+    ).toEqual({
+      kind: "pr-publish-review",
+      prNumber: 115,
+      reportFilePath: ".prs/runs/review/codex-pr-review.md",
+      commentsFilePath: ".prs/runs/review/codex-pr-review-comments.json",
+      json: true,
+    });
+  });
+
   it("parses PR guarded push JSON command", () => {
     expect(parsePrsToolCommandArgs(["pr", "push-reviewed", "115", "--json"])).toEqual({
       kind: "pr-push-reviewed",

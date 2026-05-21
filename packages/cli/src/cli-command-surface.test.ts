@@ -1428,6 +1428,8 @@ describe("CLI command surface", () => {
     expect(stdout.output()).toContain("GitHub-first AI workflows");
     expect(stdout.output()).toContain("Start here:");
     expect(stdout.output()).toContain("prs review tests [--top <count>]");
+    expect(stdout.output()).toContain("prs tool pr review <pr-number> --json");
+    expect(stdout.output()).toContain("prs tool pr publish-review <pr-number>");
     expect(stdout.output()).toContain("prs tool pr address-comments <pr-number> --json");
     expect(stdout.output()).toContain("prs tool pr fix-tests <pr-number> --json");
     expect(stdout.output()).toContain("prs tool pr add-tests <pr-number> --json");
