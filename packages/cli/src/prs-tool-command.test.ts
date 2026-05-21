@@ -104,8 +104,14 @@ describe("prs tool command parser", () => {
   });
 
   it("parses skill-first PR fix preparation JSON commands", () => {
+    expect(parsePrsToolCommandArgs(["pr", "address-comments", "115", "--json"])).toEqual({
+      kind: "pr-address-comments",
+      prNumber: 115,
+      selection: "all",
+      json: true,
+    });
     expect(parsePrsToolCommandArgs(["pr", "fix-comments", "115", "--json"])).toEqual({
-      kind: "pr-fix-comments",
+      kind: "pr-address-comments",
       prNumber: 115,
       selection: "all",
       json: true,
@@ -113,28 +119,34 @@ describe("prs tool command parser", () => {
     expect(
       parsePrsToolCommandArgs([
         "pr",
-        "fix-tests",
+        "add-tests",
         "116",
         "--selection",
         "1,2",
         "--json",
       ])
     ).toEqual({
-      kind: "pr-fix-tests",
+      kind: "pr-add-tests",
       prNumber: 116,
       selection: "1,2",
+      json: true,
+    });
+    expect(parsePrsToolCommandArgs(["pr", "fix-tests", "117", "--json"])).toEqual({
+      kind: "pr-fix-tests",
+      prNumber: 117,
+      selection: "all",
       json: true,
     });
     expect(
       parsePrsToolCommandArgs([
         "pr",
         "fix-failing-tests",
-        "117",
+        "118",
         "--json",
       ])
     ).toEqual({
-      kind: "pr-fix-failing-tests",
-      prNumber: 117,
+      kind: "pr-fix-tests",
+      prNumber: 118,
       selection: "all",
       json: true,
     });

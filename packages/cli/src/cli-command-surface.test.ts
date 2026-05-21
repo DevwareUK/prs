@@ -1102,17 +1102,21 @@ describe("CLI command surface", () => {
     );
   });
 
-  it("parses pr fix-comments as a dedicated pr subcommand", async () => {
+  it("parses pr address-comments as the preferred review-comment subcommand", async () => {
     process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
     const { parsePrCommandArgs } = await loadCli();
 
+    expect(parsePrCommandArgs(["pr", "address-comments", "73"])).toEqual({
+      action: "address-comments",
+      prNumber: 73,
+    });
     expect(parsePrCommandArgs(["pr", "fix-comments", "73"])).toEqual({
-      action: "fix-comments",
+      action: "address-comments",
       prNumber: 73,
     });
   });
 
-  it("parses pr fix-tests as a dedicated pr subcommand", async () => {
+  it("parses pr fix-tests as the preferred failing-test repair subcommand", async () => {
     process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
     const { parsePrCommandArgs } = await loadCli();
 
@@ -1120,19 +1124,23 @@ describe("CLI command surface", () => {
       action: "fix-tests",
       prNumber: 74,
     });
-  });
-
-  it("parses pr fix-failing-tests as a dedicated pr subcommand", async () => {
-    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
-    const { parsePrCommandArgs } = await loadCli();
-
     expect(parsePrCommandArgs(["pr", "fix-failing-tests", "91"])).toEqual({
-      action: "fix-failing-tests",
+      action: "fix-tests",
       prNumber: 91,
     });
     expect(() =>
       parsePrCommandArgs(["pr", "fix-failing-tests", "91", "--extra"])
     ).toThrow('Unknown pr option "--extra"');
+  });
+
+  it("parses pr add-tests as the suggested-test addition subcommand", async () => {
+    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    const { parsePrCommandArgs } = await loadCli();
+
+    expect(parsePrCommandArgs(["pr", "add-tests", "92"])).toEqual({
+      action: "add-tests",
+      prNumber: 92,
+    });
   });
 
   it("rejects retired direct pr prepare-review command", async () => {
@@ -1420,7 +1428,9 @@ describe("CLI command surface", () => {
     expect(stdout.output()).toContain("GitHub-first AI workflows");
     expect(stdout.output()).toContain("Start here:");
     expect(stdout.output()).toContain("prs review tests [--top <count>]");
-    expect(stdout.output()).toContain("prs tool pr fix-comments <pr-number> --json");
+    expect(stdout.output()).toContain("prs tool pr address-comments <pr-number> --json");
+    expect(stdout.output()).toContain("prs tool pr fix-tests <pr-number> --json");
+    expect(stdout.output()).toContain("prs tool pr add-tests <pr-number> --json");
     expect(stdout.output()).toContain("Advanced:");
     expect(stdout.output()).toContain("Beta:");
     expect(stdout.output()).toContain("prs issue draft");
@@ -1431,7 +1441,8 @@ describe("CLI command surface", () => {
     expect(stdout.output()).toContain("Legacy interactive launchers:");
     expect(stdout.output()).toContain("prs codex issue <number>");
     expect(stdout.output()).toContain("prs codex pr prepare-review <pr-number>");
-    expect(stdout.output()).toContain("prs pr fix-comments <pr-number>");
+    expect(stdout.output()).toContain("prs pr address-comments <pr-number>");
+    expect(stdout.output()).toContain("prs pr add-tests <pr-number>");
   });
 
   it("prints a deprecation notice when invoked through the legacy git-ai alias", async () => {
@@ -1446,7 +1457,7 @@ describe("CLI command surface", () => {
     expect(warning).toHaveBeenCalledWith(
       expect.stringContaining("`git-ai` is deprecated")
     );
-    expect(stdout.output()).toContain("prs pr fix-comments <pr-number>");
+    expect(stdout.output()).toContain("prs pr address-comments <pr-number>");
   });
 
   it("prints a beta workflow notice before feature-backlog output", async () => {

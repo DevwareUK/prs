@@ -61,9 +61,9 @@ prs test-backlog --top 5
 If you already have a live GitHub pull request branch checked out locally, the next recommended workflows are:
 
 ```bash
-prs pr fix-comments 88
-prs pr fix-failing-tests 88
+prs pr address-comments 88
 prs pr fix-tests 88
+prs pr add-tests 88
 ```
 
 The matching GitHub automation surfaces are `actions/pr-review`, `actions/pr-assistant`, and `actions/test-suggestions`.
@@ -155,7 +155,7 @@ Supported fields:
 - `ai.provider.region`: optional explicit AWS region for `"bedrock-claude"`. Falls back to `AWS_REGION` or `AWS_DEFAULT_REGION`.
 - `aiContext.excludePaths`: repository-relative glob patterns excluded from AI diff and repository context. These exclusions apply across `prs commit`, `prs diff`, `prs review`, issue-to-PR flows, and repository backlog scans. Bare filename globs like `*.map` match by basename anywhere in the repository. Defaults: `["**/node_modules/**", "**/vendor/**", "**/dist/**", "**/build/**", "*.map"]`.
 - `baseBranch`: base branch used by `prs issue <number>` and `prs issue prepare <number>` when switching, syncing from `origin`, and opening pull requests. If unset, the resolved default is `main`, but `prs setup` first tries the remote default branch and then prints an explicit fallback warning when it has to guess.
-- `buildCommand`: command run after the interactive runtime exits during full local `prs issue <number>` flows and after a clean or Codex-resolved merge during `prs pr resolve-conflicts <pr-number>`. PR comment-fix and test-fix preparation commands preflight this command without running final verification; `prs pr fix-failing-tests <pr-number>` runs it once to capture the initial failure and exits without a run directory if it already passes. If unset, the resolved default is `["pnpm", "build"]`, but `prs setup` first tries repository-local `verify`, `build`, or `test` commands from `package.json`, `composer.json`, or PHPUnit signals and warns before falling back.
+- `buildCommand`: command run after the interactive runtime exits during full local `prs issue <number>` flows and after a clean or Codex-resolved merge during `prs pr resolve-conflicts <pr-number>`. PR comment-fix and test-fix preparation commands preflight this command without running final verification; `prs pr fix-tests <pr-number>` runs it once to capture the initial failure and exits without a run directory if it already passes. If unset, the resolved default is `["pnpm", "build"]`, but `prs setup` first tries repository-local `verify`, `build`, or `test` commands from `package.json`, `composer.json`, or PHPUnit signals and warns before falling back.
 - `forge.type`: forge integration. Use `"github"` for GitHub-backed issue and PR flows or `"none"` to disable forge-backed issue and PR features for the repository.
 - `forge.githubCliPath`: optional path to the authenticated `gh` executable that prs should use for local GitHub operations when environment tokens are not set. PRS resolves auth in this order: `GH_TOKEN`, `GITHUB_TOKEN`, `PRS_GH_PATH` or `PRS_GITHUB_CLI_PATH`, `forge.githubCliPath`, `gh` on PATH, then common local install paths such as `/opt/homebrew/bin/gh` and `/usr/local/bin/gh`. CI and headless environments can keep using `GH_TOKEN` or `GITHUB_TOKEN`; normal local Codex shells can rely on authenticated `gh` without adding project-specific token values to `.env`.
 

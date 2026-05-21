@@ -196,7 +196,7 @@ describe("PR fix workflows", () => {
     ).toBe(false);
   });
 
-  it("prepares pr fix-comments artifacts without launching a nested runtime", async () => {
+  it("prepares pr address-comments artifacts without launching a nested runtime", async () => {
     const beforeRuns = listRunDirectories();
     let gitStatusCallCount = 0;
     const fetchMock = vi
@@ -272,11 +272,11 @@ describe("PR fix workflows", () => {
         }
 
         if (command === "codex" && args[0] === "--version") {
-          throw new Error("prs pr fix-comments must not check Codex availability");
+          throw new Error("prs pr address-comments must not check Codex availability");
         }
 
         if (command === "codex") {
-          throw new Error("prs pr fix-comments must not launch Codex");
+          throw new Error("prs pr address-comments must not launch Codex");
         }
 
         if (command === "pnpm" && args[0] === "--version") {
@@ -287,7 +287,7 @@ describe("PR fix workflows", () => {
       },
     });
 
-    process.argv = ["node", "prs", "pr", "fix-comments", "88"];
+    process.argv = ["node", "prs", "pr", "address-comments", "88"];
 
     await run();
 
@@ -320,7 +320,7 @@ describe("PR fix workflows", () => {
     );
     expect(readFileSync(promptFilePath, "utf8")).not.toContain("[2] Commit changes");
     expect(readFileSync(promptFilePath, "utf8")).not.toContain("/commit");
-    expect(readFileSync(outputLogPath, "utf8")).toContain("# prs pr fix-comments run log");
+    expect(readFileSync(outputLogPath, "utf8")).toContain("# prs pr address-comments run log");
     expect(readFileSync(outputLogPath, "utf8")).not.toContain("$ git fetch");
     expect(readFileSync(outputLogPath, "utf8")).not.toContain("$ git push");
     expect(JSON.parse(readFileSync(metadataFilePath, "utf8"))).toMatchObject({
@@ -472,7 +472,7 @@ describe("PR fix workflows", () => {
       },
     });
 
-    process.argv = ["node", "prs", "pr", "fix-comments", "66"];
+    process.argv = ["node", "prs", "pr", "address-comments", "66"];
 
     await run();
 
@@ -512,7 +512,7 @@ describe("PR fix workflows", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
-  it("prepares pr fix-tests artifacts without launching a nested runtime", async () => {
+  it("prepares pr add-tests artifacts without launching a nested runtime", async () => {
     const beforeRuns = listRunDirectories();
     let gitStatusCallCount = 0;
     process.env.GH_TOKEN = "";
@@ -607,11 +607,11 @@ describe("PR fix workflows", () => {
         }
 
         if (command === "codex" && args[0] === "--version") {
-          throw new Error("prs pr fix-tests must not check Codex availability");
+          throw new Error("prs pr add-tests must not check Codex availability");
         }
 
         if (command === "codex") {
-          throw new Error("prs pr fix-tests must not launch Codex");
+          throw new Error("prs pr add-tests must not launch Codex");
         }
 
         if (command === "pnpm" && args[0] === "--version") {
@@ -622,7 +622,7 @@ describe("PR fix workflows", () => {
       },
     });
 
-    process.argv = ["node", "prs", "pr", "fix-tests", "91"];
+    process.argv = ["node", "prs", "pr", "add-tests", "91"];
 
     await run();
 
@@ -650,7 +650,7 @@ describe("PR fix workflows", () => {
       "Verify prompt generation for selected test suggestions"
     );
     expect(readFileSync(promptFilePath, "utf8")).toContain(
-      "Read the pull request test suggestions fix snapshot"
+      "Read the pull request add-tests snapshot"
     );
     expect(readFileSync(promptFilePath, "utf8")).toContain(
       "implementing automated tests for the selected areas"
@@ -667,7 +667,7 @@ describe("PR fix workflows", () => {
     );
     expect(readFileSync(promptFilePath, "utf8")).not.toContain("[2] Commit changes");
     expect(readFileSync(promptFilePath, "utf8")).not.toContain("/commit");
-    expect(readFileSync(outputLogPath, "utf8")).toContain("# prs pr fix-tests run log");
+    expect(readFileSync(outputLogPath, "utf8")).toContain("# prs pr add-tests run log");
     expect(readFileSync(outputLogPath, "utf8")).not.toContain("$ git fetch");
     expect(readFileSync(outputLogPath, "utf8")).not.toContain("$ git push");
     expect(JSON.parse(readFileSync(metadataFilePath, "utf8"))).toMatchObject({
@@ -713,7 +713,7 @@ describe("PR fix workflows", () => {
     );
   });
 
-  it("prepares pr fix-failing-tests artifacts without launching a nested runtime", async () => {
+  it("prepares pr fix-tests artifacts without launching a nested runtime", async () => {
     const beforeRuns = listRunDirectories();
     let buildCallCount = 0;
     let gitStatusCallCount = 0;
@@ -758,11 +758,11 @@ describe("PR fix workflows", () => {
         }
 
         if (command === "codex" && args[0] === "--version") {
-          throw new Error("prs pr fix-failing-tests must not check Codex availability");
+          throw new Error("prs pr fix-tests must not check Codex availability");
         }
 
         if (command === "codex") {
-          throw new Error("prs pr fix-failing-tests must not launch Codex");
+          throw new Error("prs pr fix-tests must not launch Codex");
         }
 
         if (command === "pnpm" && args[0] === "--version") {
@@ -782,7 +782,7 @@ describe("PR fix workflows", () => {
       },
     });
 
-    process.argv = ["node", "prs", "pr", "fix-failing-tests", "95"];
+    process.argv = ["node", "prs", "pr", "fix-tests", "95"];
 
     await run();
 
@@ -820,7 +820,7 @@ describe("PR fix workflows", () => {
       "prs tool pr push-reviewed 95 --json"
     );
     expect(readFileSync(outputLogPath, "utf8")).toContain(
-      "# prs pr fix-failing-tests run log"
+      "# prs pr fix-tests run log"
     );
     expect(readFileSync(outputLogPath, "utf8")).toContain("$ pnpm build");
     expect(readFileSync(outputLogPath, "utf8")).toContain(
@@ -867,7 +867,7 @@ describe("PR fix workflows", () => {
     );
   });
 
-  it("fails pr fix-failing-tests clearly when repository forge support is disabled", async () => {
+  it("fails pr fix-tests clearly when repository forge support is disabled", async () => {
     await withRepositoryConfig(
       JSON.stringify(
         {
@@ -881,7 +881,7 @@ describe("PR fix workflows", () => {
       async () => {
         const { run } = await loadCli();
 
-        process.argv = ["node", "prs", "pr", "fix-failing-tests", "98"];
+        process.argv = ["node", "prs", "pr", "fix-tests", "98"];
 
         await expect(run()).rejects.toThrow(
           "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable pull request workflows."
@@ -890,7 +890,7 @@ describe("PR fix workflows", () => {
     );
   });
 
-  it("exits pr fix-failing-tests without runtime work when verification already passes", async () => {
+  it("exits pr fix-tests without runtime work when verification already passes", async () => {
     const beforeRuns = listRunDirectories();
     const fetchMock = vi.fn().mockResolvedValueOnce(
       createFetchResponse({
@@ -933,7 +933,7 @@ describe("PR fix workflows", () => {
       },
     });
 
-    process.argv = ["node", "prs", "pr", "fix-failing-tests", "96"];
+    process.argv = ["node", "prs", "pr", "fix-tests", "96"];
     const messages: string[] = [];
     vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
       messages.push(String(message ?? ""));
@@ -961,7 +961,7 @@ describe("PR fix workflows", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("prepares pr fix-failing-tests without running final verification", async () => {
+  it("prepares pr fix-tests without running final verification", async () => {
     const beforeRuns = listRunDirectories();
     let buildCallCount = 0;
     const fetchMock = vi.fn().mockResolvedValueOnce(
@@ -994,11 +994,11 @@ describe("PR fix workflows", () => {
         }
 
         if (command === "codex" && args[0] === "--version") {
-          throw new Error("prs pr fix-failing-tests must not check Codex availability");
+          throw new Error("prs pr fix-tests must not check Codex availability");
         }
 
         if (command === "codex") {
-          throw new Error("prs pr fix-failing-tests must not launch Codex");
+          throw new Error("prs pr fix-tests must not launch Codex");
         }
 
         if (command === "pnpm" && args[0] === "--version") {
@@ -1014,7 +1014,7 @@ describe("PR fix workflows", () => {
       },
     });
 
-    process.argv = ["node", "prs", "pr", "fix-failing-tests", "97"];
+    process.argv = ["node", "prs", "pr", "fix-tests", "97"];
 
     await run();
 
@@ -1039,7 +1039,7 @@ describe("PR fix workflows", () => {
     ).toBe(false);
   });
 
-  it("exits pr fix-tests cleanly when no test suggestions are selected", async () => {
+  it("exits pr add-tests cleanly when no test suggestions are selected", async () => {
     const beforeRuns = listRunDirectories();
     const fetchMock = vi
       .fn()
@@ -1107,7 +1107,7 @@ describe("PR fix workflows", () => {
       },
     });
 
-    process.argv = ["node", "prs", "pr", "fix-tests", "94"];
+    process.argv = ["node", "prs", "pr", "add-tests", "94"];
 
     await run();
 
@@ -1125,7 +1125,7 @@ describe("PR fix workflows", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("fails pr fix-tests clearly when no managed AI test suggestions comment exists", async () => {
+  it("fails pr add-tests clearly when no managed AI test suggestions comment exists", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -1177,14 +1177,14 @@ describe("PR fix workflows", () => {
       },
     });
 
-    process.argv = ["node", "prs", "pr", "fix-tests", "92"];
+    process.argv = ["node", "prs", "pr", "add-tests", "92"];
 
     await expect(run()).rejects.toThrow(
       "No managed AI test suggestions comment was found for PR #92."
     );
   });
 
-  it("fails pr fix-tests clearly when the managed AI test suggestions comment cannot be parsed", async () => {
+  it("fails pr add-tests clearly when the managed AI test suggestions comment cannot be parsed", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -1247,14 +1247,14 @@ describe("PR fix workflows", () => {
       },
     });
 
-    process.argv = ["node", "prs", "pr", "fix-tests", "93"];
+    process.argv = ["node", "prs", "pr", "add-tests", "93"];
 
     await expect(run()).rejects.toThrow(
       'Failed to parse the managed AI test suggestions comment for PR #93. Suggestion "Missing Why Field" is missing a Why it matters field.'
     );
   });
 
-  it("fails pr fix-comments clearly when no actionable review comments remain after filtering", async () => {
+  it("fails pr address-comments clearly when no actionable review comments remain after filtering", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -1311,7 +1311,7 @@ describe("PR fix workflows", () => {
       },
     });
 
-    process.argv = ["node", "prs", "pr", "fix-comments", "89"];
+    process.argv = ["node", "prs", "pr", "address-comments", "89"];
 
     await expect(run()).rejects.toThrow(
       "No actionable pull request review comments were found for PR #89."

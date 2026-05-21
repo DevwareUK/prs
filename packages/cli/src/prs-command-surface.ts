@@ -11,9 +11,9 @@ export type PrsPrAction =
   | "choose"
   | "prepare-review"
   | "resolve-conflicts"
-  | "fix-comments"
-  | "fix-failing-tests"
-  | "fix-tests";
+  | "address-comments"
+  | "fix-tests"
+  | "add-tests";
 
 export type PrsCommandSurfaceAction =
   | { kind: "root"; mode: "interactive" }
@@ -58,6 +58,8 @@ const ISSUE_ACTIONS = new Set(["refine", "plan", "finish"]);
 const PR_ACTIONS = new Set([
   "prepare-review",
   "resolve-conflicts",
+  "address-comments",
+  "add-tests",
   "fix-comments",
   "fix-failing-tests",
   "fix-tests",
@@ -88,7 +90,7 @@ export function renderPrsCommandSurfaceHelp(): string {
     "  /prs issue",
     "  /prs issue <number> [--all|refine|plan|finish]",
     "  /prs pr",
-    "  /prs pr <number> [--all|prepare-review|resolve-conflicts|fix-comments|fix-failing-tests|fix-tests]",
+    "  /prs pr <number> [--all|prepare-review|resolve-conflicts|address-comments|fix-tests|add-tests]",
     "  /prs audit publish [--issue <number>|--pr <number>] [--file <path>] [--section <name>] [--local-run <path>]",
     "  /prs finish",
   ].join("\n");
@@ -181,11 +183,12 @@ export function parsePrsCommandSurfaceArgs(args: string[]): PrsCommandSurfaceAct
       throw new Error(renderPrsCommandSurfaceHelp());
     }
 
+    const action = normalizePrSurfaceAction(third);
     return {
       kind: "pr",
       mode: "direct",
       prNumber,
-      action: third as PrsPrAction,
+      action,
     };
   }
 
@@ -331,9 +334,9 @@ export function routePrsCommandSurfaceAction(action: PrsCommandSurfaceAction): P
     }
 
     if (
-      action.action === "fix-comments" ||
-      action.action === "fix-failing-tests" ||
-      action.action === "fix-tests"
+      action.action === "address-comments" ||
+      action.action === "fix-tests" ||
+      action.action === "add-tests"
     ) {
       return {
         interaction: "direct",
@@ -361,6 +364,17 @@ export function routePrsCommandSurfaceAction(action: PrsCommandSurfaceAction): P
   }
 
   return { interaction: "interactive", skillName: "prs:finish-work", cliArgs: undefined };
+}
+
+function normalizePrSurfaceAction(rawAction: string | undefined): PrsPrAction {
+  if (rawAction === "fix-comments") {
+    return "address-comments";
+  }
+  if (rawAction === "fix-failing-tests") {
+    return "fix-tests";
+  }
+
+  return rawAction as PrsPrAction;
 }
 
 export function buildPrsInteractivePickerModel(

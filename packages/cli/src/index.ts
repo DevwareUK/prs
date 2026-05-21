@@ -344,9 +344,9 @@ const TOP_LEVEL_HELP = [
   "",
   "Start here:",
   "  prs review",
-  "  prs tool pr fix-comments <pr-number> --json",
-  "  prs tool pr fix-failing-tests <pr-number> --json",
+  "  prs tool pr address-comments <pr-number> --json",
   "  prs tool pr fix-tests <pr-number> --json",
+  "  prs tool pr add-tests <pr-number> --json",
   "  prs review tests [--top <count>]",
   "",
   "Advanced:",
@@ -368,9 +368,9 @@ const TOP_LEVEL_HELP = [
   "  prs codex issue batch <number> <number> [...number] [--mode unattended]",
   "  prs codex pr prepare-review <pr-number>",
   "  prs codex pr resolve-conflicts <pr-number>",
-  "  prs pr fix-comments <pr-number>",
-  "  prs pr fix-failing-tests <pr-number>",
+  "  prs pr address-comments <pr-number>",
   "  prs pr fix-tests <pr-number>",
+  "  prs pr add-tests <pr-number>",
   "",
   "Supporting commands:",
   "  prs setup",
@@ -383,9 +383,9 @@ const TOP_LEVEL_HELP = [
   "  prs tool pr ready <pr-number> [--all] --json",
   "  prs tool pr prepare-review <pr-number> --json",
   "  prs tool pr push-reviewed <pr-number> --json",
-  "  prs tool pr fix-comments <pr-number> [--selection <value>] --json",
-  "  prs tool pr fix-failing-tests <pr-number> --json",
-  "  prs tool pr fix-tests <pr-number> [--selection <value>] --json",
+  "  prs tool pr address-comments <pr-number> [--selection <value>] --json",
+  "  prs tool pr fix-tests <pr-number> --json",
+  "  prs tool pr add-tests <pr-number> [--selection <value>] --json",
   "  prs test-backlog [--top <count>]",
   "  prs feature-backlog [repo-path]",
   "  prs audit publish (--issue <number>|--pr <number>) --file <path> --section <name> [--local-run <path>]",
@@ -3761,7 +3761,7 @@ async function runPrCommand(): Promise<void> {
     return;
   }
 
-  if (prCommand.action === "fix-comments") {
+  if (prCommand.action === "address-comments") {
     const result = await runPrFixCommentsCommand({
       mode: "prepare",
       prNumber: prCommand.prNumber,
@@ -3772,7 +3772,7 @@ async function runPrCommand(): Promise<void> {
         resolve: () => ({
           displayName: "Codex",
           launch: () => {
-            throw new Error("prs pr fix-comments must not launch Codex.");
+            throw new Error("prs pr address-comments must not launch Codex.");
           },
         }),
       },
@@ -3789,7 +3789,7 @@ async function runPrCommand(): Promise<void> {
     return;
   }
 
-  if (prCommand.action === "fix-failing-tests") {
+  if (prCommand.action === "fix-tests") {
     const result = await runPrFixFailingTestsCommand({
       mode: "prepare",
       prNumber: prCommand.prNumber,
@@ -3800,7 +3800,7 @@ async function runPrCommand(): Promise<void> {
         resolve: () => ({
           displayName: "Codex",
           launch: () => {
-            throw new Error("prs pr fix-failing-tests must not launch Codex.");
+            throw new Error("prs pr fix-tests must not launch Codex.");
           },
         }),
       },
@@ -3828,7 +3828,7 @@ async function runPrCommand(): Promise<void> {
       resolve: () => ({
         displayName: "Codex",
         launch: () => {
-          throw new Error("prs pr fix-tests must not launch Codex.");
+          throw new Error("prs pr add-tests must not launch Codex.");
         },
       }),
     },
@@ -4143,9 +4143,9 @@ async function runToolCommand(): Promise<void> {
   }
 
   if (
-    toolCommand.kind === "pr-fix-comments" ||
-    toolCommand.kind === "pr-fix-failing-tests" ||
-    toolCommand.kind === "pr-fix-tests"
+    toolCommand.kind === "pr-address-comments" ||
+    toolCommand.kind === "pr-fix-tests" ||
+    toolCommand.kind === "pr-add-tests"
   ) {
     const originalConsoleLog = console.log;
     console.log = (...values: unknown[]) => {
@@ -4165,7 +4165,7 @@ async function runToolCommand(): Promise<void> {
       | Awaited<ReturnType<typeof runPrFixFailingTestsCommand>>
       | Awaited<ReturnType<typeof runPrFixTestsCommand>>;
     try {
-      if (toolCommand.kind === "pr-fix-comments") {
+      if (toolCommand.kind === "pr-address-comments") {
         result = await runPrFixCommentsCommand({
           mode: "prepare",
           selection: toolCommand.selection,
@@ -4181,7 +4181,7 @@ async function runToolCommand(): Promise<void> {
           hasChanges,
           commitGeneratedChanges,
         });
-      } else if (toolCommand.kind === "pr-fix-failing-tests") {
+      } else if (toolCommand.kind === "pr-fix-tests") {
         result = await runPrFixFailingTestsCommand({
           mode: "prepare",
           prNumber: toolCommand.prNumber,

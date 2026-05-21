@@ -49,7 +49,7 @@ type RunPrFixFailingTestsCommandOptions = {
 
 export type PullRequestFixFailingTestsPreparationResult = {
   status: "ready";
-  flow: "pr-fix-failing-tests";
+  flow: "pr-fix-tests";
   prNumber: number;
   runDir: string;
   snapshotFilePath: string;
@@ -73,7 +73,7 @@ export async function runPrFixFailingTestsCommand(
   (options.ensureVerificationCommandAvailable ?? ensureVerificationCommandAvailable)(
     options.repoRoot,
     options.buildCommand,
-    "prs pr fix-failing-tests"
+    "prs pr fix-tests"
   );
 
   console.log(`Fetching pull request #${options.prNumber}...`);
@@ -86,7 +86,7 @@ export async function runPrFixFailingTestsCommand(
   );
   if (!initialFailure) {
     console.log(
-      "Configured verification command passed. No failing test output was captured."
+      "Configured verification command passed. No failing test output was captured. If you meant to add tests from managed AI suggestions, run `prs pr add-tests <pr-number>`."
     );
     return;
   }
@@ -107,7 +107,7 @@ export async function runPrFixFailingTestsCommand(
   if (options.mode === "prepare") {
     return {
       status: "ready",
-      flow: "pr-fix-failing-tests",
+      flow: "pr-fix-tests",
       prNumber: pullRequest.number,
       runDir: workspace.runDir,
       snapshotFilePath: workspace.snapshotFilePath,

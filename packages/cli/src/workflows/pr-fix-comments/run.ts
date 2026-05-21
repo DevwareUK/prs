@@ -62,7 +62,7 @@ type RunPrFixCommentsCommandOptions = {
 
 export type PullRequestFixCommentsPreparationResult = {
   status: "ready";
-  flow: "pr-fix-comments";
+  flow: "pr-address-comments";
   prNumber: number;
   runDir: string;
   snapshotFilePath: string;
@@ -123,7 +123,11 @@ function findLatestSuccessfulFixCommentsRun(
   }
 
   return readdirSync(runsDir)
-    .filter((entry) => entry.endsWith(`-pr-${prNumber}-fix-comments`))
+    .filter(
+      (entry) =>
+        entry.endsWith(`-pr-${prNumber}-address-comments`) ||
+        entry.endsWith(`-pr-${prNumber}-fix-comments`)
+    )
     .map((entry) => resolve(runsDir, entry, "addressed-review-comments.json"))
     .filter((filePath) => existsSync(filePath))
     .map((filePath) => parseAddressedReviewCommentsRun(readFileSync(filePath, "utf8")))
@@ -237,7 +241,7 @@ async function acknowledgeAddressedReviewThreads(input: {
       .map((thread) => [thread.nodeId as string, thread])
   );
   const commitLabel = input.commitSha ? `\`${input.commitSha.slice(0, 12)}\`` : "the latest fix commit";
-  const body = `Addressed by ${commitLabel} after \`prs pr fix-comments\` verification passed.`;
+  const body = `Addressed by ${commitLabel} after \`prs pr address-comments\` verification passed.`;
 
   for (const nodeId of threadsByNodeId.keys()) {
     try {
@@ -402,7 +406,7 @@ export async function runPrFixCommentsCommand(
   (options.ensureVerificationCommandAvailable ?? ensureVerificationCommandAvailable)(
     options.repoRoot,
     options.buildCommand,
-    "prs pr fix-comments"
+    "prs pr address-comments"
   );
 
   console.log(`Fetching pull request #${options.prNumber}...`);
@@ -494,7 +498,7 @@ export async function runPrFixCommentsCommand(
   if (options.mode === "prepare") {
     return {
       status: "ready",
-      flow: "pr-fix-comments",
+      flow: "pr-address-comments",
       prNumber: pullRequest.number,
       runDir: workspace.runDir,
       snapshotFilePath: workspace.snapshotFilePath,
