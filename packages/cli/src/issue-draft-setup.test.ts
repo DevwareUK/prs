@@ -37,7 +37,7 @@ describe("Issue draft and setup workflows", () => {
 
     const { run } = await loadCli({
       runtimeRepoRoot: repoRoot,
-      readlineAnswers: ["", "", ""],
+      readlineAnswers: ["", "", "", "", ""],
       execFileSyncImpl: (command, args) => {
         if (
           command === "git" &&
@@ -98,6 +98,19 @@ describe("Issue draft and setup workflows", () => {
       buildCommand: ["pnpm", "build"],
       forge: {
         type: "github",
+      },
+      githubActions: {
+        workflows: {
+          "pr-assistant": {
+            enabled: true,
+          },
+          "pr-review": {
+            enabled: true,
+          },
+          "test-suggestions": {
+            enabled: true,
+          },
+        },
       },
     });
     expect(readFileSync(resolve(repoRoot, ".gitignore"), "utf8")).toContain(".prs/\n");

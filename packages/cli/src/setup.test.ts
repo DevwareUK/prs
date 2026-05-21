@@ -174,11 +174,17 @@ describe("setup command", () => {
         "/usr/local/bin/node",
         "/Users/tester/Projects/prs/packages/cli/dist/index.js",
       ],
-      promptForLine: createPrompt(["", "", ""], prompts),
+      promptForLine: createPrompt(["", "", "", "", ""], prompts),
       repoRoot,
     });
 
-    expect(prompts).toHaveLength(3);
+    expect(prompts).toEqual([
+      "Use the recommended setup values shown above [Y/n]: ",
+      "Enable PR review GitHub Action workflow [Y/n]: ",
+      "Enable PR assistant GitHub Action workflow [Y/n]: ",
+      "Enable test suggestions GitHub Action workflow [Y/n]: ",
+      "Create an optional AGENTS.md scaffold for repo-specific agent guidance [y/N]: ",
+    ]);
     expect(
       JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
     ).toEqual({
@@ -197,6 +203,19 @@ describe("setup command", () => {
       buildCommand: ["pnpm", "build"],
       forge: {
         type: "github",
+      },
+      githubActions: {
+        workflows: {
+          "pr-assistant": {
+            enabled: true,
+          },
+          "pr-review": {
+            enabled: true,
+          },
+          "test-suggestions": {
+            enabled: true,
+          },
+        },
       },
     });
     expect(readFileSync(resolve(repoRoot, ".gitignore"), "utf8")).toContain(".prs/\n");
@@ -265,6 +284,156 @@ describe("setup command", () => {
     expect(existsSync(resolve(repoRoot, "AGENTS.md"))).toBe(false);
     expect(messages.join("\n")).toContain("Next step: create `.env`");
     expect(messages.join("\n")).toContain("OPENAI_API_KEY` repository secret");
+  });
+
+  it("installs only enabled managed GitHub Actions during setup", async () => {
+    const repoRoot = createRepo("prs-setup-action-toggles-");
+    createCodexHome("prs-setup-codex-home-");
+    writeFileSync(
+      resolve(repoRoot, "package.json"),
+      JSON.stringify(
+        {
+          name: "fixture-node-repo",
+          scripts: {
+            build: "tsup",
+          },
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(resolve(repoRoot, "pnpm-lock.yaml"), "");
+
+    mockChildProcess(
+      repoRoot,
+      {
+        "rev-parse --show-toplevel": `${repoRoot}\n`,
+        "symbolic-ref refs/remotes/origin/HEAD": "refs/remotes/origin/main\n",
+        "remote get-url origin": "git@github.com:acme/fixture-node-repo.git\n",
+      },
+      { ghAuthStatus: new Error("not logged in") }
+    );
+
+    const messages: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
+      messages.push(String(message ?? ""));
+    });
+
+    await runSetupCommand({
+      promptForLine: createPrompt(["", "", "n", "", ""]),
+      repoRoot,
+    });
+
+    expect(
+      JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
+    ).toMatchObject({
+      githubActions: {
+        workflows: {
+          "pr-assistant": {
+            enabled: false,
+          },
+          "pr-review": {
+            enabled: true,
+          },
+          "test-suggestions": {
+            enabled: true,
+          },
+        },
+      },
+    });
+    expect(existsSync(resolve(repoRoot, ".github", "workflows", "prs-pr-review.yml"))).toBe(
+      true
+    );
+    expect(
+      existsSync(resolve(repoRoot, ".github", "workflows", "prs-pr-assistant.yml"))
+    ).toBe(false);
+    expect(
+      existsSync(resolve(repoRoot, ".github", "workflows", "prs-test-suggestions.yml"))
+    ).toBe(true);
+    expect(messages.join("\n")).toContain("Configured GitHub Actions: enabled PR review, test suggestions; disabled PR assistant");
+  });
+
+  it("removes disabled prs-managed GitHub Action workflows but leaves unmanaged files untouched", async () => {
+    const repoRoot = createRepo("prs-setup-disable-managed-action-");
+    createCodexHome("prs-setup-codex-home-");
+    mkdirSync(resolve(repoRoot, ".github", "workflows"), { recursive: true });
+    mkdirSync(resolve(repoRoot, ".prs"), { recursive: true });
+    writeFileSync(
+      resolve(repoRoot, "package.json"),
+      JSON.stringify(
+        {
+          name: "fixture-node-repo",
+          scripts: {
+            build: "tsup",
+          },
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(resolve(repoRoot, "pnpm-lock.yaml"), "");
+    writeFileSync(
+      resolve(repoRoot, ".prs", "config.json"),
+      JSON.stringify(
+        {
+          forge: {
+            type: "github",
+          },
+          githubActions: {
+            workflows: {
+              "pr-review": {
+                enabled: false,
+              },
+              "pr-assistant": {
+                enabled: false,
+              },
+              "test-suggestions": {
+                enabled: true,
+              },
+            },
+          },
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(
+      resolve(repoRoot, ".github", "workflows", "prs-pr-review.yml"),
+      ["# Generated by prs setup", "name: Pull Request Smith PR Review", ""].join("\n")
+    );
+    writeFileSync(
+      resolve(repoRoot, ".github", "workflows", "prs-pr-assistant.yml"),
+      ["name: Custom assistant workflow", "jobs: {}", ""].join("\n")
+    );
+
+    mockChildProcess(
+      repoRoot,
+      {
+        "rev-parse --show-toplevel": `${repoRoot}\n`,
+        "symbolic-ref refs/remotes/origin/HEAD": "refs/remotes/origin/main\n",
+        "remote get-url origin": "git@github.com:acme/fixture-node-repo.git\n",
+      },
+      { ghAuthStatus: new Error("not logged in") }
+    );
+
+    const messages: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
+      messages.push(String(message ?? ""));
+    });
+
+    await runSetupCommand({
+      promptForLine: createPrompt(["", "", "", "", ""]),
+      repoRoot,
+    });
+
+    expect(existsSync(resolve(repoRoot, ".github", "workflows", "prs-pr-review.yml"))).toBe(
+      false
+    );
+    expect(
+      readFileSync(resolve(repoRoot, ".github", "workflows", "prs-pr-assistant.yml"), "utf8")
+    ).toContain("Custom assistant workflow");
+    expect(messages.join("\n")).toContain("Removed disabled managed workflow");
+    expect(messages.join("\n")).toContain("Left disabled unmanaged workflow");
   });
 
   it("generates repository-specific config defaults from Drupal repository signals", async () => {
@@ -430,6 +599,9 @@ describe("setup command", () => {
         "coverage/**, generated/**",
         "y",
         "y",
+        "y",
+        "y",
+        "y",
       ]),
       repoRoot,
     });
@@ -556,6 +728,19 @@ describe("setup command", () => {
       buildCommand: ["pnpm", "build"],
       forge: {
         type: "github",
+      },
+      githubActions: {
+        workflows: {
+          "pr-assistant": {
+            enabled: true,
+          },
+          "pr-review": {
+            enabled: true,
+          },
+          "test-suggestions": {
+            enabled: true,
+          },
+        },
       },
     });
   });

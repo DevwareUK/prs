@@ -109,6 +109,48 @@ describe("repository config schema", () => {
     ).toThrow();
   });
 
+  it("accepts managed GitHub Action workflow enablement config", () => {
+    expect(
+      RepositoryConfig.parse({
+        githubActions: {
+          workflows: {
+            "pr-review": {
+              enabled: true,
+            },
+            "test-suggestions": {
+              enabled: false,
+            },
+          },
+        },
+      })
+    ).toEqual({
+      githubActions: {
+        workflows: {
+          "pr-review": {
+            enabled: true,
+          },
+          "test-suggestions": {
+            enabled: false,
+          },
+        },
+      },
+    });
+  });
+
+  it("requires managed GitHub Action workflow enabled values to be booleans", () => {
+    expect(() =>
+      RepositoryConfig.parse({
+        githubActions: {
+          workflows: {
+            "pr-review": {
+              enabled: "yes",
+            },
+          },
+        },
+      })
+    ).toThrow();
+  });
+
   it("requires resolved ai.issueDraft.useCodexSuperpowers to be present", () => {
     expect(() =>
       ResolvedRepositoryConfig.parse({

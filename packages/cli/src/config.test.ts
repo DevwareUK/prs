@@ -150,6 +150,7 @@ describe("config helpers", () => {
       forge: {
         type: "github",
       },
+      githubActions: {},
       localRuntime: undefined,
     });
   });
