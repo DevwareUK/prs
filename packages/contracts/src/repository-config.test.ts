@@ -151,6 +151,20 @@ describe("repository config schema", () => {
     ).toThrow();
   });
 
+  it("requires managed GitHub Action workflow ids to be non-empty", () => {
+    expect(() =>
+      RepositoryConfig.parse({
+        githubActions: {
+          workflows: {
+            "": {
+              enabled: true,
+            },
+          },
+        },
+      })
+    ).toThrow();
+  });
+
   it("requires resolved ai.issueDraft.useCodexSuperpowers to be present", () => {
     expect(() =>
       ResolvedRepositoryConfig.parse({
