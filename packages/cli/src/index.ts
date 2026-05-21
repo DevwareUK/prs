@@ -149,6 +149,7 @@ import {
   preparePullRequestReviewTool,
   runPrPrepareReviewCommand,
 } from "./workflows/pr-prepare-review/run";
+import { preparePullRequestLocalReviewTool } from "./workflows/pr-local-review/run";
 import { runPrResolveConflictsCommand } from "./workflows/pr-resolve-conflicts/run";
 import { runPrFixTestsCommand } from "./workflows/pr-fix-tests/run";
 import { pushReviewedPullRequestUpdates } from "./workflows/pull-request-reviewed-updates";
@@ -344,6 +345,7 @@ const TOP_LEVEL_HELP = [
   "",
   "Start here:",
   "  prs review",
+  "  prs tool pr review <pr-number> --json",
   "  prs tool pr address-comments <pr-number> --json",
   "  prs tool pr fix-tests <pr-number> --json",
   "  prs tool pr add-tests <pr-number> --json",
@@ -381,6 +383,7 @@ const TOP_LEVEL_HELP = [
   "  prs tool issue create (--draft-file <path>|--issue-set <path>) --json",
   "  prs tool pr list [--actionable] --json",
   "  prs tool pr ready <pr-number> [--all] --json",
+  "  prs tool pr review <pr-number> --json",
   "  prs tool pr prepare-review <pr-number> --json",
   "  prs tool pr push-reviewed <pr-number> --json",
   "  prs tool pr address-comments <pr-number> [--selection <value>] --json",
@@ -4051,6 +4054,31 @@ async function runToolCommand(): Promise<void> {
         2
       )}\n`
     );
+    return;
+  }
+
+  if (toolCommand.kind === "pr-review") {
+    const originalConsoleLog = console.log;
+    console.log = (...values: unknown[]) => {
+      process.stderr.write(`${values.map((value) => String(value)).join(" ")}\n`);
+    };
+
+    let result: Awaited<ReturnType<typeof preparePullRequestLocalReviewTool>>;
+    try {
+      result = await preparePullRequestLocalReviewTool({
+        prNumber: toolCommand.prNumber,
+        repoRoot,
+        buildCommand: repositoryConfig.buildCommand,
+        ensureVerificationCommandAvailable,
+        preflightBaseBranch: preflightRemoteBranch,
+        forge: getRepositoryForge(repoRoot),
+        ensureCleanWorkingTree,
+      });
+    } finally {
+      console.log = originalConsoleLog;
+    }
+
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return;
   }
 

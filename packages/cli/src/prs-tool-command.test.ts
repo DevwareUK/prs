@@ -95,6 +95,14 @@ describe("prs tool command parser", () => {
     });
   });
 
+  it("parses PR local Codex review JSON command", () => {
+    expect(parsePrsToolCommandArgs(["pr", "review", "115", "--json"])).toEqual({
+      kind: "pr-review",
+      prNumber: 115,
+      json: true,
+    });
+  });
+
   it("parses PR guarded push JSON command", () => {
     expect(parsePrsToolCommandArgs(["pr", "push-reviewed", "115", "--json"])).toEqual({
       kind: "pr-push-reviewed",

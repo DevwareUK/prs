@@ -67,6 +67,18 @@ function renderPrPrepareReviewToolCommand(): string {
   return `prs ${cliArgs.replace("123", "<number>")}`;
 }
 
+function renderPrReviewToolCommand(): string {
+  const route = routePrsCommandSurfaceAction(
+    parsePrsCommandSurfaceArgs(["pr", "123", "review"])
+  );
+  const cliArgs = route.cliArgs?.join(" ");
+  if (!route.toolOnly || !cliArgs) {
+    throw new Error("Expected /prs pr <number> review to route to a prs tool command.");
+  }
+
+  return `prs ${cliArgs.replace("123", "<number>")}`;
+}
+
 function renderIssueReadyToolCommand(all = false): string {
   const route = routePrsCommandSurfaceAction(
     parsePrsCommandSurfaceArgs(all ? ["issue", "123", "--all"] : ["issue", "123"])
@@ -253,6 +265,7 @@ export const PRS_CODEX_SKILLS: ManagedCodexSkill[] = [
       "- `/prs issue <number> finish`: finish work with the issue context preserved; after a pull request exists, offer the next `/prs pr` step for that pull request.",
       `- \`/prs pr <number>\`: run \`${renderPrReadyToolCommand()}\`; prepare the actual PR head branch in the current repository checkout used by the user's normal local runtime, fetch and merge the latest PR base branch, summarize \`prContext\` signals from GitHub, including grouped \`commentSummary\` entries with source links when available, and stop with the next sensible action so the user can browse the app quickly. If the PR head branch is locked by a clean prs worktree, the tool may remove that clean worktree and then check out the actual PR branch in the current checkout. If that worktree has uncommitted changes, stop and report the blocker.`,
       `- \`/prs pr <number> --all\`: run \`${renderPrReadyToolCommand(true)}\`; take all sensible readiness steps without prompting in the current repository checkout, including starting the configured local app runtime when needed. Do not push, review, fix, approve, merge, switch to an existing PR worktree, or run broad local verification.`,
+      `- \`/prs pr <number> review\`: run \`${renderPrReviewToolCommand()}\`, read the returned \`promptFilePath\` and \`contextFilePath\`, inspect the prepared checkout in this active Codex session, and write the final report to the returned \`reportFilePath\`. Do not edit code, commit, push, resolve comments, or post to GitHub.`,
       `- \`/prs pr <number> prepare-review\`: run \`${renderPrPrepareReviewToolCommand()}\`, keep the prepared branch checked out in the current repository, read the returned \`snapshotFilePath\` when useful, then continue review in this Codex session. The deterministic tool does not generate \`review-brief.md\`; do not look for one unless a separate command created it.`,
       "- `/prs pr <number> resolve-conflicts`: run `prs pr resolve-conflicts <number>`.",
       "- `/prs pr <number> address-comments`: run `prs tool pr address-comments <number> --json`, read the returned `promptFilePath` and `snapshotFilePath`, then continue the selected review-comment fixes in this Codex session. After fixes are complete, verify, commit reviewed changes, and run `prs tool pr push-reviewed <number> --json`. Do not run a command that launches nested Codex.",

@@ -12,6 +12,7 @@ export type PrsToolCommand =
       json: boolean;
     }
   | { kind: "pr-list"; actionable: boolean; json: boolean }
+  | { kind: "pr-review"; prNumber: number; json: boolean }
   | { kind: "pr-prepare-review"; prNumber: number; json: boolean }
   | { kind: "pr-push-reviewed"; prNumber: number; json: boolean }
   | {
@@ -31,17 +32,18 @@ export function renderPrsToolCommandHelp(): string {
     "                        [--run-dir <path>] [--plan-file <path>]",
     "                        [--label <name>] [--labels <a,b>]",
     "                        [--force-prs-managed]",
-  "  prs tool pr list [--actionable] --json",
-  "  prs tool pr prepare-review <pr-number> --json",
-  "  prs tool pr push-reviewed <pr-number> --json",
-  "  prs tool pr address-comments <pr-number> [--selection <value>] --json",
-  "  prs tool pr fix-tests <pr-number> --json",
-  "  prs tool pr add-tests <pr-number> [--selection <value>] --json",
-  "  prs tool pr ready <pr-number> [--all] --json",
-  "",
-  "Compatibility aliases:",
-  "  prs tool pr fix-comments <pr-number> [--selection <value>] --json      (use address-comments)",
-  "  prs tool pr fix-failing-tests <pr-number> --json                       (use fix-tests)",
+    "  prs tool pr list [--actionable] --json",
+    "  prs tool pr review <pr-number> --json",
+    "  prs tool pr prepare-review <pr-number> --json",
+    "  prs tool pr push-reviewed <pr-number> --json",
+    "  prs tool pr address-comments <pr-number> [--selection <value>] --json",
+    "  prs tool pr fix-tests <pr-number> --json",
+    "  prs tool pr add-tests <pr-number> [--selection <value>] --json",
+    "  prs tool pr ready <pr-number> [--all] --json",
+    "",
+    "Compatibility aliases:",
+    "  prs tool pr fix-comments <pr-number> [--selection <value>] --json      (use address-comments)",
+    "  prs tool pr fix-failing-tests <pr-number> --json                       (use fix-tests)",
   ].join("\n");
 }
 
@@ -261,7 +263,7 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
     throw new Error(renderPrsToolCommandHelp());
   }
 
-  if (command === "prepare-review") {
+  if (command === "review" || command === "prepare-review") {
     if (rest.length > 0) {
       throw new Error(renderPrsToolCommandHelp());
     }
@@ -274,7 +276,11 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
       throw new Error(renderPrsToolCommandHelp());
     }
 
-    return { kind: "pr-prepare-review", prNumber, json: true };
+    return {
+      kind: command === "review" ? "pr-review" : "pr-prepare-review",
+      prNumber,
+      json: true,
+    };
   }
 
   if (command === "push-reviewed") {
