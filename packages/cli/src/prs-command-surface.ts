@@ -9,6 +9,7 @@ export type PrsIssueAction = "work" | "refine" | "plan" | "finish";
 export type PrsReviewAction = "choose" | "diff" | "tests" | "features";
 export type PrsPrAction =
   | "choose"
+  | "review"
   | "prepare-review"
   | "resolve-conflicts"
   | "address-comments"
@@ -56,6 +57,7 @@ export type PrsInteractivePickerModel =
 
 const ISSUE_ACTIONS = new Set(["refine", "plan", "finish"]);
 const PR_ACTIONS = new Set([
+  "review",
   "prepare-review",
   "resolve-conflicts",
   "address-comments",
@@ -90,7 +92,7 @@ export function renderPrsCommandSurfaceHelp(): string {
     "  /prs issue",
     "  /prs issue <number> [--all|refine|plan|finish]",
     "  /prs pr",
-    "  /prs pr <number> [--all|prepare-review|resolve-conflicts|address-comments|fix-tests|add-tests]",
+    "  /prs pr <number> [--all|review|prepare-review|resolve-conflicts|address-comments|fix-tests|add-tests]",
     "  /prs audit publish [--issue <number>|--pr <number>] [--file <path>] [--section <name>] [--local-run <path>]",
     "  /prs finish",
   ].join("\n");
@@ -328,6 +330,16 @@ export function routePrsCommandSurfaceAction(action: PrsCommandSurfaceAction): P
         interaction: "direct",
         skillName: "prs",
         cliArgs: ["tool", "pr", "prepare-review", String(action.prNumber), "--json"],
+        target: { type: "pull-request", number: action.prNumber },
+        toolOnly: true,
+      };
+    }
+
+    if (action.action === "review") {
+      return {
+        interaction: "direct",
+        skillName: "prs",
+        cliArgs: ["tool", "pr", "review", String(action.prNumber), "--json"],
         target: { type: "pull-request", number: action.prNumber },
         toolOnly: true,
       };
