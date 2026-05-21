@@ -19,7 +19,7 @@ export function createPullRequestFixFailingTestsWorkspace(
     repoRoot,
     ".prs",
     "runs",
-    `${formatRunTimestamp()}-pr-${prNumber}-fix-failing-tests`
+    `${formatRunTimestamp()}-pr-${prNumber}-fix-tests`
   );
 
   mkdirSync(runDir, { recursive: true });
@@ -74,7 +74,7 @@ function formatInitialOutputLog(
   createdAt: string
 ): string {
   return [
-    "# prs pr fix-failing-tests run log",
+    "# prs pr fix-tests run log",
     "",
     `Created: ${createdAt}`,
     `Snapshot file: ${toRepoRelativePath(repoRoot, workspace.snapshotFilePath)}`,

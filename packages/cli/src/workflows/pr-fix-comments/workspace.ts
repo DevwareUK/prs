@@ -20,7 +20,7 @@ export function createPullRequestFixWorkspace(
     repoRoot,
     ".prs",
     "runs",
-    `${formatRunTimestamp()}-pr-${prNumber}-fix-comments`
+    `${formatRunTimestamp()}-pr-${prNumber}-address-comments`
   );
 
   mkdirSync(runDir, { recursive: true });
@@ -135,7 +135,7 @@ export function writePullRequestFixWorkspaceFiles(
   writeFileSync(
     workspace.outputLogPath,
     [
-      "# prs pr fix-comments run log",
+      "# prs pr address-comments run log",
       "",
       `Created: ${createdAt}`,
       `Snapshot file: ${toRepoRelativePath(repoRoot, workspace.snapshotFilePath)}`,

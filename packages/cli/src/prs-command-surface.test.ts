@@ -123,23 +123,35 @@ describe("prs command surface", () => {
       prNumber: 456,
       action: "prepare-review",
     });
+    expect(parsePrsCommandSurfaceArgs(["pr", "456", "address-comments"])).toEqual({
+      kind: "pr",
+      mode: "direct",
+      prNumber: 456,
+      action: "address-comments",
+    });
     expect(parsePrsCommandSurfaceArgs(["pr", "456", "fix-comments"])).toEqual({
       kind: "pr",
       mode: "direct",
       prNumber: 456,
-      action: "fix-comments",
-    });
-    expect(parsePrsCommandSurfaceArgs(["pr", "456", "fix-failing-tests"])).toEqual({
-      kind: "pr",
-      mode: "direct",
-      prNumber: 456,
-      action: "fix-failing-tests",
+      action: "address-comments",
     });
     expect(parsePrsCommandSurfaceArgs(["pr", "456", "fix-tests"])).toEqual({
       kind: "pr",
       mode: "direct",
       prNumber: 456,
       action: "fix-tests",
+    });
+    expect(parsePrsCommandSurfaceArgs(["pr", "456", "fix-failing-tests"])).toEqual({
+      kind: "pr",
+      mode: "direct",
+      prNumber: 456,
+      action: "fix-tests",
+    });
+    expect(parsePrsCommandSurfaceArgs(["pr", "456", "add-tests"])).toEqual({
+      kind: "pr",
+      mode: "direct",
+      prNumber: 456,
+      action: "add-tests",
     });
   });
 
@@ -395,26 +407,12 @@ describe("prs command surface routing", () => {
         kind: "pr",
         mode: "direct",
         prNumber: 456,
-        action: "fix-comments",
+        action: "address-comments",
       })
     ).toEqual({
       interaction: "direct",
       skillName: "prs",
-      cliArgs: ["tool", "pr", "fix-comments", "456", "--json"],
-      target: { type: "pull-request", number: 456 },
-      toolOnly: true,
-    });
-    expect(
-      routePrsCommandSurfaceAction({
-        kind: "pr",
-        mode: "direct",
-        prNumber: 456,
-        action: "fix-failing-tests",
-      })
-    ).toEqual({
-      interaction: "direct",
-      skillName: "prs",
-      cliArgs: ["tool", "pr", "fix-failing-tests", "456", "--json"],
+      cliArgs: ["tool", "pr", "address-comments", "456", "--json"],
       target: { type: "pull-request", number: 456 },
       toolOnly: true,
     });
@@ -429,6 +427,20 @@ describe("prs command surface routing", () => {
       interaction: "direct",
       skillName: "prs",
       cliArgs: ["tool", "pr", "fix-tests", "456", "--json"],
+      target: { type: "pull-request", number: 456 },
+      toolOnly: true,
+    });
+    expect(
+      routePrsCommandSurfaceAction({
+        kind: "pr",
+        mode: "direct",
+        prNumber: 456,
+        action: "add-tests",
+      })
+    ).toEqual({
+      interaction: "direct",
+      skillName: "prs",
+      cliArgs: ["tool", "pr", "add-tests", "456", "--json"],
       target: { type: "pull-request", number: 456 },
       toolOnly: true,
     });

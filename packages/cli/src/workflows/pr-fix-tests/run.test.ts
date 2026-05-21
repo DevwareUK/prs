@@ -159,22 +159,22 @@ function createForge(
 describe("runPrFixTestsCommand", () => {
   const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-pr-fix-tests-"));
   const workspace: PullRequestFixTestsWorkspace = {
-    runDir: resolve(repoRoot, ".prs/runs/20260320T112935000Z-pr-71-fix-tests"),
+    runDir: resolve(repoRoot, ".prs/runs/20260320T112935000Z-pr-71-add-tests"),
     snapshotFilePath: resolve(
       repoRoot,
-      ".prs/runs/20260320T112935000Z-pr-71-fix-tests/pr-test-suggestions.md"
+      ".prs/runs/20260320T112935000Z-pr-71-add-tests/pr-test-suggestions.md"
     ),
     promptFilePath: resolve(
       repoRoot,
-      ".prs/runs/20260320T112935000Z-pr-71-fix-tests/prompt.md"
+      ".prs/runs/20260320T112935000Z-pr-71-add-tests/prompt.md"
     ),
     metadataFilePath: resolve(
       repoRoot,
-      ".prs/runs/20260320T112935000Z-pr-71-fix-tests/metadata.json"
+      ".prs/runs/20260320T112935000Z-pr-71-add-tests/metadata.json"
     ),
     outputLogPath: resolve(
       repoRoot,
-      ".prs/runs/20260320T112935000Z-pr-71-fix-tests/output.log"
+      ".prs/runs/20260320T112935000Z-pr-71-add-tests/output.log"
     ),
   };
 
@@ -271,7 +271,7 @@ describe("runPrFixTestsCommand", () => {
 
     expect(result).toEqual({
       status: "ready",
-      flow: "pr-fix-tests",
+      flow: "pr-add-tests",
       prNumber: 71,
       runDir: workspace.runDir,
       snapshotFilePath: workspace.snapshotFilePath,
@@ -401,7 +401,7 @@ describe("runPrFixTestsCommand", () => {
     expect(commitGeneratedChanges).toHaveBeenCalledWith(
       repoRoot,
       expect.objectContaining({
-        content: "test: address AI test suggestions for PR #71\n",
+        content: "test: add suggested tests for PR #71\n",
         filePath: resolve(workspace.runDir, "commit-message.txt"),
       })
     );
@@ -915,7 +915,7 @@ describe("runPrFixTestsCommand", () => {
     expect(commitGeneratedChanges).toHaveBeenCalledWith(
       repoRoot,
       expect.objectContaining({
-        content: "test: address AI test suggestions for PR #71\n",
+        content: "test: add suggested tests for PR #71\n",
       })
     );
     expect(spawnSync).not.toHaveBeenCalledWith(

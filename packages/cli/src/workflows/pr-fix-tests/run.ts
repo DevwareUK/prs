@@ -49,7 +49,7 @@ type RunPrFixTestsCommandOptions = {
 
 export type PullRequestFixPreparationResult = {
   status: "ready";
-  flow: "pr-fix-tests";
+  flow: "pr-add-tests";
   prNumber: number;
   runDir: string;
   snapshotFilePath: string;
@@ -95,7 +95,7 @@ export async function runPrFixTestsCommand(
   (options.ensureVerificationCommandAvailable ?? ensureVerificationCommandAvailable)(
     options.repoRoot,
     options.buildCommand,
-    "prs pr fix-tests"
+    "prs pr add-tests"
   );
 
   console.log(`Fetching pull request #${options.prNumber}...`);
@@ -157,7 +157,7 @@ export async function runPrFixTestsCommand(
   if (options.mode === "prepare") {
     return {
       status: "ready",
-      flow: "pr-fix-tests",
+      flow: "pr-add-tests",
       prNumber: pullRequest.number,
       runDir: workspace.runDir,
       snapshotFilePath: workspace.snapshotFilePath,
@@ -202,7 +202,7 @@ export async function runPrFixTestsCommand(
     hasChanges: options.hasChanges,
     commitGeneratedChanges: options.commitGeneratedChanges,
     resolveInitialCommitMessage: async () =>
-      `test: address AI test suggestions for PR #${pullRequest.number}\n`,
+      `test: add suggested tests for PR #${pullRequest.number}\n`,
     noChangesMessage: `${runtime.displayName} completed without producing any file changes to commit.`,
   });
 

@@ -21,7 +21,7 @@ import type {
 const cleanupTargets = new Set<string>();
 
 function createTempRepoRoot(): string {
-  const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-pr-fix-tests-"));
+  const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-pr-add-tests-"));
   cleanupTargets.add(repoRoot);
   return repoRoot;
 }
@@ -33,18 +33,18 @@ afterEach(() => {
   cleanupTargets.clear();
 });
 
-describe("pr-fix-tests workspace", () => {
+describe("pr-add-tests workspace", () => {
   it("creates the run directory and writes prompt, snapshot, metadata, and log artifacts", () => {
     const repoRoot = createTempRepoRoot();
     const workspace = createPullRequestFixTestsWorkspace(repoRoot, 71);
 
     const pullRequest: PullRequestDetails = {
       number: 71,
-      title: "Add prs pr fix-tests",
+      title: "Add prs pr add-tests",
       body: "Closes #70\n\nImplement AI test suggestion handoff.",
       url: "https://github.com/DevwareUK/prs/pull/71",
       baseRefName: "main",
-      headRefName: "feat/pr-fix-tests",
+      headRefName: "feat/pr-add-tests",
     };
     const selectedSuggestions: PullRequestTestSuggestion[] = [
       {
@@ -85,7 +85,7 @@ describe("pr-fix-tests workspace", () => {
     const linkedIssues: PullRequestLinkedIssueContext[] = [
       {
         number: 70,
-        title: "Add prs pr fix-tests",
+        title: "Add prs pr add-tests",
         body: "Support implementing managed AI test suggestions from pull requests.",
         url: "https://github.com/DevwareUK/prs/issues/70",
       },
@@ -102,7 +102,7 @@ describe("pr-fix-tests workspace", () => {
     );
 
     expect(existsSync(workspace.runDir)).toBe(true);
-    expect(workspace.runDir).toMatch(/\.prs\/runs\/.+-pr-71-fix-tests$/);
+    expect(workspace.runDir).toMatch(/\.prs\/runs\/.+-pr-71-add-tests$/);
 
     const snapshot = readFileSync(workspace.snapshotFilePath, "utf8");
     const prompt = readFileSync(workspace.promptFilePath, "utf8");
@@ -120,7 +120,7 @@ describe("pr-fix-tests workspace", () => {
     const outputLog = readFileSync(workspace.outputLogPath, "utf8");
 
     expect(snapshot).toContain("# Pull Request Test Suggestions Fix Snapshot");
-    expect(snapshot).toContain("### Issue #70: Add prs pr fix-tests");
+    expect(snapshot).toContain("### Issue #70: Add prs pr add-tests");
     expect(snapshot).toContain(
       "### Suggestion 1: Test parsing of managed AI test suggestions comments"
     );
@@ -130,7 +130,7 @@ describe("pr-fix-tests workspace", () => {
     expect(snapshot).toContain("## Suggested edge cases");
 
     expect(prompt).toContain(
-      "Read the pull request test suggestions fix snapshot at `.prs/runs/"
+      "Read the pull request add-tests snapshot at `.prs/runs/"
     );
     expect(prompt).toContain("Use `.prs/runs/");
     expect(prompt).toContain("- keep code changes focused on implementing automated tests");
@@ -147,7 +147,7 @@ describe("pr-fix-tests workspace", () => {
     expect(metadata.linkedIssues).toEqual([
       {
         number: 70,
-        title: "Add prs pr fix-tests",
+        title: "Add prs pr add-tests",
         url: "https://github.com/DevwareUK/prs/issues/70",
       },
     ]);
@@ -179,9 +179,9 @@ describe("pr-fix-tests workspace", () => {
     expect(metadata.snapshotFile).toMatch(/\.prs\/runs\/.+\/pr-test-suggestions\.md$/);
     expect(metadata.promptFile).toMatch(/\.prs\/runs\/.+\/prompt\.md$/);
     expect(metadata.outputLog).toMatch(/\.prs\/runs\/.+\/output\.log$/);
-    expect(metadata.runDir).toMatch(/\.prs\/runs\/.+-pr-71-fix-tests$/);
+    expect(metadata.runDir).toMatch(/\.prs\/runs\/.+-pr-71-add-tests$/);
 
-    expect(outputLog).toContain("# prs pr fix-tests run log");
+    expect(outputLog).toContain("# prs pr add-tests run log");
     expect(outputLog).toContain("Snapshot file: .prs/runs/");
     expect(outputLog).toContain("Prompt file: .prs/runs/");
   });

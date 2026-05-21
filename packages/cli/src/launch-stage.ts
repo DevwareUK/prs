@@ -48,7 +48,7 @@ const LAUNCH_STAGE_NOTICE_DEFINITIONS: Record<
     reason:
       "It creates GitHub issues from skill-produced drafts and can write durable `.prs/` artifacts plus forge changes.",
     recommendedFirst:
-      "`prs review`, `prs pr fix-comments <pr-number>`, or `prs review tests --top 5`.",
+      "`prs review`, `prs pr address-comments <pr-number>`, or `prs review tests --top 5`.",
     constraints:
       "Requires a completed issue draft from the active skill flow; `--runtime` is an explicit legacy escape hatch for opening a separate drafting session.",
   },
@@ -88,7 +88,7 @@ const LAUNCH_STAGE_NOTICE_DEFINITIONS: Record<
     reason:
       "This is the legacy issue automation path until it fully uses the Codex + Superpowers + GitHub audit contract.",
     recommendedFirst:
-      "Codex + Superpowers + GitHub audit for issue work, or `prs review`, `prs pr fix-comments <pr-number>`, and `prs pr fix-tests <pr-number>` for narrower PR work.",
+      "Codex + Superpowers + GitHub audit for issue work, or `prs review`, `prs pr address-comments <pr-number>`, `prs pr fix-tests <pr-number>`, and `prs pr add-tests <pr-number>` for narrower PR work.",
     constraints:
       'Requires a clean working tree, issue access through the configured forge, and a usable text provider; interactive runs need an available runtime CLI, while `--mode unattended` also needs authenticated GitHub access and `ai.runtime.type: "codex"`.',
   },
@@ -98,7 +98,7 @@ const LAUNCH_STAGE_NOTICE_DEFINITIONS: Record<
     reason:
       "It automates reviewer workspace setup, base-branch sync, and a live Codex handoff around a pull request.",
     recommendedFirst:
-      "`prs review` for the lower-risk review path, then `prs pr fix-comments <pr-number>` or `prs pr fix-tests <pr-number>` when you want guided local changes.",
+      "`prs review` for the lower-risk review path, then `prs pr address-comments <pr-number>`, `prs pr fix-tests <pr-number>`, or `prs pr add-tests <pr-number>` when you want guided local changes.",
     constraints:
       "Requires a clean working tree, pull-request access through the configured forge, and `codex` on PATH; it may check out a review branch and merge the latest base branch before generating the brief.",
   },
@@ -108,7 +108,7 @@ const LAUNCH_STAGE_NOTICE_DEFINITIONS: Record<
     reason:
       "It syncs a live PR branch with its base branch and opens a focused Codex session when merge conflicts need guided local resolution.",
     recommendedFirst:
-      "`prs pr fix-comments <pr-number>` or `prs pr fix-tests <pr-number>` when the PR is mergeable and you want guided local changes.",
+      "`prs pr address-comments <pr-number>`, `prs pr fix-tests <pr-number>`, or `prs pr add-tests <pr-number>` when the PR is mergeable and you want guided local changes.",
     constraints:
       "Requires a clean working tree, pull-request access through the configured forge, `codex` on PATH, a fetchable origin base branch, and a PR head branch that can be pushed back to origin.",
   },

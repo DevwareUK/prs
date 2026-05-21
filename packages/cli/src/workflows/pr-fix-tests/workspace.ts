@@ -20,7 +20,7 @@ export function createPullRequestFixTestsWorkspace(
     repoRoot,
     ".prs",
     "runs",
-    `${formatRunTimestamp()}-pr-${prNumber}-fix-tests`
+    `${formatRunTimestamp()}-pr-${prNumber}-add-tests`
   );
 
   mkdirSync(runDir, { recursive: true });
@@ -50,7 +50,7 @@ function buildPullRequestFixTestsRuntimePrompt(
   return [
     "You are working in the current repository.",
     "",
-    `Read the pull request test suggestions fix snapshot at \`${snapshotFile}\` before making changes.`,
+    `Read the pull request add-tests snapshot at \`${snapshotFile}\` before making changes.`,
     `Use \`${runDir}\` for run artifacts created by this workflow.`,
     "",
     "Instructions to the coding agent:",
@@ -145,7 +145,7 @@ export function writePullRequestFixTestsWorkspaceFiles(
   writeFileSync(
     workspace.outputLogPath,
     [
-      "# prs pr fix-tests run log",
+      "# prs pr add-tests run log",
       "",
       `Created: ${createdAt}`,
       `Snapshot file: ${toRepoRelativePath(repoRoot, workspace.snapshotFilePath)}`,

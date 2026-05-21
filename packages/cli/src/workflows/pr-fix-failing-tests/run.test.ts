@@ -57,24 +57,24 @@ function createForge(): RepositoryForge {
 }
 
 describe("runPrFixFailingTestsCommand", () => {
-  const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-pr-fix-failing-tests-"));
+  const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-pr-fix-tests-"));
   const workspace: PullRequestFixFailingTestsWorkspace = {
-    runDir: resolve(repoRoot, ".prs/runs/20260320T112935000Z-pr-95-fix-failing-tests"),
+    runDir: resolve(repoRoot, ".prs/runs/20260320T112935000Z-pr-95-fix-tests"),
     snapshotFilePath: resolve(
       repoRoot,
-      ".prs/runs/20260320T112935000Z-pr-95-fix-failing-tests/failing-tests.md"
+      ".prs/runs/20260320T112935000Z-pr-95-fix-tests/failing-tests.md"
     ),
     promptFilePath: resolve(
       repoRoot,
-      ".prs/runs/20260320T112935000Z-pr-95-fix-failing-tests/prompt.md"
+      ".prs/runs/20260320T112935000Z-pr-95-fix-tests/prompt.md"
     ),
     metadataFilePath: resolve(
       repoRoot,
-      ".prs/runs/20260320T112935000Z-pr-95-fix-failing-tests/metadata.json"
+      ".prs/runs/20260320T112935000Z-pr-95-fix-tests/metadata.json"
     ),
     outputLogPath: resolve(
       repoRoot,
-      ".prs/runs/20260320T112935000Z-pr-95-fix-failing-tests/output.log"
+      ".prs/runs/20260320T112935000Z-pr-95-fix-tests/output.log"
     ),
   };
 
@@ -124,7 +124,7 @@ describe("runPrFixFailingTestsCommand", () => {
 
     expect(result).toEqual({
       status: "ready",
-      flow: "pr-fix-failing-tests",
+      flow: "pr-fix-tests",
       prNumber: 95,
       runDir: workspace.runDir,
       snapshotFilePath: workspace.snapshotFilePath,

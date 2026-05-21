@@ -15,7 +15,7 @@ export type PrsToolCommand =
   | { kind: "pr-prepare-review"; prNumber: number; json: boolean }
   | { kind: "pr-push-reviewed"; prNumber: number; json: boolean }
   | {
-      kind: "pr-fix-comments" | "pr-fix-failing-tests" | "pr-fix-tests";
+      kind: "pr-address-comments" | "pr-fix-tests" | "pr-add-tests";
       prNumber: number;
       selection: string;
       json: boolean;
@@ -31,13 +31,17 @@ export function renderPrsToolCommandHelp(): string {
     "                        [--run-dir <path>] [--plan-file <path>]",
     "                        [--label <name>] [--labels <a,b>]",
     "                        [--force-prs-managed]",
-    "  prs tool pr list [--actionable] --json",
-    "  prs tool pr prepare-review <pr-number> --json",
-    "  prs tool pr push-reviewed <pr-number> --json",
-    "  prs tool pr fix-comments <pr-number> [--selection <value>] --json",
-    "  prs tool pr fix-failing-tests <pr-number> --json",
-    "  prs tool pr fix-tests <pr-number> [--selection <value>] --json",
-    "  prs tool pr ready <pr-number> [--all] --json",
+  "  prs tool pr list [--actionable] --json",
+  "  prs tool pr prepare-review <pr-number> --json",
+  "  prs tool pr push-reviewed <pr-number> --json",
+  "  prs tool pr address-comments <pr-number> [--selection <value>] --json",
+  "  prs tool pr fix-tests <pr-number> --json",
+  "  prs tool pr add-tests <pr-number> [--selection <value>] --json",
+  "  prs tool pr ready <pr-number> [--all] --json",
+  "",
+  "Compatibility aliases:",
+  "  prs tool pr fix-comments <pr-number> [--selection <value>] --json      (use address-comments)",
+  "  prs tool pr fix-failing-tests <pr-number> --json                       (use fix-tests)",
   ].join("\n");
 }
 
@@ -290,6 +294,8 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
   }
 
   if (
+    command === "address-comments" ||
+    command === "add-tests" ||
     command === "fix-comments" ||
     command === "fix-failing-tests" ||
     command === "fix-tests"
@@ -305,6 +311,9 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
     let selection = "all";
     let json = false;
 
+    const kind = normalizePrFixToolKind(command);
+    const acceptsSelection = kind === "pr-address-comments" || kind === "pr-add-tests";
+
     for (let index = 0; index < optionArgs.length; index += 1) {
       const rawArg = optionArgs[index];
 
@@ -314,6 +323,11 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
       }
 
       if (rawArg === "--selection") {
+        if (!acceptsSelection) {
+          throw new Error(
+            "`prs tool pr fix-tests` now repairs failing tests and does not accept --selection. Use `prs tool pr add-tests <pr-number> --selection <value> --json` for managed AI test suggestions."
+          );
+        }
         const value = optionArgs[index + 1];
         if (!value) {
           throw new Error(`Missing value for --selection. ${renderPrsToolCommandHelp()}`);
@@ -324,6 +338,11 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
       }
 
       if (rawArg.startsWith("--selection=")) {
+        if (!acceptsSelection) {
+          throw new Error(
+            "`prs tool pr fix-tests` now repairs failing tests and does not accept --selection. Use `prs tool pr add-tests <pr-number> --selection <value> --json` for managed AI test suggestions."
+          );
+        }
         selection = rawArg.slice("--selection=".length);
         continue;
       }
@@ -335,7 +354,7 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
       throw new Error(`prs tool pr ${command} requires --json. ${renderPrsToolCommandHelp()}`);
     }
 
-    return { kind: `pr-${command}` as const, prNumber, selection, json: true };
+    return { kind, prNumber, selection, json: true };
   }
 
   if (command === "ready") {
@@ -354,4 +373,17 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
   }
 
   throw new Error(renderPrsToolCommandHelp());
+}
+
+function normalizePrFixToolKind(
+  command: string
+): Extract<PrsToolCommand, { prNumber: number; selection: string }>["kind"] {
+  if (command === "fix-comments" || command === "address-comments") {
+    return "pr-address-comments";
+  }
+  if (command === "fix-failing-tests" || command === "fix-tests") {
+    return "pr-fix-tests";
+  }
+
+  return "pr-add-tests";
 }

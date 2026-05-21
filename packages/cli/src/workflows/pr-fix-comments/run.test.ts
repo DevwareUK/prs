@@ -119,24 +119,24 @@ function createForge(
 }
 
 describe("runPrFixCommentsCommand", () => {
-  const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-pr-fix-comments-"));
+  const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-pr-address-comments-"));
   const workspace: PullRequestFixWorkspace = {
-    runDir: resolve(repoRoot, ".prs/runs/20260320T112935000Z-pr-88-fix-comments"),
+    runDir: resolve(repoRoot, ".prs/runs/20260320T112935000Z-pr-88-address-comments"),
     snapshotFilePath: resolve(
       repoRoot,
-      ".prs/runs/20260320T112935000Z-pr-88-fix-comments/pr-review-comments.md"
+      ".prs/runs/20260320T112935000Z-pr-88-address-comments/pr-review-comments.md"
     ),
     promptFilePath: resolve(
       repoRoot,
-      ".prs/runs/20260320T112935000Z-pr-88-fix-comments/prompt.md"
+      ".prs/runs/20260320T112935000Z-pr-88-address-comments/prompt.md"
     ),
     metadataFilePath: resolve(
       repoRoot,
-      ".prs/runs/20260320T112935000Z-pr-88-fix-comments/metadata.json"
+      ".prs/runs/20260320T112935000Z-pr-88-address-comments/metadata.json"
     ),
     outputLogPath: resolve(
       repoRoot,
-      ".prs/runs/20260320T112935000Z-pr-88-fix-comments/output.log"
+      ".prs/runs/20260320T112935000Z-pr-88-address-comments/output.log"
     ),
   };
 
@@ -214,7 +214,7 @@ describe("runPrFixCommentsCommand", () => {
 
     expect(result).toEqual({
       status: "ready",
-      flow: "pr-fix-comments",
+      flow: "pr-address-comments",
       prNumber: 88,
       runDir: workspace.runDir,
       snapshotFilePath: workspace.snapshotFilePath,
