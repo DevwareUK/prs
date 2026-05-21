@@ -152,6 +152,10 @@ describe("managed prs Codex skills", () => {
     expect(issueMarkdown).toContain("/prs:issue <number> --all");
     expect(prMarkdown).toContain("name: prs:pr");
     expect(prMarkdown).toContain("actual PR head branch");
+    expect(prMarkdown).toContain("/prs:pr <number> review");
+    expect(prMarkdown).toContain("prs tool pr review <number> --json");
+    expect(prMarkdown).toContain("write the final report to the returned `reportFilePath`");
+    expect(prMarkdown).toContain("/prs:pr <number> prepare-review");
     expect(prMarkdown).toContain("browse/functional test first");
     expect(auditMarkdown).toContain("name: prs:audit");
     expect(auditMarkdown).toContain("prs audit publish");
