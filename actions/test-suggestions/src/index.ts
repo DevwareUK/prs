@@ -8,7 +8,6 @@ import { OpenAIProvider } from "@prs/providers";
 import {
   getOptionalInlineOrFileInput,
   getOptionalInput,
-  getRequiredInlineOrFileInput,
   getRequiredInput,
 } from "../../shared/src/inputs";
 import {

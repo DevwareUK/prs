@@ -1,8 +1,5 @@
 import type { RepositoryComment } from "../../forge";
-import {
-  ALL_TEST_SUGGESTIONS_COMMENT_MARKERS,
-  TEST_SUGGESTIONS_COMMENT_MARKER,
-} from "@prs/contracts";
+import { ALL_TEST_SUGGESTIONS_COMMENT_MARKERS } from "@prs/contracts";
 import type {
   PullRequestTestSuggestion,
   PullRequestTestSuggestionPriority,
@@ -76,7 +73,7 @@ function parseSuggestionBlock(
   let value: string | undefined;
   let protectedPaths: string[] = [];
   let likelyLocations: string[] = [];
-  let edgeCases: string[] = [];
+  const edgeCases: string[] = [];
   let implementationNote: string | undefined;
   let collectingEdgeCases = false;
 

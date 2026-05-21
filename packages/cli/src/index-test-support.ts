@@ -802,7 +802,6 @@ async function loadGitHubForge(options: {
 } = {}) {
   vi.resetModules();
 
-  const runtimeRepoRoot = options.runtimeRepoRoot ?? REPO_ROOT;
   const execFileSync = vi.fn((command: string, args: string[]) => {
     if (
       command === "git" &&

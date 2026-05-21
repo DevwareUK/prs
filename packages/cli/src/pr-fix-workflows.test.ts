@@ -198,7 +198,6 @@ describe("PR fix workflows", () => {
 
   it("prepares pr address-comments artifacts without launching a nested runtime", async () => {
     const beforeRuns = listRunDirectories();
-    let gitStatusCallCount = 0;
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -256,7 +255,6 @@ describe("PR fix workflows", () => {
       readlineAnswers: ["all"],
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "status") {
-          gitStatusCallCount += 1;
           return "";
         }
 
@@ -514,7 +512,6 @@ describe("PR fix workflows", () => {
 
   it("prepares pr add-tests artifacts without launching a nested runtime", async () => {
     const beforeRuns = listRunDirectories();
-    let gitStatusCallCount = 0;
     process.env.GH_TOKEN = "";
     process.env.GITHUB_TOKEN = "test-token";
     const fetchMock = vi
@@ -591,7 +588,6 @@ describe("PR fix workflows", () => {
       readlineAnswers: ["2"],
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "status") {
-          gitStatusCallCount += 1;
           return "";
         }
 
@@ -716,7 +712,6 @@ describe("PR fix workflows", () => {
   it("prepares pr fix-tests artifacts without launching a nested runtime", async () => {
     const beforeRuns = listRunDirectories();
     let buildCallCount = 0;
-    let gitStatusCallCount = 0;
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -742,7 +737,6 @@ describe("PR fix workflows", () => {
       readlineAnswers: [],
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "status") {
-          gitStatusCallCount += 1;
           return "";
         }
 

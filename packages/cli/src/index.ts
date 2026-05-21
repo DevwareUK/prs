@@ -71,13 +71,11 @@ import {
 import {
   parseIssueCommandArgs,
   parseIssueNumber,
-  type IssueCommandOptions,
   type IssueDraftCommandOptions,
 } from "./commands/issue";
 import {
   parseReviewCommandArgs,
   REVIEW_USAGE,
-  type ReviewCommandOptions,
 } from "./commands/review";
 import { listPullRequestsTool } from "./pr-list-tool";
 import { readyPullRequestTool } from "./pr-ready-tool";
@@ -748,14 +746,6 @@ function runInteractiveCommand(
   if (result.status !== 0) {
     throw new Error(errorMessage);
   }
-}
-
-function canRunCommand(command: string, args: string[] = ["--version"]): boolean {
-  const result = spawnSync(command, args, {
-    stdio: "ignore",
-  });
-
-  return !result.error && result.status === 0;
 }
 
 function hasChanges(repoRoot: string): boolean {

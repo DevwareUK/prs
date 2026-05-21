@@ -46405,7 +46405,7 @@ function parseSuggestionBlock(blockTitle, blockLines, suggestionIndex) {
   let value;
   let protectedPaths = [];
   let likelyLocations = [];
-  let edgeCases = [];
+  const edgeCases = [];
   let implementationNote;
   let collectingEdgeCases = false;
   for (const rawLine of blockLines) {

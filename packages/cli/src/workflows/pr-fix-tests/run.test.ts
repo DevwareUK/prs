@@ -747,7 +747,7 @@ describe("runPrFixTestsCommand", () => {
   });
 
   it("lets the user modify the reviewed commit message before committing", async () => {
-    const { forge, updateIssueComment } = createForge([
+    const { forge } = createForge([
       createManagedComment(
         [
           "<!-- prs:test-suggestions -->",
@@ -845,7 +845,7 @@ describe("runPrFixTestsCommand", () => {
   });
 
   it("keeps the reviewed local commit when the PR head branch diverged on origin", async () => {
-    const { forge, updateIssueComment } = createForge([
+    const { forge } = createForge([
       createManagedComment(
         [
           "<!-- prs:test-suggestions -->",
