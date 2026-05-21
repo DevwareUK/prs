@@ -45,6 +45,7 @@ describe("PR list tool", () => {
           {
             number: 10,
             title: "Owned by me",
+            html_url: "https://github.com/DevwareUK/prs/pull/10",
             user: { login: "me" },
             assignees: [],
             requested_reviewers: [],
@@ -56,6 +57,7 @@ describe("PR list tool", () => {
           {
             number: 11,
             title: "Needs my review",
+            html_url: "https://github.com/DevwareUK/prs/pull/11",
             user: { login: "someone-else" },
             assignees: [],
             requested_reviewers: [{ login: "me" }],
@@ -67,6 +69,7 @@ describe("PR list tool", () => {
           {
             number: 12,
             title: "Not mine",
+            html_url: "https://github.com/DevwareUK/prs/pull/12",
             user: { login: "someone-else" },
             assignees: [],
             requested_reviewers: [],
@@ -93,11 +96,13 @@ describe("PR list tool", () => {
       pullRequests: [
         {
           number: 11,
+          url: "https://github.com/DevwareUK/prs/pull/11",
           reviewRequestedFrom: ["me"],
           hasConflicts: true,
         },
         {
           number: 10,
+          url: "https://github.com/DevwareUK/prs/pull/10",
           author: "me",
         },
       ],

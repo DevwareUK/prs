@@ -1,6 +1,7 @@
 export type ActionableIssue = {
   number: number;
   title: string;
+  url: string;
   author: string;
   assignees: string[];
   labels: string[];
@@ -12,6 +13,7 @@ export type ActionableIssue = {
 export type ActionablePullRequest = {
   number: number;
   title: string;
+  url: string;
   author: string;
   assignees: string[];
   reviewRequestedFrom: string[];

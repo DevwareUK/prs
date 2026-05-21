@@ -73,6 +73,9 @@ describe("managed prs Codex skills", () => {
       "/prs issue`: run `prs tool issue list --actionable --json`"
     );
     expect(markdown).toContain(
+      "/prs issue`: run `prs tool issue list --actionable --json`, show each returned actionable for me issue number, title, and GitHub URL"
+    );
+    expect(markdown).toContain(
       "/prs issue <number>`: run `prs tool issue ready <number> --json`"
     );
     expect(markdown).toContain(
@@ -117,6 +120,9 @@ describe("managed prs Codex skills", () => {
     expect(markdown).toContain("Do not recreate prs workflows with ad hoc git commands");
     expect(markdown).toContain(
       "/prs pr`: run `prs tool pr list --actionable --json`"
+    );
+    expect(markdown).toContain(
+      "/prs pr`: run `prs tool pr list --actionable --json`, show each returned pull request number, title, and GitHub URL"
     );
     expect(markdown).toContain("instead of inspecting git refs or source files");
     expect(markdown).toContain("actionable for me");

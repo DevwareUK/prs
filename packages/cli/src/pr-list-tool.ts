@@ -99,6 +99,7 @@ function isConflictState(value: unknown): boolean {
 function normalizePullRequest(payload: {
   number?: number;
   title?: string;
+  html_url?: string;
   user?: { login?: string };
   assignees?: Array<{ login?: string }>;
   requested_reviewers?: Array<{ login?: string }>;
@@ -111,6 +112,7 @@ function normalizePullRequest(payload: {
   if (
     !payload.number ||
     !payload.title ||
+    !payload.html_url ||
     !payload.user?.login ||
     !payload.head?.ref ||
     !payload.updated_at
@@ -121,6 +123,7 @@ function normalizePullRequest(payload: {
   return {
     number: payload.number,
     title: payload.title,
+    url: payload.html_url,
     author: payload.user.login,
     assignees: normalizeStringArray(payload.assignees),
     reviewRequestedFrom: normalizeStringArray(payload.requested_reviewers),

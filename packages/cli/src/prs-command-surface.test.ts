@@ -476,6 +476,7 @@ describe("prs interactive picker models", () => {
           {
             number: 1,
             title: "Mine",
+            url: "https://github.com/DevwareUK/prs/issues/1",
             author: "me",
             assignees: [],
             labels: [],
@@ -486,6 +487,7 @@ describe("prs interactive picker models", () => {
           {
             number: 2,
             title: "Already has PR",
+            url: "https://github.com/DevwareUK/prs/issues/2",
             author: "me",
             assignees: ["me"],
             labels: ["ready"],
@@ -503,6 +505,7 @@ describe("prs interactive picker models", () => {
         {
           number: 1,
           title: "Mine",
+          url: "https://github.com/DevwareUK/prs/issues/1",
           author: "me",
           assignees: [],
           labels: [],
@@ -523,6 +526,7 @@ describe("prs interactive picker models", () => {
           {
             number: 10,
             title: "Conflicts",
+            url: "https://github.com/DevwareUK/prs/pull/10",
             author: "alice",
             assignees: [],
             reviewRequestedFrom: [],
@@ -537,6 +541,7 @@ describe("prs interactive picker models", () => {
           {
             number: 11,
             title: "Not actionable",
+            url: "https://github.com/DevwareUK/prs/pull/11",
             author: "alice",
             assignees: [],
             reviewRequestedFrom: [],
@@ -558,6 +563,7 @@ describe("prs interactive picker models", () => {
         {
           number: 10,
           title: "Conflicts",
+          url: "https://github.com/DevwareUK/prs/pull/10",
           author: "alice",
           assignees: [],
           reviewRequestedFrom: [],

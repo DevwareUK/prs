@@ -45,6 +45,7 @@ describe("issue list tool", () => {
           {
             number: 1,
             title: "Owned by me",
+            html_url: "https://github.com/DevwareUK/prs/issues/1",
             user: { login: "me" },
             assignees: [],
             labels: [],
@@ -53,6 +54,7 @@ describe("issue list tool", () => {
           {
             number: 2,
             title: "Already has a PR",
+            html_url: "https://github.com/DevwareUK/prs/issues/2",
             user: { login: "me" },
             assignees: [{ login: "me" }],
             labels: [{ name: "ready" }],
@@ -61,6 +63,7 @@ describe("issue list tool", () => {
           {
             number: 3,
             title: "Planned issue",
+            html_url: "https://github.com/DevwareUK/prs/issues/3",
             user: { login: "someone-else" },
             assignees: [],
             labels: [],
@@ -69,6 +72,7 @@ describe("issue list tool", () => {
           {
             number: 4,
             title: "Pull request returned by issues endpoint",
+            html_url: "https://github.com/DevwareUK/prs/pull/4",
             user: { login: "me" },
             assignees: [],
             labels: [],
@@ -119,11 +123,13 @@ describe("issue list tool", () => {
       issues: [
         {
           number: 3,
+          url: "https://github.com/DevwareUK/prs/issues/3",
           hasPrsPlan: true,
           hasLinkedOpenPullRequest: false,
         },
         {
           number: 1,
+          url: "https://github.com/DevwareUK/prs/issues/1",
           author: "me",
           hasLinkedOpenPullRequest: false,
         },

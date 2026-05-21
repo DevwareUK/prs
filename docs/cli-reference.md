@@ -32,7 +32,9 @@ Supporting commands:
 - `prs setup`: guided repository onboarding for `prs`
 - `prs setup --update-skills`: refresh only managed Codex `/prs` skills
 - `prs update skills`: refresh managed Codex `/prs` skills after upgrading the CLI
+- `prs tool issue list [--actionable] --json`: list open GitHub issues, optionally filtered to actionable-for-me issues; returned items include number, title, URL, ownership, labels, update time, linked-PR status, and PRS plan status
 - `prs tool issue create (--draft-file <path>|--issue-set <path>) --json`: deterministically create GitHub issues from approved local issue draft artifacts
+- `prs tool pr list [--actionable] --json`: list open GitHub pull requests, optionally filtered to actionable-for-me PRs; returned items include number, title, URL, ownership, branch, labels, update time, and action signals such as conflicts
 - `prs tool pr ready <pr-number> [--all] --json`: fast local PR readiness for `/prs:pr`; checks out the actual PR head branch, fetches and merges the latest PR base branch, reports GitHub-hosted review signals in `prContext`, includes grouped PR comment summaries with source links when comments are available, reports actionable/handled/duplicate/resolved/outdated review-thread counts, and skips broad local verification
 - `prs codex pr prepare-review <pr-number>`: explicit legacy launcher for reviewer workspace preparation and live Codex follow-up
 - `prs tool pr prepare-review <pr-number> --json`: deterministic Codex-safe review preparation

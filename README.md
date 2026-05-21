@@ -149,6 +149,8 @@ Supporting commands:
 - `prs commit`
 - `prs diff`
 
+`prs tool issue list [--actionable] --json` and `prs tool pr list [--actionable] --json` include a `url` field for every returned issue or pull request. The interactive `/prs issue` and `/prs pr` entrypoints use those list tools and should show each returned item with its number, title, and GitHub URL before offering follow-up actions.
+
 `prs tool pr ready <pr-number> --json` is the fast local PR-readiness path used by `/prs:pr`: it checks out the actual PR head branch, fetches and merges the latest PR base branch, writes readiness metadata with GitHub-hosted context such as failed/pending checks, managed AI test suggestions, actionable review comments, and grouped comment summaries with source links, and does not run the configured build or broad local verification. Review comment readiness uses the same resolved/outdated thread filtering as `prs pr address-comments`, suppresses duplicate PRS-authored inline findings, and reports separate counts for actionable, handled older-head, duplicate, resolved, and outdated review threads. Add `--all` when you also want the configured local runtime started when possible.
 
 `/prs pr <pr-number> address-comments`, `/prs pr <pr-number> fix-tests`, and `/prs pr <pr-number> add-tests` use deterministic `prs tool pr ... --json` preparation commands. They write the focused `.prs/runs/...` prompt, snapshot, metadata, and output-log artifacts, return the file paths to the active Codex session, and do not launch a nested runtime. After active Codex verifies and commits selected fixes, run `prs tool pr push-reviewed <pr-number> --json` to fetch the PR head, check ahead/behind status, and push only when `HEAD` is ahead and not behind `origin/<pr-head-branch>`.
