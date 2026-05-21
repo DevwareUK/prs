@@ -55,6 +55,12 @@ type DetectionResult<T> = {
   warnings: string[];
 };
 
+type LocalRuntimeSuggestion = {
+  evidence: string;
+  source: string;
+  value: RepositoryLocalRuntimeConfigType;
+};
+
 type PackageJson = {
   packageManager?: string;
   scripts?: Record<string, string>;
@@ -75,6 +81,7 @@ type RepositoryInspection = {
   suggestedIssueUseCodexSuperpowers: boolean;
   suggestedIssueUseCodexSuperpowersSource: string;
   suggestedLocalRuntime: RepositoryLocalRuntimeConfigType | undefined;
+  suggestedLocalRuntimeSuggestions: LocalRuntimeSuggestion[];
   suggestedLocalRuntimeSource: string;
   suggestedForgeTypeSource: string;
   suggestedRuntimeType: RuntimeType;
@@ -483,29 +490,60 @@ function detectLocalRuntime(
     };
   }
 
-  const ddevConfigPath = resolve(repoRoot, ".ddev", "config.yaml");
-  if (!existsSync(ddevConfigPath)) {
-    return {
-      value: undefined,
-      source: "no local runtime readiness signal detected",
-      warnings: [],
-    };
-  }
-
-  const config = readFileSync(ddevConfigPath, "utf8");
-  const name = config.match(/^name:\s*([A-Za-z0-9_.-]+)/m)?.[1];
-  const ddevCommand = findCommandPath("ddev") ?? "ddev";
-
   return {
-    value: {
-      type: "command",
-      ...(name ? { url: `https://${name}.ddev.site` } : {}),
-      statusCommand: [ddevCommand, "describe"],
-      startCommand: [ddevCommand, "start"],
-    },
-    source: ".ddev/config.yaml",
+    value: undefined,
+    source: "no local runtime configured",
     warnings: [],
   };
+}
+
+function detectLocalRuntimeSuggestions(repoRoot: string): LocalRuntimeSuggestion[] {
+  const suggestions: LocalRuntimeSuggestion[] = [];
+  const ddevConfigPath = resolve(repoRoot, ".ddev", "config.yaml");
+  if (existsSync(ddevConfigPath)) {
+    const config = readFileSync(ddevConfigPath, "utf8");
+    const name = config.match(/^name:\s*([A-Za-z0-9_.-]+)/m)?.[1];
+    const ddevCommand = findCommandPath("ddev") ?? "ddev";
+    suggestions.push({
+      evidence: ".ddev/config.yaml exists",
+      source: ".ddev/config.yaml",
+      value: {
+        type: "command",
+        ...(name ? { url: `https://${name}.ddev.site` } : {}),
+        statusCommand: [ddevCommand, "describe"],
+        startCommand: [ddevCommand, "start"],
+      },
+    });
+  }
+
+  const dsmConfigPath = resolve(repoRoot, ".dsm", "site.json");
+  if (existsSync(dsmConfigPath)) {
+    const dsmConfig = readJsonFile<Record<string, unknown>>(dsmConfigPath);
+    const configuredUrl =
+      typeof dsmConfig?.url === "string"
+        ? dsmConfig.url
+        : typeof dsmConfig?.primaryUrl === "string"
+          ? dsmConfig.primaryUrl
+          : undefined;
+    const name = typeof dsmConfig?.name === "string" ? dsmConfig.name : undefined;
+    const dsmCommand = findCommandPath("dsm") ?? "dsm";
+    suggestions.push({
+      evidence: ".dsm/site.json exists",
+      source: ".dsm/site.json",
+      value: {
+        type: "command",
+        ...(configuredUrl
+          ? { url: configuredUrl }
+          : name
+            ? { url: `https://${name}.dsm.site` }
+            : {}),
+        statusCommand: [dsmCommand, "status"],
+        startCommand: [dsmCommand, "start"],
+      },
+    });
+  }
+
+  return suggestions;
 }
 
 function detectIssueUseCodexSuperpowers(
@@ -1566,6 +1604,7 @@ function inspectRepository(
   const issueUseCodexSuperpowers = detectIssueUseCodexSuperpowers(existingConfig);
   const runtimeType = detectRuntimeType(existingConfig);
   const localRuntime = detectLocalRuntime(repoRoot, existingConfig);
+  const localRuntimeSuggestions = detectLocalRuntimeSuggestions(repoRoot);
   const actionableGitHubWorkflowIds = findActionableGitHubWorkflowIds(repoRoot);
   const suggestedEnabledGitHubWorkflowIds = detectEnabledGitHubWorkflowIds(
     repoRoot,
@@ -1605,6 +1644,7 @@ function inspectRepository(
     suggestedIssueUseCodexSuperpowers: issueUseCodexSuperpowers.value,
     suggestedIssueUseCodexSuperpowersSource: issueUseCodexSuperpowers.source,
     suggestedLocalRuntime: localRuntime.value,
+    suggestedLocalRuntimeSuggestions: localRuntimeSuggestions,
     suggestedLocalRuntimeSource: localRuntime.source,
     suggestedForgeTypeSource: forgeType.source,
     suggestedRuntimeType: runtimeType.value,
@@ -1707,6 +1747,20 @@ function parseExcludePathList(value: string): string[] {
   return uniqueStrings(normalized.split(","));
 }
 
+function parseOptionalPromptCommand(value: string, defaultCommand?: string[]): string[] | undefined {
+  const normalized = value.trim();
+  if (!normalized) {
+    return defaultCommand;
+  }
+
+  if (normalized.toLowerCase() === "none") {
+    return undefined;
+  }
+
+  const command = parseCommandString(normalized);
+  return command.length > 0 ? command : undefined;
+}
+
 function renderDefaultValue(value: string): string {
   return value ? ` [${value}]` : "";
 }
@@ -1791,6 +1845,83 @@ async function promptExcludePaths(
   }
 }
 
+async function promptOptionalCommand(
+  promptForLine: (prompt: string) => Promise<string>,
+  prompt: string,
+  defaultCommand?: string[]
+): Promise<string[] | undefined> {
+  while (true) {
+    const response = await promptForLine(
+      `${prompt}${renderDefaultValue(
+        defaultCommand ? formatCommandForDisplay(defaultCommand) : ""
+      )}: `
+    );
+
+    try {
+      return parseOptionalPromptCommand(response, defaultCommand);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.log(message);
+    }
+  }
+}
+
+async function promptLocalRuntime(
+  promptForLine: (prompt: string) => Promise<string>,
+  inspection: RepositoryInspection,
+  options: { promptWhenNoSuggestion: boolean }
+): Promise<RepositoryLocalRuntimeConfigType | undefined> {
+  if (inspection.suggestedLocalRuntime) {
+    return inspection.suggestedLocalRuntime;
+  }
+
+  const suggestion = inspection.suggestedLocalRuntimeSuggestions[0]?.value;
+  if (!suggestion && !options.promptWhenNoSuggestion) {
+    return undefined;
+  }
+
+  const shouldConfigure = await promptYesNo(
+    promptForLine,
+    "Configure local app runtime readiness",
+    false
+  );
+  if (!shouldConfigure) {
+    return undefined;
+  }
+
+  const urlResponse = (
+    await promptForLine(`Local app URL${renderDefaultValue(suggestion?.url ?? "")}: `)
+  ).trim();
+  const statusCommand = await promptOptionalCommand(
+    promptForLine,
+    "Local app status command",
+    suggestion?.statusCommand
+  );
+  const startCommand = await promptOptionalCommand(
+    promptForLine,
+    "Local app start command",
+    suggestion?.startCommand
+  );
+
+  const url =
+    urlResponse && urlResponse.toLowerCase() !== "none"
+      ? urlResponse
+      : !urlResponse
+        ? suggestion?.url
+        : undefined;
+
+  if (!url && !statusCommand && !startCommand) {
+    return undefined;
+  }
+
+  return {
+    type: "command",
+    ...(url ? { url } : {}),
+    ...(statusCommand ? { statusCommand } : {}),
+    ...(startCommand ? { startCommand } : {}),
+  };
+}
+
 async function promptYesNo(
   promptForLine: (prompt: string) => Promise<string>,
   prompt: string,
@@ -1815,18 +1946,68 @@ async function promptYesNo(
   }
 }
 
-function ensureGitAiIgnored(repoRoot: string): boolean {
-  const gitignorePath = resolve(repoRoot, ".gitignore");
-  const existing = existsSync(gitignorePath) ? readFileSync(gitignorePath, "utf8") : "";
-  const lines = existing.split(/\r?\n/).map((line) => line.trim());
+type PrsGitignoreWriteResult = "created" | "updated" | "unchanged";
 
-  if (lines.includes(".prs") || lines.includes(".prs/")) {
-    return false;
+const GENERATED_PRS_STATE_GITIGNORE_ENTRIES = [
+  "runs/",
+  "issues/",
+  "worktrees/",
+  "batches/",
+];
+
+function ensurePrsGeneratedStateIgnored(repoRoot: string): PrsGitignoreWriteResult {
+  const prsDirectory = resolve(repoRoot, ".prs");
+  const gitignorePath = resolve(prsDirectory, ".gitignore");
+  const existed = existsSync(gitignorePath);
+  const existing = existed ? readFileSync(gitignorePath, "utf8") : "";
+  const existingLines = existing.split(/\r?\n/);
+  const normalizedLines = new Set(
+    existingLines.map((line) => line.trim()).filter((line) => line.length > 0)
+  );
+  const missingEntries = GENERATED_PRS_STATE_GITIGNORE_ENTRIES.filter(
+    (entry) => !normalizedLines.has(entry)
+  );
+
+  if (existed && missingEntries.length === 0) {
+    return "unchanged";
+  }
+
+  mkdirSync(prsDirectory, { recursive: true });
+  if (!existed) {
+    writeFileSync(gitignorePath, `${GENERATED_PRS_STATE_GITIGNORE_ENTRIES.join("\n")}\n`, "utf8");
+    return "created";
   }
 
   const prefix = existing.length > 0 && !existing.endsWith("\n") ? "\n" : "";
-  writeFileSync(gitignorePath, `${existing}${prefix}.prs/\n`, "utf8");
-  return true;
+  writeFileSync(gitignorePath, `${existing}${prefix}${missingEntries.join("\n")}\n`, "utf8");
+  return "updated";
+}
+
+function findRootPrsIgnorePatterns(repoRoot: string): string[] {
+  const gitignorePath = resolve(repoRoot, ".gitignore");
+  if (!existsSync(gitignorePath)) {
+    return [];
+  }
+
+  return readFileSync(gitignorePath, "utf8")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => {
+      if (!line || line.startsWith("#") || line.startsWith("!")) {
+        return false;
+      }
+
+      return [
+        ".prs",
+        ".prs/",
+        ".prs/*",
+        ".prs/**",
+        "/.prs",
+        "/.prs/",
+        "/.prs/*",
+        "/.prs/**",
+      ].includes(line);
+    });
 }
 
 function buildRepositoryConfig(
@@ -1962,6 +2143,13 @@ function logInspection(repoRoot: string, inspection: RepositoryInspection): void
         : "none"
     } (${inspection.suggestedLocalRuntimeSource})`
   );
+  for (const suggestion of inspection.suggestedLocalRuntimeSuggestions) {
+    console.log(
+      `Local app runtime suggestion: ${formatLocalRuntimeForDisplay(
+        suggestion.value
+      )} (${suggestion.source}; ${suggestion.evidence}; requires confirmation before writing)`
+    );
+  }
   console.log(
     `Suggested Codex Superpowers-backed issue workflows: ${
       inspection.suggestedIssueUseCodexSuperpowers ? "enabled" : "disabled"
@@ -2026,6 +2214,9 @@ async function collectCustomSetupAnswers(
     promptForLine,
     inspection.suggestedExcludePaths
   );
+  const localRuntime = await promptLocalRuntime(promptForLine, inspection, {
+    promptWhenNoSuggestion: true,
+  });
 
   return {
     baseBranch,
@@ -2034,7 +2225,7 @@ async function collectCustomSetupAnswers(
     forgeType,
     issueUseCodexSuperpowers: inspection.suggestedIssueUseCodexSuperpowers,
     runtimeType,
-    localRuntime: inspection.suggestedLocalRuntime,
+    localRuntime,
   };
 }
 
@@ -2075,7 +2266,12 @@ async function collectSetupAnswers(
 
   const recommendedAnswers = buildRecommendedAnswers(inspection);
   const customAnswers = useRecommendedAnswers
-    ? recommendedAnswers
+    ? {
+        ...recommendedAnswers,
+        localRuntime: await promptLocalRuntime(promptForLine, inspection, {
+          promptWhenNoSuggestion: false,
+        }),
+      }
     : await collectCustomSetupAnswers(promptForLine, inspection);
 
   const enabledGitHubWorkflowIds = await collectGitHubWorkflowAnswers(
@@ -2192,7 +2388,8 @@ export async function runSetupCommand(options: {
   );
 
   writeRepositoryConfig(options.repoRoot, buildRepositoryConfig(answers, existingConfig));
-  const gitignoreUpdated = ensureGitAiIgnored(options.repoRoot);
+  const prsGitignoreStatus = ensurePrsGeneratedStateIgnored(options.repoRoot);
+  const rootPrsIgnorePatterns = findRootPrsIgnorePatterns(options.repoRoot);
   const workflowInstallResult =
     answers.forgeType === "github"
       ? installGitHubWorkflows(options.repoRoot, answers.enabledGitHubWorkflowIds)
@@ -2234,8 +2431,17 @@ export async function runSetupCommand(options: {
     );
   }
   console.log(
-    gitignoreUpdated ? "Added `.prs/` to .gitignore." : "`.prs/` was already gitignored."
+    prsGitignoreStatus === "created"
+      ? "Created .prs/.gitignore for generated local state."
+      : prsGitignoreStatus === "updated"
+        ? "Updated .prs/.gitignore for generated local state."
+        : ".prs/.gitignore already ignored generated local state."
   );
+  for (const pattern of rootPrsIgnorePatterns) {
+    console.log(
+      `Warning: root .gitignore pattern \`${pattern}\` ignores setup-managed .prs/config.json and .prs/.gitignore. Remove or narrow that root ignore before committing those setup files.`
+    );
+  }
 
   for (const installedPath of workflowInstallResult.installed) {
     console.log(`Installed ${installedPath}.`);

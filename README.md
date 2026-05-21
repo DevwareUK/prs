@@ -99,7 +99,7 @@ If you already have a live GitHub pull request branch checked out locally in Cod
 /prs pr 88 add-tests
 ```
 
-See [docs/setup-configuration.md](docs/setup-configuration.md) for prerequisites, `prs setup`, `.env`, `.prs/config.json`, provider/runtime fallback, and `.prs/` working-state details.
+See [docs/setup-configuration.md](docs/setup-configuration.md) for prerequisites, `prs setup`, `.env`, setup-managed `.prs/config.json` and `.prs/.gitignore`, provider/runtime fallback, and generated `.prs/` working-state details.
 
 ## Command tiers
 

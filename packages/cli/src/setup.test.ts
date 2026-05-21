@@ -219,7 +219,10 @@ describe("setup command", () => {
         },
       },
     });
-    expect(readFileSync(resolve(repoRoot, ".gitignore"), "utf8")).toContain(".prs/\n");
+    expect(readFileSync(resolve(repoRoot, ".gitignore"), "utf8")).toBe("node_modules/\n");
+    expect(readFileSync(resolve(repoRoot, ".prs", ".gitignore"), "utf8")).toBe(
+      ["runs/", "issues/", "worktrees/", "batches/", ""].join("\n")
+    );
     expect(
       readFileSync(resolve(repoRoot, ".github", "workflows", "prs-pr-review.yml"), "utf8")
     ).toContain("DevwareUK/prs/actions/pr-review@main");
@@ -579,7 +582,99 @@ describe("setup command", () => {
     });
   });
 
-  it("writes detected DDEV readiness as generic local runtime config", async () => {
+  it("writes .prs/.gitignore idempotently on setup reruns", async () => {
+    const repoRoot = createRepo("prs-setup-prs-gitignore-rerun-");
+    createCodexHome("prs-setup-codex-home-");
+    mkdirSync(resolve(repoRoot, ".prs"), { recursive: true });
+    writeFileSync(
+      resolve(repoRoot, ".prs", ".gitignore"),
+      ["runs/", "custom-local-state/", ""].join("\n")
+    );
+    writeFileSync(
+      resolve(repoRoot, "package.json"),
+      JSON.stringify(
+        {
+          name: "fixture-node-repo",
+          scripts: {
+            build: "tsup",
+          },
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(resolve(repoRoot, "pnpm-lock.yaml"), "");
+
+    mockChildProcess(repoRoot, {
+      "rev-parse --show-toplevel": `${repoRoot}\n`,
+      "symbolic-ref refs/remotes/origin/HEAD": "refs/remotes/origin/main\n",
+      "remote get-url origin": "git@gitlab.com:acme/fixture-node-repo.git\n",
+    });
+
+    await runSetupCommand({
+      promptForLine: createPrompt(["", ""]),
+      repoRoot,
+    });
+
+    await runSetupCommand({
+      promptForLine: createPrompt(["", ""]),
+      repoRoot,
+    });
+
+    const prsGitignore = readFileSync(resolve(repoRoot, ".prs", ".gitignore"), "utf8");
+    expect(prsGitignore).toBe(
+      ["runs/", "custom-local-state/", "issues/", "worktrees/", "batches/", ""].join("\n")
+    );
+    expect(prsGitignore.match(/^runs\/$/gm) ?? []).toHaveLength(1);
+    expect(prsGitignore.match(/^issues\/$/gm) ?? []).toHaveLength(1);
+    expect(prsGitignore.match(/^worktrees\/$/gm) ?? []).toHaveLength(1);
+    expect(prsGitignore.match(/^batches\/$/gm) ?? []).toHaveLength(1);
+  });
+
+  it("warns but does not modify a root .gitignore that blocks tracked .prs setup files", async () => {
+    const repoRoot = createRepo("prs-setup-root-prs-ignore-warning-");
+    createCodexHome("prs-setup-codex-home-");
+    writeFileSync(resolve(repoRoot, ".gitignore"), ".prs/\nnode_modules/\n");
+    writeFileSync(
+      resolve(repoRoot, "package.json"),
+      JSON.stringify(
+        {
+          name: "fixture-node-repo",
+          scripts: {
+            build: "tsup",
+          },
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(resolve(repoRoot, "pnpm-lock.yaml"), "");
+
+    mockChildProcess(repoRoot, {
+      "rev-parse --show-toplevel": `${repoRoot}\n`,
+      "symbolic-ref refs/remotes/origin/HEAD": "refs/remotes/origin/main\n",
+      "remote get-url origin": "git@gitlab.com:acme/fixture-node-repo.git\n",
+    });
+
+    const messages: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
+      messages.push(String(message ?? ""));
+    });
+
+    await runSetupCommand({
+      promptForLine: createPrompt(["", ""]),
+      repoRoot,
+    });
+
+    expect(readFileSync(resolve(repoRoot, ".gitignore"), "utf8")).toBe(
+      ".prs/\nnode_modules/\n"
+    );
+    expect(messages.join("\n")).toContain(
+      "Warning: root .gitignore pattern `.prs/` ignores setup-managed .prs/config.json and .prs/.gitignore"
+    );
+  });
+
+  it("does not write DDEV local runtime config unless explicitly confirmed", async () => {
     const repoRoot = createRepo("prs-setup-ddev-runtime-");
     createCodexHome("prs-setup-codex-home-");
     const binDir = resolve(repoRoot, "bin");
@@ -599,7 +694,7 @@ describe("setup command", () => {
 
     try {
       await runSetupCommand({
-        promptForLine: createPrompt(["", ""]),
+        promptForLine: createPrompt(["", "n", ""]),
         repoRoot,
       });
     } finally {
@@ -609,11 +704,123 @@ describe("setup command", () => {
     expect(
       JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
         .localRuntime
+    ).toBeUndefined();
+  });
+
+  it("does not write DSM local runtime config unless explicitly confirmed", async () => {
+    const repoRoot = createRepo("prs-setup-dsm-runtime-");
+    createCodexHome("prs-setup-codex-home-");
+    mkdirSync(resolve(repoRoot, ".dsm"), { recursive: true });
+    writeFileSync(resolve(repoRoot, ".dsm", "site.json"), '{"name":"fixture"}\n');
+
+    mockChildProcess(repoRoot, {
+      "rev-parse --show-toplevel": `${repoRoot}\n`,
+      "symbolic-ref refs/remotes/origin/HEAD": "refs/remotes/origin/main\n",
+      "remote get-url origin": "git@gitlab.com:acme/drupal-site.git\n",
+    });
+
+    await runSetupCommand({
+      promptForLine: createPrompt(["", "n", ""]),
+      repoRoot,
+    });
+
+    expect(
+      JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
+        .localRuntime
+    ).toBeUndefined();
+  });
+
+  it("writes custom command local runtime config after explicit setup confirmation", async () => {
+    const repoRoot = createRepo("prs-setup-custom-runtime-");
+    createCodexHome("prs-setup-codex-home-");
+    writeFileSync(
+      resolve(repoRoot, "package.json"),
+      JSON.stringify(
+        {
+          name: "fixture-node-repo",
+          scripts: {
+            build: "tsup",
+          },
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(resolve(repoRoot, "pnpm-lock.yaml"), "");
+
+    mockChildProcess(repoRoot, {
+      "rev-parse --show-toplevel": `${repoRoot}\n`,
+      "symbolic-ref refs/remotes/origin/HEAD": "refs/remotes/origin/main\n",
+      "remote get-url origin": "git@gitlab.com:acme/fixture-node-repo.git\n",
+    });
+
+    await runSetupCommand({
+      promptForLine: createPrompt([
+        "n",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "y",
+        "http://localhost:8888",
+        "make status",
+        "make up",
+        "",
+      ]),
+      repoRoot,
+    });
+
+    expect(
+      JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
+        .localRuntime
     ).toEqual({
       type: "command",
-      url: "https://fixture.ddev.site",
-      statusCommand: [resolve(binDir, "ddev"), "describe"],
-      startCommand: [resolve(binDir, "ddev"), "start"],
+      url: "http://localhost:8888",
+      statusCommand: ["make", "status"],
+      startCommand: ["make", "up"],
+    });
+  });
+
+  it("preserves existing local runtime config on setup rerun", async () => {
+    const repoRoot = createRepo("prs-setup-preserve-local-runtime-");
+    createCodexHome("prs-setup-codex-home-");
+    mkdirSync(resolve(repoRoot, ".prs"), { recursive: true });
+    writeFileSync(
+      resolve(repoRoot, ".prs", "config.json"),
+      JSON.stringify(
+        {
+          localRuntime: {
+            type: "command",
+            url: "http://existing.test",
+            statusCommand: ["make", "status"],
+            startCommand: ["make", "up"],
+          },
+        },
+        null,
+        2
+      )
+    );
+
+    mockChildProcess(repoRoot, {
+      "rev-parse --show-toplevel": `${repoRoot}\n`,
+      "symbolic-ref refs/remotes/origin/HEAD": "refs/remotes/origin/main\n",
+      "remote get-url origin": "git@gitlab.com:acme/fixture-node-repo.git\n",
+    });
+
+    await runSetupCommand({
+      promptForLine: createPrompt(["", ""]),
+      repoRoot,
+    });
+
+    expect(
+      JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
+        .localRuntime
+    ).toEqual({
+      type: "command",
+      url: "http://existing.test",
+      statusCommand: ["make", "status"],
+      startCommand: ["make", "up"],
     });
   });
 
@@ -678,6 +885,7 @@ describe("setup command", () => {
         "codex",
         "pnpm build",
         "coverage/**, generated/**",
+        "n",
         "y",
         "y",
         "y",

@@ -113,7 +113,10 @@ describe("Issue draft and setup workflows", () => {
         },
       },
     });
-    expect(readFileSync(resolve(repoRoot, ".gitignore"), "utf8")).toContain(".prs/\n");
+    expect(readFileSync(resolve(repoRoot, ".gitignore"), "utf8")).toBe("node_modules/\n");
+    expect(readFileSync(resolve(repoRoot, ".prs", ".gitignore"), "utf8")).toBe(
+      ["runs/", "issues/", "worktrees/", "batches/", ""].join("\n")
+    );
     expect(
       readFileSync(resolve(repoRoot, ".github", "workflows", "prs-pr-review.yml"), "utf8")
     ).toContain("DevwareUK/prs/actions/pr-review@main");
@@ -159,7 +162,7 @@ describe("Issue draft and setup workflows", () => {
 
     const { run } = await loadCli({
       runtimeRepoRoot: repoRoot,
-      readlineAnswers: ["n", "develop", "none", "codex", "", "", "y"],
+      readlineAnswers: ["n", "develop", "none", "codex", "", "", "n", "y"],
       execFileSyncImpl: (command, args) => {
         if (
           command === "git" &&

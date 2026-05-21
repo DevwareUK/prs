@@ -62,13 +62,14 @@ If Superpowers is unavailable or produces no plan artifact, `prs` prints a fallb
 
 ## Local artifacts
 
-The `.prs/` directory is repository-local working state and should stay gitignored.
+`.prs/config.json` and `.prs/.gitignore` are setup-managed repository files. Generated `.prs/` workflow state should stay local and is ignored through `.prs/.gitignore`.
 
 Typical paths:
 
 - `.prs/runs/`: prompts, metadata, logs, output snapshots, and Superpowers spec/plan artifacts
 - `.prs/issues/`: issue snapshots, generated drafts, and per-issue session state
 - `.prs/batches/`: multi-issue run state
+- `.prs/worktrees/`: generated issue worktrees for parallel issue runs
 
 For Codex-guided local fix workflows, the most useful files are usually `prompt.md`, `metadata.json`, `output.log`, and the preserved source snapshot such as `pr-review-comments.md` or `pr-test-suggestions.md`.
 
