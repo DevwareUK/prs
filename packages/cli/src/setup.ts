@@ -82,6 +82,7 @@ type RepositoryInspection = {
   suggestedExcludePaths: string[];
   suggestedForgeType: ForgeType;
   actionableGitHubWorkflowIds: GitHubWorkflowId[];
+  suggestedEnabledGitHubWorkflowIds: GitHubWorkflowId[];
   missingGitHubWorkflowIds: GitHubWorkflowId[];
   warnings: string[];
   stackLabel: string;
@@ -96,7 +97,7 @@ type SetupAnswers = {
   issueUseCodexSuperpowers: boolean;
   localRuntime: RepositoryLocalRuntimeConfigType | undefined;
   runtimeType: RuntimeType;
-  installGitHubWorkflows: boolean;
+  enabledGitHubWorkflowIds: GitHubWorkflowId[];
   updateAgents: boolean;
 };
 
@@ -107,7 +108,9 @@ type GitHubWorkflowTemplate = {
 };
 
 type GitHubWorkflowInstallResult = {
+  disabledUnmanaged: string[];
   installed: string[];
+  removed: string[];
   skipped: string[];
   updated: string[];
 };
@@ -606,10 +609,47 @@ function findActionableGitHubWorkflowIds(repoRoot: string): GitHubWorkflowId[] {
   }).map((workflow) => workflow.id);
 }
 
+function getConfiguredGitHubWorkflowEnabled(
+  config: RepositoryConfigType | undefined,
+  workflowId: GitHubWorkflowId
+): boolean | undefined {
+  return config?.githubActions?.workflows?.[workflowId]?.enabled;
+}
+
+function detectEnabledGitHubWorkflowIds(
+  repoRoot: string,
+  existingConfig: RepositoryConfigType | undefined
+): GitHubWorkflowId[] {
+  return RECOMMENDED_GITHUB_WORKFLOWS.filter((workflow) => {
+    const configured = getConfiguredGitHubWorkflowEnabled(existingConfig, workflow.id);
+    if (configured !== undefined) {
+      return configured;
+    }
+
+    if (isManagedGitHubWorkflow(repoRoot, workflow)) {
+      return true;
+    }
+
+    return !existsSync(getGitAiWorkflowPath(repoRoot, workflow.fileName));
+  }).map((workflow) => workflow.id);
+}
+
 function renderGitHubWorkflowLabels(workflowIds: readonly GitHubWorkflowId[]): string {
   return RECOMMENDED_GITHUB_WORKFLOWS.filter((workflow) => workflowIds.includes(workflow.id))
     .map((workflow) => workflow.label)
     .join(", ");
+}
+
+function renderGitHubWorkflowStateSummary(
+  enabledWorkflowIds: readonly GitHubWorkflowId[]
+): string {
+  const disabledWorkflowIds = RECOMMENDED_GITHUB_WORKFLOWS.map((workflow) => workflow.id).filter(
+    (workflowId) => !enabledWorkflowIds.includes(workflowId)
+  );
+  const enabledLabel = renderGitHubWorkflowLabels(enabledWorkflowIds) || "none";
+  const disabledLabel = renderGitHubWorkflowLabels(disabledWorkflowIds) || "none";
+
+  return `enabled ${enabledLabel}; disabled ${disabledLabel}`;
 }
 
 function renderGitAiWorkflowHeader(description: string): string[] {
@@ -1272,17 +1312,39 @@ function installGitHubWorkflows(
   mkdirSync(workflowsDir, { recursive: true });
 
   const result: GitHubWorkflowInstallResult = {
+    disabledUnmanaged: [],
     installed: [],
+    removed: [],
     skipped: [],
     updated: [],
   };
 
-  for (const workflow of RECOMMENDED_GITHUB_WORKFLOWS.filter((entry) =>
-    workflowIds.includes(entry.id)
-  )) {
+  for (const workflow of RECOMMENDED_GITHUB_WORKFLOWS) {
     const filePath = resolve(workflowsDir, workflow.fileName);
     const legacyPath = getLegacyWorkflowPath(repoRoot, workflow.id);
     const nextContent = `${renderGitHubWorkflow(workflow.id)}\n`;
+    const enabled = workflowIds.includes(workflow.id);
+
+    if (!enabled) {
+      if (existsSync(filePath)) {
+        if (isManagedGitHubWorkflow(repoRoot, workflow)) {
+          rmSync(filePath, { force: true });
+          result.removed.push(filePath);
+        } else {
+          result.disabledUnmanaged.push(filePath);
+        }
+      }
+
+      if (
+        existsSync(legacyPath) &&
+        isLegacyManagedGitHubWorkflowContent(readFileSync(legacyPath, "utf8"), workflow.id)
+      ) {
+        rmSync(legacyPath, { force: true });
+        result.removed.push(legacyPath);
+      }
+
+      continue;
+    }
 
     if (!existsSync(filePath)) {
       writeFileSync(filePath, nextContent, "utf8");
@@ -1505,6 +1567,10 @@ function inspectRepository(
   const runtimeType = detectRuntimeType(existingConfig);
   const localRuntime = detectLocalRuntime(repoRoot, existingConfig);
   const actionableGitHubWorkflowIds = findActionableGitHubWorkflowIds(repoRoot);
+  const suggestedEnabledGitHubWorkflowIds = detectEnabledGitHubWorkflowIds(
+    repoRoot,
+    existingConfig
+  );
   const missingGitHubWorkflowIds = findMissingGitHubWorkflowIds(repoRoot);
 
   const signals = [shape.stackLabel];
@@ -1546,6 +1612,7 @@ function inspectRepository(
     suggestedExcludePaths: detectSuggestedExcludePaths(repoRoot, existingConfig),
     suggestedForgeType: forgeType.value,
     actionableGitHubWorkflowIds,
+    suggestedEnabledGitHubWorkflowIds,
     missingGitHubWorkflowIds,
     warnings,
     stackLabel: shape.stackLabel,
@@ -1794,6 +1861,19 @@ function buildRepositoryConfig(
     };
   }
 
+  if (answers.forgeType === "github") {
+    config.githubActions = {
+      workflows: Object.fromEntries(
+        RECOMMENDED_GITHUB_WORKFLOWS.map((workflow) => [
+          workflow.id,
+          {
+            enabled: answers.enabledGitHubWorkflowIds.includes(workflow.id),
+          },
+        ])
+      ),
+    };
+  }
+
   if (answers.localRuntime) {
     config.localRuntime = answers.localRuntime;
   }
@@ -1906,10 +1986,9 @@ function logInspection(repoRoot: string, inspection: RepositoryInspection): void
   console.log("");
 }
 
-function buildRecommendedAnswers(inspection: RepositoryInspection): Omit<
-  SetupAnswers,
-  "installGitHubWorkflows" | "updateAgents"
-> {
+function buildRecommendedAnswers(
+  inspection: RepositoryInspection
+): Omit<SetupAnswers, "enabledGitHubWorkflowIds" | "updateAgents"> {
   return {
     baseBranch: inspection.suggestedBaseBranch,
     buildCommand: inspection.suggestedBuildCommand,
@@ -1924,7 +2003,7 @@ function buildRecommendedAnswers(inspection: RepositoryInspection): Omit<
 async function collectCustomSetupAnswers(
   promptForLine: (prompt: string) => Promise<string>,
   inspection: RepositoryInspection
-): Promise<Omit<SetupAnswers, "installGitHubWorkflows" | "updateAgents">> {
+): Promise<Omit<SetupAnswers, "enabledGitHubWorkflowIds" | "updateAgents">> {
   const baseBranch = await promptWithDefault(
     promptForLine,
     "Default branch",
@@ -1959,6 +2038,30 @@ async function collectCustomSetupAnswers(
   };
 }
 
+async function collectGitHubWorkflowAnswers(
+  promptForLine: (prompt: string) => Promise<string>,
+  inspection: RepositoryInspection,
+  forgeType: ForgeType
+): Promise<GitHubWorkflowId[]> {
+  if (forgeType !== "github") {
+    return [];
+  }
+
+  const enabledWorkflowIds: GitHubWorkflowId[] = [];
+  for (const workflow of RECOMMENDED_GITHUB_WORKFLOWS) {
+    const enabled = await promptYesNo(
+      promptForLine,
+      `Enable ${workflow.label} GitHub Action workflow`,
+      inspection.suggestedEnabledGitHubWorkflowIds.includes(workflow.id)
+    );
+    if (enabled) {
+      enabledWorkflowIds.push(workflow.id);
+    }
+  }
+
+  return enabledWorkflowIds;
+}
+
 async function collectSetupAnswers(
   promptForLine: (prompt: string) => Promise<string>,
   inspection: RepositoryInspection,
@@ -1975,16 +2078,11 @@ async function collectSetupAnswers(
     ? recommendedAnswers
     : await collectCustomSetupAnswers(promptForLine, inspection);
 
-  const installGitHubWorkflows =
-    customAnswers.forgeType === "github" && inspection.actionableGitHubWorkflowIds.length > 0
-      ? await promptYesNo(
-          promptForLine,
-          `Install or update recommended GitHub Actions workflows (${renderGitHubWorkflowLabels(
-            inspection.actionableGitHubWorkflowIds
-          )})`,
-          true
-        )
-      : false;
+  const enabledGitHubWorkflowIds = await collectGitHubWorkflowAnswers(
+    promptForLine,
+    inspection,
+    customAnswers.forgeType
+  );
 
   const updateAgents = await promptYesNo(
     promptForLine,
@@ -1996,7 +2094,7 @@ async function collectSetupAnswers(
 
   return {
     ...customAnswers,
-    installGitHubWorkflows,
+    enabledGitHubWorkflowIds,
     updateAgents,
   };
 }
@@ -2095,13 +2193,16 @@ export async function runSetupCommand(options: {
 
   writeRepositoryConfig(options.repoRoot, buildRepositoryConfig(answers, existingConfig));
   const gitignoreUpdated = ensureGitAiIgnored(options.repoRoot);
-  const workflowInstallResult = answers.installGitHubWorkflows
-    ? installGitHubWorkflows(options.repoRoot, inspection.actionableGitHubWorkflowIds)
-    : {
-        installed: [],
-        skipped: [],
-        updated: [],
-      };
+  const workflowInstallResult =
+    answers.forgeType === "github"
+      ? installGitHubWorkflows(options.repoRoot, answers.enabledGitHubWorkflowIds)
+      : {
+          disabledUnmanaged: [],
+          installed: [],
+          removed: [],
+          skipped: [],
+          updated: [],
+        };
 
   if (answers.updateAgents) {
     upsertAgentsSection(options.repoRoot, renderAgentsSection());
@@ -2125,6 +2226,13 @@ export async function runSetupCommand(options: {
     }`
   );
   console.log(`Configured forge integration: ${answers.forgeType}`);
+  if (answers.forgeType === "github") {
+    console.log(
+      `Configured GitHub Actions: ${renderGitHubWorkflowStateSummary(
+        answers.enabledGitHubWorkflowIds
+      )}`
+    );
+  }
   console.log(
     gitignoreUpdated ? "Added `.prs/` to .gitignore." : "`.prs/` was already gitignored."
   );
@@ -2140,6 +2248,16 @@ export async function runSetupCommand(options: {
   for (const skippedPath of workflowInstallResult.skipped) {
     console.log(
       `Skipped ${skippedPath} because it is not managed by prs setup.`
+    );
+  }
+
+  for (const removedPath of workflowInstallResult.removed) {
+    console.log(`Removed disabled managed workflow ${removedPath}.`);
+  }
+
+  for (const disabledUnmanagedPath of workflowInstallResult.disabledUnmanaged) {
+    console.log(
+      `Left disabled unmanaged workflow ${disabledUnmanagedPath} untouched.`
     );
   }
 

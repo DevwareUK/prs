@@ -108,12 +108,30 @@ export type RepositoryLocalRuntimeConfigType = z.infer<
   typeof RepositoryLocalRuntimeConfig
 >;
 
+export const RepositoryGitHubActionWorkflowConfig = z.object({
+  enabled: z.boolean(),
+});
+
+export const RepositoryGitHubActionsConfig = z.object({
+  workflows: z
+    .record(
+      z.string().trim().min(1, "githubActions workflow ids must be non-empty"),
+      RepositoryGitHubActionWorkflowConfig
+    )
+    .optional(),
+});
+
+export type RepositoryGitHubActionsConfigType = z.infer<
+  typeof RepositoryGitHubActionsConfig
+>;
+
 export const RepositoryConfig = z.object({
   ai: RepositoryAiConfig.optional(),
   aiContext: RepositoryAiContextConfig.optional(),
   baseBranch: z.string().trim().min(1, "baseBranch must be non-empty").optional(),
   buildCommand: RepositoryConfigCommand.optional(),
   forge: RepositoryForgeConfig.optional(),
+  githubActions: RepositoryGitHubActionsConfig.optional(),
   localRuntime: RepositoryLocalRuntimeConfig.optional(),
 });
 
@@ -139,6 +157,7 @@ export const ResolvedRepositoryConfig = z.object({
     type: RepositoryForgeType,
     githubCliPath: z.string().trim().min(1).optional(),
   }),
+  githubActions: RepositoryGitHubActionsConfig,
   localRuntime: RepositoryLocalRuntimeConfig.optional(),
 });
 
