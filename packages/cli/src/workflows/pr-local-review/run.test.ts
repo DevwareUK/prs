@@ -110,6 +110,7 @@ function createWorkspace(repoRoot: string): PullRequestLocalReviewWorkspace {
     assistantLastMessageFilePath: resolve(runDir, "assistant-last-message.txt"),
     contextFilePath: resolve(runDir, "pr-review-context.md"),
     reportFilePath: resolve(runDir, "codex-pr-review.md"),
+    commentsFilePath: resolve(runDir, "codex-pr-review-comments.json"),
   };
 }
 
@@ -250,6 +251,7 @@ describe("preparePullRequestLocalReviewTool", () => {
       promptFilePath: workspace.promptFilePath,
       outputLogPath: workspace.outputLogPath,
       reportFilePath: workspace.reportFilePath,
+      commentsFilePath: workspace.commentsFilePath,
       nextAction: "write-codex-pr-review-report",
       changedFiles: ["src/filter.ts", "README.md"],
     });
@@ -271,6 +273,7 @@ describe("preparePullRequestLocalReviewTool", () => {
       expect.objectContaining({
         flow: "pr-review",
         reportFilePath: workspace.reportFilePath,
+        commentsFilePath: workspace.commentsFilePath,
       })
     );
   });
@@ -383,6 +386,7 @@ describe("preparePullRequestLocalReviewTool", () => {
       prNumber: 224,
       conflictPromptFilePath: workspace.conflictPromptFilePath,
       reportFilePath: workspace.reportFilePath,
+      commentsFilePath: workspace.commentsFilePath,
       nextAction: "resolve-conflicts-in-current-codex-session",
     });
     expect(writePullRequestLocalReviewConflictPrompt).toHaveBeenCalledWith(

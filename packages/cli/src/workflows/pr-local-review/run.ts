@@ -454,6 +454,7 @@ export async function preparePullRequestLocalReviewTool(
       diff,
       warnings,
       reportFilePath: workspace.reportFilePath,
+      commentsFilePath: workspace.commentsFilePath,
     };
 
     writePullRequestLocalReviewWorkspaceFiles(
@@ -473,6 +474,7 @@ export async function preparePullRequestLocalReviewTool(
       metadataFilePath: workspace.metadataFilePath,
       outputLogPath: workspace.outputLogPath,
       reportFilePath: workspace.reportFilePath,
+      commentsFilePath: workspace.commentsFilePath,
       checkout: checkoutTarget,
       baseSync,
       changedFiles,
@@ -503,6 +505,7 @@ export async function preparePullRequestLocalReviewTool(
       diff: "",
       warnings: error.baseSync.warnings,
       reportFilePath: workspace.reportFilePath,
+      commentsFilePath: workspace.commentsFilePath,
     };
     writePullRequestLocalReviewWorkspaceFiles(
       options.repoRoot,
@@ -522,6 +525,7 @@ export async function preparePullRequestLocalReviewTool(
       metadataFilePath: workspace.metadataFilePath,
       outputLogPath: workspace.outputLogPath,
       reportFilePath: workspace.reportFilePath,
+      commentsFilePath: workspace.commentsFilePath,
       checkout: checkoutTarget,
       baseSync: error.baseSync,
       nextAction: "resolve-conflicts-in-current-codex-session",

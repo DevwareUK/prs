@@ -13,6 +13,7 @@ import type {
 export type PullRequestLocalReviewWorkspace = PullRequestPrepareReviewWorkspace & {
   contextFilePath: string;
   reportFilePath: string;
+  commentsFilePath: string;
 };
 
 export type PullRequestLocalReviewCaptured<T> =
@@ -46,6 +47,7 @@ export type PullRequestLocalReviewContextInput = {
   diff: string;
   warnings: string[];
   reportFilePath: string;
+  commentsFilePath: string;
 };
 
 export type PullRequestLocalReviewToolResult =
@@ -58,6 +60,7 @@ export type PullRequestLocalReviewToolResult =
       metadataFilePath: string;
       outputLogPath: string;
       reportFilePath: string;
+      commentsFilePath: string;
       checkout: PullRequestPrepareReviewCheckoutTarget;
       baseSync: PullRequestPrepareReviewBaseSyncState;
       changedFiles: string[];
@@ -73,6 +76,7 @@ export type PullRequestLocalReviewToolResult =
       metadataFilePath: string;
       outputLogPath: string;
       reportFilePath: string;
+      commentsFilePath: string;
       checkout: PullRequestPrepareReviewCheckoutTarget;
       baseSync: PullRequestPrepareReviewBaseSyncState;
       nextAction: "resolve-conflicts-in-current-codex-session";

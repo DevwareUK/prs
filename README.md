@@ -38,7 +38,7 @@ Start here if you are evaluating `prs` for a team:
 | `actions/pr-assistant` | Maintains a managed PR assistant section in the pull request body without overwriting unrelated manual content. |
 | `actions/test-suggestions` | Posts practical, task-ready test suggestions for the current pull request diff in GitHub. |
 | `prs review` | Runs a local top-risk diff pre-review that surfaces the strongest reviewer-ready concerns before or during a pull request. |
-| `/prs pr <pr-number> review` | Prepares the live PR checkout plus repo-aware review context for the active Codex session, then writes a consolidated report under `.prs/runs` and publishes it through the managed PR audit comment path without editing, committing, pushing, or resolving comments. |
+| `/prs pr <pr-number> review` | Prepares the live PR checkout plus repo-aware review context for the active Codex session, then writes a consolidated report plus line-linked comment candidates under `.prs/runs` and publishes both a managed PR audit comment and high-confidence inline review comments without editing, committing, pushing, or resolving comments. |
 | `/prs pr <pr-number> address-comments` | Prepares selected GitHub review comments as local `.prs/` artifacts for the active Codex session, then expects verified committed fixes to be pushed with the guarded `prs tool pr push-reviewed <pr-number> --json` path. |
 | `/prs pr <pr-number> fix-tests` | Captures currently failing local verification output on a PR branch, prepares a focused fix snapshot for the active Codex session, then expects verified committed fixes to be pushed through the guarded PR-head push tool. |
 | `/prs pr <pr-number> add-tests` | Prepares selected managed AI test suggestions as local `.prs/` artifacts with preserved task context, then expects verified committed test changes to be pushed through the guarded PR-head push tool. |
@@ -148,6 +148,7 @@ Supporting commands:
 - `prs tool pr list [--actionable] --json`
 - `prs tool pr ready <pr-number> [--all] --json`
 - `prs tool pr review <pr-number> --json`
+- `prs tool pr publish-review <pr-number> --report <path> --comments <path> --json`
 - `prs tool pr prepare-review <pr-number> --json`
 - `prs tool pr push-reviewed <pr-number> --json`
 - `prs commit`
@@ -155,7 +156,7 @@ Supporting commands:
 
 `prs tool pr ready <pr-number> --json` is the fast local PR-readiness path used by `/prs:pr`: it checks out the actual PR head branch, fetches and merges the latest PR base branch, writes readiness metadata with GitHub-hosted context such as failed/pending checks, managed AI test suggestions, actionable review comments, and grouped comment summaries with source links, and does not run the configured build or broad local verification. Review comment readiness uses the same resolved/outdated thread filtering as `prs pr address-comments`, suppresses duplicate PRS-authored inline findings, and reports separate counts for actionable, handled older-head, duplicate, resolved, and outdated review threads. Add `--all` when you also want the configured local runtime started when possible.
 
-`/prs pr <pr-number> review` uses `prs tool pr review <pr-number> --json` to check out/sync the PR head, collect linked issues, changed files, diff, checks, issue comments, review comments, metadata, and a focused review prompt, then lets the active Codex session write `.prs/runs/<timestamp>-pr-<number>-review/codex-pr-review.md`. After saving the report, the active session publishes it to the pull request with `prs audit publish --pr <pr-number> --file <reportFilePath> --section "Codex PR review"`. The workflow does not edit code, commit, push, or resolve comments.
+`/prs pr <pr-number> review` uses `prs tool pr review <pr-number> --json` to check out/sync the PR head, collect linked issues, changed files, diff, checks, issue comments, review comments, metadata, and a focused review prompt, then lets the active Codex session write `.prs/runs/<timestamp>-pr-<number>-review/codex-pr-review.md` and `.prs/runs/<timestamp>-pr-<number>-review/codex-pr-review-comments.json`. After saving both files, the active session runs `prs tool pr publish-review <pr-number> --report <reportFilePath> --comments <commentsFilePath> --json` to publish the report to the managed PR audit comment and post high-confidence line-linked review comments on changed lines. The workflow does not edit code, commit, push, or resolve comments.
 
 `/prs pr <pr-number> address-comments`, `/prs pr <pr-number> fix-tests`, and `/prs pr <pr-number> add-tests` use deterministic `prs tool pr ... --json` preparation commands. They write the focused `.prs/runs/...` prompt, snapshot, metadata, and output-log artifacts, return the file paths to the active Codex session, and do not launch a nested runtime. After active Codex verifies and commits selected fixes, run `prs tool pr push-reviewed <pr-number> --json` to fetch the PR head, check ahead/behind status, and push only when `HEAD` is ahead and not behind `origin/<pr-head-branch>`.
 

@@ -13,6 +13,13 @@ export type PrsToolCommand =
     }
   | { kind: "pr-list"; actionable: boolean; json: boolean }
   | { kind: "pr-review"; prNumber: number; json: boolean }
+  | {
+      kind: "pr-publish-review";
+      prNumber: number;
+      reportFilePath: string;
+      commentsFilePath: string;
+      json: boolean;
+    }
   | { kind: "pr-prepare-review"; prNumber: number; json: boolean }
   | { kind: "pr-push-reviewed"; prNumber: number; json: boolean }
   | {
@@ -32,9 +39,10 @@ export function renderPrsToolCommandHelp(): string {
     "                        [--run-dir <path>] [--plan-file <path>]",
     "                        [--label <name>] [--labels <a,b>]",
     "                        [--force-prs-managed]",
-    "  prs tool pr list [--actionable] --json",
-    "  prs tool pr review <pr-number> --json",
-    "  prs tool pr prepare-review <pr-number> --json",
+  "  prs tool pr list [--actionable] --json",
+  "  prs tool pr review <pr-number> --json",
+  "  prs tool pr publish-review <pr-number> --report <path> --comments <path> --json",
+  "  prs tool pr prepare-review <pr-number> --json",
     "  prs tool pr push-reviewed <pr-number> --json",
     "  prs tool pr address-comments <pr-number> [--selection <value>] --json",
     "  prs tool pr fix-tests <pr-number> --json",
@@ -279,6 +287,77 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
     return {
       kind: command === "review" ? "pr-review" : "pr-prepare-review",
       prNumber,
+      json: true,
+    };
+  }
+
+  if (command === "publish-review") {
+    if (!third || third === "--json") {
+      throw new Error(renderPrsToolCommandHelp());
+    }
+
+    const prNumber = parseToolNumber(third, "pr");
+    const optionArgs = [fourth, ...rest].filter(
+      (arg): arg is string => arg !== undefined
+    );
+    let reportFilePath: string | undefined;
+    let commentsFilePath: string | undefined;
+    let json = false;
+
+    for (let index = 0; index < optionArgs.length; index += 1) {
+      const rawArg = optionArgs[index];
+
+      if (rawArg === "--json") {
+        json = true;
+        continue;
+      }
+
+      if (rawArg === "--report") {
+        reportFilePath = optionArgs[index + 1];
+        if (!reportFilePath) {
+          throw new Error(`Missing value for --report. ${renderPrsToolCommandHelp()}`);
+        }
+        index += 1;
+        continue;
+      }
+
+      if (rawArg.startsWith("--report=")) {
+        reportFilePath = rawArg.slice("--report=".length);
+        continue;
+      }
+
+      if (rawArg === "--comments") {
+        commentsFilePath = optionArgs[index + 1];
+        if (!commentsFilePath) {
+          throw new Error(`Missing value for --comments. ${renderPrsToolCommandHelp()}`);
+        }
+        index += 1;
+        continue;
+      }
+
+      if (rawArg.startsWith("--comments=")) {
+        commentsFilePath = rawArg.slice("--comments=".length);
+        continue;
+      }
+
+      throw new Error(`Unknown tool option "${rawArg}". ${renderPrsToolCommandHelp()}`);
+    }
+
+    if (!json) {
+      throw new Error(`prs tool pr publish-review requires --json. ${renderPrsToolCommandHelp()}`);
+    }
+
+    if (!reportFilePath || !commentsFilePath) {
+      throw new Error(
+        `prs tool pr publish-review requires --report and --comments. ${renderPrsToolCommandHelp()}`
+      );
+    }
+
+    return {
+      kind: "pr-publish-review",
+      prNumber,
+      reportFilePath,
+      commentsFilePath,
       json: true,
     };
   }

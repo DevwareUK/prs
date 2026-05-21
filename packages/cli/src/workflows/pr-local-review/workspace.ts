@@ -26,6 +26,7 @@ export function createPullRequestLocalReviewWorkspace(
   );
   const contextFilePath = resolve(runDir, "pr-review-context.md");
   const reportFilePath = resolve(runDir, "codex-pr-review.md");
+  const commentsFilePath = resolve(runDir, "codex-pr-review-comments.json");
 
   mkdirSync(runDir, { recursive: true });
 
@@ -41,6 +42,7 @@ export function createPullRequestLocalReviewWorkspace(
     assistantLastMessageFilePath: resolve(runDir, "assistant-last-message.txt"),
     contextFilePath,
     reportFilePath,
+    commentsFilePath,
   };
 }
 
@@ -184,8 +186,21 @@ function buildPullRequestLocalReviewPrompt(
 ): string {
   const contextFile = toRepoRelativePath(repoRoot, workspace.contextFilePath);
   const reportFile = toRepoRelativePath(repoRoot, workspace.reportFilePath);
+  const commentsFile = toRepoRelativePath(repoRoot, workspace.commentsFilePath);
   const runDir = toRepoRelativePath(repoRoot, workspace.runDir);
   const publishCommand = formatCommandForDisplay([
+    "prs",
+    "tool",
+    "pr",
+    "publish-review",
+    String(input.pullRequest.number),
+    "--report",
+    workspace.reportFilePath,
+    "--comments",
+    workspace.commentsFilePath,
+    "--json",
+  ]);
+  const legacyAuditCommand = formatCommandForDisplay([
     "prs",
     "audit",
     "publish",
@@ -203,12 +218,13 @@ function buildPullRequestLocalReviewPrompt(
     "",
     `Read the review context at \`${contextFile}\` before writing the report.`,
     `Write the final Markdown report to \`${reportFile}\`.`,
+    `Write line-linked review comments as JSON to \`${commentsFile}\`.`,
     `Use \`${runDir}\` only for local workflow artifacts created by this review.`,
     "",
     "Rules:",
     "- do not edit tracked repository files",
     "- do not commit, push, or resolve comments",
-    "- do not post directly to GitHub except through the audit publish command below",
+    "- do not post directly to GitHub except through the publish command below",
     "- ground every finding in the diff, files, metadata, comments, checks, or visible repository conventions",
     "- discard weak or speculative findings",
     "- reconcile duplicate concerns into one finding",
@@ -229,7 +245,30 @@ function buildPullRequestLocalReviewPrompt(
     "- Rollout and documentation concerns",
     "- Evidence appendix",
     "",
-    `After saving the report, publish it with \`${publishCommand}\`.`,
+    "The comments JSON must be an array. Use this object shape for each inline comment candidate:",
+    "```json",
+    JSON.stringify(
+      [
+        {
+          path: "src/example.ts",
+          line: 42,
+          severity: "high",
+          confidence: "high",
+          category: "bug",
+          affectedFile: "src/example.ts",
+          body: "Explain the line-linked concern in reviewer-ready language.",
+          whyThisMatters: "Explain the concrete risk.",
+          suggestedFix: "Optional concrete fix guidance.",
+        },
+      ],
+      null,
+      2
+    ),
+    "```",
+    "",
+    "Only include comments that can be anchored to changed right-side diff lines. Prefer an empty array over weak or non-line-linked comments.",
+    `After saving the report and comments JSON, publish them with \`${publishCommand}\`.`,
+    `If the publish-review command is unavailable, publish only the audit report with \`${legacyAuditCommand}\` and report that inline comments were not posted.`,
     "When the report is saved and published, stop.",
   ].join("\n");
 }
@@ -295,6 +334,9 @@ export function writePullRequestLocalReviewWorkspaceFiles(
     `Review context: ${toRepoRelativePath(repoRoot, workspace.contextFilePath)}\nReport: ${toRepoRelativePath(
       repoRoot,
       workspace.reportFilePath
+    )}\nComments: ${toRepoRelativePath(
+      repoRoot,
+      workspace.commentsFilePath
     )}\nVerification fallback: ${formatCommandForDisplay(buildCommand)}\n`,
     "utf8"
   );
@@ -334,6 +376,7 @@ export function writePullRequestLocalReviewMetadata(
         outputLog: toRepoRelativePath(repoRoot, workspace.outputLogPath),
         runDir: toRepoRelativePath(repoRoot, workspace.runDir),
         reportFile: toRepoRelativePath(repoRoot, workspace.reportFilePath),
+        commentsFile: toRepoRelativePath(repoRoot, workspace.commentsFilePath),
         checkout: input.checkoutTarget,
         baseSync: input.baseSync,
         changedFiles: input.changedFiles,

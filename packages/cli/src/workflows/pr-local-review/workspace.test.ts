@@ -63,16 +63,22 @@ describe("pull request local review workspace", () => {
       "Write the final Markdown report to `.prs/runs/"
     );
     expect(readFileSync(workspace.promptFilePath, "utf8")).toContain(
+      "Write line-linked review comments as JSON to `.prs/runs/"
+    );
+    expect(readFileSync(workspace.promptFilePath, "utf8")).toContain(
+      '"confidence": "high"'
+    );
+    expect(readFileSync(workspace.promptFilePath, "utf8")).toContain(
       "Blocking concerns"
     );
     expect(readFileSync(workspace.promptFilePath, "utf8")).toContain(
       "do not commit, push, or resolve comments"
     );
     expect(readFileSync(workspace.promptFilePath, "utf8")).toContain(
-      "do not post directly to GitHub except through the audit publish command below"
+      "do not post directly to GitHub except through the publish command below"
     );
     expect(readFileSync(workspace.promptFilePath, "utf8")).toContain(
-      `After saving the report, publish it with \`prs audit publish --pr 224 --file ${workspace.reportFilePath} --section "Codex PR review"\`.`
+      `After saving the report and comments JSON, publish them with \`prs tool pr publish-review 224 --report ${workspace.reportFilePath} --comments ${workspace.commentsFilePath} --json\`.`
     );
     expect(readFileSync(workspace.contextFilePath, "utf8")).toContain(
       "## Changed Files\n\n- src/filter.ts"
