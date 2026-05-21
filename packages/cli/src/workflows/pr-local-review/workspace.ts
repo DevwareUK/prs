@@ -179,11 +179,23 @@ export function formatPullRequestLocalReviewContext(
 
 function buildPullRequestLocalReviewPrompt(
   repoRoot: string,
-  workspace: PullRequestLocalReviewWorkspace
+  workspace: PullRequestLocalReviewWorkspace,
+  input: PullRequestLocalReviewContextInput
 ): string {
   const contextFile = toRepoRelativePath(repoRoot, workspace.contextFilePath);
   const reportFile = toRepoRelativePath(repoRoot, workspace.reportFilePath);
   const runDir = toRepoRelativePath(repoRoot, workspace.runDir);
+  const publishCommand = formatCommandForDisplay([
+    "prs",
+    "audit",
+    "publish",
+    "--pr",
+    String(input.pullRequest.number),
+    "--file",
+    workspace.reportFilePath,
+    "--section",
+    "Codex PR review",
+  ]);
 
   return [
     "You are working in the current repository as a senior pull request reviewer.",
@@ -195,7 +207,8 @@ function buildPullRequestLocalReviewPrompt(
     "",
     "Rules:",
     "- do not edit tracked repository files",
-    "- do not commit, push, resolve comments, or post to GitHub",
+    "- do not commit, push, or resolve comments",
+    "- do not post directly to GitHub except through the audit publish command below",
     "- ground every finding in the diff, files, metadata, comments, checks, or visible repository conventions",
     "- discard weak or speculative findings",
     "- reconcile duplicate concerns into one finding",
@@ -216,7 +229,8 @@ function buildPullRequestLocalReviewPrompt(
     "- Rollout and documentation concerns",
     "- Evidence appendix",
     "",
-    "When the report is complete and saved, stop.",
+    `After saving the report, publish it with \`${publishCommand}\`.`,
+    "When the report is saved and published, stop.",
   ].join("\n");
 }
 
@@ -273,7 +287,7 @@ export function writePullRequestLocalReviewWorkspaceFiles(
   writeFileSync(workspace.contextFilePath, formatPullRequestLocalReviewContext(input), "utf8");
   writeFileSync(
     workspace.promptFilePath,
-    `${buildPullRequestLocalReviewPrompt(repoRoot, workspace)}\n`,
+    `${buildPullRequestLocalReviewPrompt(repoRoot, workspace, input)}\n`,
     "utf8"
   );
   writeFileSync(

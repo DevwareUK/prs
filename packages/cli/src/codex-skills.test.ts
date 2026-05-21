@@ -112,6 +112,9 @@ describe("managed prs Codex skills", () => {
       "/prs pr <number> review`: run `prs tool pr review <number> --json`"
     );
     expect(markdown).toContain("write the final report to the returned `reportFilePath`");
+    expect(markdown).toContain(
+      'publish it with `prs audit publish --pr <number> --file <reportFilePath> --section "Codex PR review"`'
+    );
     expect(markdown).toContain("read the returned `snapshotFilePath`");
     expect(markdown).toContain("does not generate `review-brief.md`");
     expect(markdown).toContain("verify, commit reviewed changes");
@@ -155,6 +158,9 @@ describe("managed prs Codex skills", () => {
     expect(prMarkdown).toContain("/prs:pr <number> review");
     expect(prMarkdown).toContain("prs tool pr review <number> --json");
     expect(prMarkdown).toContain("write the final report to the returned `reportFilePath`");
+    expect(prMarkdown).toContain(
+      'publish it with `prs audit publish --pr <number> --file <reportFilePath> --section "Codex PR review"`'
+    );
     expect(prMarkdown).toContain("/prs:pr <number> prepare-review");
     expect(prMarkdown).toContain("browse/functional test first");
     expect(auditMarkdown).toContain("name: prs:audit");

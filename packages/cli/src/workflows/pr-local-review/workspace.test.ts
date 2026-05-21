@@ -66,7 +66,13 @@ describe("pull request local review workspace", () => {
       "Blocking concerns"
     );
     expect(readFileSync(workspace.promptFilePath, "utf8")).toContain(
-      "do not commit, push, resolve comments, or post to GitHub"
+      "do not commit, push, or resolve comments"
+    );
+    expect(readFileSync(workspace.promptFilePath, "utf8")).toContain(
+      "do not post directly to GitHub except through the audit publish command below"
+    );
+    expect(readFileSync(workspace.promptFilePath, "utf8")).toContain(
+      `After saving the report, publish it with \`prs audit publish --pr 224 --file ${workspace.reportFilePath} --section "Codex PR review"\`.`
     );
     expect(readFileSync(workspace.contextFilePath, "utf8")).toContain(
       "## Changed Files\n\n- src/filter.ts"

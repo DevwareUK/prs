@@ -137,7 +137,7 @@ describe("preparePullRequestLocalReviewTool", () => {
     vi.spyOn(process.stderr, "write").mockImplementation(() => true);
   });
 
-  it("prepares a report-only Codex review context without launching a runtime", async () => {
+  it("prepares a Codex review report context without launching a runtime", async () => {
     const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-pr-local-review-"));
     cleanupTargets.add(repoRoot);
 
