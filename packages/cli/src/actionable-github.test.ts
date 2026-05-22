@@ -12,6 +12,7 @@ describe("actionable GitHub filters", () => {
       {
         number: 1,
         title: "Assigned",
+        url: "https://github.com/DevwareUK/prs/issues/1",
         author: "alice",
         assignees: ["me"],
         labels: [],
@@ -22,6 +23,7 @@ describe("actionable GitHub filters", () => {
       {
         number: 2,
         title: "Mine",
+        url: "https://github.com/DevwareUK/prs/issues/2",
         author: "me",
         assignees: [],
         labels: [],
@@ -32,6 +34,7 @@ describe("actionable GitHub filters", () => {
       {
         number: 3,
         title: "Ready",
+        url: "https://github.com/DevwareUK/prs/issues/3",
         author: "alice",
         assignees: [],
         labels: ["ready"],
@@ -42,6 +45,7 @@ describe("actionable GitHub filters", () => {
       {
         number: 4,
         title: "Planned",
+        url: "https://github.com/DevwareUK/prs/issues/4",
         author: "alice",
         assignees: [],
         labels: [],
@@ -52,6 +56,7 @@ describe("actionable GitHub filters", () => {
       {
         number: 5,
         title: "Already has PR",
+        url: "https://github.com/DevwareUK/prs/issues/5",
         author: "me",
         assignees: ["me"],
         labels: ["ready"],
@@ -62,6 +67,7 @@ describe("actionable GitHub filters", () => {
       {
         number: 6,
         title: "Not actionable",
+        url: "https://github.com/DevwareUK/prs/issues/6",
         author: "alice",
         assignees: [],
         labels: [],
@@ -84,6 +90,7 @@ describe("actionable GitHub filters", () => {
       {
         number: 1,
         title: "Ready recent",
+        url: "https://github.com/DevwareUK/prs/issues/1",
         author: "alice",
         assignees: [],
         labels: ["ready"],
@@ -94,6 +101,7 @@ describe("actionable GitHub filters", () => {
       {
         number: 2,
         title: "Assigned older",
+        url: "https://github.com/DevwareUK/prs/issues/2",
         author: "alice",
         assignees: ["me"],
         labels: [],
@@ -104,6 +112,7 @@ describe("actionable GitHub filters", () => {
       {
         number: 3,
         title: "Planned",
+        url: "https://github.com/DevwareUK/prs/issues/3",
         author: "alice",
         assignees: [],
         labels: [],
@@ -125,6 +134,7 @@ describe("actionable GitHub filters", () => {
       {
         number: 10,
         title: "Mine",
+        url: "https://github.com/DevwareUK/prs/pull/10",
         author: "me",
         assignees: [],
         reviewRequestedFrom: [],
@@ -139,6 +149,7 @@ describe("actionable GitHub filters", () => {
       {
         number: 11,
         title: "Review request",
+        url: "https://github.com/DevwareUK/prs/pull/11",
         author: "alice",
         assignees: [],
         reviewRequestedFrom: ["me"],
@@ -153,6 +164,7 @@ describe("actionable GitHub filters", () => {
       {
         number: 12,
         title: "Conflicts",
+        url: "https://github.com/DevwareUK/prs/pull/12",
         author: "alice",
         assignees: [],
         reviewRequestedFrom: [],
@@ -167,6 +179,7 @@ describe("actionable GitHub filters", () => {
       {
         number: 13,
         title: "Not actionable",
+        url: "https://github.com/DevwareUK/prs/pull/13",
         author: "alice",
         assignees: [],
         reviewRequestedFrom: [],

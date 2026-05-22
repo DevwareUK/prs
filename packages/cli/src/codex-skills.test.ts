@@ -73,6 +73,9 @@ describe("managed prs Codex skills", () => {
       "/prs issue`: run `prs tool issue list --actionable --json`"
     );
     expect(markdown).toContain(
+      "/prs issue`: run `prs tool issue list --actionable --json`, show each returned actionable for me issue number, title, and GitHub URL"
+    );
+    expect(markdown).toContain(
       "/prs issue <number>`: run `prs tool issue ready <number> --json`"
     );
     expect(markdown).toContain(
@@ -108,6 +111,14 @@ describe("managed prs Codex skills", () => {
     expect(markdown).toContain(
       "/prs pr <number> prepare-review`: run `prs tool pr prepare-review <number> --json`"
     );
+    expect(markdown).toContain(
+      "/prs pr <number> review`: run `prs tool pr review <number> --json`"
+    );
+    expect(markdown).toContain("write the final report to the returned `reportFilePath`");
+    expect(markdown).toContain("write inline review candidates to the returned `commentsFilePath`");
+    expect(markdown).toContain(
+      "publish both with `prs tool pr publish-review <number> --report <reportFilePath> --comments <commentsFilePath> --json`"
+    );
     expect(markdown).toContain("read the returned `snapshotFilePath`");
     expect(markdown).toContain("does not generate `review-brief.md`");
     expect(markdown).toContain("verify, commit reviewed changes");
@@ -117,6 +128,9 @@ describe("managed prs Codex skills", () => {
     expect(markdown).toContain("Do not recreate prs workflows with ad hoc git commands");
     expect(markdown).toContain(
       "/prs pr`: run `prs tool pr list --actionable --json`"
+    );
+    expect(markdown).toContain(
+      "/prs pr`: run `prs tool pr list --actionable --json`, show each returned pull request number, title, and GitHub URL"
     );
     expect(markdown).toContain("instead of inspecting git refs or source files");
     expect(markdown).toContain("actionable for me");
@@ -146,8 +160,22 @@ describe("managed prs Codex skills", () => {
     expect(reviewMarkdown).toContain("/prs:review tests");
     expect(issueMarkdown).toContain("name: prs:issue");
     expect(issueMarkdown).toContain("/prs:issue <number> --all");
+    expect(issueMarkdown).toContain(
+      "For interactive issue selection, use `prs tool issue list --actionable --json` as the source of truth and show each returned issue with its number, title, and GitHub URL."
+    );
     expect(prMarkdown).toContain("name: prs:pr");
     expect(prMarkdown).toContain("actual PR head branch");
+    expect(prMarkdown).toContain(
+      "For interactive PR selection, use `prs tool pr list --actionable --json` as the source of truth and show each returned pull request with its number, title, and GitHub URL."
+    );
+    expect(prMarkdown).toContain("/prs:pr <number> review");
+    expect(prMarkdown).toContain("prs tool pr review <number> --json");
+    expect(prMarkdown).toContain("write the final report to the returned `reportFilePath`");
+    expect(prMarkdown).toContain("write inline review candidates to the returned `commentsFilePath`");
+    expect(prMarkdown).toContain(
+      "publish both with `prs tool pr publish-review <number> --report <reportFilePath> --comments <commentsFilePath> --json`"
+    );
+    expect(prMarkdown).toContain("/prs:pr <number> prepare-review");
     expect(prMarkdown).toContain("browse/functional test first");
     expect(auditMarkdown).toContain("name: prs:audit");
     expect(auditMarkdown).toContain("prs audit publish");

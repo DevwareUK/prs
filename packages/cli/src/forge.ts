@@ -86,6 +86,25 @@ export type PullRequestReviewThreadDetails = {
   comments: PullRequestReviewComment[];
 };
 
+export type PullRequestInlineReviewCommentInput = {
+  path: string;
+  line: number;
+  side: "RIGHT";
+  body: string;
+};
+
+export type CreatePullRequestReviewInput = {
+  prNumber: number;
+  commitSha?: string;
+  body: string;
+  comments: PullRequestInlineReviewCommentInput[];
+};
+
+export type CreatedPullRequestReviewRecord = {
+  id?: number;
+  url?: string;
+};
+
 export type CreatedIssueRecord = {
   number: number;
   title: string;
@@ -122,6 +141,9 @@ export interface RepositoryForge {
   ): Promise<PullRequestReviewThreadDetails[]>;
   replyToPullRequestReviewThread?(threadNodeId: string, body: string): Promise<void>;
   resolvePullRequestReviewThread?(threadNodeId: string): Promise<void>;
+  createPullRequestReview?(
+    input: CreatePullRequestReviewInput
+  ): Promise<CreatedPullRequestReviewRecord>;
   createIssuePlanComment(issueNumber: number, body: string): Promise<IssuePlanComment>;
   createAuditComment(target: AuditTarget, body: string): Promise<RepositoryComment>;
   updateIssuePlanComment(commentId: number, body: string): Promise<IssuePlanComment>;

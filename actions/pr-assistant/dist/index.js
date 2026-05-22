@@ -16158,6 +16158,8 @@ var require_dist = __commonJS({
       RepositoryFeatureSignals: () => RepositoryFeatureSignals,
       RepositoryForgeConfig: () => RepositoryForgeConfig,
       RepositoryForgeType: () => RepositoryForgeType,
+      RepositoryGitHubActionWorkflowConfig: () => RepositoryGitHubActionWorkflowConfig,
+      RepositoryGitHubActionsConfig: () => RepositoryGitHubActionsConfig,
       RepositoryLocalRuntimeConfig: () => RepositoryLocalRuntimeConfig,
       RepositoryOpenAiProviderConfig: () => RepositoryOpenAiProviderConfig,
       ResolvedRepositoryConfig: () => ResolvedRepositoryConfig,
@@ -16558,12 +16560,22 @@ var require_dist = __commonJS({
       statusCommand: RepositoryConfigCommand.optional(),
       startCommand: RepositoryConfigCommand.optional()
     });
+    var RepositoryGitHubActionWorkflowConfig = import_zod9.z.object({
+      enabled: import_zod9.z.boolean()
+    });
+    var RepositoryGitHubActionsConfig = import_zod9.z.object({
+      workflows: import_zod9.z.record(
+        import_zod9.z.string().trim().min(1, "githubActions workflow ids must be non-empty"),
+        RepositoryGitHubActionWorkflowConfig
+      ).optional()
+    });
     var RepositoryConfig = import_zod9.z.object({
       ai: RepositoryAiConfig.optional(),
       aiContext: RepositoryAiContextConfig.optional(),
       baseBranch: import_zod9.z.string().trim().min(1, "baseBranch must be non-empty").optional(),
       buildCommand: RepositoryConfigCommand.optional(),
       forge: RepositoryForgeConfig.optional(),
+      githubActions: RepositoryGitHubActionsConfig.optional(),
       localRuntime: RepositoryLocalRuntimeConfig.optional()
     });
     var ResolvedRepositoryConfig = import_zod9.z.object({
@@ -16586,6 +16598,7 @@ var require_dist = __commonJS({
         type: RepositoryForgeType,
         githubCliPath: import_zod9.z.string().trim().min(1).optional()
       }),
+      githubActions: RepositoryGitHubActionsConfig,
       localRuntime: RepositoryLocalRuntimeConfig.optional()
     });
     var import_zod10 = require_zod();
@@ -17124,6 +17137,7 @@ ${formatValidationIssues(validationIssues)}`,
           type: parsedConfig.forge?.type ?? DEFAULT_REPOSITORY_FORGE_TYPE,
           ...parsedConfig.forge?.githubCliPath ? { githubCliPath: parsedConfig.forge.githubCliPath } : {}
         },
+        githubActions: parsedConfig.githubActions ?? {},
         localRuntime: parsedConfig.localRuntime
       });
     }

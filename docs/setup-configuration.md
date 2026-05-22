@@ -43,7 +43,11 @@ cd /path/to/your-repo
 prs setup
 ```
 
-`prs setup` detects the repository root, suggests repo-aware defaults for the base branch, verification command, forge, Codex-first runtime, the Codex-only `ai.issue.useCodexSuperpowers` flag, and extra AI exclusions, then offers a fast "use the recommended setup" confirmation path. It writes `.prs/config.json`, ensures `.prs/` is gitignored, can optionally add a minimal `AGENTS.md` scaffold for repo-specific agent guidance, and for GitHub repositories can also install the recommended PR-focused workflows under `.github/workflows/prs-*.yml`. When setup finds managed legacy `git-ai-*.yml` workflow files, it migrates them to the new `prs-*.yml` filenames instead of leaving duplicate managed files behind. When setup cannot determine a value confidently, it prints an explicit warning before asking you to confirm or replace the suggestion.
+`prs setup` detects the repository root, suggests repo-aware defaults for the base branch, verification command, forge, Codex-first runtime, the Codex-only `ai.issue.useCodexSuperpowers` flag, and extra AI exclusions, then offers a fast "use the recommended setup" confirmation path. It writes setup-managed `.prs/config.json` and `.prs/.gitignore`, can optionally add a minimal `AGENTS.md` scaffold for repo-specific agent guidance, and for GitHub repositories asks which recommended PR-focused workflows should be enabled under `.github/workflows/prs-*.yml`. Enabled managed workflows are installed or updated; disabled prs-managed workflow files are removed so they do not keep running. Unmanaged workflow files with the same names are left untouched. When setup finds managed legacy `git-ai-*.yml` workflow files for enabled actions, it migrates them to the new `prs-*.yml` filenames instead of leaving duplicate managed files behind. When setup cannot determine a value confidently, it prints an explicit warning before asking you to confirm or replace the suggestion.
+
+Setup leaves the repository root `.gitignore` unchanged during normal setup. If an existing root ignore pattern such as `.prs/` prevents `.prs/config.json` and `.prs/.gitignore` from being tracked, setup prints an actionable warning and leaves that repository policy for you to narrow intentionally.
+
+Local runtime readiness is explicit project configuration. Existing `.prs/config.json` `localRuntime` values are preserved on reruns. New setup runs default to no local runtime; visible files such as `.ddev/config.yaml` or `.dsm/site.json` may be shown as suggestions, but setup only writes `localRuntime` after you confirm or enter the URL, status command, and start command.
 
 `prs setup` does not install or refresh global Codex `/prs` skills. After installing or upgrading the CLI, run `prs update skills` or `prs setup --update-skills` to install or refresh those managed skills without changing repository setup.
 
@@ -138,6 +142,19 @@ Optional repository-specific defaults live in `.prs/config.json`. `prs setup` ca
   "forge": {
     "type": "github",
     "githubCliPath": "/opt/homebrew/bin/gh"
+  },
+  "githubActions": {
+    "workflows": {
+      "pr-review": {
+        "enabled": true
+      },
+      "pr-assistant": {
+        "enabled": true
+      },
+      "test-suggestions": {
+        "enabled": false
+      }
+    }
   }
 }
 ```
@@ -158,6 +175,8 @@ Supported fields:
 - `buildCommand`: command run after the interactive runtime exits during full local `prs issue <number>` flows and after a clean or Codex-resolved merge during `prs pr resolve-conflicts <pr-number>`. PR comment-fix and test-fix preparation commands preflight this command without running final verification; `prs pr fix-tests <pr-number>` runs it once to capture the initial failure and exits without a run directory if it already passes. If unset, the resolved default is `["pnpm", "build"]`, but `prs setup` first tries repository-local `verify`, `build`, or `test` commands from `package.json`, `composer.json`, or PHPUnit signals and warns before falling back.
 - `forge.type`: forge integration. Use `"github"` for GitHub-backed issue and PR flows or `"none"` to disable forge-backed issue and PR features for the repository.
 - `forge.githubCliPath`: optional path to the authenticated `gh` executable that prs should use for local GitHub operations when environment tokens are not set. PRS resolves auth in this order: `GH_TOKEN`, `GITHUB_TOKEN`, `PRS_GH_PATH` or `PRS_GITHUB_CLI_PATH`, `forge.githubCliPath`, `gh` on PATH, then common local install paths such as `/opt/homebrew/bin/gh` and `/usr/local/bin/gh`. CI and headless environments can keep using `GH_TOKEN` or `GITHUB_TOKEN`; normal local Codex shells can rely on authenticated `gh` without adding project-specific token values to `.env`.
+- `githubActions.workflows.<action-id>.enabled`: setup-time enablement for managed GitHub Action workflows. Current action IDs are `"pr-review"`, `"pr-assistant"`, and `"test-suggestions"`. `prs setup` writes explicit values for GitHub repositories, uses existing config choices as rerun defaults, installs or updates enabled prs-managed workflows, removes disabled prs-managed workflow files, and leaves disabled unmanaged workflow files untouched.
+- `localRuntime`: optional explicit command-based local app readiness configuration used by PR readiness checks. `prs setup` preserves existing values, otherwise defaults to no local runtime. If setup shows repository-visible runtime suggestions, those suggestions are examples only until you confirm or edit them.
 
 Runtime and provider fallback behavior:
 
@@ -171,12 +190,15 @@ Runtime and provider fallback behavior:
 
 ### `.prs/`
 
-`.prs/` is repository-local working state used by issue and backlog workflows. It is intentionally gitignored and should not be committed. `prs setup` will add `.prs/` to `.gitignore` when needed.
+`.prs/config.json` and `.prs/.gitignore` are setup-managed repository files. Commit them when you want a repository to share prs defaults and generated-state ignore rules.
 
-Think of `.prs/` as the working memory for issue, planning, and backlog flows.
+Generated `.prs/` subdirectories are repository-local working memory for issue, planning, and backlog flows. `prs setup` writes `.prs/.gitignore` so these generated directories stay local:
 
 Typical contents:
 
 - `.prs/batches/`: persistent multi-issue run state for `prs issue <number> <number> ...` and the `prs issue batch ...` compatibility alias
 - `.prs/issues/`: issue snapshots and generated drafts
 - `.prs/runs/`: run prompts, metadata, logs, and run-local supporting artifacts such as optional issue-set manifests plus Superpowers issue draft/refine spec and plan files
+- `.prs/worktrees/`: generated issue worktrees for multi-issue automation
+
+If the root `.gitignore` still ignores all of `.prs/`, Git will also ignore `.prs/config.json` and `.prs/.gitignore`. `prs setup` warns about that conflict but does not rewrite root ignore policy for you.

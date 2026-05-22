@@ -30,10 +30,16 @@ prs issue <number> [--mode <interactive|unattended>]
 prs issue <number> <number> [...number] [--mode unattended]
 prs issue prepare <number> [--mode <local|github-action>]
 prs issue finalize <number>
+prs tool pr review <pr-number> --json
+prs tool pr publish-review <pr-number> --report <path> --comments <path> --json
 prs tool pr push-reviewed <pr-number> --json
 ```
 
 For `/prs create` and `/prs create issue`, keep drafting in the active Codex conversation. The skill should inspect the repository, ask any necessary clarifying questions, write the issue draft or issue-set manifest itself, and call `prs issue draft --draft-file <path>` or `prs issue draft --issue-set-file <path>` only to persist artifacts, preview the result, and create GitHub issues after approval. Use `prs issue draft --runtime` only when a human explicitly wants a separate drafting session with prompt-file context.
+
+For no-number `/prs issue` and `/prs pr`, use `prs tool issue list [--actionable] --json` and `prs tool pr list [--actionable] --json` as the source of truth. The returned items include a `url` field; show each item with its number, title, and GitHub URL before offering follow-up actions.
+
+For `/prs pr <number> review`, keep the review in the active Codex conversation. The skill should run `prs tool pr review <number> --json`, read the returned `promptFilePath` and `contextFilePath`, inspect the prepared checkout, write the consolidated Markdown report to `reportFilePath`, write structured line-linked review candidates to `commentsFilePath`, and run `prs tool pr publish-review <number> --report <reportFilePath> --comments <commentsFilePath> --json`. The publish tool updates the managed PR audit comment and creates real GitHub inline review comments for high-confidence candidates that anchor to changed right-side diff lines. This workflow must not edit code, commit, push, resolve comments, or post directly to GitHub outside the managed publish tool.
 
 For `/prs pr <number> address-comments`, `/prs pr <number> fix-tests`, and `/prs pr <number> add-tests`, keep the fix work in the active Codex conversation. The skill should run the deterministic `prs tool pr <action> <number> --json` preparation command, read the returned prompt and snapshot, apply the selected fixes, run configured verification, commit reviewed changes, and then run `prs tool pr push-reviewed <number> --json`. That final tool fetches the PR head, checks ahead/behind status, and pushes only when `HEAD` is ahead and not behind `origin/<pr-head-branch>`.
 
@@ -62,13 +68,14 @@ If Superpowers is unavailable or produces no plan artifact, `prs` prints a fallb
 
 ## Local artifacts
 
-The `.prs/` directory is repository-local working state and should stay gitignored.
+`.prs/config.json` and `.prs/.gitignore` are setup-managed repository files. Generated `.prs/` workflow state should stay local and is ignored through `.prs/.gitignore`.
 
 Typical paths:
 
 - `.prs/runs/`: prompts, metadata, logs, output snapshots, and Superpowers spec/plan artifacts
 - `.prs/issues/`: issue snapshots, generated drafts, and per-issue session state
 - `.prs/batches/`: multi-issue run state
+- `.prs/worktrees/`: generated issue worktrees for parallel issue runs
 
 For Codex-guided local fix workflows, the most useful files are usually `prompt.md`, `metadata.json`, `output.log`, and the preserved source snapshot such as `pr-review-comments.md` or `pr-test-suggestions.md`.
 

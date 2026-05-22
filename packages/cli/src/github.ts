@@ -3,6 +3,7 @@ import { appendFileSync } from "node:fs";
 import type {
   AuditTarget,
   CreatePullRequestInput,
+  CreatePullRequestReviewInput,
   CreatedPullRequestRecord,
   CreatedIssueRecord,
   IssueDetails,
@@ -1256,6 +1257,50 @@ class GitHubRepositoryForge implements RepositoryForge {
       },
       "Failed to resolve the addressed GitHub pull request review thread."
     );
+  }
+
+  async createPullRequestReview(
+    input: CreatePullRequestReviewInput
+  ): Promise<{ id?: number; url?: string }> {
+    const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
+    const token = getGitHubApiToken(
+      "Creating pull request reviews requires GH_TOKEN or GITHUB_TOKEN to be set, or gh to be installed and authenticated.",
+      this.repoRoot
+    );
+    const response = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/pulls/${input.prNumber}/reviews`,
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/vnd.github+json",
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "User-Agent": "prs-cli",
+        },
+        body: JSON.stringify({
+          commit_id: input.commitSha,
+          event: "COMMENT",
+          body: input.body,
+          comments: input.comments,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to create GitHub pull request review for #${input.prNumber} (${response.status} ${response.statusText}).`
+      );
+    }
+
+    const payload = (await response.json()) as {
+      id?: number;
+      html_url?: string;
+    };
+
+    return {
+      id: payload.id,
+      url: payload.html_url,
+    };
   }
 
   async createIssuePlanComment(

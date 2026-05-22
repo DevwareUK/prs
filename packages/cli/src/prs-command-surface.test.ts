@@ -123,6 +123,12 @@ describe("prs command surface", () => {
       prNumber: 456,
       action: "prepare-review",
     });
+    expect(parsePrsCommandSurfaceArgs(["pr", "456", "review"])).toEqual({
+      kind: "pr",
+      mode: "direct",
+      prNumber: 456,
+      action: "review",
+    });
     expect(parsePrsCommandSurfaceArgs(["pr", "456", "address-comments"])).toEqual({
       kind: "pr",
       mode: "direct",
@@ -394,6 +400,20 @@ describe("prs command surface routing", () => {
         kind: "pr",
         mode: "direct",
         prNumber: 456,
+        action: "review",
+      })
+    ).toEqual({
+      interaction: "direct",
+      skillName: "prs",
+      cliArgs: ["tool", "pr", "review", "456", "--json"],
+      target: { type: "pull-request", number: 456 },
+      toolOnly: true,
+    });
+    expect(
+      routePrsCommandSurfaceAction({
+        kind: "pr",
+        mode: "direct",
+        prNumber: 456,
         action: "resolve-conflicts",
       })
     ).toEqual({
@@ -476,6 +496,7 @@ describe("prs interactive picker models", () => {
           {
             number: 1,
             title: "Mine",
+            url: "https://github.com/DevwareUK/prs/issues/1",
             author: "me",
             assignees: [],
             labels: [],
@@ -486,6 +507,7 @@ describe("prs interactive picker models", () => {
           {
             number: 2,
             title: "Already has PR",
+            url: "https://github.com/DevwareUK/prs/issues/2",
             author: "me",
             assignees: ["me"],
             labels: ["ready"],
@@ -503,6 +525,7 @@ describe("prs interactive picker models", () => {
         {
           number: 1,
           title: "Mine",
+          url: "https://github.com/DevwareUK/prs/issues/1",
           author: "me",
           assignees: [],
           labels: [],
@@ -523,6 +546,7 @@ describe("prs interactive picker models", () => {
           {
             number: 10,
             title: "Conflicts",
+            url: "https://github.com/DevwareUK/prs/pull/10",
             author: "alice",
             assignees: [],
             reviewRequestedFrom: [],
@@ -537,6 +561,7 @@ describe("prs interactive picker models", () => {
           {
             number: 11,
             title: "Not actionable",
+            url: "https://github.com/DevwareUK/prs/pull/11",
             author: "alice",
             assignees: [],
             reviewRequestedFrom: [],
@@ -558,6 +583,7 @@ describe("prs interactive picker models", () => {
         {
           number: 10,
           title: "Conflicts",
+          url: "https://github.com/DevwareUK/prs/pull/10",
           author: "alice",
           assignees: [],
           reviewRequestedFrom: [],

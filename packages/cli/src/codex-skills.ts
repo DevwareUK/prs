@@ -67,6 +67,22 @@ function renderPrPrepareReviewToolCommand(): string {
   return `prs ${cliArgs.replace("123", "<number>")}`;
 }
 
+function renderPrReviewToolCommand(): string {
+  const route = routePrsCommandSurfaceAction(
+    parsePrsCommandSurfaceArgs(["pr", "123", "review"])
+  );
+  const cliArgs = route.cliArgs?.join(" ");
+  if (!route.toolOnly || !cliArgs) {
+    throw new Error("Expected /prs pr <number> review to route to a prs tool command.");
+  }
+
+  return `prs ${cliArgs.replace("123", "<number>")}`;
+}
+
+function renderPrPublishReviewToolCommand(): string {
+  return "prs tool pr publish-review <number> --report <reportFilePath> --comments <commentsFilePath> --json";
+}
+
 function renderIssueReadyToolCommand(all = false): string {
   const route = routePrsCommandSurfaceAction(
     parsePrsCommandSurfaceArgs(all ? ["issue", "123", "--all"] : ["issue", "123"])
@@ -241,8 +257,8 @@ export const PRS_CODEX_SKILLS: ManagedCodexSkill[] = [
       `- \`/prs review tests\`: run \`${renderReviewCommand("tests")}\`; review repository-wide testing strategy and coverage, then offer to turn approved gaps into GitHub issues.`,
       `- \`/prs review features\`: run \`${renderReviewCommand("features")}\`; review repository-wide feature/product opportunities, then offer to turn approved opportunities into GitHub issues.`,
       `- \`/prs review diff\`: run \`${renderReviewCommand("diff")}\`; review the current diff or supplied \`--base\`/\`--head\` comparison.`,
-      "- `/prs issue`: run `prs tool issue list --actionable --json`, show actionable for me open issues, and then offer contextual issue actions. One selection prepares issue context; multiple selections start parallel issue work through Superpowers agents and worktrees.",
-      "- `/prs pr`: run `prs tool pr list --actionable --json`, show the returned actionable pull requests, and then offer contextual PR actions.",
+      "- `/prs issue`: run `prs tool issue list --actionable --json`, show each returned actionable for me issue number, title, and GitHub URL, and then offer contextual issue actions. One selection prepares issue context; multiple selections start parallel issue work through Superpowers agents and worktrees.",
+      "- `/prs pr`: run `prs tool pr list --actionable --json`, show each returned pull request number, title, and GitHub URL, and then offer contextual PR actions.",
       "",
       "### Direct forms",
       "",
@@ -253,6 +269,7 @@ export const PRS_CODEX_SKILLS: ManagedCodexSkill[] = [
       "- `/prs issue <number> finish`: finish work with the issue context preserved; after a pull request exists, offer the next `/prs pr` step for that pull request.",
       `- \`/prs pr <number>\`: run \`${renderPrReadyToolCommand()}\`; prepare the actual PR head branch in the current repository checkout used by the user's normal local runtime, fetch and merge the latest PR base branch, summarize \`prContext\` signals from GitHub, including grouped \`commentSummary\` entries with source links when available, and stop with the next sensible action so the user can browse the app quickly. If the PR head branch is locked by a clean prs worktree, the tool may remove that clean worktree and then check out the actual PR branch in the current checkout. If that worktree has uncommitted changes, stop and report the blocker.`,
       `- \`/prs pr <number> --all\`: run \`${renderPrReadyToolCommand(true)}\`; take all sensible readiness steps without prompting in the current repository checkout, including starting the configured local app runtime when needed. Do not push, review, fix, approve, merge, switch to an existing PR worktree, or run broad local verification.`,
+      `- \`/prs pr <number> review\`: run \`${renderPrReviewToolCommand()}\`, read the returned \`promptFilePath\` and \`contextFilePath\`, inspect the prepared checkout in this active Codex session, write the final report to the returned \`reportFilePath\`, write inline review candidates to the returned \`commentsFilePath\`, and publish both with \`${renderPrPublishReviewToolCommand()}\`. Do not edit code, commit, push, resolve comments, or post directly to GitHub outside the publish tool.`,
       `- \`/prs pr <number> prepare-review\`: run \`${renderPrPrepareReviewToolCommand()}\`, keep the prepared branch checked out in the current repository, read the returned \`snapshotFilePath\` when useful, then continue review in this Codex session. The deterministic tool does not generate \`review-brief.md\`; do not look for one unless a separate command created it.`,
       "- `/prs pr <number> resolve-conflicts`: run `prs pr resolve-conflicts <number>`.",
       "- `/prs pr <number> address-comments`: run `prs tool pr address-comments <number> --json`, read the returned `promptFilePath` and `snapshotFilePath`, then continue the selected review-comment fixes in this Codex session. After fixes are complete, verify, commit reviewed changes, and run `prs tool pr push-reviewed <number> --json`. Do not run a command that launches nested Codex.",
@@ -390,7 +407,7 @@ export const PRS_CODEX_SKILLS: ManagedCodexSkill[] = [
       "Use this alias exactly like `/prs issue`.",
       `For \`/prs:issue <number>\`, run \`${renderIssueReadyToolCommand()}\` and stop with the next sensible action unless \`--all\` is present.`,
       `For \`/prs:issue <number> --all\`, run \`${renderIssueReadyToolCommand(true)}\`, then continue into Superpowers worktree creation and issue implementation from the updated base branch.`,
-      "For interactive issue selection, use `prs tool issue list --actionable --json` as the source of truth.",
+      "For interactive issue selection, use `prs tool issue list --actionable --json` as the source of truth and show each returned issue with its number, title, and GitHub URL.",
       "When implementation opens or updates a pull request, clean up the issue worktree only when no uncommitted or unpushed work would be lost.",
     ].join("\n"),
   },
@@ -405,9 +422,11 @@ export const PRS_CODEX_SKILLS: ManagedCodexSkill[] = [
       "## Pull Request Work",
       "",
       "Use this alias exactly like `/prs pr`.",
-      "For interactive PR selection, use `prs tool pr list --actionable --json` as the source of truth.",
+      "For interactive PR selection, use `prs tool pr list --actionable --json` as the source of truth and show each returned pull request with its number, title, and GitHub URL.",
       `For \`/prs:pr <number>\`, run \`${renderPrReadyToolCommand()}\`; prepare the actual PR head branch in the current repository checkout used by the user's local runtime, fetch and merge the latest PR base branch, summarize \`prContext\` GitHub signals, including grouped \`commentSummary\` entries with source links when available, and stop once the app is ready to browse or a blocker is clear.`,
       `For \`/prs:pr <number> --all\`, run \`${renderPrReadyToolCommand(true)}\`; take all sensible readiness steps but do not push, review, fix, approve, merge, switch into an existing PR worktree, or run broad local verification.`,
+      `For \`/prs:pr <number> review\`, run \`${renderPrReviewToolCommand()}\`; read the returned \`promptFilePath\` and \`contextFilePath\`, inspect the prepared checkout in this active Codex session, write the final report to the returned \`reportFilePath\`, write inline review candidates to the returned \`commentsFilePath\`, and publish both with \`${renderPrPublishReviewToolCommand()}\`. Do not edit code, commit, push, resolve comments, or post directly to GitHub outside the publish tool.`,
+      `For \`/prs:pr <number> prepare-review\`, run \`${renderPrPrepareReviewToolCommand()}\`; keep the prepared branch checked out in the current repository, read the returned \`snapshotFilePath\` when useful, then continue review in this Codex session. The deterministic tool does not generate \`review-brief.md\`; do not look for one unless a separate command created it.`,
       "If the PR head branch is locked by a clean prs worktree, let the tool remove that worktree and check out the actual PR branch in the current checkout. If the worktree is dirty, stop and report the blocker.",
       "After readiness, offer the next sensible step: browse/functional test first, then inspect failed or pending checks, grouped comment summaries, managed AI test suggestions, and actionable review comments before any explicit fix/review command.",
     ].join("\n"),

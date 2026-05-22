@@ -61,6 +61,7 @@ export function resolveRepositoryConfig(
         ? { githubCliPath: parsedConfig.forge.githubCliPath }
         : {}),
     },
+    githubActions: parsedConfig.githubActions ?? {},
     localRuntime: parsedConfig.localRuntime,
   });
 }
