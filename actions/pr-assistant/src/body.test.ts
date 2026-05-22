@@ -42,6 +42,37 @@ describe("pr-assistant body helpers", () => {
     expect(section).toContain("No changed files detected from the diff.");
   });
 
+  it("renders shared impact profile details instead of a separate risk narrative", () => {
+    const section = buildPRAssistantSection({
+      summary: "Adds profile output.",
+      riskAreas: ["Legacy risk text should not render when the profile exists."],
+      filesChanged: ["actions/pr-assistant/src/index.ts"],
+      testingNotes: ["Unit tests cover the renderer."],
+      rolloutConcerns: ["Legacy rollout text should not render when the profile exists."],
+      reviewerChecklist: [],
+      impactProfile: {
+        riskLevel: "medium",
+        riskReasons: ["The assistant body output shape changes."],
+        affectedAreas: ["actions/pr-assistant/src/index.ts"],
+        rolloutImpact: ["Generated setup workflows expose a new output."],
+        migrationImpact: [],
+        configurationImpact: [],
+        flags: {
+          security: false,
+          performance: false,
+        },
+        manualVerification: ["Inspect the managed PR body section."],
+      },
+    });
+
+    expect(section).toContain("### Impact Profile");
+    expect(section).toContain("Risk level: medium");
+    expect(section).toContain("- The assistant body output shape changes.");
+    expect(section).toContain("- Generated setup workflows expose a new output.");
+    expect(section).not.toContain("Legacy risk text should not render");
+    expect(section).not.toContain("Legacy rollout text should not render");
+  });
+
   it("appends a managed section when the PR body has no markers", () => {
     const merged = mergePRAssistantSection(
       "Human-authored intro",

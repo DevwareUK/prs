@@ -1,5 +1,5 @@
 name: "AI PR Assistant"
-description: "Generate and merge a managed PR assistant section with summary, risks, files, testing, rollout, and checklist notes"
+description: "Generate and merge a managed PR assistant section with summary, impact profile, files, testing, and checklist notes"
 
 inputs:
   diff:
@@ -38,6 +38,8 @@ outputs:
     description: "Generated managed PR assistant section markdown with stable reviewer headings"
   body:
     description: "Updated pull request body with the managed PR assistant section"
+  impact_profile_json:
+    description: "Shared structured PR impact profile JSON with risk level, affected areas, rollout/configuration impact, flags, and manual verification hints"
 
 runs:
   using: "node20"

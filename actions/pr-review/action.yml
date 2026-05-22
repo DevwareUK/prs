@@ -42,6 +42,8 @@ outputs:
     description: "Generated PR pre-review summary"
   body:
     description: "Generated managed PR pre-review comment body"
+  impact_profile_json:
+    description: "Shared structured PR impact profile JSON with risk level, affected areas, rollout/configuration impact, flags, and manual verification hints"
   findings_json:
     description: "JSON array of higher-level pre-review findings"
   comments_json:

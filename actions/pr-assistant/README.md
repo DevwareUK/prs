@@ -1,6 +1,6 @@
 # pr-assistant action
 
-Generate a managed PR assistant section from a pull request diff via OpenAI and merge it into the existing PR body. The section uses a stable shape: summary, risk areas, files changed, testing notes, rollout concerns, and reviewer checklist.
+Generate a managed PR assistant section from a pull request diff via OpenAI and merge it into the existing PR body. The section uses a stable reviewer shape: summary, shared impact profile, files changed, testing notes, and reviewer checklist.
 
 This GitHub Action is OpenAI-only today. Advanced local CLI provider and runtime customization such as `bedrock-claude` or `claude-code` does not change this action's input surface.
 
@@ -30,6 +30,8 @@ node actions/pr-assistant/dist/index.js
 
 `INPUT_DIFF` and `INPUT_COMMIT_MESSAGES` are still supported for smaller local runs, but the `*_FILE` inputs avoid shell and GitHub Actions argument-length limits.
 
-When `GITHUB_OUTPUT` is not set, outputs are printed to stdout as `summary=...`, `section=...`, and `body=...`.
+When `GITHUB_OUTPUT` is not set, outputs are printed to stdout as `summary=...`, `section=...`, `body=...`, and `impact_profile_json=...`.
+
+`impact_profile_json` contains the shared structured PR impact profile used by PR review, PR assistant, and local `prs review`: risk level, evidence-backed risk reasons, affected areas, rollout/migration/configuration impact, security/performance flags, and manual verification hints.
 
 `Files changed` is derived from the diff headers in code so the managed section does not rely on the model to invent file paths.

@@ -1,6 +1,6 @@
 import { appendFileSync } from "node:fs";
 import { PRAssistantInput } from "@prs/contracts";
-import { generatePRAssistant } from "@prs/core";
+import { generatePRAssistant, serializePRImpactProfile } from "@prs/core";
 import { OpenAIProvider } from "@prs/providers";
 import {
   getOptionalInlineOrFileInput,
@@ -50,6 +50,7 @@ async function run(): Promise<void> {
   setOutput("summary", result.summary);
   setOutput("section", section);
   setOutput("body", body);
+  setOutput("impact_profile_json", serializePRImpactProfile(result.impactProfile));
 }
 
 run().catch((error: unknown) => {

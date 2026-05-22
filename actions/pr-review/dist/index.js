@@ -16086,6 +16086,7 @@ var require_dist = __commonJS({
       CommitMessageModelOutput: () => CommitMessageModelOutput,
       CommitMessageOutput: () => CommitMessageOutput,
       CurrentTestingSetup: () => CurrentTestingSetup,
+      DEFAULT_PR_IMPACT_PROFILE: () => DEFAULT_PR_IMPACT_PROFILE,
       DiffSummaryInput: () => DiffSummaryInput,
       DiffSummaryOutput: () => DiffSummaryOutput,
       FeatureBacklogCategory: () => FeatureBacklogCategory,
@@ -16130,6 +16131,9 @@ var require_dist = __commonJS({
       PRAssistantOutput: () => PRAssistantOutput,
       PRDescriptionInput: () => PRDescriptionInput,
       PRDescriptionOutput: () => PRDescriptionOutput,
+      PRImpactProfile: () => PRImpactProfile,
+      PRImpactProfileFlags: () => PRImpactProfileFlags,
+      PRImpactRiskLevel: () => PRImpactRiskLevel,
       PRODUCT_DISPLAY_NAME: () => PRODUCT_DISPLAY_NAME,
       PRODUCT_SHORT_NAME: () => PRODUCT_SHORT_NAME,
       PRReviewCategory: () => PRReviewCategory,
@@ -16437,36 +16441,55 @@ var require_dist = __commonJS({
       doneDefinition: RequiredStringList("doneDefinition"),
       openQuestions: import_zod5.z.array(import_zod5.z.string().trim().min(1, "openQuestions items must be non-empty")).optional()
     });
-    var import_zod6 = require_zod();
-    var PRAssistantItem = import_zod6.z.string().trim().min(1);
-    var PRAssistantInput = import_zod6.z.object({
-      diff: import_zod6.z.string().trim().min(1),
-      commitMessages: import_zod6.z.string().trim().min(1).optional(),
-      prTitle: import_zod6.z.string().trim().min(1).optional(),
-      prBody: import_zod6.z.string().trim().min(1).optional()
-    });
-    var PRAssistantOutput = import_zod6.z.object({
-      summary: import_zod6.z.string().trim().min(1, "summary must be non-empty"),
-      riskAreas: import_zod6.z.array(PRAssistantItem),
-      filesChanged: import_zod6.z.array(PRAssistantItem),
-      testingNotes: import_zod6.z.array(PRAssistantItem),
-      rolloutConcerns: import_zod6.z.array(PRAssistantItem),
-      reviewerChecklist: import_zod6.z.array(PRAssistantItem)
-    });
     var import_zod7 = require_zod();
-    var PRDescriptionInput = import_zod7.z.object({
-      diff: import_zod7.z.string().trim().min(1),
-      issueTitle: import_zod7.z.string().trim().min(1).optional(),
-      issueBody: import_zod7.z.string().trim().min(1).optional()
+    var import_zod6 = require_zod();
+    var PRImpactProfileItem = import_zod6.z.string().trim().min(1);
+    var PRImpactRiskLevel = import_zod6.z.enum(["none", "low", "medium", "high"]);
+    var PRImpactProfileFlags = import_zod6.z.object({
+      security: import_zod6.z.boolean().default(false),
+      performance: import_zod6.z.boolean().default(false)
     });
-    var PRDescriptionOutput = import_zod7.z.object({
-      title: import_zod7.z.string().trim().min(1, "title must be non-empty"),
-      body: import_zod7.z.string().trim().min(1, "body must be non-empty")
+    var PRImpactProfile = import_zod6.z.object({
+      riskLevel: PRImpactRiskLevel.default("none"),
+      riskReasons: import_zod6.z.array(PRImpactProfileItem).default([]),
+      affectedAreas: import_zod6.z.array(PRImpactProfileItem).default([]),
+      rolloutImpact: import_zod6.z.array(PRImpactProfileItem).default([]),
+      migrationImpact: import_zod6.z.array(PRImpactProfileItem).default([]),
+      configurationImpact: import_zod6.z.array(PRImpactProfileItem).default([]),
+      flags: PRImpactProfileFlags.default(PRImpactProfileFlags.parse({})),
+      manualVerification: import_zod6.z.array(PRImpactProfileItem).default([])
+    });
+    var DEFAULT_PR_IMPACT_PROFILE = PRImpactProfile.parse({});
+    var PRAssistantItem = import_zod7.z.string().trim().min(1);
+    var PRAssistantInput = import_zod7.z.object({
+      diff: import_zod7.z.string().trim().min(1),
+      commitMessages: import_zod7.z.string().trim().min(1).optional(),
+      prTitle: import_zod7.z.string().trim().min(1).optional(),
+      prBody: import_zod7.z.string().trim().min(1).optional()
+    });
+    var PRAssistantOutput = import_zod7.z.object({
+      summary: import_zod7.z.string().trim().min(1, "summary must be non-empty"),
+      impactProfile: PRImpactProfile.default(DEFAULT_PR_IMPACT_PROFILE),
+      riskAreas: import_zod7.z.array(PRAssistantItem),
+      filesChanged: import_zod7.z.array(PRAssistantItem),
+      testingNotes: import_zod7.z.array(PRAssistantItem),
+      rolloutConcerns: import_zod7.z.array(PRAssistantItem),
+      reviewerChecklist: import_zod7.z.array(PRAssistantItem)
     });
     var import_zod8 = require_zod();
-    var PRReviewSeverity = import_zod8.z.enum(["high", "medium", "low"]);
-    var PRReviewConfidence = import_zod8.z.enum(["high", "medium", "low"]);
-    var PRReviewCategory = import_zod8.z.enum([
+    var PRDescriptionInput = import_zod8.z.object({
+      diff: import_zod8.z.string().trim().min(1),
+      issueTitle: import_zod8.z.string().trim().min(1).optional(),
+      issueBody: import_zod8.z.string().trim().min(1).optional()
+    });
+    var PRDescriptionOutput = import_zod8.z.object({
+      title: import_zod8.z.string().trim().min(1, "title must be non-empty"),
+      body: import_zod8.z.string().trim().min(1, "body must be non-empty")
+    });
+    var import_zod9 = require_zod();
+    var PRReviewSeverity = import_zod9.z.enum(["high", "medium", "low"]);
+    var PRReviewConfidence = import_zod9.z.enum(["high", "medium", "low"]);
+    var PRReviewCategory = import_zod9.z.enum([
       "bug",
       "correctness",
       "security",
@@ -16480,201 +16503,202 @@ var require_dist = __commonJS({
       severity: PRReviewSeverity,
       confidence: PRReviewConfidence,
       category: PRReviewCategory,
-      affectedFile: import_zod8.z.string().trim().min(1, "affectedFile must be non-empty"),
-      body: import_zod8.z.string().trim().min(1, "body must be non-empty"),
-      whyThisMatters: import_zod8.z.string().trim().min(1, "whyThisMatters must be non-empty"),
-      suggestedFix: import_zod8.z.string().trim().min(1).optional()
+      affectedFile: import_zod9.z.string().trim().min(1, "affectedFile must be non-empty"),
+      body: import_zod9.z.string().trim().min(1, "body must be non-empty"),
+      whyThisMatters: import_zod9.z.string().trim().min(1, "whyThisMatters must be non-empty"),
+      suggestedFix: import_zod9.z.string().trim().min(1).optional()
     };
-    var PRReviewComment = import_zod8.z.object({
-      path: import_zod8.z.string().trim().min(1, "path must be non-empty"),
-      line: import_zod8.z.number().int().positive("line must be a positive integer"),
+    var PRReviewComment = import_zod9.z.object({
+      path: import_zod9.z.string().trim().min(1, "path must be non-empty"),
+      line: import_zod9.z.number().int().positive("line must be a positive integer"),
       ...PRReviewConcernBase
     });
-    var PRReviewFinding = import_zod8.z.object({
-      title: import_zod8.z.string().trim().min(1, "title must be non-empty"),
+    var PRReviewFinding = import_zod9.z.object({
+      title: import_zod9.z.string().trim().min(1, "title must be non-empty"),
       ...PRReviewConcernBase
     });
-    var PRReviewInput2 = import_zod8.z.object({
-      diff: import_zod8.z.string().trim().min(1),
-      prTitle: import_zod8.z.string().trim().min(1).optional(),
-      prBody: import_zod8.z.string().trim().min(1).optional(),
-      issueNumber: import_zod8.z.number().int().positive().optional(),
-      issueTitle: import_zod8.z.string().trim().min(1).optional(),
-      issueBody: import_zod8.z.string().trim().min(1).optional(),
-      issueUrl: import_zod8.z.string().trim().url().optional()
+    var PRReviewInput2 = import_zod9.z.object({
+      diff: import_zod9.z.string().trim().min(1),
+      prTitle: import_zod9.z.string().trim().min(1).optional(),
+      prBody: import_zod9.z.string().trim().min(1).optional(),
+      issueNumber: import_zod9.z.number().int().positive().optional(),
+      issueTitle: import_zod9.z.string().trim().min(1).optional(),
+      issueBody: import_zod9.z.string().trim().min(1).optional(),
+      issueUrl: import_zod9.z.string().trim().url().optional()
     });
-    var PRReviewOutput = import_zod8.z.object({
-      summary: import_zod8.z.string().trim().min(1, "summary must be non-empty"),
-      comments: import_zod8.z.array(PRReviewComment),
-      findings: import_zod8.z.array(PRReviewFinding).max(3).default([])
+    var PRReviewOutput = import_zod9.z.object({
+      summary: import_zod9.z.string().trim().min(1, "summary must be non-empty"),
+      impactProfile: PRImpactProfile.default(DEFAULT_PR_IMPACT_PROFILE),
+      comments: import_zod9.z.array(PRReviewComment),
+      findings: import_zod9.z.array(PRReviewFinding).max(3).default([])
     });
-    var import_zod9 = require_zod();
-    var RepositoryForgeType = import_zod9.z.enum(["github", "none"]);
-    var RepositoryForgeConfig = import_zod9.z.object({
+    var import_zod10 = require_zod();
+    var RepositoryForgeType = import_zod10.z.enum(["github", "none"]);
+    var RepositoryForgeConfig = import_zod10.z.object({
       type: RepositoryForgeType.optional(),
-      githubCliPath: import_zod9.z.string().trim().min(1, "forge githubCliPath must be non-empty").optional()
+      githubCliPath: import_zod10.z.string().trim().min(1, "forge githubCliPath must be non-empty").optional()
     });
-    var RepositoryAiContextConfig = import_zod9.z.object({
-      excludePaths: import_zod9.z.array(import_zod9.z.string().trim().min(1, "excludePaths entries must be non-empty")).optional()
+    var RepositoryAiContextConfig = import_zod10.z.object({
+      excludePaths: import_zod10.z.array(import_zod10.z.string().trim().min(1, "excludePaths entries must be non-empty")).optional()
     });
-    var RepositoryAiRuntimeType = import_zod9.z.enum(["codex", "claude-code"]);
-    var RepositoryAiRuntimeConfig = import_zod9.z.discriminatedUnion("type", [
-      import_zod9.z.object({
-        type: import_zod9.z.literal("codex")
+    var RepositoryAiRuntimeType = import_zod10.z.enum(["codex", "claude-code"]);
+    var RepositoryAiRuntimeConfig = import_zod10.z.discriminatedUnion("type", [
+      import_zod10.z.object({
+        type: import_zod10.z.literal("codex")
       }),
-      import_zod9.z.object({
-        type: import_zod9.z.literal("claude-code")
+      import_zod10.z.object({
+        type: import_zod10.z.literal("claude-code")
       })
     ]);
-    var RepositoryAiIssueDraftConfig = import_zod9.z.object({
-      useCodexSuperpowers: import_zod9.z.boolean().optional()
+    var RepositoryAiIssueDraftConfig = import_zod10.z.object({
+      useCodexSuperpowers: import_zod10.z.boolean().optional()
     });
-    var RepositoryAiIssueConfig = import_zod9.z.object({
-      useCodexSuperpowers: import_zod9.z.boolean().optional()
+    var RepositoryAiIssueConfig = import_zod10.z.object({
+      useCodexSuperpowers: import_zod10.z.boolean().optional()
     });
-    var RepositoryAiProviderType = import_zod9.z.enum(["openai", "bedrock-claude"]);
-    var RepositoryOpenAiProviderConfig = import_zod9.z.object({
-      type: import_zod9.z.literal("openai"),
-      model: import_zod9.z.string().trim().min(1, "openai model must be non-empty").optional(),
-      baseUrl: import_zod9.z.string().trim().min(1, "openai baseUrl must be non-empty").optional()
+    var RepositoryAiProviderType = import_zod10.z.enum(["openai", "bedrock-claude"]);
+    var RepositoryOpenAiProviderConfig = import_zod10.z.object({
+      type: import_zod10.z.literal("openai"),
+      model: import_zod10.z.string().trim().min(1, "openai model must be non-empty").optional(),
+      baseUrl: import_zod10.z.string().trim().min(1, "openai baseUrl must be non-empty").optional()
     });
-    var RepositoryBedrockClaudeProviderConfig = import_zod9.z.object({
-      type: import_zod9.z.literal("bedrock-claude"),
-      model: import_zod9.z.string().trim().min(1, "bedrock-claude model must be non-empty"),
-      region: import_zod9.z.string().trim().min(1, "bedrock-claude region must be non-empty").optional()
+    var RepositoryBedrockClaudeProviderConfig = import_zod10.z.object({
+      type: import_zod10.z.literal("bedrock-claude"),
+      model: import_zod10.z.string().trim().min(1, "bedrock-claude model must be non-empty"),
+      region: import_zod10.z.string().trim().min(1, "bedrock-claude region must be non-empty").optional()
     });
-    var RepositoryAiProviderConfig = import_zod9.z.discriminatedUnion("type", [
+    var RepositoryAiProviderConfig = import_zod10.z.discriminatedUnion("type", [
       RepositoryOpenAiProviderConfig,
       RepositoryBedrockClaudeProviderConfig
     ]);
-    var RepositoryAiConfig = import_zod9.z.object({
+    var RepositoryAiConfig = import_zod10.z.object({
       issue: RepositoryAiIssueConfig.optional(),
       issueDraft: RepositoryAiIssueDraftConfig.optional(),
       runtime: RepositoryAiRuntimeConfig.optional(),
       provider: RepositoryAiProviderConfig.optional()
     });
-    var RepositoryConfigCommand = import_zod9.z.array(import_zod9.z.string().trim().min(1, "command segments must be non-empty")).min(1, "command must contain at least one segment");
-    var RepositoryLocalRuntimeConfig = import_zod9.z.object({
-      type: import_zod9.z.literal("command"),
-      url: import_zod9.z.string().trim().min(1, "localRuntime url must be non-empty").optional(),
+    var RepositoryConfigCommand = import_zod10.z.array(import_zod10.z.string().trim().min(1, "command segments must be non-empty")).min(1, "command must contain at least one segment");
+    var RepositoryLocalRuntimeConfig = import_zod10.z.object({
+      type: import_zod10.z.literal("command"),
+      url: import_zod10.z.string().trim().min(1, "localRuntime url must be non-empty").optional(),
       statusCommand: RepositoryConfigCommand.optional(),
       startCommand: RepositoryConfigCommand.optional()
     });
-    var RepositoryGitHubActionWorkflowConfig = import_zod9.z.object({
-      enabled: import_zod9.z.boolean()
+    var RepositoryGitHubActionWorkflowConfig = import_zod10.z.object({
+      enabled: import_zod10.z.boolean()
     });
-    var RepositoryGitHubActionsConfig = import_zod9.z.object({
-      workflows: import_zod9.z.record(
-        import_zod9.z.string().trim().min(1, "githubActions workflow ids must be non-empty"),
+    var RepositoryGitHubActionsConfig = import_zod10.z.object({
+      workflows: import_zod10.z.record(
+        import_zod10.z.string().trim().min(1, "githubActions workflow ids must be non-empty"),
         RepositoryGitHubActionWorkflowConfig
       ).optional()
     });
-    var RepositoryConfig = import_zod9.z.object({
+    var RepositoryConfig = import_zod10.z.object({
       ai: RepositoryAiConfig.optional(),
       aiContext: RepositoryAiContextConfig.optional(),
-      baseBranch: import_zod9.z.string().trim().min(1, "baseBranch must be non-empty").optional(),
+      baseBranch: import_zod10.z.string().trim().min(1, "baseBranch must be non-empty").optional(),
       buildCommand: RepositoryConfigCommand.optional(),
       forge: RepositoryForgeConfig.optional(),
       githubActions: RepositoryGitHubActionsConfig.optional(),
       localRuntime: RepositoryLocalRuntimeConfig.optional()
     });
-    var ResolvedRepositoryConfig = import_zod9.z.object({
-      ai: import_zod9.z.object({
-        issue: import_zod9.z.object({
-          useCodexSuperpowers: import_zod9.z.boolean()
+    var ResolvedRepositoryConfig = import_zod10.z.object({
+      ai: import_zod10.z.object({
+        issue: import_zod10.z.object({
+          useCodexSuperpowers: import_zod10.z.boolean()
         }),
-        issueDraft: import_zod9.z.object({
-          useCodexSuperpowers: import_zod9.z.boolean()
+        issueDraft: import_zod10.z.object({
+          useCodexSuperpowers: import_zod10.z.boolean()
         }),
         runtime: RepositoryAiRuntimeConfig,
         provider: RepositoryAiProviderConfig
       }),
-      aiContext: import_zod9.z.object({
-        excludePaths: import_zod9.z.array(import_zod9.z.string().trim().min(1))
+      aiContext: import_zod10.z.object({
+        excludePaths: import_zod10.z.array(import_zod10.z.string().trim().min(1))
       }),
-      baseBranch: import_zod9.z.string().trim().min(1),
+      baseBranch: import_zod10.z.string().trim().min(1),
       buildCommand: RepositoryConfigCommand,
-      forge: import_zod9.z.object({
+      forge: import_zod10.z.object({
         type: RepositoryForgeType,
-        githubCliPath: import_zod9.z.string().trim().min(1).optional()
+        githubCliPath: import_zod10.z.string().trim().min(1).optional()
       }),
       githubActions: RepositoryGitHubActionsConfig,
       localRuntime: RepositoryLocalRuntimeConfig.optional()
     });
-    var import_zod10 = require_zod();
-    var ReviewSummaryItem = import_zod10.z.string().trim().min(1);
-    var ReviewSummaryInput = import_zod10.z.object({
-      diff: import_zod10.z.string().trim().min(1),
-      prTitle: import_zod10.z.string().trim().min(1).optional(),
-      prBody: import_zod10.z.string().trim().min(1).optional()
-    });
-    var ReviewSummaryOutput = import_zod10.z.object({
-      summary: import_zod10.z.string().trim().min(1, "summary must be non-empty"),
-      riskAreas: import_zod10.z.array(ReviewSummaryItem),
-      reviewerFocus: import_zod10.z.array(ReviewSummaryItem),
-      missingTests: import_zod10.z.array(ReviewSummaryItem).optional()
-    });
     var import_zod11 = require_zod();
-    var TestBacklogPriority = import_zod11.z.enum(["high", "medium", "low"]);
-    var SuggestedTestType = import_zod11.z.enum([
+    var ReviewSummaryItem = import_zod11.z.string().trim().min(1);
+    var ReviewSummaryInput = import_zod11.z.object({
+      diff: import_zod11.z.string().trim().min(1),
+      prTitle: import_zod11.z.string().trim().min(1).optional(),
+      prBody: import_zod11.z.string().trim().min(1).optional()
+    });
+    var ReviewSummaryOutput = import_zod11.z.object({
+      summary: import_zod11.z.string().trim().min(1, "summary must be non-empty"),
+      riskAreas: import_zod11.z.array(ReviewSummaryItem),
+      reviewerFocus: import_zod11.z.array(ReviewSummaryItem),
+      missingTests: import_zod11.z.array(ReviewSummaryItem).optional()
+    });
+    var import_zod12 = require_zod();
+    var TestBacklogPriority = import_zod12.z.enum(["high", "medium", "low"]);
+    var SuggestedTestType = import_zod12.z.enum([
       "unit",
       "integration",
       "smoke",
       "cli",
       "workflow"
     ]);
-    var TestBacklogInput = import_zod11.z.object({
-      excludePaths: import_zod11.z.array(import_zod11.z.string().trim().min(1)).optional(),
-      repoRoot: import_zod11.z.string().trim().min(1, "repoRoot must be non-empty"),
-      maxFindings: import_zod11.z.number().int().min(1).max(20).optional()
+    var TestBacklogInput = import_zod12.z.object({
+      excludePaths: import_zod12.z.array(import_zod12.z.string().trim().min(1)).optional(),
+      repoRoot: import_zod12.z.string().trim().min(1, "repoRoot must be non-empty"),
+      maxFindings: import_zod12.z.number().int().min(1).max(20).optional()
     });
-    var TestingSetupStatus = import_zod11.z.enum(["none", "partial", "established"]);
-    var CiIntegrationStatus = import_zod11.z.enum(["missing", "partial", "established"]);
-    var FrameworkRecommendation = import_zod11.z.object({
-      recommended: import_zod11.z.string().trim().min(1),
-      rationale: import_zod11.z.string().trim().min(1),
-      alternatives: import_zod11.z.array(import_zod11.z.string().trim().min(1))
+    var TestingSetupStatus = import_zod12.z.enum(["none", "partial", "established"]);
+    var CiIntegrationStatus = import_zod12.z.enum(["missing", "partial", "established"]);
+    var FrameworkRecommendation = import_zod12.z.object({
+      recommended: import_zod12.z.string().trim().min(1),
+      rationale: import_zod12.z.string().trim().min(1),
+      alternatives: import_zod12.z.array(import_zod12.z.string().trim().min(1))
     });
-    var CiIntegrationAssessment = import_zod11.z.object({
+    var CiIntegrationAssessment = import_zod12.z.object({
       status: CiIntegrationStatus,
-      hasGitHubActions: import_zod11.z.boolean(),
-      workflows: import_zod11.z.array(import_zod11.z.string().trim().min(1)),
-      evidence: import_zod11.z.array(import_zod11.z.string().trim().min(1)),
-      notes: import_zod11.z.array(import_zod11.z.string().trim().min(1))
+      hasGitHubActions: import_zod12.z.boolean(),
+      workflows: import_zod12.z.array(import_zod12.z.string().trim().min(1)),
+      evidence: import_zod12.z.array(import_zod12.z.string().trim().min(1)),
+      notes: import_zod12.z.array(import_zod12.z.string().trim().min(1))
     });
-    var CurrentTestingSetup = import_zod11.z.object({
+    var CurrentTestingSetup = import_zod12.z.object({
       status: TestingSetupStatus,
-      hasTests: import_zod11.z.boolean(),
-      testFileCount: import_zod11.z.number().int().min(0),
-      frameworks: import_zod11.z.array(import_zod11.z.string().trim().min(1)),
-      evidence: import_zod11.z.array(import_zod11.z.string().trim().min(1)),
-      testDirectories: import_zod11.z.array(import_zod11.z.string().trim().min(1)),
-      notes: import_zod11.z.array(import_zod11.z.string().trim().min(1)),
+      hasTests: import_zod12.z.boolean(),
+      testFileCount: import_zod12.z.number().int().min(0),
+      frameworks: import_zod12.z.array(import_zod12.z.string().trim().min(1)),
+      evidence: import_zod12.z.array(import_zod12.z.string().trim().min(1)),
+      testDirectories: import_zod12.z.array(import_zod12.z.string().trim().min(1)),
+      notes: import_zod12.z.array(import_zod12.z.string().trim().min(1)),
       frameworkRecommendation: FrameworkRecommendation.optional(),
       ciIntegration: CiIntegrationAssessment
     });
-    var TestBacklogFinding = import_zod11.z.object({
-      id: import_zod11.z.string().trim().min(1, "id must be non-empty"),
-      title: import_zod11.z.string().trim().min(1, "title must be non-empty"),
+    var TestBacklogFinding = import_zod12.z.object({
+      id: import_zod12.z.string().trim().min(1, "id must be non-empty"),
+      title: import_zod12.z.string().trim().min(1, "title must be non-empty"),
       priority: TestBacklogPriority,
-      rationale: import_zod11.z.string().trim().min(1, "rationale must be non-empty"),
-      suggestedTestTypes: import_zod11.z.array(SuggestedTestType).min(1),
-      relatedPaths: import_zod11.z.array(import_zod11.z.string().trim().min(1)).min(1),
-      existingCoverage: import_zod11.z.string().trim().min(1).optional(),
-      issueTitle: import_zod11.z.string().trim().min(1, "issueTitle must be non-empty"),
-      issueBody: import_zod11.z.string().trim().min(1, "issueBody must be non-empty")
+      rationale: import_zod12.z.string().trim().min(1, "rationale must be non-empty"),
+      suggestedTestTypes: import_zod12.z.array(SuggestedTestType).min(1),
+      relatedPaths: import_zod12.z.array(import_zod12.z.string().trim().min(1)).min(1),
+      existingCoverage: import_zod12.z.string().trim().min(1).optional(),
+      issueTitle: import_zod12.z.string().trim().min(1, "issueTitle must be non-empty"),
+      issueBody: import_zod12.z.string().trim().min(1, "issueBody must be non-empty")
     });
-    var TestBacklogOutput = import_zod11.z.object({
-      summary: import_zod11.z.string().trim().min(1, "summary must be non-empty"),
+    var TestBacklogOutput = import_zod12.z.object({
+      summary: import_zod12.z.string().trim().min(1, "summary must be non-empty"),
       currentTestingSetup: CurrentTestingSetup,
-      notableCoverageGaps: import_zod11.z.array(import_zod11.z.string().trim().min(1)),
-      findings: import_zod11.z.array(TestBacklogFinding)
+      notableCoverageGaps: import_zod12.z.array(import_zod12.z.string().trim().min(1)),
+      findings: import_zod12.z.array(TestBacklogFinding)
     });
-    var import_zod12 = require_zod();
-    var TestSuggestionString = import_zod12.z.string().trim().min(1);
-    var TestSuggestionItem = import_zod12.z.object({
+    var import_zod13 = require_zod();
+    var TestSuggestionString = import_zod13.z.string().trim().min(1);
+    var TestSuggestionItem = import_zod13.z.object({
       area: TestSuggestionString.min(1, "area must be non-empty"),
-      priority: import_zod12.z.enum(["high", "medium", "low"]),
+      priority: import_zod13.z.enum(["high", "medium", "low"]),
       testType: TestSuggestionString.min(1, "testType must be non-empty"),
       behavior: TestSuggestionString.min(1, "behavior must be non-empty"),
       regressionRisk: TestSuggestionString.min(
@@ -16682,9 +16706,9 @@ var require_dist = __commonJS({
         "regressionRisk must be non-empty"
       ),
       value: TestSuggestionString.min(1, "value must be non-empty"),
-      protectedPaths: import_zod12.z.array(TestSuggestionString).optional(),
-      likelyLocations: import_zod12.z.array(TestSuggestionString).optional(),
-      edgeCases: import_zod12.z.array(TestSuggestionString).optional(),
+      protectedPaths: import_zod13.z.array(TestSuggestionString).optional(),
+      likelyLocations: import_zod13.z.array(TestSuggestionString).optional(),
+      edgeCases: import_zod13.z.array(TestSuggestionString).optional(),
       implementationNote: TestSuggestionString.min(
         1,
         "implementationNote must be non-empty"
@@ -16692,43 +16716,43 @@ var require_dist = __commonJS({
     });
     var AddressedAssessmentSuggestionItem = TestSuggestionItem.extend({
       suggestionId: TestSuggestionString.min(1, "suggestionId must be non-empty"),
-      addressed: import_zod12.z.boolean()
+      addressed: import_zod13.z.boolean()
     });
-    var ResolvedTestSuggestionItem = import_zod12.z.object({
+    var ResolvedTestSuggestionItem = import_zod13.z.object({
       area: TestSuggestionString.min(1, "area must be non-empty"),
       testType: TestSuggestionString.min(1, "testType must be non-empty"),
       behavior: TestSuggestionString.min(1, "behavior must be non-empty"),
       regressionRisk: TestSuggestionString.optional(),
       value: TestSuggestionString.optional(),
-      protectedPaths: import_zod12.z.array(TestSuggestionString).optional(),
-      likelyLocations: import_zod12.z.array(TestSuggestionString).optional(),
-      edgeCases: import_zod12.z.array(TestSuggestionString).optional(),
+      protectedPaths: import_zod13.z.array(TestSuggestionString).optional(),
+      likelyLocations: import_zod13.z.array(TestSuggestionString).optional(),
+      edgeCases: import_zod13.z.array(TestSuggestionString).optional(),
       implementationNote: TestSuggestionString.optional(),
       resolvedAt: TestSuggestionString.min(1, "resolvedAt must be non-empty"),
       commitSha: TestSuggestionString.min(1, "commitSha must be non-empty")
     });
-    var TestSuggestionsInput = import_zod12.z.object({
-      diff: import_zod12.z.string().trim().min(1),
-      prTitle: import_zod12.z.string().trim().min(1).optional(),
-      prBody: import_zod12.z.string().trim().min(1).optional(),
-      resolvedSuggestions: import_zod12.z.array(ResolvedTestSuggestionItem).optional()
+    var TestSuggestionsInput = import_zod13.z.object({
+      diff: import_zod13.z.string().trim().min(1),
+      prTitle: import_zod13.z.string().trim().min(1).optional(),
+      prBody: import_zod13.z.string().trim().min(1).optional(),
+      resolvedSuggestions: import_zod13.z.array(ResolvedTestSuggestionItem).optional()
     });
-    var TestSuggestionsOutput = import_zod12.z.object({
+    var TestSuggestionsOutput = import_zod13.z.object({
       summary: TestSuggestionString.min(1, "summary must be non-empty"),
-      suggestedTests: import_zod12.z.array(TestSuggestionItem),
-      edgeCases: import_zod12.z.array(TestSuggestionString).optional()
+      suggestedTests: import_zod13.z.array(TestSuggestionItem),
+      edgeCases: import_zod13.z.array(TestSuggestionString).optional()
     });
-    var TestSuggestionAddressedAssessmentInput = import_zod12.z.object({
-      diff: import_zod12.z.string().trim().min(1),
-      prTitle: import_zod12.z.string().trim().min(1).optional(),
-      prBody: import_zod12.z.string().trim().min(1).optional(),
-      suggestions: import_zod12.z.array(AddressedAssessmentSuggestionItem).min(1)
+    var TestSuggestionAddressedAssessmentInput = import_zod13.z.object({
+      diff: import_zod13.z.string().trim().min(1),
+      prTitle: import_zod13.z.string().trim().min(1).optional(),
+      prBody: import_zod13.z.string().trim().min(1).optional(),
+      suggestions: import_zod13.z.array(AddressedAssessmentSuggestionItem).min(1)
     });
-    var TestSuggestionAddressedAssessmentOutput = import_zod12.z.object({
-      addressedSuggestions: import_zod12.z.array(
-        import_zod12.z.object({
+    var TestSuggestionAddressedAssessmentOutput = import_zod13.z.object({
+      addressedSuggestions: import_zod13.z.array(
+        import_zod13.z.object({
           suggestionId: TestSuggestionString.min(1, "suggestionId must be non-empty"),
-          addressed: import_zod12.z.literal(true),
+          addressed: import_zod13.z.literal(true),
           evidence: TestSuggestionString.min(1, "evidence must be non-empty")
         }).strict()
       )
@@ -16766,8 +16790,11 @@ var require_dist2 = __commonJS({
       DEFAULT_REPOSITORY_BASE_BRANCH: () => DEFAULT_REPOSITORY_BASE_BRANCH,
       DEFAULT_REPOSITORY_BUILD_COMMAND: () => DEFAULT_REPOSITORY_BUILD_COMMAND,
       DEFAULT_REPOSITORY_FORGE_TYPE: () => DEFAULT_REPOSITORY_FORGE_TYPE,
-      PR_ASSISTANT_END_MARKER: () => import_contracts9.PR_ASSISTANT_END_MARKER,
-      PR_ASSISTANT_START_MARKER: () => import_contracts9.PR_ASSISTANT_START_MARKER,
+      EMPTY_PR_IMPACT_PROFILE: () => EMPTY_PR_IMPACT_PROFILE,
+      PR_ASSISTANT_END_MARKER: () => import_contracts10.PR_ASSISTANT_END_MARKER,
+      PR_ASSISTANT_START_MARKER: () => import_contracts10.PR_ASSISTANT_START_MARKER,
+      PR_IMPACT_PROFILE_GUIDANCE_LINES: () => PR_IMPACT_PROFILE_GUIDANCE_LINES,
+      PR_IMPACT_PROFILE_SCHEMA_LINES: () => PR_IMPACT_PROFILE_SCHEMA_LINES,
       StructuredGenerationError: () => StructuredGenerationError,
       analyzeFeatureBacklog: () => analyzeFeatureBacklog,
       analyzeTestBacklog: () => analyzeTestBacklog,
@@ -16776,6 +16803,7 @@ var require_dist2 = __commonJS({
       buildPRAssistantSection: () => buildPRAssistantSection,
       createRepositoryPathMatcher: () => createRepositoryPathMatcher,
       filterRepositoryPaths: () => filterRepositoryPaths,
+      formatPRImpactProfileMarkdown: () => formatPRImpactProfileMarkdown,
       formatPRReviewInlineCommentBody: () => formatPRReviewInlineCommentBody,
       formatPRReviewMarkdown: () => formatPRReviewMarkdown2,
       generateCommitMessage: () => generateCommitMessage,
@@ -16790,8 +16818,10 @@ var require_dist2 = __commonJS({
       generateTestSuggestions: () => generateTestSuggestions,
       isRepositoryPathExcluded: () => isRepositoryPathExcluded,
       mergePRAssistantSection: () => mergePRAssistantSection,
+      normalizePRImpactProfile: () => normalizePRImpactProfile,
       normalizeRepositoryPath: () => normalizeRepositoryPath,
       resolveRepositoryConfig: () => resolveRepositoryConfig,
+      serializePRImpactProfile: () => serializePRImpactProfile2,
       stripManagedPRAssistantSection: () => stripManagedPRAssistantSection
     });
     module2.exports = __toCommonJS2(index_exports);
@@ -17764,8 +17794,129 @@ ${formatValidationIssues(validationIssues)}`,
       });
       return normalizeIssueResolutionPlanOutput(modelOutput);
     }
-    var import_contracts7 = require_dist();
+    var import_contracts8 = require_dist();
     var import_zod = require_zod();
+    var import_contracts7 = require_dist();
+    var EMPTY_PR_IMPACT_PROFILE = import_contracts7.DEFAULT_PR_IMPACT_PROFILE;
+    var PR_IMPACT_PROFILE_GUIDANCE_LINES = [
+      "Use the shared impact profile for PR-level risk metadata: risk level, evidence-backed risk reasons, affected areas, rollout impact, migration impact, configuration impact, security/performance flags, and manual verification hints.",
+      'Set "riskLevel" to "none" when the diff does not support a concrete PR-level risk.',
+      "Keep impact profile items concise, non-duplicative, and grounded in the diff or supporting PR context.",
+      "Use calm empty arrays for low-signal or empty profile fields instead of generic warnings."
+    ];
+    var PR_IMPACT_PROFILE_SCHEMA_LINES = [
+      '  "impactProfile": {',
+      '    "riskLevel": "none" | "low" | "medium" | "high",',
+      '    "riskReasons": string[],',
+      '    "affectedAreas": string[],',
+      '    "rolloutImpact": string[],',
+      '    "migrationImpact": string[],',
+      '    "configurationImpact": string[],',
+      '    "flags": {',
+      '      "security": boolean,',
+      '      "performance": boolean',
+      "    },",
+      '    "manualVerification": string[]',
+      "  },"
+    ];
+    function normalizeStringArray(value) {
+      if (!Array.isArray(value)) {
+        return [];
+      }
+      return value.filter((item) => typeof item === "string").map((item) => item.trim()).filter((item) => item.length > 0);
+    }
+    function normalizePRImpactProfile(value) {
+      if (!value || typeof value !== "object") {
+        return EMPTY_PR_IMPACT_PROFILE;
+      }
+      const profile = value;
+      const flags = profile.flags && typeof profile.flags === "object" ? profile.flags : {};
+      return import_contracts7.PRImpactProfile.parse({
+        riskLevel: profile.riskLevel,
+        riskReasons: normalizeStringArray(profile.riskReasons),
+        affectedAreas: normalizeStringArray(profile.affectedAreas),
+        rolloutImpact: normalizeStringArray(profile.rolloutImpact),
+        migrationImpact: normalizeStringArray(profile.migrationImpact),
+        configurationImpact: normalizeStringArray(profile.configurationImpact),
+        flags: {
+          security: flags.security === true,
+          performance: flags.performance === true
+        },
+        manualVerification: normalizeStringArray(profile.manualVerification)
+      });
+    }
+    function serializePRImpactProfile2(profile) {
+      return JSON.stringify(import_contracts7.PRImpactProfile.parse(profile), null, 2);
+    }
+    function heading(level, title) {
+      return `${"#".repeat(level)} ${title}`;
+    }
+    function renderListSection(title, items, level) {
+      if (items.length === 0) {
+        return [];
+      }
+      return [heading(level, title), ...items.map((item) => `- ${item}`), ""];
+    }
+    function formatPRImpactProfileMarkdown(profile, options = {}) {
+      const parsedProfile = import_contracts7.PRImpactProfile.parse(profile ?? {});
+      const headingLevel = options.headingLevel ?? 2;
+      const nestedHeadingLevel = headingLevel + 1;
+      const flagItems = [
+        ...parsedProfile.flags.security ? ["Security-sensitive change"] : [],
+        ...parsedProfile.flags.performance ? ["Performance-sensitive change"] : []
+      ];
+      const hasImpactDetails = parsedProfile.riskReasons.length > 0 || parsedProfile.affectedAreas.length > 0 || parsedProfile.rolloutImpact.length > 0 || parsedProfile.migrationImpact.length > 0 || parsedProfile.configurationImpact.length > 0 || flagItems.length > 0 || parsedProfile.manualVerification.length > 0;
+      const lines = [
+        heading(headingLevel, "Impact Profile"),
+        `Risk level: ${parsedProfile.riskLevel}`,
+        ""
+      ];
+      if (!hasImpactDetails) {
+        lines.push("No specific impact concerns noted.");
+        return lines.join("\n");
+      }
+      lines.push(
+        ...renderListSection(
+          "Risk reasons",
+          parsedProfile.riskReasons,
+          nestedHeadingLevel
+        ),
+        ...renderListSection(
+          "Affected areas",
+          parsedProfile.affectedAreas,
+          nestedHeadingLevel
+        ),
+        ...renderListSection(
+          "Rollout impact",
+          parsedProfile.rolloutImpact,
+          nestedHeadingLevel
+        ),
+        ...renderListSection(
+          "Migration impact",
+          parsedProfile.migrationImpact,
+          nestedHeadingLevel
+        ),
+        ...renderListSection(
+          "Configuration impact",
+          parsedProfile.configurationImpact,
+          nestedHeadingLevel
+        ),
+        ...renderListSection(
+          "Flags",
+          flagItems,
+          nestedHeadingLevel
+        ),
+        ...renderListSection(
+          "Manual verification",
+          parsedProfile.manualVerification,
+          nestedHeadingLevel
+        )
+      );
+      while (lines[lines.length - 1] === "") {
+        lines.pop();
+      }
+      return lines.join("\n");
+    }
     var PR_ASSISTANT_SYSTEM_PROMPT = [
       "You are a senior software engineer writing a GitHub pull request assistant section for human reviewers.",
       "Be concise, repetitive, and predictable.",
@@ -17779,9 +17930,8 @@ ${formatValidationIssues(validationIssues)}`,
     var PRAssistantModelItem = import_zod.z.string().trim().min(1);
     var PRAssistantModelOutput = import_zod.z.object({
       summary: import_zod.z.string().trim().min(1, "summary must be non-empty"),
-      riskAreas: import_zod.z.array(PRAssistantModelItem).default([]),
+      impactProfile: import_contracts8.PRImpactProfile.default(EMPTY_PR_IMPACT_PROFILE),
       testingNotes: import_zod.z.array(PRAssistantModelItem).default([]),
-      rolloutConcerns: import_zod.z.array(PRAssistantModelItem).default([]),
       reviewerChecklist: import_zod.z.array(PRAssistantModelItem).default([])
     });
     function collectChangedFiles(diff) {
@@ -17820,18 +17970,16 @@ ${formatValidationIssues(validationIssues)}`,
         taskLine: "Generate a structured GitHub pull request assistant section from the provided diff.",
         guidanceLines: [
           'The "summary" should be a short paragraph describing the overall change and intent.',
-          '"riskAreas" should list concrete review risks or be an empty array if none are clearly supported.',
+          ...PR_IMPACT_PROFILE_GUIDANCE_LINES,
           '"testingNotes" should list testing evidence, gaps, or notable verification context grounded in the diff or supporting context.',
-          '"rolloutConcerns" should list rollout, migration, or deployment concerns grounded in the diff or be an empty array.',
           '"reviewerChecklist" should list the specific checks a reviewer should make based on the diff.',
           "Do not include a files list in the JSON. File paths are derived from the diff separately.",
           "Avoid repeating the same point across multiple fields."
         ],
         schemaLines: [
           '  "summary": string,',
-          '  "riskAreas": string[],',
+          ...PR_IMPACT_PROFILE_SCHEMA_LINES,
           '  "testingNotes": string[],',
-          '  "rolloutConcerns": string[],',
           '  "reviewerChecklist": string[]'
         ],
         contextLines: contextLines.length > 0 ? ["Supporting context (optional, may be incomplete):", ...contextLines] : void 0,
@@ -17839,7 +17987,7 @@ ${formatValidationIssues(validationIssues)}`,
       });
     }
     async function generatePRAssistant(provider, input) {
-      const parsedInput = import_contracts7.PRAssistantInput.parse(input);
+      const parsedInput = import_contracts8.PRAssistantInput.parse(input);
       const prompt = buildPrompt5(parsedInput);
       const modelOutput = await generateStructuredOutput({
         provider,
@@ -17847,23 +17995,36 @@ ${formatValidationIssues(validationIssues)}`,
         prompt,
         schema: PRAssistantModelOutput,
         validationErrorPrefix: "Model output failed PR assistant schema validation",
-        normalizeParsedJson: (value) => normalizeNullableFields(value, [
-          "riskAreas",
-          "testingNotes",
-          "rolloutConcerns",
-          "reviewerChecklist"
-        ])
+        normalizeParsedJson: (value) => {
+          const normalized = normalizeNullableFields(value, [
+            "testingNotes",
+            "reviewerChecklist"
+          ]);
+          if (!normalized || typeof normalized !== "object") {
+            return normalized;
+          }
+          return {
+            ...normalized,
+            impactProfile: normalizePRImpactProfile(
+              normalized.impactProfile
+            )
+          };
+        }
       });
-      return import_contracts7.PRAssistantOutput.parse({
+      const impactProfile = normalizePRImpactProfile(modelOutput.impactProfile);
+      return import_contracts8.PRAssistantOutput.parse({
         ...modelOutput,
-        filesChanged: collectChangedFiles(parsedInput.diff)
+        impactProfile,
+        riskAreas: impactProfile.riskReasons,
+        filesChanged: collectChangedFiles(parsedInput.diff),
+        rolloutConcerns: impactProfile.rolloutImpact
       });
     }
-    var import_contracts8 = require_dist();
     var import_contracts9 = require_dist();
     var import_contracts10 = require_dist();
+    var import_contracts11 = require_dist();
     var PR_ASSISTANT_SECTION_PATTERN = new RegExp(
-      `${buildMarkerGroup(import_contracts8.ALL_PR_ASSISTANT_START_MARKERS)}[\\s\\S]*?${buildMarkerGroup(import_contracts8.ALL_PR_ASSISTANT_END_MARKERS)}`,
+      `${buildMarkerGroup(import_contracts9.ALL_PR_ASSISTANT_START_MARKERS)}[\\s\\S]*?${buildMarkerGroup(import_contracts9.ALL_PR_ASSISTANT_END_MARKERS)}`,
       "m"
     );
     function escapeRegExp(value) {
@@ -17879,6 +18040,9 @@ ${formatValidationIssues(validationIssues)}`,
         ""
       ];
     }
+    function hasImpactProfile(assistant) {
+      return "impactProfile" in assistant;
+    }
     function stripManagedPRAssistantSection(body) {
       if (!body) {
         return void 0;
@@ -17888,13 +18052,22 @@ ${formatValidationIssues(validationIssues)}`,
     }
     function buildPRAssistantSection(assistant) {
       const lines = ["## PR Assistant", "", "### Summary", assistant.summary, ""];
-      lines.push(
-        ...renderBulletSection(
-          "Risk areas",
-          assistant.riskAreas,
-          "None noted."
-        )
-      );
+      if (hasImpactProfile(assistant)) {
+        lines.push(
+          ...formatPRImpactProfileMarkdown(assistant.impactProfile, {
+            headingLevel: 3
+          }).split("\n"),
+          ""
+        );
+      } else {
+        lines.push(
+          ...renderBulletSection(
+            "Risk areas",
+            assistant.riskAreas,
+            "None noted."
+          )
+        );
+      }
       lines.push(
         ...renderBulletSection(
           "Files changed",
@@ -17909,13 +18082,15 @@ ${formatValidationIssues(validationIssues)}`,
           "None noted."
         )
       );
-      lines.push(
-        ...renderBulletSection(
-          "Rollout concerns",
-          assistant.rolloutConcerns,
-          "None noted."
-        )
-      );
+      if (!hasImpactProfile(assistant)) {
+        lines.push(
+          ...renderBulletSection(
+            "Rollout concerns",
+            assistant.rolloutConcerns,
+            "None noted."
+          )
+        );
+      }
       lines.push(
         ...renderBulletSection(
           "Reviewer checklist",
@@ -17930,9 +18105,9 @@ ${formatValidationIssues(validationIssues)}`,
     }
     function mergePRAssistantSection(existingBody, section) {
       const managedSection = [
-        import_contracts10.PR_ASSISTANT_START_MARKER,
+        import_contracts11.PR_ASSISTANT_START_MARKER,
         section,
-        import_contracts10.PR_ASSISTANT_END_MARKER
+        import_contracts11.PR_ASSISTANT_END_MARKER
       ].join("\n");
       if (!existingBody?.trim()) {
         return managedSection;
@@ -17945,7 +18120,7 @@ ${formatValidationIssues(validationIssues)}`,
 
 ${managedSection}`;
     }
-    var import_contracts11 = require_dist();
+    var import_contracts12 = require_dist();
     var PR_DESCRIPTION_SYSTEM_PROMPT = [
       "You are a senior software engineer writing a GitHub pull request description.",
       "Be concise but informative.",
@@ -17981,18 +18156,18 @@ ${managedSection}`;
       });
     }
     async function generatePRDescription(provider, input) {
-      const parsedInput = import_contracts11.PRDescriptionInput.parse(input);
+      const parsedInput = import_contracts12.PRDescriptionInput.parse(input);
       const prompt = buildPrompt6(parsedInput);
       const modelOutput = await generateStructuredOutput({
         provider,
         systemPrompt: PR_DESCRIPTION_SYSTEM_PROMPT,
         prompt,
-        schema: import_contracts11.PRDescriptionOutput,
+        schema: import_contracts12.PRDescriptionOutput,
         validationErrorPrefix: "Model output failed PR description schema validation"
       });
       return modelOutput;
     }
-    var import_contracts12 = require_dist();
+    var import_contracts13 = require_dist();
     var MAX_PR_REVIEW_SIGNALS = 5;
     var SEVERITY_WEIGHT = {
       high: 300,
@@ -18173,6 +18348,7 @@ ${managedSection}`;
         taskLine: "Generate an AI pull request pre-review signal from the provided diff.",
         guidanceLines: [
           'The "summary" should be 1 to 2 short sentences describing the overall pre-review outcome, the strongest evidence-backed concerns, and how the change aligns with the diff context.',
+          ...PR_IMPACT_PROFILE_GUIDANCE_LINES,
           "Return only the top reviewer-ready risks and keep the combined total across comments and findings to 5 or fewer items.",
           "Prefer 3 to 5 total risks only when the diff supports that many; return fewer or zero when the evidence is sparse.",
           "Order both arrays from highest priority to lowest priority so trimming preserves the strongest risks first.",
@@ -18200,6 +18376,7 @@ ${managedSection}`;
         ],
         schemaLines: [
           '  "summary": string,',
+          ...PR_IMPACT_PROFILE_SCHEMA_LINES,
           '  "comments": [',
           "    {",
           '      "path": string,',
@@ -18239,6 +18416,7 @@ ${managedSection}`;
         return result;
       }
       const normalized = { ...result };
+      normalized.impactProfile = normalizePRImpactProfile(normalized.impactProfile);
       if (Array.isArray(normalized.comments)) {
         normalized.comments = normalized.comments.map(
           (comment) => normalizeNullableFields(comment, ["suggestedFix"])
@@ -18249,20 +18427,20 @@ ${managedSection}`;
           (finding) => normalizeNullableFields(finding, ["suggestedFix"])
         );
       }
-      const parsedReview = import_contracts12.PRReviewOutput.safeParse(normalized);
+      const parsedReview = import_contracts13.PRReviewOutput.safeParse(normalized);
       if (!parsedReview.success) {
         return normalized;
       }
       return trimPRReviewOutput(parsedReview.data);
     }
     async function generatePRReview2(provider, input) {
-      const parsedInput = import_contracts12.PRReviewInput.parse(input);
+      const parsedInput = import_contracts13.PRReviewInput.parse(input);
       const prompt = buildPrompt7(parsedInput);
       return generateStructuredOutput({
         provider,
         systemPrompt: PR_REVIEW_SYSTEM_PROMPT,
         prompt,
-        schema: import_contracts12.PRReviewOutput,
+        schema: import_contracts13.PRReviewOutput,
         validationErrorPrefix: "Model output failed PR review schema validation",
         normalizeParsedJson: normalizeModelOutput
       });
@@ -18343,6 +18521,7 @@ ${managedSection}`;
           `- ${issue.number !== void 0 ? `#${issue.number}: ` : ""}[${issue.title}](${issue.url})`
         );
       }
+      lines.push("", formatPRImpactProfileMarkdown(review.impactProfile));
       lines.push("", "## Top Risks");
       if (topSignals.length === 0) {
         lines.push("No reviewer-ready risks identified from this diff.");
@@ -18409,7 +18588,7 @@ ${managedSection}`;
       }
       return result;
     }
-    var import_contracts13 = require_dist();
+    var import_contracts14 = require_dist();
     var REVIEW_SUMMARY_SYSTEM_PROMPT = [
       "You are a senior software engineer reviewing a GitHub pull request.",
       "Write a concise PR-level review summary for another human reviewer.",
@@ -18462,20 +18641,20 @@ ${managedSection}`;
       ].join("\n");
     }
     async function generateReviewSummary(provider, input) {
-      const parsedInput = import_contracts13.ReviewSummaryInput.parse(input);
+      const parsedInput = import_contracts14.ReviewSummaryInput.parse(input);
       const prompt = buildPrompt8(parsedInput);
       return generateStructuredOutput({
         provider,
         systemPrompt: REVIEW_SUMMARY_SYSTEM_PROMPT,
         prompt,
-        schema: import_contracts13.ReviewSummaryOutput,
+        schema: import_contracts14.ReviewSummaryOutput,
         validationErrorPrefix: "Model output failed review summary schema validation",
         normalizeParsedJson: (value) => normalizeNullableFields(value, ["missingTests"])
       });
     }
     var import_node_fs22 = require("fs");
     var import_node_path22 = require("path");
-    var import_contracts14 = require_dist();
+    var import_contracts15 = require_dist();
     var SKIP_DIRECTORIES2 = /* @__PURE__ */ new Set([
       ".git",
       ".prs",
@@ -19332,7 +19511,7 @@ ${managedSection}`;
       return `Repository scan found ${sourceFileCount} source file${sourceFileCount === 1 ? "" : "s"}, ${setup.testFileCount} test file${setup.testFileCount === 1 ? "" : "s"}, and ${frameworkSummary}. Current testing setup is ${setup.status} and CI test integration is ${ciSummary}.${recommendationSummary} Highest-value gaps focus on ${topPriorities}.`;
     }
     async function analyzeTestBacklog(input) {
-      const parsed = import_contracts14.TestBacklogInput.parse(input);
+      const parsed = import_contracts15.TestBacklogInput.parse(input);
       const repoRoot = (0, import_node_path22.resolve)(parsed.repoRoot);
       const excludePaths = resolveRepositoryConfig({
         aiContext: {
@@ -19372,14 +19551,14 @@ ${managedSection}`;
       const notableCoverageGaps = sortedFindings.map(
         (finding) => `${finding.title} (${finding.priority})`
       );
-      return import_contracts14.TestBacklogOutput.parse({
+      return import_contracts15.TestBacklogOutput.parse({
         summary: summarizeAnalysis2(setup, sortedFindings, snapshot.sourceFiles.length),
         currentTestingSetup: setup,
         notableCoverageGaps,
         findings: sortedFindings
       });
     }
-    var import_contracts15 = require_dist();
+    var import_contracts16 = require_dist();
     var TEST_SUGGESTIONS_SYSTEM_PROMPT = [
       "You are a senior software engineer planning automated tests for a GitHub pull request.",
       "Suggest practical, implementation-focused tests that would add meaningful coverage.",
@@ -19570,20 +19749,20 @@ ${managedSection}`;
       return result;
     }
     async function generateTestSuggestions(provider, input) {
-      const parsedInput = import_contracts15.TestSuggestionsInput.parse(input);
+      const parsedInput = import_contracts16.TestSuggestionsInput.parse(input);
       const prompt = buildPrompt9(parsedInput);
       const output = await generateStructuredOutput({
         provider,
         systemPrompt: TEST_SUGGESTIONS_SYSTEM_PROMPT,
         prompt,
-        schema: import_contracts15.TestSuggestionsOutput,
+        schema: import_contracts16.TestSuggestionsOutput,
         validationErrorPrefix: "Model output failed test suggestions schema validation",
         normalizeParsedJson: normalizeModelOutput2
       });
       return filterResolvedDuplicates(output, parsedInput);
     }
     async function assessAddressedTestSuggestions(provider, input) {
-      const parsedInput = import_contracts15.TestSuggestionAddressedAssessmentInput.parse(input);
+      const parsedInput = import_contracts16.TestSuggestionAddressedAssessmentInput.parse(input);
       const uncheckedSuggestionIds = new Set(
         parsedInput.suggestions.filter((suggestion) => !suggestion.addressed).map((suggestion) => suggestion.suggestionId)
       );
@@ -19594,7 +19773,7 @@ ${managedSection}`;
         provider,
         systemPrompt: TEST_SUGGESTION_ADDRESSED_ASSESSMENT_SYSTEM_PROMPT,
         prompt: buildAddressedAssessmentPrompt(parsedInput),
-        schema: import_contracts15.TestSuggestionAddressedAssessmentOutput,
+        schema: import_contracts16.TestSuggestionAddressedAssessmentOutput,
         validationErrorPrefix: "Model output failed test suggestion addressed assessment schema validation"
       });
       return {
@@ -46396,6 +46575,7 @@ async function run() {
       url: input.issueUrl
     })
   );
+  setOutput("impact_profile_json", (0, import_core18.serializePRImpactProfile)(result.impactProfile));
   setOutput("findings_json", JSON.stringify(result.findings, null, 2));
   setOutput("comments_json", JSON.stringify(result.comments, null, 2));
 }

@@ -13,6 +13,11 @@ import {
   generateStructuredOutput,
   normalizeNullableFields,
 } from "./structured-generation";
+import {
+  normalizePRImpactProfile,
+  PR_IMPACT_PROFILE_GUIDANCE_LINES,
+  PR_IMPACT_PROFILE_SCHEMA_LINES,
+} from "./pr-impact-profile";
 import { trimPRReviewOutput } from "./pr-review-top-risks";
 
 const PR_REVIEW_SYSTEM_PROMPT = [
@@ -181,6 +186,7 @@ function buildPrompt(input: PRReviewInputType): string {
       "Generate an AI pull request pre-review signal from the provided diff.",
     guidanceLines: [
       'The "summary" should be 1 to 2 short sentences describing the overall pre-review outcome, the strongest evidence-backed concerns, and how the change aligns with the diff context.',
+      ...PR_IMPACT_PROFILE_GUIDANCE_LINES,
       "Return only the top reviewer-ready risks and keep the combined total across comments and findings to 5 or fewer items.",
       "Prefer 3 to 5 total risks only when the diff supports that many; return fewer or zero when the evidence is sparse.",
       'Order both arrays from highest priority to lowest priority so trimming preserves the strongest risks first.',
@@ -210,6 +216,7 @@ function buildPrompt(input: PRReviewInputType): string {
     ],
     schemaLines: [
       '  "summary": string,',
+      ...PR_IMPACT_PROFILE_SCHEMA_LINES,
       '  "comments": [',
       "    {",
       '      "path": string,',
@@ -255,6 +262,7 @@ function normalizeModelOutput(value: unknown): unknown {
   }
 
   const normalized = { ...(result as Record<string, unknown>) };
+  normalized.impactProfile = normalizePRImpactProfile(normalized.impactProfile);
   if (Array.isArray(normalized.comments)) {
     normalized.comments = normalized.comments.map((comment) =>
       normalizeNullableFields(comment, ["suggestedFix"])

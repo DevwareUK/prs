@@ -364,4 +364,49 @@ describe("generatePRReview", () => {
     expect(review.comments).toHaveLength(2);
     expect(review.findings.length + review.comments.length).toBe(5);
   });
+
+  it("returns the shared impact profile from PR review output", async () => {
+    const provider = createProvider({
+      summary:
+        "The change adds a new workflow output and needs release documentation.",
+      impactProfile: {
+        riskLevel: "high",
+        riskReasons: ["Action output contracts change."],
+        affectedAreas: ["actions/pr-review/action.yml"],
+        rolloutImpact: ["Consumers can opt into the new JSON output."],
+        migrationImpact: [],
+        configurationImpact: [],
+        flags: {
+          security: false,
+          performance: false,
+        },
+        manualVerification: ["Confirm the generated workflow exposes the new output."],
+      },
+      comments: [],
+      findings: [],
+    });
+
+    const review = await generatePRReview(provider, {
+      diff: [
+        "diff --git a/actions/pr-review/action.yml b/actions/pr-review/action.yml",
+        "--- a/actions/pr-review/action.yml",
+        "+++ b/actions/pr-review/action.yml",
+        "@@ -41,0 +42,2 @@",
+        "+  impact_profile_json:",
+        "+    description: Shared impact profile JSON",
+      ].join("\n"),
+    });
+
+    expect(review.impactProfile.riskLevel).toBe("high");
+    expect(review.impactProfile.riskReasons).toEqual([
+      "Action output contracts change.",
+    ]);
+
+    const request = provider.generateText.mock.calls[0]?.[0];
+    expect(request?.prompt).toContain('"impactProfile": {');
+    expect(request?.prompt).toContain('"riskLevel": "none" | "low" | "medium" | "high"');
+    expect(request?.prompt).toContain(
+      "Use the shared impact profile for PR-level risk metadata"
+    );
+  });
 });
