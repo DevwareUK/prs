@@ -416,7 +416,6 @@ export async function runPrFixCommentsCommand(
     options.repoRoot,
     pullRequest.number
   );
-  let comments: PullRequestReviewComment[] = [];
   let reviewThreads: PullRequestReviewThread[];
   if (options.forge.fetchPullRequestReviewThreads) {
     try {
@@ -424,7 +423,7 @@ export async function runPrFixCommentsCommand(
         await options.forge.fetchPullRequestReviewThreads(options.prNumber)
       );
     } catch {
-      comments = (
+      const comments = (
         await options.forge.fetchPullRequestReviewComments(options.prNumber)
       )
         .filter(shouldRetainPullRequestReviewCommentInThread)
@@ -432,7 +431,7 @@ export async function runPrFixCommentsCommand(
       reviewThreads = buildPullRequestReviewThreads(comments);
     }
   } else {
-    comments = (
+    const comments = (
       await options.forge.fetchPullRequestReviewComments(options.prNumber)
     )
       .filter(shouldRetainPullRequestReviewCommentInThread)

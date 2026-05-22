@@ -1251,7 +1251,6 @@ describe("Full issue run workflow", () => {
   it("commits and opens a pull request when an unattended issue run creates only untracked files", async () => {
     const beforeRuns = listRunDirectories();
     const issueNumber = 1513;
-    const branchName = "feat/issue-1513-add-sales-event-manager-test";
     const untrackedPath =
       "web/modules/custom/bos_sales_event/tests/src/Unit/Service/SalesEventManagerTest.php";
     const sessionStateDir = resolve(REPO_ROOT, ".prs", "issues", String(issueNumber));
@@ -1622,7 +1621,6 @@ describe("Full issue run workflow", () => {
   it("uses unattended Codex for Superpowers plan preflight during unattended issue runs", async () => {
     const beforeRuns = listRunDirectories();
     const issueNumber = 1516;
-    const branchName = "feat/issue-1516-superpowers-plan-preflight";
     const sessionStateDir = resolve(REPO_ROOT, ".prs", "issues", String(issueNumber));
     const issueWorkspaceDir = resolve(
       REPO_ROOT,

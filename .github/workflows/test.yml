@@ -36,6 +36,9 @@ jobs:
         env:
           CI: true
 
+      - name: Lint workspace
+        run: pnpm lint
+
       - name: Build workspace
         run: pnpm build
 

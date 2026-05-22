@@ -1,6 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
 import type { AIProvider } from "@prs/providers";
 import { formatCommandForDisplay } from "../../config";
 import type { PullRequestDetails, RepositoryForge } from "../../forge";

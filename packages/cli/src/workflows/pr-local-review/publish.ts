@@ -4,8 +4,6 @@ import { PRReviewComment } from "@prs/contracts";
 import { publishAuditArtifact } from "../../audit-artifacts";
 import type {
   PullRequestInlineReviewCommentInput,
-  PullRequestReviewComment,
-  PullRequestReviewThreadDetails,
   RepositoryForge,
 } from "../../forge";
 

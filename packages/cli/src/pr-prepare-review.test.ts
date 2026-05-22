@@ -891,8 +891,8 @@ describe("PR prepare-review workflow", () => {
             "--- a/packages/cli/src/workflows/pr-prepare-review/run.ts",
             "+++ b/packages/cli/src/workflows/pr-prepare-review/run.ts",
             "@@ -1,1 +1,2 @@",
-            '-console.log(\"before\");',
-            '+console.log(\"after\");',
+            '-console.log("before");',
+            '+console.log("after");',
           ].join("\n");
         }
 
@@ -1556,7 +1556,6 @@ describe("PR prepare-review workflow", () => {
 
     process.env.GITHUB_TOKEN = "test-token";
     process.argv = ["node", "prs", "codex", "pr", "prepare-review", "205"];
-    const stdout = captureStdout();
     const messages: string[] = [];
     vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
       messages.push(String(message ?? ""));

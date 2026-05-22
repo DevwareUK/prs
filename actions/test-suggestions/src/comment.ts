@@ -137,7 +137,7 @@ function parseSuggestionBlock(
   let value: string | undefined;
   let protectedPaths: string[] = [];
   let likelyLocations: string[] = [];
-  let edgeCases: string[] = [];
+  const edgeCases: string[] = [];
   let implementationNote: string | undefined;
   let collectingEdgeCases = false;
 
