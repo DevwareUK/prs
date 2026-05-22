@@ -37,6 +37,7 @@ For the first-offer flows, `.prs/` is part of the product story. It gives the op
 Relevant paths:
 
 - `.prs/config.json`: repository-level defaults such as `ai.provider.type`, `ai.runtime.type`, `baseBranch`, and `buildCommand`
+- `.prs/.gitignore`: setup-managed ignore rules for generated local prs state
 - `.prs/runs/`: timestamped workflow directories for local guided runs
 - `.prs/issues/`: issue snapshots, generated drafts, and unattended per-issue session state
 - `.prs/batches/`: unattended batch queue state
@@ -64,7 +65,7 @@ Keep the onboarding story narrow and opinionated:
 - Recommended runtime path: use the current Codex session for `prs pr address-comments <pr-number>` and `prs pr add-tests <pr-number>` after the commands prepare their handoff artifacts.
 - Deeper-launch options: `bedrock-claude` and `claude-code` are supported, but they are not the simplest first-offer setup and should stay out of the first demo unless the buyer already requires them.
 - Local prerequisites: `git`, Node.js, `pnpm`, the `prs` CLI linked from this repository, and GitHub authentication for PR-backed local commands.
-- Repository setup expectation: run `prs setup` in the target repository so `.prs/config.json`, `.gitignore`, and optional managed `AGENTS.md` guidance are aligned before the first live fix workflow.
+- Repository setup expectation: run `prs setup` in the target repository so `.prs/config.json`, `.prs/.gitignore`, explicit local runtime settings, and optional managed `AGENTS.md` guidance are aligned before the first live fix workflow. If root `.gitignore` ignores all of `.prs/`, narrow that policy intentionally before committing setup-managed `.prs` files.
 - Pull request setup expectation: for `prs pr address-comments <pr-number>`, `prs pr fix-tests <pr-number>`, and `prs pr add-tests <pr-number>`, have the PR branch checked out locally and keep the working tree clean.
 
 ## Commands To Keep Out Of The First Demo
