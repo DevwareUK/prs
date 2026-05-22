@@ -3,6 +3,7 @@ import {
   PRAssistantInputType,
   PRAssistantOutput,
   PRAssistantOutputType,
+  PRImpactProfile,
 } from "@prs/contracts";
 import { AIProvider } from "@prs/providers";
 import { z } from "zod";
@@ -14,6 +15,12 @@ import {
   generateStructuredOutput,
   normalizeNullableFields,
 } from "./structured-generation";
+import {
+  EMPTY_PR_IMPACT_PROFILE,
+  normalizePRImpactProfile,
+  PR_IMPACT_PROFILE_GUIDANCE_LINES,
+  PR_IMPACT_PROFILE_SCHEMA_LINES,
+} from "./pr-impact-profile";
 
 const PR_ASSISTANT_SYSTEM_PROMPT = [
   "You are a senior software engineer writing a GitHub pull request assistant section for human reviewers.",
@@ -30,9 +37,8 @@ const PRAssistantModelItem = z.string().trim().min(1);
 
 const PRAssistantModelOutput = z.object({
   summary: z.string().trim().min(1, "summary must be non-empty"),
-  riskAreas: z.array(PRAssistantModelItem).default([]),
+  impactProfile: PRImpactProfile.default(EMPTY_PR_IMPACT_PROFILE),
   testingNotes: z.array(PRAssistantModelItem).default([]),
-  rolloutConcerns: z.array(PRAssistantModelItem).default([]),
   reviewerChecklist: z.array(PRAssistantModelItem).default([]),
 });
 
@@ -80,18 +86,16 @@ function buildPrompt(input: PRAssistantInputType): string {
       "Generate a structured GitHub pull request assistant section from the provided diff.",
     guidanceLines: [
       'The "summary" should be a short paragraph describing the overall change and intent.',
-      '"riskAreas" should list concrete review risks or be an empty array if none are clearly supported.',
+      ...PR_IMPACT_PROFILE_GUIDANCE_LINES,
       '"testingNotes" should list testing evidence, gaps, or notable verification context grounded in the diff or supporting context.',
-      '"rolloutConcerns" should list rollout, migration, or deployment concerns grounded in the diff or be an empty array.',
       '"reviewerChecklist" should list the specific checks a reviewer should make based on the diff.',
       "Do not include a files list in the JSON. File paths are derived from the diff separately.",
       "Avoid repeating the same point across multiple fields.",
     ],
     schemaLines: [
       '  "summary": string,',
-      '  "riskAreas": string[],',
+      ...PR_IMPACT_PROFILE_SCHEMA_LINES,
       '  "testingNotes": string[],',
-      '  "rolloutConcerns": string[],',
       '  "reviewerChecklist": string[]',
     ],
     contextLines:
@@ -114,17 +118,30 @@ export async function generatePRAssistant(
     prompt,
     schema: PRAssistantModelOutput,
     validationErrorPrefix: "Model output failed PR assistant schema validation",
-    normalizeParsedJson: (value) =>
-      normalizeNullableFields(value, [
-        "riskAreas",
+    normalizeParsedJson: (value) => {
+      const normalized = normalizeNullableFields(value, [
         "testingNotes",
-        "rolloutConcerns",
         "reviewerChecklist",
-      ]),
+      ]);
+      if (!normalized || typeof normalized !== "object") {
+        return normalized;
+      }
+
+      return {
+        ...(normalized as Record<string, unknown>),
+        impactProfile: normalizePRImpactProfile(
+          (normalized as Record<string, unknown>).impactProfile
+        ),
+      };
+    },
   });
+  const impactProfile = normalizePRImpactProfile(modelOutput.impactProfile);
 
   return PRAssistantOutput.parse({
     ...modelOutput,
+    impactProfile,
+    riskAreas: impactProfile.riskReasons,
     filesChanged: collectChangedFiles(parsedInput.diff),
+    rolloutConcerns: impactProfile.rolloutImpact,
   });
 }

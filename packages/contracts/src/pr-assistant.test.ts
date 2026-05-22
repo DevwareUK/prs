@@ -16,6 +16,19 @@ describe("PRAssistantOutput", () => {
 
     expect(parsed).toEqual({
       summary: "Adds a shared PR assistant section for generated review guidance.",
+      impactProfile: {
+        riskLevel: "none",
+        riskReasons: [],
+        affectedAreas: [],
+        rolloutImpact: [],
+        migrationImpact: [],
+        configurationImpact: [],
+        flags: {
+          security: false,
+          performance: false,
+        },
+        manualVerification: [],
+      },
       riskAreas: ["Managed section replacement logic in the PR body."],
       filesChanged: ["actions/pr-assistant/src/index.ts"],
       testingNotes: ["pnpm build"],

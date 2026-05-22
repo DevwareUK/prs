@@ -3,6 +3,7 @@ import {
   ALL_PR_ASSISTANT_START_MARKERS,
   PRAssistantOutputType,
 } from "@prs/contracts";
+import { formatPRImpactProfileMarkdown } from "./pr-impact-profile";
 export {
   PR_ASSISTANT_END_MARKER,
   PR_ASSISTANT_START_MARKER,
@@ -16,6 +17,10 @@ const PR_ASSISTANT_SECTION_PATTERN = new RegExp(
   `${buildMarkerGroup(ALL_PR_ASSISTANT_START_MARKERS)}[\\s\\S]*?${buildMarkerGroup(ALL_PR_ASSISTANT_END_MARKERS)}`,
   "m"
 );
+
+type PRAssistantSectionInput =
+  | PRAssistantOutputType
+  | Omit<PRAssistantOutputType, "impactProfile">;
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -37,6 +42,12 @@ function renderBulletSection(
   ];
 }
 
+function hasImpactProfile(
+  assistant: PRAssistantSectionInput
+): assistant is PRAssistantOutputType {
+  return "impactProfile" in assistant;
+}
+
 export function stripManagedPRAssistantSection(
   body: string | undefined
 ): string | undefined {
@@ -52,17 +63,26 @@ export function stripManagedPRAssistantSection(
 }
 
 export function buildPRAssistantSection(
-  assistant: PRAssistantOutputType
+  assistant: PRAssistantSectionInput
 ): string {
   const lines: string[] = ["## PR Assistant", "", "### Summary", assistant.summary, ""];
 
-  lines.push(
-    ...renderBulletSection(
-      "Risk areas",
-      assistant.riskAreas,
-      "None noted."
-    )
-  );
+  if (hasImpactProfile(assistant)) {
+    lines.push(
+      ...formatPRImpactProfileMarkdown(assistant.impactProfile, {
+        headingLevel: 3,
+      }).split("\n"),
+      ""
+    );
+  } else {
+    lines.push(
+      ...renderBulletSection(
+        "Risk areas",
+        assistant.riskAreas,
+        "None noted."
+      )
+    );
+  }
   lines.push(
     ...renderBulletSection(
       "Files changed",
@@ -77,13 +97,15 @@ export function buildPRAssistantSection(
       "None noted."
     )
   );
-  lines.push(
-    ...renderBulletSection(
-      "Rollout concerns",
-      assistant.rolloutConcerns,
-      "None noted."
-    )
-  );
+  if (!hasImpactProfile(assistant)) {
+    lines.push(
+      ...renderBulletSection(
+        "Rollout concerns",
+        assistant.rolloutConcerns,
+        "None noted."
+      )
+    );
+  }
   lines.push(
     ...renderBulletSection(
       "Reviewer checklist",

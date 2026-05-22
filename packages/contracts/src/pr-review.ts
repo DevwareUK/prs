@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEFAULT_PR_IMPACT_PROFILE, PRImpactProfile } from "./pr-impact-profile";
 
 export const PRReviewSeverity = z.enum(["high", "medium", "low"]);
 
@@ -57,6 +58,7 @@ export type PRReviewInputType = z.infer<typeof PRReviewInput>;
 
 export const PRReviewOutput = z.object({
   summary: z.string().trim().min(1, "summary must be non-empty"),
+  impactProfile: PRImpactProfile.default(DEFAULT_PR_IMPACT_PROFILE),
   comments: z.array(PRReviewComment),
   findings: z.array(PRReviewFinding).max(3).default([]),
 });

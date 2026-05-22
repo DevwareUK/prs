@@ -7,6 +7,7 @@ export * from "./path-filter";
 export * from "./pr-assistant";
 export * from "./pr-assistant-body";
 export * from "./pr-description";
+export * from "./pr-impact-profile";
 export * from "./pr-review";
 export * from "./pr-review-render";
 export * from "./repository-config";

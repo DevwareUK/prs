@@ -34,10 +34,10 @@ Start here if you are evaluating `prs` for a team:
 
 | Surface | Why it is part of the primary offer |
 | --- | --- |
-| `actions/pr-review` | Adds AI pull request pre-review signal, higher-level findings, and line-linked review comments in GitHub. Generated setup workflows mark inline comments with hidden PRS metadata, reconcile older PRS-authored review threads before posting, and avoid repeating the same active finding. |
-| `actions/pr-assistant` | Maintains a managed PR assistant section in the pull request body without overwriting unrelated manual content. |
+| `actions/pr-review` | Adds AI pull request pre-review signal, a shared structured impact profile, higher-level findings, and line-linked review comments in GitHub. Generated setup workflows mark inline comments with hidden PRS metadata, reconcile older PRS-authored review threads before posting, and avoid repeating the same active finding. |
+| `actions/pr-assistant` | Maintains a managed PR assistant section in the pull request body without overwriting unrelated manual content and renders the same shared structured impact profile used by PR review. |
 | `actions/test-suggestions` | Posts practical, task-ready test suggestions for the current pull request diff in GitHub. |
-| `prs review` | Runs a local top-risk diff pre-review that surfaces the strongest reviewer-ready concerns before or during a pull request. |
+| `prs review` | Runs a local top-risk diff pre-review that surfaces the shared structured impact profile and strongest reviewer-ready concerns before or during a pull request. |
 | `/prs pr <pr-number> review` | Prepares the live PR checkout plus repo-aware review context for the active Codex session, then writes a consolidated report plus line-linked comment candidates under `.prs/runs` and publishes both a managed PR audit comment and high-confidence inline review comments without editing, committing, pushing, or resolving comments. |
 | `/prs pr <pr-number> address-comments` | Prepares selected GitHub review comments as local `.prs/` artifacts for the active Codex session, then expects verified committed fixes to be pushed with the guarded `prs tool pr push-reviewed <pr-number> --json` path. |
 | `/prs pr <pr-number> fix-tests` | Captures currently failing local verification output on a PR branch, prepares a focused fix snapshot for the active Codex session, then expects verified committed fixes to be pushed through the guarded PR-head push tool. |

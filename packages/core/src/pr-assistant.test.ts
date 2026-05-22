@@ -39,4 +39,51 @@ describe("generatePRAssistant", () => {
     ]);
     expect(result.summary).toContain("stable reviewer format");
   });
+
+  it("returns the shared impact profile for PR assistant output", async () => {
+    const provider: AIProvider = {
+      generateText: vi.fn().mockResolvedValue(
+        JSON.stringify({
+          summary: "Adds a structured impact profile to the assistant section.",
+          impactProfile: {
+            riskLevel: "low",
+            riskReasons: ["The rendered dashboard shape changes."],
+            affectedAreas: ["actions/pr-assistant/src/index.ts"],
+            rolloutImpact: [],
+            migrationImpact: [],
+            configurationImpact: [],
+            flags: {
+              security: false,
+              performance: false,
+            },
+            manualVerification: ["Preview the managed PR assistant section."],
+          },
+          testingNotes: ["Unit tests cover the renderer."],
+          reviewerChecklist: [],
+        })
+      ),
+    };
+
+    const result = await generatePRAssistant(provider, {
+      diff: [
+        "diff --git a/actions/pr-assistant/src/index.ts b/actions/pr-assistant/src/index.ts",
+        "--- a/actions/pr-assistant/src/index.ts",
+        "+++ b/actions/pr-assistant/src/index.ts",
+        "@@ -1,1 +1,1 @@",
+        "-old",
+        "+new",
+      ].join("\n"),
+    });
+
+    expect(result.impactProfile.riskLevel).toBe("low");
+    expect(result.impactProfile.manualVerification).toEqual([
+      "Preview the managed PR assistant section.",
+    ]);
+
+    const request = vi.mocked(provider.generateText).mock.calls[0]?.[0];
+    expect(request?.prompt).toContain('"impactProfile": {');
+    expect(request?.prompt).toContain(
+      "Use the shared impact profile for PR-level risk metadata"
+    );
+  });
 });

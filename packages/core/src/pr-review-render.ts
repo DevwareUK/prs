@@ -3,6 +3,7 @@ import type {
   PRReviewFindingType,
   PRReviewOutputType,
 } from "@prs/contracts";
+import { formatPRImpactProfileMarkdown } from "./pr-impact-profile";
 import {
   MAX_PR_REVIEW_SIGNALS,
   rankPRReviewSignals,
@@ -144,6 +145,8 @@ export function formatPRReviewMarkdown(
       `- ${issue.number !== undefined ? `#${issue.number}: ` : ""}[${issue.title}](${issue.url})`
     );
   }
+
+  lines.push("", formatPRImpactProfileMarkdown(review.impactProfile));
 
   lines.push("", "## Top Risks");
 

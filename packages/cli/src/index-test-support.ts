@@ -1436,6 +1436,19 @@ async function loadCli(options: {
       "<!-- git-ai-test-suggestions -->",
     ],
     GIT_AI_ALIAS_DEPRECATION_MESSAGE: "`git-ai` is deprecated. Use `prs` instead.",
+    DEFAULT_PR_IMPACT_PROFILE: {
+      riskLevel: "none",
+      riskReasons: [],
+      affectedAreas: [],
+      rolloutImpact: [],
+      migrationImpact: [],
+      configurationImpact: [],
+      flags: {
+        security: false,
+        performance: false,
+      },
+      manualVerification: [],
+    },
     includesManagedMarker: (body: string, markers: string[]) =>
       markers.some((marker) => body.includes(marker)),
     ISSUE_PLAN_COMMENT_MARKER: "<!-- prs:issue-plan -->",
@@ -1517,6 +1530,54 @@ async function loadCli(options: {
     PRODUCT_SHORT_NAME: "prs",
     PR_ASSISTANT_END_MARKER: "<!-- prs:pr-assistant:end -->",
     PR_ASSISTANT_START_MARKER: "<!-- prs:pr-assistant:start -->",
+    PRImpactProfile: {
+      parse: (value?: unknown) => {
+        const profile = value && typeof value === "object" ? value as {
+          riskLevel?: unknown;
+          riskReasons?: unknown;
+          affectedAreas?: unknown;
+          rolloutImpact?: unknown;
+          migrationImpact?: unknown;
+          configurationImpact?: unknown;
+          flags?: unknown;
+          manualVerification?: unknown;
+        } : {};
+        const flags = profile.flags && typeof profile.flags === "object"
+          ? profile.flags as { security?: unknown; performance?: unknown }
+          : {};
+
+        return {
+          riskLevel:
+            profile.riskLevel === "low" ||
+            profile.riskLevel === "medium" ||
+            profile.riskLevel === "high"
+              ? profile.riskLevel
+              : "none",
+          riskReasons: Array.isArray(profile.riskReasons)
+            ? profile.riskReasons.filter((item): item is string => typeof item === "string")
+            : [],
+          affectedAreas: Array.isArray(profile.affectedAreas)
+            ? profile.affectedAreas.filter((item): item is string => typeof item === "string")
+            : [],
+          rolloutImpact: Array.isArray(profile.rolloutImpact)
+            ? profile.rolloutImpact.filter((item): item is string => typeof item === "string")
+            : [],
+          migrationImpact: Array.isArray(profile.migrationImpact)
+            ? profile.migrationImpact.filter((item): item is string => typeof item === "string")
+            : [],
+          configurationImpact: Array.isArray(profile.configurationImpact)
+            ? profile.configurationImpact.filter((item): item is string => typeof item === "string")
+            : [],
+          flags: {
+            security: flags.security === true,
+            performance: flags.performance === true,
+          },
+          manualVerification: Array.isArray(profile.manualVerification)
+            ? profile.manualVerification.filter((item): item is string => typeof item === "string")
+            : [],
+        };
+      },
+    },
     REPOSITORY_CONFIG_RELATIVE_PATH: ".prs/config.json",
     REPOSITORY_STATE_DIRECTORY: ".prs",
     LEGACY_REPOSITORY_CONFIG_RELATIVE_PATH: ".git-ai/config.json",

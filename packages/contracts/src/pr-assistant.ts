@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEFAULT_PR_IMPACT_PROFILE, PRImpactProfile } from "./pr-impact-profile";
 
 const PRAssistantItem = z.string().trim().min(1);
 
@@ -13,6 +14,7 @@ export type PRAssistantInputType = z.infer<typeof PRAssistantInput>;
 
 export const PRAssistantOutput = z.object({
   summary: z.string().trim().min(1, "summary must be non-empty"),
+  impactProfile: PRImpactProfile.default(DEFAULT_PR_IMPACT_PROFILE),
   riskAreas: z.array(PRAssistantItem),
   filesChanged: z.array(PRAssistantItem),
   testingNotes: z.array(PRAssistantItem),

@@ -101,10 +101,11 @@ Outputs:
 
 - `summary`
 - `body`
+- `impact_profile_json`
 - `findings_json`
 - `comments_json`
 
-The managed `body` output is written as pre-review signal for a human reviewer. `comments_json` carries severity, confidence, affected file, why-this-matters context, and optional suggested fixes for each candidate comment.
+The managed `body` output is written as pre-review signal for a human reviewer. `impact_profile_json` carries the shared structured PR impact profile used by PR review, PR assistant, and local `prs review`. `comments_json` carries severity, confidence, affected file, why-this-matters context, and optional suggested fixes for each candidate comment.
 
 When `GITHUB_OUTPUT` is not set, outputs are printed to stdout.
 
@@ -147,8 +148,9 @@ Inputs:
 Outputs:
 
 - `summary`
-- `section` with `Summary`, `Risk areas`, `Files changed`, `Testing notes`, `Rollout concerns`, and `Reviewer checklist`
+- `section` with `Summary`, `Impact Profile`, `Files changed`, `Testing notes`, and `Reviewer checklist`
 - `body`
+- `impact_profile_json`
 
 When `GITHUB_OUTPUT` is not set, outputs are printed to stdout.
 
