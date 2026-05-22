@@ -165,6 +165,7 @@ describe("PR prepare-review workflow", () => {
           {
             number: 115,
             title: "Needs my review",
+            html_url: "https://github.com/DevwareUK/prs/pull/115",
             user: { login: "someone-else" },
             assignees: [],
             requested_reviewers: [{ login: "me" }],
@@ -176,6 +177,7 @@ describe("PR prepare-review workflow", () => {
           {
             number: 116,
             title: "Unrelated PR",
+            html_url: "https://github.com/DevwareUK/prs/pull/116",
             user: { login: "someone-else" },
             assignees: [],
             requested_reviewers: [],
@@ -216,6 +218,7 @@ describe("PR prepare-review workflow", () => {
       pullRequests: [
         {
           number: 115,
+          url: "https://github.com/DevwareUK/prs/pull/115",
           reviewRequestedFrom: ["me"],
         },
       ],
@@ -236,6 +239,7 @@ describe("PR prepare-review workflow", () => {
           {
             number: 151,
             title: "Planned issue",
+            html_url: "https://github.com/DevwareUK/prs/issues/151",
             user: { login: "someone-else" },
             assignees: [],
             labels: [],
@@ -244,6 +248,7 @@ describe("PR prepare-review workflow", () => {
           {
             number: 152,
             title: "Pull request returned by issues endpoint",
+            html_url: "https://github.com/DevwareUK/prs/pull/152",
             user: { login: "me" },
             assignees: [],
             labels: [],
@@ -290,6 +295,7 @@ describe("PR prepare-review workflow", () => {
       issues: [
         {
           number: 151,
+          url: "https://github.com/DevwareUK/prs/issues/151",
           hasPrsPlan: true,
         },
       ],
@@ -310,6 +316,7 @@ describe("PR prepare-review workflow", () => {
           {
             number: 117,
             title: "Review me from env",
+            html_url: "https://github.com/DevwareUK/prs/pull/117",
             user: { login: "someone-else" },
             assignees: [],
             requested_reviewers: [{ login: "me" }],
@@ -354,6 +361,7 @@ describe("PR prepare-review workflow", () => {
       pullRequests: [
         {
           number: 117,
+          url: "https://github.com/DevwareUK/prs/pull/117",
           reviewRequestedFrom: ["me"],
         },
       ],

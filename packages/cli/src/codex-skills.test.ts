@@ -73,6 +73,9 @@ describe("managed prs Codex skills", () => {
       "/prs issue`: run `prs tool issue list --actionable --json`"
     );
     expect(markdown).toContain(
+      "/prs issue`: run `prs tool issue list --actionable --json`, show each returned actionable for me issue number, title, and GitHub URL"
+    );
+    expect(markdown).toContain(
       "/prs issue <number>`: run `prs tool issue ready <number> --json`"
     );
     expect(markdown).toContain(
@@ -126,6 +129,9 @@ describe("managed prs Codex skills", () => {
     expect(markdown).toContain(
       "/prs pr`: run `prs tool pr list --actionable --json`"
     );
+    expect(markdown).toContain(
+      "/prs pr`: run `prs tool pr list --actionable --json`, show each returned pull request number, title, and GitHub URL"
+    );
     expect(markdown).toContain("instead of inspecting git refs or source files");
     expect(markdown).toContain("actionable for me");
     expect(markdown).toContain("Do not assume the GitHub CLI (`gh`) is installed");
@@ -154,8 +160,14 @@ describe("managed prs Codex skills", () => {
     expect(reviewMarkdown).toContain("/prs:review tests");
     expect(issueMarkdown).toContain("name: prs:issue");
     expect(issueMarkdown).toContain("/prs:issue <number> --all");
+    expect(issueMarkdown).toContain(
+      "For interactive issue selection, use `prs tool issue list --actionable --json` as the source of truth and show each returned issue with its number, title, and GitHub URL."
+    );
     expect(prMarkdown).toContain("name: prs:pr");
     expect(prMarkdown).toContain("actual PR head branch");
+    expect(prMarkdown).toContain(
+      "For interactive PR selection, use `prs tool pr list --actionable --json` as the source of truth and show each returned pull request with its number, title, and GitHub URL."
+    );
     expect(prMarkdown).toContain("/prs:pr <number> review");
     expect(prMarkdown).toContain("prs tool pr review <number> --json");
     expect(prMarkdown).toContain("write the final report to the returned `reportFilePath`");

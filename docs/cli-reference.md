@@ -33,7 +33,9 @@ Supporting commands:
 - `prs setup`: guided repository onboarding for `prs`
 - `prs setup --update-skills`: refresh only managed Codex `/prs` skills
 - `prs update skills`: refresh managed Codex `/prs` skills after upgrading the CLI
+- `prs tool issue list [--actionable] --json`: list open GitHub issues, optionally filtered to actionable-for-me issues; returned items include number, title, URL, ownership, labels, update time, linked-PR status, and PRS plan status
 - `prs tool issue create (--draft-file <path>|--issue-set <path>) --json`: deterministically create GitHub issues from approved local issue draft artifacts
+- `prs tool pr list [--actionable] --json`: list open GitHub pull requests, optionally filtered to actionable-for-me PRs; returned items include number, title, URL, ownership, branch, labels, update time, and action signals such as conflicts
 - `prs tool pr ready <pr-number> [--all] --json`: fast local PR readiness for `/prs:pr`; checks out the actual PR head branch, fetches and merges the latest PR base branch, reports GitHub-hosted review signals in `prContext`, includes grouped PR comment summaries with source links when comments are available, reports actionable/handled/duplicate/resolved/outdated review-thread counts, and skips broad local verification
 - `prs tool pr review <pr-number> --json`: deterministic local Codex PR review preparation; checks out/syncs the PR head, writes review context plus prompt artifacts, and returns paths where the active Codex session should write the Markdown report plus structured inline review candidates
 - `prs tool pr publish-review <pr-number> --report <path> --comments <path> --json`: publishes the completed local Codex PR review report to the managed PR audit comment and posts high-confidence line-linked review comments on changed lines

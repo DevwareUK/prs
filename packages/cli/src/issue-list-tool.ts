@@ -94,6 +94,10 @@ function normalizeLabels(values: Array<{ name?: string } | undefined> | undefine
     .filter((value): value is string => Boolean(value));
 }
 
+function isCanonicalGitHubIssueUrl(value: string | undefined): value is string {
+  return Boolean(value?.match(/^https:\/\/github\.com\/[^/]+\/[^/]+\/issues\/\d+$/));
+}
+
 function issueHasPlanComment(comments: Array<{ body?: string }>): boolean {
   return comments.some((comment) =>
     ISSUE_PLAN_MARKERS.some((marker) => comment.body?.includes(marker))
@@ -119,6 +123,7 @@ function normalizeIssue(
   payload: {
     number?: number;
     title?: string;
+    html_url?: string;
     user?: { login?: string };
     assignees?: Array<{ login?: string }>;
     labels?: Array<{ name?: string }>;
@@ -132,6 +137,7 @@ function normalizeIssue(
     payload.pull_request ||
     !payload.number ||
     !payload.title ||
+    !isCanonicalGitHubIssueUrl(payload.html_url) ||
     !payload.user?.login ||
     !payload.updated_at
   ) {
@@ -141,6 +147,7 @@ function normalizeIssue(
   return {
     number: payload.number,
     title: payload.title,
+    url: payload.html_url,
     author: payload.user.login,
     assignees: normalizeStringArray(payload.assignees),
     labels: normalizeLabels(payload.labels),

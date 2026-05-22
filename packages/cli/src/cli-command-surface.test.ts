@@ -22,6 +22,19 @@ import {
 } from "./index-test-support";
 
 describe("CLI command surface", () => {
+  it("documents no-number /prs issue and /prs pr URL display", () => {
+    const docs = [
+      readFileSync(resolve(process.cwd(), "README.md"), "utf8"),
+      readFileSync(resolve(process.cwd(), "docs/cli-reference.md"), "utf8"),
+      readFileSync(resolve(process.cwd(), "docs/codex-prs-workflows.md"), "utf8"),
+    ].join("\n");
+
+    expect(docs).toContain("prs tool issue list [--actionable] --json");
+    expect(docs).toContain("prs tool pr list [--actionable] --json");
+    expect(docs).toContain("number, title, and GitHub URL");
+    expect(docs).toContain("include a `url` field");
+  });
+
   it("parses issue draft caller and runtime modes", async () => {
     process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
     const { parseIssueCommandArgs } = await loadCli();

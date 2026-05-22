@@ -45,6 +45,7 @@ describe("issue list tool", () => {
           {
             number: 1,
             title: "Owned by me",
+            html_url: "https://github.com/DevwareUK/prs/issues/1",
             user: { login: "me" },
             assignees: [],
             labels: [],
@@ -53,6 +54,7 @@ describe("issue list tool", () => {
           {
             number: 2,
             title: "Already has a PR",
+            html_url: "https://github.com/DevwareUK/prs/issues/2",
             user: { login: "me" },
             assignees: [{ login: "me" }],
             labels: [{ name: "ready" }],
@@ -61,6 +63,7 @@ describe("issue list tool", () => {
           {
             number: 3,
             title: "Planned issue",
+            html_url: "https://github.com/DevwareUK/prs/issues/3",
             user: { login: "someone-else" },
             assignees: [],
             labels: [],
@@ -69,6 +72,7 @@ describe("issue list tool", () => {
           {
             number: 4,
             title: "Pull request returned by issues endpoint",
+            html_url: "https://github.com/DevwareUK/prs/pull/4",
             user: { login: "me" },
             assignees: [],
             labels: [],
@@ -119,13 +123,89 @@ describe("issue list tool", () => {
       issues: [
         {
           number: 3,
+          url: "https://github.com/DevwareUK/prs/issues/3",
           hasPrsPlan: true,
           hasLinkedOpenPullRequest: false,
         },
         {
           number: 1,
+          url: "https://github.com/DevwareUK/prs/issues/1",
           author: "me",
           hasLinkedOpenPullRequest: false,
+        },
+      ],
+    });
+  });
+
+  it("skips issues without usable GitHub URLs", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({ login: "me" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue([
+          {
+            number: 1,
+            title: "Valid issue",
+            html_url: "https://github.com/DevwareUK/prs/issues/1",
+            user: { login: "me" },
+            assignees: [],
+            labels: [],
+            updated_at: "2026-05-10T10:00:00Z",
+          },
+          {
+            number: 2,
+            title: "Malformed URL",
+            html_url: "not-a-github-url",
+            user: { login: "me" },
+            assignees: [],
+            labels: [],
+            updated_at: "2026-05-11T10:00:00Z",
+          },
+          {
+            number: 3,
+            title: "Missing URL",
+            user: { login: "me" },
+            assignees: [],
+            labels: [],
+            updated_at: "2026-05-12T10:00:00Z",
+          },
+        ]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue([]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue([]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue([]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue([]),
+      });
+
+    await expect(
+      listIssuesTool({
+        actionable: false,
+        env: { GH_TOKEN: "token" },
+        fetchImpl,
+        repoRoot: "/repo",
+        runCommand: () => "git@github.com:DevwareUK/prs.git",
+      })
+    ).resolves.toMatchObject({
+      status: "ready",
+      issues: [
+        {
+          number: 1,
+          url: "https://github.com/DevwareUK/prs/issues/1",
         },
       ],
     });
