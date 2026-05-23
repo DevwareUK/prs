@@ -197,6 +197,7 @@ Important behavior:
 - PR creation uses the selected issue branch base, defaulting to the configured `baseBranch` and using the overlapping PR head branch when the issue branch was prepared from that PR
 - GitHub-backed PR creation requires `gh` to be installed and authenticated
 - GitHub-backed issue plan comments require `GH_TOKEN` or `GITHUB_TOKEN`, or an authenticated `gh` session, when they are created or refreshed
+- managed refinement, issue-plan, issue-spec, and audit comments include visible `prs automation note` framing; GitHub still displays the author from the publishing credential, so use bot, GitHub App, or service-account credentials when comments must appear from a bot account
 - if an issue resolution plan comment exists, `prs issue prepare <number>` and full `prs issue <number>` runs copy the latest edited plan into the generated issue snapshot
 - when `forge.type` is `github`, issue fetching uses `gh issue view` when available, otherwise the GitHub API
 - when `forge.type` is `github`, GitHub API access for issue fetching, plan comments, or issue creation uses `GH_TOKEN` or `GITHUB_TOKEN` when present
