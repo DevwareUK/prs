@@ -43,7 +43,7 @@ cd /path/to/your-repo
 prs setup
 ```
 
-`prs setup` detects the repository root, suggests repo-aware defaults for the base branch, verification command, forge, Codex-first runtime, the Codex-only `ai.issue.useCodexSuperpowers` flag, and extra AI exclusions, then offers a fast "use the recommended setup" confirmation path. It writes setup-managed `.prs/config.json` and `.prs/.gitignore`, can optionally add a minimal `AGENTS.md` scaffold for repo-specific agent guidance, and for GitHub repositories asks which recommended PR-focused workflows should be enabled under `.github/workflows/prs-*.yml`. Enabled managed workflows are installed or updated; disabled prs-managed workflow files are removed so they do not keep running. Unmanaged workflow files with the same names are left untouched. When setup finds managed legacy `git-ai-*.yml` workflow files for enabled actions, it migrates them to the new `prs-*.yml` filenames instead of leaving duplicate managed files behind. When setup cannot determine a value confidently, it prints an explicit warning before asking you to confirm or replace the suggestion.
+`prs setup` detects the repository root, suggests repo-aware defaults for the base branch, verification command, forge, Codex-first runtime, the Codex-only `ai.issue.useCodexSuperpowers` flag, and extra AI exclusions, then offers a fast "use the recommended setup" confirmation path. It writes setup-managed `.prs/config.json` and `.prs/.gitignore`, can optionally add a minimal `AGENTS.md` scaffold for repo-specific agent guidance, and for GitHub repositories asks which recommended PR-focused workflows should be enabled under `.github/workflows/prs-*.yml`. Enabled managed workflows are installed or updated; disabled prs-managed workflow files are removed so they do not keep running. Unmanaged workflow files with the same names are left untouched. When setup cannot determine a value confidently, it prints an explicit warning before asking you to confirm or replace the suggestion.
 
 Setup leaves the repository root `.gitignore` unchanged during normal setup. If an existing root ignore pattern such as `.prs/` prevents `.prs/config.json` and `.prs/.gitignore` from being tracked, setup prints an actionable warning and leaves that repository policy for you to narrow intentionally.
 
@@ -82,7 +82,7 @@ You only need extra tooling for advanced or deeper local workflows:
 - `codex` plus authenticated GitHub access for `prs issue <number> --mode unattended`, `prs issue <number> <number> ...`, and `prs issue batch ...`
 - authenticated `gh`, `GH_TOKEN`, or `GITHUB_TOKEN` for GitHub-backed issue and pull request flows
 
-`prs` resolves the active repository from your current Git working tree at runtime. It loads `.env` and `.prs/config.json` from that repository root, not from the CLI build location. If a repository has not been migrated yet, `prs` falls back to legacy `.git-ai/` config and workflow state when no `.prs/` equivalent exists.
+`prs` resolves the active repository from your current Git working tree at runtime. It loads `.env` and `.prs/config.json` from that repository root, not from the CLI build location.
 
 ### Runtime and provider asymmetry
 

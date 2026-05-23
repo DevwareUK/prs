@@ -403,7 +403,7 @@ describe("Issue draft and setup workflows", () => {
   });
 
   it("requires issue draft to receive a skill-produced draft or explicit runtime opt-in", async () => {
-    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    process.env.PRS_DISABLE_AUTO_RUN = "1";
     const { parseIssueCommandArgs } = await loadCli();
 
     expect(() => parseIssueCommandArgs(["issue", "draft"])).toThrow(

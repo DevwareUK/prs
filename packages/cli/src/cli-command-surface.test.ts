@@ -36,7 +36,7 @@ describe("CLI command surface", () => {
   });
 
   it("parses issue draft caller and runtime modes", async () => {
-    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    process.env.PRS_DISABLE_AUTO_RUN = "1";
     const { parseIssueCommandArgs } = await loadCli();
 
     expect(
@@ -69,7 +69,7 @@ describe("CLI command surface", () => {
   });
 
   it("parses issue plan as a dedicated issue subcommand", async () => {
-    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    process.env.PRS_DISABLE_AUTO_RUN = "1";
     const { parseIssueCommandArgs } = await loadCli();
 
     expect(parseIssueCommandArgs(["issue", "plan", "42"])).toEqual({
@@ -81,7 +81,7 @@ describe("CLI command surface", () => {
   });
 
   it("parses issue plan refresh aliases", async () => {
-    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    process.env.PRS_DISABLE_AUTO_RUN = "1";
     const { parseIssueCommandArgs } = await loadCli();
 
     expect(parseIssueCommandArgs(["issue", "plan", "42", "--refresh"])).toEqual({
@@ -249,7 +249,7 @@ describe("CLI command surface", () => {
   });
 
   it("parses issue refine as a dedicated issue subcommand", async () => {
-    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    process.env.PRS_DISABLE_AUTO_RUN = "1";
     const { parseIssueCommandArgs } = await loadCli();
 
     expect(parseIssueCommandArgs(["issue", "refine", "42"])).toEqual({
@@ -259,7 +259,7 @@ describe("CLI command surface", () => {
   });
 
   it("rejects extra issue refine arguments", async () => {
-    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    process.env.PRS_DISABLE_AUTO_RUN = "1";
     const { parseIssueCommandArgs } = await loadCli();
 
     expect(() => parseIssueCommandArgs(["issue", "refine", "42", "extra"])).toThrow(
@@ -1081,7 +1081,7 @@ describe("CLI command surface", () => {
   });
 
   it("parses issue batch as an unattended issue subcommand", async () => {
-    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    process.env.PRS_DISABLE_AUTO_RUN = "1";
     const { parseIssueCommandArgs } = await loadCli();
 
     expect(
@@ -1094,7 +1094,7 @@ describe("CLI command surface", () => {
   });
 
   it("parses multiple issue numbers as a parallel unattended issue run", async () => {
-    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    process.env.PRS_DISABLE_AUTO_RUN = "1";
     const { parseIssueCommandArgs } = await loadCli();
 
     expect(parseIssueCommandArgs(["issue", "123", "124", "--mode", "unattended"])).toEqual({
@@ -1105,7 +1105,7 @@ describe("CLI command surface", () => {
   });
 
   it("rejects interactive batch issue mode", async () => {
-    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    process.env.PRS_DISABLE_AUTO_RUN = "1";
     const { parseIssueCommandArgs } = await loadCli();
 
     expect(() =>
@@ -1116,7 +1116,7 @@ describe("CLI command surface", () => {
   });
 
   it("parses pr address-comments as the preferred review-comment subcommand", async () => {
-    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    process.env.PRS_DISABLE_AUTO_RUN = "1";
     const { parsePrCommandArgs } = await loadCli();
 
     expect(parsePrCommandArgs(["pr", "address-comments", "73"])).toEqual({
@@ -1130,7 +1130,7 @@ describe("CLI command surface", () => {
   });
 
   it("parses pr fix-tests as the preferred failing-test repair subcommand", async () => {
-    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    process.env.PRS_DISABLE_AUTO_RUN = "1";
     const { parsePrCommandArgs } = await loadCli();
 
     expect(parsePrCommandArgs(["pr", "fix-tests", "74"])).toEqual({
@@ -1147,7 +1147,7 @@ describe("CLI command surface", () => {
   });
 
   it("parses pr add-tests as the suggested-test addition subcommand", async () => {
-    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    process.env.PRS_DISABLE_AUTO_RUN = "1";
     const { parsePrCommandArgs } = await loadCli();
 
     expect(parsePrCommandArgs(["pr", "add-tests", "92"])).toEqual({
@@ -1157,7 +1157,7 @@ describe("CLI command surface", () => {
   });
 
   it("rejects retired direct pr prepare-review command", async () => {
-    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    process.env.PRS_DISABLE_AUTO_RUN = "1";
     const { parsePrCommandArgs } = await loadCli();
 
     expect(() => parsePrCommandArgs(["pr", "prepare-review", "75"])).toThrow(
@@ -1166,7 +1166,7 @@ describe("CLI command surface", () => {
   });
 
   it("parses pr resolve-conflicts as a dedicated pr subcommand", async () => {
-    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    process.env.PRS_DISABLE_AUTO_RUN = "1";
     const { parsePrCommandArgs } = await loadCli();
 
     expect(parsePrCommandArgs(["pr", "resolve-conflicts", "76"])).toEqual({
@@ -1176,7 +1176,7 @@ describe("CLI command surface", () => {
   });
 
   it("rejects explicit codex launcher commands with migration guidance", async () => {
-    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    process.env.PRS_DISABLE_AUTO_RUN = "1";
     const { parseCodexCommand } = await loadCli();
 
     for (const args of [
@@ -1192,7 +1192,7 @@ describe("CLI command surface", () => {
   });
 
   it("parses audit publish for issue artifacts", async () => {
-    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    process.env.PRS_DISABLE_AUTO_RUN = "1";
     const { parseAuditCommandArgs } = await loadCli();
 
     expect(
@@ -1216,7 +1216,7 @@ describe("CLI command surface", () => {
   });
 
   it("rejects audit publish without a target", async () => {
-    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    process.env.PRS_DISABLE_AUTO_RUN = "1";
     const { parseAuditCommandArgs } = await loadCli();
 
     expect(() =>
@@ -1319,7 +1319,7 @@ describe("CLI command surface", () => {
   });
 
   it("parses repo-level test-backlog flags for the CLI", async () => {
-    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    process.env.PRS_DISABLE_AUTO_RUN = "1";
     const { parseTestBacklogCommandArgs } = await import("./index");
 
     const options = parseTestBacklogCommandArgs([
@@ -1358,7 +1358,7 @@ describe("CLI command surface", () => {
   });
 
   it("parses feature-backlog flags with an explicit repository path", async () => {
-    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    process.env.PRS_DISABLE_AUTO_RUN = "1";
     const { parseFeatureBacklogCommandArgs } = await loadCli();
 
     const options = parseFeatureBacklogCommandArgs([
@@ -1393,7 +1393,7 @@ describe("CLI command surface", () => {
   });
 
   it("parses review flags for local PR review", async () => {
-    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    process.env.PRS_DISABLE_AUTO_RUN = "1";
     const { parseReviewCommandArgs } = await import("./index");
 
     const options = parseReviewCommandArgs([
@@ -1451,21 +1451,6 @@ describe("CLI command surface", () => {
     expect(stdout.output()).not.toContain("prs codex");
     expect(stdout.output()).toContain("prs pr address-comments <pr-number>");
     expect(stdout.output()).toContain("prs pr add-tests <pr-number>");
-  });
-
-  it("prints a deprecation notice when invoked through the legacy git-ai alias", async () => {
-    const { run } = await loadCli();
-
-    process.argv = ["node", "git-ai", "--help"];
-
-    const stdout = captureStdout();
-    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
-    await run();
-
-    expect(warning).toHaveBeenCalledWith(
-      expect.stringContaining("`git-ai` is deprecated")
-    );
-    expect(stdout.output()).toContain("prs pr address-comments <pr-number>");
   });
 
   it("prints a beta workflow notice before feature-backlog output", async () => {
@@ -1554,7 +1539,7 @@ describe("CLI command surface", () => {
   });
 
   it("rejects unexpected setup arguments", async () => {
-    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    process.env.PRS_DISABLE_AUTO_RUN = "1";
     const { parseSetupCommandArgs } = await loadCli();
 
     expect(() => parseSetupCommandArgs(["setup", "--force"])).toThrow(
@@ -1563,7 +1548,7 @@ describe("CLI command surface", () => {
   });
 
   it("parses update skills command", async () => {
-    process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
+    process.env.PRS_DISABLE_AUTO_RUN = "1";
     const { parseUpdateCommandArgs } = await loadCli();
 
     expect(parseUpdateCommandArgs(["update", "skills"])).toEqual({ action: "skills" });

@@ -16072,15 +16072,6 @@ var require_dist = __commonJS({
     var index_exports = {};
     __export2(index_exports, {
       ACTION_REPOSITORY: () => ACTION_REPOSITORY,
-      ALL_ISSUE_PLAN_COMMENT_MARKERS: () => ALL_ISSUE_PLAN_COMMENT_MARKERS,
-      ALL_ISSUE_SPEC_COMMENT_MARKERS: () => ALL_ISSUE_SPEC_COMMENT_MARKERS,
-      ALL_ISSUE_TO_PR_COMMENT_MARKERS: () => ALL_ISSUE_TO_PR_COMMENT_MARKERS,
-      ALL_PR_ASSISTANT_END_MARKERS: () => ALL_PR_ASSISTANT_END_MARKERS2,
-      ALL_PR_ASSISTANT_START_MARKERS: () => ALL_PR_ASSISTANT_START_MARKERS2,
-      ALL_PR_REVIEW_COMMENT_MARKERS: () => ALL_PR_REVIEW_COMMENT_MARKERS,
-      ALL_SETUP_SECTION_END_MARKERS: () => ALL_SETUP_SECTION_END_MARKERS,
-      ALL_SETUP_SECTION_START_MARKERS: () => ALL_SETUP_SECTION_START_MARKERS,
-      ALL_TEST_SUGGESTIONS_COMMENT_MARKERS: () => ALL_TEST_SUGGESTIONS_COMMENT_MARKERS,
       CiIntegrationAssessment: () => CiIntegrationAssessment,
       CiIntegrationStatus: () => CiIntegrationStatus,
       CommitMessageInput: () => CommitMessageInput,
@@ -16097,7 +16088,6 @@ var require_dist = __commonJS({
       FeatureBacklogSuggestion: () => FeatureBacklogSuggestion,
       FrameworkRecommendation: () => FrameworkRecommendation,
       GENERATED_BY_SETUP_HEADER: () => GENERATED_BY_SETUP_HEADER,
-      GIT_AI_ALIAS_DEPRECATION_MESSAGE: () => GIT_AI_ALIAS_DEPRECATION_MESSAGE,
       ISSUE_PLAN_COMMENT_MARKER: () => ISSUE_PLAN_COMMENT_MARKER,
       ISSUE_SPEC_COMMENT_MARKER: () => ISSUE_SPEC_COMMENT_MARKER,
       ISSUE_TO_PR_COMMENT_MARKER: () => ISSUE_TO_PR_COMMENT_MARKER,
@@ -16114,21 +16104,6 @@ var require_dist = __commonJS({
       IssueResolutionPlanInput: () => IssueResolutionPlanInput,
       IssueResolutionPlanModelOutput: () => IssueResolutionPlanModelOutput,
       IssueResolutionPlanOutput: () => IssueResolutionPlanOutput,
-      LEGACY_ACTION_REPOSITORY: () => LEGACY_ACTION_REPOSITORY,
-      LEGACY_GENERATED_BY_SETUP_HEADER: () => LEGACY_GENERATED_BY_SETUP_HEADER,
-      LEGACY_ISSUE_PLAN_COMMENT_MARKER: () => LEGACY_ISSUE_PLAN_COMMENT_MARKER,
-      LEGACY_ISSUE_SPEC_COMMENT_MARKER: () => LEGACY_ISSUE_SPEC_COMMENT_MARKER,
-      LEGACY_ISSUE_TO_PR_COMMENT_MARKER: () => LEGACY_ISSUE_TO_PR_COMMENT_MARKER,
-      LEGACY_PACKAGE_SCOPE: () => LEGACY_PACKAGE_SCOPE,
-      LEGACY_PRODUCT_SHORT_NAME: () => LEGACY_PRODUCT_SHORT_NAME,
-      LEGACY_PR_ASSISTANT_END_MARKER: () => LEGACY_PR_ASSISTANT_END_MARKER,
-      LEGACY_PR_ASSISTANT_START_MARKER: () => LEGACY_PR_ASSISTANT_START_MARKER,
-      LEGACY_PR_REVIEW_COMMENT_MARKER: () => LEGACY_PR_REVIEW_COMMENT_MARKER,
-      LEGACY_REPOSITORY_CONFIG_RELATIVE_PATH: () => LEGACY_REPOSITORY_CONFIG_RELATIVE_PATH,
-      LEGACY_REPOSITORY_STATE_DIRECTORY: () => LEGACY_REPOSITORY_STATE_DIRECTORY,
-      LEGACY_SETUP_SECTION_END: () => LEGACY_SETUP_SECTION_END,
-      LEGACY_SETUP_SECTION_START: () => LEGACY_SETUP_SECTION_START,
-      LEGACY_TEST_SUGGESTIONS_COMMENT_MARKER: () => LEGACY_TEST_SUGGESTIONS_COMMENT_MARKER,
       PACKAGE_SCOPE: () => PACKAGE_SCOPE,
       PRAssistantInput: () => PRAssistantInput2,
       PRAssistantOutput: () => PRAssistantOutput,
@@ -16189,73 +16164,21 @@ var require_dist = __commonJS({
     });
     module2.exports = __toCommonJS2(index_exports);
     var PRODUCT_SHORT_NAME = "prs";
-    var LEGACY_PRODUCT_SHORT_NAME = "git-ai";
     var PRODUCT_DISPLAY_NAME = "Pull Request Smith";
     var PACKAGE_SCOPE = "@prs";
-    var LEGACY_PACKAGE_SCOPE = "@git-ai";
     var REPOSITORY_STATE_DIRECTORY = ".prs";
-    var LEGACY_REPOSITORY_STATE_DIRECTORY = ".git-ai";
     var REPOSITORY_CONFIG_RELATIVE_PATH = `${REPOSITORY_STATE_DIRECTORY}/config.json`;
-    var LEGACY_REPOSITORY_CONFIG_RELATIVE_PATH = `${LEGACY_REPOSITORY_STATE_DIRECTORY}/config.json`;
     var PR_ASSISTANT_START_MARKER4 = "<!-- prs:pr-assistant:start -->";
     var PR_ASSISTANT_END_MARKER4 = "<!-- prs:pr-assistant:end -->";
-    var LEGACY_PR_ASSISTANT_START_MARKER = "<!-- git-ai:pr-assistant:start -->";
-    var LEGACY_PR_ASSISTANT_END_MARKER = "<!-- git-ai:pr-assistant:end -->";
-    var ALL_PR_ASSISTANT_START_MARKERS2 = [
-      PR_ASSISTANT_START_MARKER4,
-      LEGACY_PR_ASSISTANT_START_MARKER
-    ];
-    var ALL_PR_ASSISTANT_END_MARKERS2 = [
-      PR_ASSISTANT_END_MARKER4,
-      LEGACY_PR_ASSISTANT_END_MARKER
-    ];
     var ISSUE_PLAN_COMMENT_MARKER = "<!-- prs:issue-plan -->";
-    var LEGACY_ISSUE_PLAN_COMMENT_MARKER = "<!-- git-ai:issue-plan -->";
-    var ALL_ISSUE_PLAN_COMMENT_MARKERS = [
-      ISSUE_PLAN_COMMENT_MARKER,
-      LEGACY_ISSUE_PLAN_COMMENT_MARKER
-    ];
     var ISSUE_SPEC_COMMENT_MARKER = "<!-- prs:issue-spec -->";
-    var LEGACY_ISSUE_SPEC_COMMENT_MARKER = "<!-- git-ai:issue-spec -->";
-    var ALL_ISSUE_SPEC_COMMENT_MARKERS = [
-      ISSUE_SPEC_COMMENT_MARKER,
-      LEGACY_ISSUE_SPEC_COMMENT_MARKER
-    ];
     var PR_REVIEW_COMMENT_MARKER = "<!-- prs:pr-review -->";
-    var LEGACY_PR_REVIEW_COMMENT_MARKER = "<!-- git-ai-pr-review -->";
-    var ALL_PR_REVIEW_COMMENT_MARKERS = [
-      PR_REVIEW_COMMENT_MARKER,
-      LEGACY_PR_REVIEW_COMMENT_MARKER
-    ];
     var TEST_SUGGESTIONS_COMMENT_MARKER = "<!-- prs:test-suggestions -->";
-    var LEGACY_TEST_SUGGESTIONS_COMMENT_MARKER = "<!-- git-ai-test-suggestions -->";
-    var ALL_TEST_SUGGESTIONS_COMMENT_MARKERS = [
-      TEST_SUGGESTIONS_COMMENT_MARKER,
-      LEGACY_TEST_SUGGESTIONS_COMMENT_MARKER
-    ];
     var ISSUE_TO_PR_COMMENT_MARKER = "<!-- prs:issue-to-pr -->";
-    var LEGACY_ISSUE_TO_PR_COMMENT_MARKER = "<!-- git-ai:issue-to-pr -->";
-    var ALL_ISSUE_TO_PR_COMMENT_MARKERS = [
-      ISSUE_TO_PR_COMMENT_MARKER,
-      LEGACY_ISSUE_TO_PR_COMMENT_MARKER
-    ];
     var SETUP_SECTION_START = "<!-- prs:setup:start -->";
     var SETUP_SECTION_END = "<!-- prs:setup:end -->";
-    var LEGACY_SETUP_SECTION_START = "<!-- git-ai:setup:start -->";
-    var LEGACY_SETUP_SECTION_END = "<!-- git-ai:setup:end -->";
-    var ALL_SETUP_SECTION_START_MARKERS = [
-      SETUP_SECTION_START,
-      LEGACY_SETUP_SECTION_START
-    ];
-    var ALL_SETUP_SECTION_END_MARKERS = [
-      SETUP_SECTION_END,
-      LEGACY_SETUP_SECTION_END
-    ];
     var GENERATED_BY_SETUP_HEADER = "# Generated by prs setup";
-    var LEGACY_GENERATED_BY_SETUP_HEADER = "# Generated by git-ai setup";
     var ACTION_REPOSITORY = "DevwareUK/prs";
-    var LEGACY_ACTION_REPOSITORY = "DevwareUK/git-ai";
-    var GIT_AI_ALIAS_DEPRECATION_MESSAGE = "`git-ai` is deprecated. Use `prs` instead.";
     function includesManagedMarker(body, markers) {
       return markers.some((marker) => body.includes(marker));
     }
@@ -16834,7 +16757,7 @@ var require_dist2 = __commonJS({
       stripManagedPRAssistantSection: () => stripManagedPRAssistantSection2
     });
     module2.exports = __toCommonJS2(index_exports);
-    var import_contracts6 = require_dist();
+    var import_contracts5 = require_dist();
     var StructuredGenerationError = class extends Error {
       kind;
       rawResponse;
@@ -16986,19 +16909,19 @@ ${formatValidationIssues(validationIssues)}`,
       ].join("\n");
     }
     function normalizeCommitMessageOutput(value) {
-      return import_contracts6.CommitMessageOutput.parse({
+      return import_contracts5.CommitMessageOutput.parse({
         title: value.title,
         body: value.body ?? void 0
       });
     }
     async function generateCommitMessage(provider, diff) {
-      const parsedInput = import_contracts6.CommitMessageInput.parse({ diff });
+      const parsedInput = import_contracts5.CommitMessageInput.parse({ diff });
       const prompt = buildPrompt(parsedInput);
       const modelOutput = await generateStructuredOutput({
         provider,
         systemPrompt: COMMIT_MESSAGE_SYSTEM_PROMPT,
         prompt,
-        schema: import_contracts6.CommitMessageModelOutput,
+        schema: import_contracts5.CommitMessageModelOutput,
         validationErrorPrefix: "Model output failed commit message schema validation"
       });
       return normalizeCommitMessageOutput(modelOutput);
@@ -17737,7 +17660,7 @@ ${formatValidationIssues(validationIssues)}`,
       });
       return normalizeIssueDraftOutput(modelOutput);
     }
-    var import_contracts62 = require_dist();
+    var import_contracts6 = require_dist();
     var ISSUE_RESOLUTION_PLAN_SYSTEM_PROMPT = [
       "You are a senior software engineer planning implementation work for a GitHub issue.",
       "Generate a concrete, editable resolution plan that another engineer or coding agent can follow.",
@@ -17789,16 +17712,16 @@ ${formatValidationIssues(validationIssues)}`,
       return sections.join("\n");
     }
     function normalizeIssueResolutionPlanOutput(value) {
-      return import_contracts62.IssueResolutionPlanOutput.parse(value);
+      return import_contracts6.IssueResolutionPlanOutput.parse(value);
     }
     async function generateIssueResolutionPlan(provider, input) {
-      const parsedInput = import_contracts62.IssueResolutionPlanInput.parse(input);
+      const parsedInput = import_contracts6.IssueResolutionPlanInput.parse(input);
       const prompt = buildPrompt4(parsedInput);
       const modelOutput = await generateStructuredOutput({
         provider,
         systemPrompt: ISSUE_RESOLUTION_PLAN_SYSTEM_PROMPT,
         prompt,
-        schema: import_contracts62.IssueResolutionPlanModelOutput,
+        schema: import_contracts6.IssueResolutionPlanModelOutput,
         validationErrorPrefix: "Model output failed issue resolution plan schema validation",
         normalizeParsedJson: (value) => normalizeNullableFields(value, ["openQuestions"])
       });
@@ -18032,16 +17955,12 @@ ${formatValidationIssues(validationIssues)}`,
     }
     var import_contracts9 = require_dist();
     var import_contracts10 = require_dist();
-    var import_contracts11 = require_dist();
     var PR_ASSISTANT_SECTION_PATTERN2 = new RegExp(
-      `${buildMarkerGroup2(import_contracts9.ALL_PR_ASSISTANT_START_MARKERS)}[\\s\\S]*?${buildMarkerGroup2(import_contracts9.ALL_PR_ASSISTANT_END_MARKERS)}`,
+      `${escapeRegExp2(import_contracts9.PR_ASSISTANT_START_MARKER)}[\\s\\S]*?${escapeRegExp2(import_contracts9.PR_ASSISTANT_END_MARKER)}`,
       "m"
     );
     function escapeRegExp2(value) {
       return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    }
-    function buildMarkerGroup2(markers) {
-      return `(?:${markers.map((marker) => escapeRegExp2(marker)).join("|")})`;
     }
     function renderBulletSection2(title, items, emptyState) {
       return [
@@ -18115,9 +18034,9 @@ ${formatValidationIssues(validationIssues)}`,
     }
     function mergePRAssistantSection2(existingBody, section) {
       const managedSection = [
-        import_contracts11.PR_ASSISTANT_START_MARKER,
+        import_contracts9.PR_ASSISTANT_START_MARKER,
         section,
-        import_contracts11.PR_ASSISTANT_END_MARKER
+        import_contracts9.PR_ASSISTANT_END_MARKER
       ].join("\n");
       if (!existingBody?.trim()) {
         return managedSection;
@@ -18130,7 +18049,7 @@ ${formatValidationIssues(validationIssues)}`,
 
 ${managedSection}`;
     }
-    var import_contracts12 = require_dist();
+    var import_contracts11 = require_dist();
     var PR_DESCRIPTION_SYSTEM_PROMPT = [
       "You are a senior software engineer writing a GitHub pull request description.",
       "Be concise but informative.",
@@ -18166,18 +18085,18 @@ ${managedSection}`;
       });
     }
     async function generatePRDescription(provider, input) {
-      const parsedInput = import_contracts12.PRDescriptionInput.parse(input);
+      const parsedInput = import_contracts11.PRDescriptionInput.parse(input);
       const prompt = buildPrompt6(parsedInput);
       const modelOutput = await generateStructuredOutput({
         provider,
         systemPrompt: PR_DESCRIPTION_SYSTEM_PROMPT,
         prompt,
-        schema: import_contracts12.PRDescriptionOutput,
+        schema: import_contracts11.PRDescriptionOutput,
         validationErrorPrefix: "Model output failed PR description schema validation"
       });
       return modelOutput;
     }
-    var import_contracts13 = require_dist();
+    var import_contracts12 = require_dist();
     var MAX_PR_REVIEW_SIGNALS = 5;
     var SEVERITY_WEIGHT = {
       high: 300,
@@ -18437,20 +18356,20 @@ ${managedSection}`;
           (finding) => normalizeNullableFields(finding, ["suggestedFix"])
         );
       }
-      const parsedReview = import_contracts13.PRReviewOutput.safeParse(normalized);
+      const parsedReview = import_contracts12.PRReviewOutput.safeParse(normalized);
       if (!parsedReview.success) {
         return normalized;
       }
       return trimPRReviewOutput(parsedReview.data);
     }
     async function generatePRReview(provider, input) {
-      const parsedInput = import_contracts13.PRReviewInput.parse(input);
+      const parsedInput = import_contracts12.PRReviewInput.parse(input);
       const prompt = buildPrompt7(parsedInput);
       return generateStructuredOutput({
         provider,
         systemPrompt: PR_REVIEW_SYSTEM_PROMPT,
         prompt,
-        schema: import_contracts13.PRReviewOutput,
+        schema: import_contracts12.PRReviewOutput,
         validationErrorPrefix: "Model output failed PR review schema validation",
         normalizeParsedJson: normalizeModelOutput
       });
@@ -18598,7 +18517,7 @@ ${managedSection}`;
       }
       return result;
     }
-    var import_contracts14 = require_dist();
+    var import_contracts13 = require_dist();
     var REVIEW_SUMMARY_SYSTEM_PROMPT = [
       "You are a senior software engineer reviewing a GitHub pull request.",
       "Write a concise PR-level review summary for another human reviewer.",
@@ -18651,20 +18570,20 @@ ${managedSection}`;
       ].join("\n");
     }
     async function generateReviewSummary(provider, input) {
-      const parsedInput = import_contracts14.ReviewSummaryInput.parse(input);
+      const parsedInput = import_contracts13.ReviewSummaryInput.parse(input);
       const prompt = buildPrompt8(parsedInput);
       return generateStructuredOutput({
         provider,
         systemPrompt: REVIEW_SUMMARY_SYSTEM_PROMPT,
         prompt,
-        schema: import_contracts14.ReviewSummaryOutput,
+        schema: import_contracts13.ReviewSummaryOutput,
         validationErrorPrefix: "Model output failed review summary schema validation",
         normalizeParsedJson: (value) => normalizeNullableFields(value, ["missingTests"])
       });
     }
     var import_node_fs22 = require("fs");
     var import_node_path22 = require("path");
-    var import_contracts15 = require_dist();
+    var import_contracts14 = require_dist();
     var SKIP_DIRECTORIES2 = /* @__PURE__ */ new Set([
       ".git",
       ".prs",
@@ -19521,7 +19440,7 @@ ${managedSection}`;
       return `Repository scan found ${sourceFileCount} source file${sourceFileCount === 1 ? "" : "s"}, ${setup.testFileCount} test file${setup.testFileCount === 1 ? "" : "s"}, and ${frameworkSummary}. Current testing setup is ${setup.status} and CI test integration is ${ciSummary}.${recommendationSummary} Highest-value gaps focus on ${topPriorities}.`;
     }
     async function analyzeTestBacklog(input) {
-      const parsed = import_contracts15.TestBacklogInput.parse(input);
+      const parsed = import_contracts14.TestBacklogInput.parse(input);
       const repoRoot = (0, import_node_path22.resolve)(parsed.repoRoot);
       const excludePaths = resolveRepositoryConfig({
         aiContext: {
@@ -19561,14 +19480,14 @@ ${managedSection}`;
       const notableCoverageGaps = sortedFindings.map(
         (finding) => `${finding.title} (${finding.priority})`
       );
-      return import_contracts15.TestBacklogOutput.parse({
+      return import_contracts14.TestBacklogOutput.parse({
         summary: summarizeAnalysis2(setup, sortedFindings, snapshot.sourceFiles.length),
         currentTestingSetup: setup,
         notableCoverageGaps,
         findings: sortedFindings
       });
     }
-    var import_contracts16 = require_dist();
+    var import_contracts15 = require_dist();
     var TEST_SUGGESTIONS_SYSTEM_PROMPT = [
       "You are a senior software engineer planning automated tests for a GitHub pull request.",
       "Suggest practical, implementation-focused tests that would add meaningful coverage.",
@@ -19759,20 +19678,20 @@ ${managedSection}`;
       return result;
     }
     async function generateTestSuggestions(provider, input) {
-      const parsedInput = import_contracts16.TestSuggestionsInput.parse(input);
+      const parsedInput = import_contracts15.TestSuggestionsInput.parse(input);
       const prompt = buildPrompt9(parsedInput);
       const output = await generateStructuredOutput({
         provider,
         systemPrompt: TEST_SUGGESTIONS_SYSTEM_PROMPT,
         prompt,
-        schema: import_contracts16.TestSuggestionsOutput,
+        schema: import_contracts15.TestSuggestionsOutput,
         validationErrorPrefix: "Model output failed test suggestions schema validation",
         normalizeParsedJson: normalizeModelOutput2
       });
       return filterResolvedDuplicates(output, parsedInput);
     }
     async function assessAddressedTestSuggestions(provider, input) {
-      const parsedInput = import_contracts16.TestSuggestionAddressedAssessmentInput.parse(input);
+      const parsedInput = import_contracts15.TestSuggestionAddressedAssessmentInput.parse(input);
       const uncheckedSuggestionIds = new Set(
         parsedInput.suggestions.filter((suggestion) => !suggestion.addressed).map((suggestion) => suggestion.suggestionId)
       );
@@ -19783,7 +19702,7 @@ ${managedSection}`;
         provider,
         systemPrompt: TEST_SUGGESTION_ADDRESSED_ASSESSMENT_SYSTEM_PROMPT,
         prompt: buildAddressedAssessmentPrompt(parsedInput),
-        schema: import_contracts16.TestSuggestionAddressedAssessmentOutput,
+        schema: import_contracts15.TestSuggestionAddressedAssessmentOutput,
         validationErrorPrefix: "Model output failed test suggestion addressed assessment schema validation"
       });
       return {
@@ -46482,7 +46401,7 @@ var require_dist3 = __commonJS({
 
 // src/index.ts
 var import_node_fs6 = require("fs");
-var import_contracts5 = __toESM(require_dist());
+var import_contracts4 = __toESM(require_dist());
 var import_core18 = __toESM(require_dist2());
 var import_providers = __toESM(require_dist3());
 
@@ -46606,16 +46525,12 @@ function formatPRImpactProfileMarkdown(profile, options = {}) {
 
 // ../../packages/core/src/pr-assistant-body.ts
 var import_contracts3 = __toESM(require_dist());
-var import_contracts4 = __toESM(require_dist());
 var PR_ASSISTANT_SECTION_PATTERN = new RegExp(
-  `${buildMarkerGroup(import_contracts2.ALL_PR_ASSISTANT_START_MARKERS)}[\\s\\S]*?${buildMarkerGroup(import_contracts2.ALL_PR_ASSISTANT_END_MARKERS)}`,
+  `${escapeRegExp(import_contracts2.PR_ASSISTANT_START_MARKER)}[\\s\\S]*?${escapeRegExp(import_contracts2.PR_ASSISTANT_END_MARKER)}`,
   "m"
 );
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-function buildMarkerGroup(markers) {
-  return `(?:${markers.map((marker) => escapeRegExp(marker)).join("|")})`;
 }
 function renderBulletSection(title, items, emptyState) {
   return [
@@ -46689,9 +46604,9 @@ function buildPRAssistantSection(assistant) {
 }
 function mergePRAssistantSection(existingBody, section) {
   const managedSection = [
-    import_contracts4.PR_ASSISTANT_START_MARKER,
+    import_contracts2.PR_ASSISTANT_START_MARKER,
     section,
-    import_contracts4.PR_ASSISTANT_END_MARKER
+    import_contracts2.PR_ASSISTANT_END_MARKER
   ].join("\n");
   if (!existingBody?.trim()) {
     return managedSection;
@@ -46722,7 +46637,7 @@ ${delimiter}
 async function run() {
   const prBody = getOptionalInput("pr_body");
   const promptBody = stripManagedPRAssistantSection(prBody);
-  const input = import_contracts5.PRAssistantInput.parse({
+  const input = import_contracts4.PRAssistantInput.parse({
     diff: getRequiredInlineOrFileInput("diff", "diff_file"),
     commitMessages: getOptionalInlineOrFileInput("commit_messages", "commit_messages_file"),
     prTitle: getOptionalInput("pr_title"),

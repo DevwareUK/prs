@@ -9,7 +9,7 @@ import {
   readFileSync,
   writeFileSync,
 } from "node:fs";
-import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import {
   analyzeFeatureBacklog,
@@ -33,14 +33,9 @@ import {
 } from "@prs/providers";
 import type { ResolvedRepositoryConfigType } from "@prs/contracts";
 import {
-  ALL_ISSUE_PLAN_COMMENT_MARKERS,
-  GIT_AI_ALIAS_DEPRECATION_MESSAGE,
-  ALL_ISSUE_SPEC_COMMENT_MARKERS,
   ISSUE_PLAN_COMMENT_MARKER,
   ISSUE_SPEC_COMMENT_MARKER,
   IssueDraftSet,
-  LEGACY_PRODUCT_SHORT_NAME,
-  PRODUCT_SHORT_NAME,
 } from "@prs/contracts";
 import dotenv from "dotenv";
 import {
@@ -403,11 +398,6 @@ const UPDATE_USAGE = ["Usage:", "  prs update skills"].join("\n");
 
 function getCliArgs(): string[] {
   return process.argv.slice(2).filter((arg) => arg !== "--");
-}
-
-function getInvokedCommandName(): string {
-  const argvPath = process.argv[1];
-  return argvPath ? basename(argvPath) : PRODUCT_SHORT_NAME;
 }
 
 function getDefaultRepoRoot(): string {
@@ -987,9 +977,7 @@ function findLatestIssueSpecComment(
 ): RepositoryComment | undefined {
   return comments
     .filter((comment) =>
-      ALL_ISSUE_SPEC_COMMENT_MARKERS.some((marker) =>
-        comment.body.trimStart().startsWith(marker)
-      )
+      comment.body.trimStart().startsWith(ISSUE_SPEC_COMMENT_MARKER)
     )
     .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0];
 }
@@ -999,9 +987,7 @@ function findLatestIssuePlanComment(
 ): IssuePlanComment | undefined {
   const comment = comments
     .filter((candidate) =>
-      ALL_ISSUE_PLAN_COMMENT_MARKERS.some((marker) =>
-        candidate.body.trimStart().startsWith(marker)
-      )
+      candidate.body.trimStart().startsWith(ISSUE_PLAN_COMMENT_MARKER)
     )
     .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0];
 
@@ -6664,7 +6650,7 @@ function runIssueBatchChild(
         cwd: worktreePath,
         env: {
           ...process.env,
-          GIT_AI_DISABLE_AUTO_RUN: "0",
+          PRS_DISABLE_AUTO_RUN: "0",
           PRS_ISSUE_WORKTREE_BASE_READY: "1",
         },
         stdio: ["ignore", "pipe", "pipe"],
@@ -7221,9 +7207,6 @@ async function runIssueCommand(): Promise<void> {
 export async function run(): Promise<void> {
   const args = getCliArgs();
   const firstArg = args[0];
-  if (getInvokedCommandName() === LEGACY_PRODUCT_SHORT_NAME) {
-    console.warn(GIT_AI_ALIAS_DEPRECATION_MESSAGE);
-  }
 
   if (firstArg === "help" || firstArg === "--help" || firstArg === "-h") {
     process.stdout.write(`${TOP_LEVEL_HELP}\n`);
@@ -7322,7 +7305,7 @@ export async function run(): Promise<void> {
   process.stdout.write(formatDiffSummary(result));
 }
 
-if (process.env.GIT_AI_DISABLE_AUTO_RUN !== "1") {
+if (process.env.PRS_DISABLE_AUTO_RUN !== "1") {
   void run().catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
     console.error(message);

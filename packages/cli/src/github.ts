@@ -22,7 +22,7 @@ import {
   resolveGitHubCli,
   resolveGitHubToken,
 } from "./github-auth";
-import { ALL_ISSUE_PLAN_COMMENT_MARKERS } from "@prs/contracts";
+import { ISSUE_PLAN_COMMENT_MARKER } from "@prs/contracts";
 
 function runCommand(
   command: string,
@@ -1155,9 +1155,7 @@ class GitHubRepositoryForge implements RepositoryForge {
 
     return comments
       .filter((comment) =>
-        ALL_ISSUE_PLAN_COMMENT_MARKERS.some((marker) =>
-          comment.body.trimStart().startsWith(marker)
-        )
+        comment.body.trimStart().startsWith(ISSUE_PLAN_COMMENT_MARKER)
       )
       .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0];
   }

@@ -9,10 +9,8 @@ import {
   DEFAULT_REPOSITORY_AI_RUNTIME_TYPE,
 } from "../../core/src/repository-config";
 import {
-  LEGACY_REPOSITORY_CONFIG_RELATIVE_PATH,
   REPOSITORY_CONFIG_RELATIVE_PATH,
   formatCommandForDisplay,
-  getLegacyRepositoryConfigPath,
   getRepositoryConfigPath,
   loadRepositoryConfig,
   loadResolvedRepositoryConfig,
@@ -23,7 +21,6 @@ const cleanupTargets = new Set<string>();
 function createRepoRoot(): string {
   const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-config-"));
   mkdirSync(resolve(repoRoot, ".prs"), { recursive: true });
-  mkdirSync(resolve(repoRoot, ".git-ai"), { recursive: true });
   cleanupTargets.add(repoRoot);
   return repoRoot;
 }
@@ -43,12 +40,6 @@ describe("config helpers", () => {
   it("resolves the canonical repository config path under .prs/config.json", () => {
     expect(getRepositoryConfigPath("/tmp/example-repo")).toBe(
       "/tmp/example-repo/.prs/config.json"
-    );
-  });
-
-  it("resolves the legacy repository config path under .git-ai/config.json", () => {
-    expect(getLegacyRepositoryConfigPath("/tmp/example-repo")).toBe(
-      "/tmp/example-repo/.git-ai/config.json"
     );
   });
 
@@ -97,28 +88,6 @@ describe("config helpers", () => {
           type: "bedrock-claude",
           model: "anthropic.claude-3-7-sonnet-20250219-v1:0",
           region: "eu-west-1",
-        },
-      },
-    });
-  });
-
-  it("falls back to the legacy .git-ai/config.json path when .prs/config.json is missing", () => {
-    const repoRoot = createRepoRoot();
-    writeFileSync(
-      resolve(repoRoot, LEGACY_REPOSITORY_CONFIG_RELATIVE_PATH),
-      JSON.stringify({
-        ai: {
-          runtime: {
-            type: "claude-code",
-          },
-        },
-      })
-    );
-
-    expect(loadRepositoryConfig(repoRoot)).toEqual({
-      ai: {
-        runtime: {
-          type: "claude-code",
         },
       },
     });
