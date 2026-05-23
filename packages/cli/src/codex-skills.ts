@@ -407,7 +407,7 @@ export const PRS_CODEX_SKILLS: ManagedCodexSkill[] = [
       "## Issue Work",
       "",
       "Use this alias exactly like `/prs issue`.",
-      "For `/prs:issue <number> refine`, run `prs issue refine <number>` and keep refinement on the same GitHub issue: use issue comments for the back-and-forth, update the original issue summary, publish managed `<!-- prs:issue-spec -->` and `<!-- prs:issue-plan -->` comments there, add the final confidence comment, and never create linked issues from this refinement flow.",
+      "For `/prs:issue <number> refine`, run `prs issue refine <number>` and keep refinement on the same GitHub issue: use Superpowers brainstorming through GitHub issue comments for the back-and-forth, preserve the original issue body, post clarifying questions when brainstorming is not satisfied, publish managed `<!-- prs:issue-spec -->` and `<!-- prs:issue-plan -->` comments only once refinement is settled, add the final confidence comment, and never create linked issues from this refinement flow.",
       `For \`/prs:issue <number>\`, run \`${renderIssueReadyToolCommand()}\` and stop with the next sensible action unless \`--all\` is present.`,
       `For \`/prs:issue <number> --all\`, run \`${renderIssueReadyToolCommand(true)}\`, then continue into Superpowers worktree creation and issue implementation from the updated base branch.`,
       "For interactive issue selection, use `prs tool issue list --actionable --json` as the source of truth and show each returned issue with its number, title, and GitHub URL.",

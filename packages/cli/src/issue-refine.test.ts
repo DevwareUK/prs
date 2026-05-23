@@ -115,11 +115,13 @@ describe("Issue refine workflow", () => {
       flow?: string;
       requestedChanges?: string;
       draftFile?: string;
+      questionsFile?: string;
     };
     expect(metadata).toMatchObject({
       flow: "issue-refine",
       requestedChanges: "Clarify the rollback plan and edge cases.",
       draftFile: `.prs/runs/${createdRunDir}/issue-refine-${issueNumber}.md`,
+      questionsFile: `.prs/runs/${createdRunDir}/issue-refine-questions.md`,
     });
     expect(
       readFileSync(resolve(REPO_ROOT, metadata.draftFile as string), "utf8")
@@ -283,6 +285,151 @@ describe("Issue refine workflow", () => {
     expect(runtimePrompt).toContain("Add rollout details.");
   });
 
+  it("posts brainstorming questions instead of publishing artifacts when requirements are unresolved", async () => {
+    const beforeRuns = listRunDirectories();
+    const issueNumber = 158;
+    let runtimePrompt = "";
+    createMockCodexSuperpowersHome();
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url.endsWith(`/issues/${issueNumber}`) && init?.method === "PATCH") {
+        throw new Error("Issue refinement should not update the issue body.");
+      }
+
+      if (url.endsWith(`/issues/${issueNumber}`)) {
+        return createFetchResponse({
+          title: "Loose order information request",
+          body: "Can we capture extra information on an order?",
+          html_url: getRepositoryIssueUrl(issueNumber),
+        });
+      }
+
+      if (url.includes(`/issues/${issueNumber}/comments?`)) {
+        return createFetchResponse([]);
+      }
+
+      if (url.endsWith(`/issues/${issueNumber}/comments`) && init?.method === "POST") {
+        const body = JSON.parse(String(init.body)) as { body: string };
+        return createFetchResponse({
+          id: 9158,
+          body: body.body,
+          html_url:
+            `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-9158`,
+          updated_at: "2026-04-26T09:35:00Z",
+        });
+      }
+
+      throw new Error(`Unexpected fetch call: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await withRepositoryConfig(
+      JSON.stringify(
+        {
+          ai: {
+            issue: {
+              useCodexSuperpowers: true,
+            },
+          },
+        },
+        null,
+        2
+      ),
+      async () => {
+        const { run } = await loadCli({
+          readlineAnswers: ["n", "y"],
+          execFileSyncImpl: (command, args) => {
+            if (command === "git" && args[0] === "remote") {
+              return "git@github.com:DevwareUK/prs.git\n";
+            }
+
+            throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+          },
+          spawnSyncImpl: (command, args) => {
+            if (command === "gh" && args[0] === "--version") {
+              return { status: 1, error: new Error("gh is unavailable") };
+            }
+
+            if (command === "codex" && args[0] === "--version") {
+              return { status: 0 };
+            }
+
+            if (command === "codex") {
+              const { metadata, runDir } = readLatestRunMetadata();
+              runtimePrompt = readFileSync(
+                resolve(REPO_ROOT, metadata.promptFile as string),
+                "utf8"
+              );
+              writeFileSync(
+                resolve(REPO_ROOT, metadata.questionsFile as string),
+                [
+                  "Before I write the spec and implementation plan, I need to pin down the intended order workflow.",
+                  "",
+                  "- Who can view and edit the extra order information?",
+                  "- Should it appear in confirmation emails, exports, reports, or admin screens?",
+                  "- Is this information required at checkout or optional?",
+                  "",
+                ].join("\n"),
+                "utf8"
+              );
+              cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", runDir));
+              return { status: 0 };
+            }
+
+            throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+          },
+        });
+
+        process.env.GH_TOKEN = "";
+        process.env.GITHUB_TOKEN = "test-token";
+        process.argv = ["node", "prs", "issue", "refine", String(issueNumber)];
+        await run();
+      }
+    );
+
+    const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
+    expect(createdRunDir).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "issues", String(issueNumber)));
+
+    expect(runtimePrompt).toContain("superpowers:brainstorming");
+    expect(runtimePrompt).toContain("write only the GitHub issue comment body");
+    const patchCall = fetchMock.mock.calls.find(
+      ([input, init]) =>
+        String(input).endsWith(`/issues/${issueNumber}`) &&
+        (init as RequestInit | undefined)?.method === "PATCH"
+    );
+    expect(patchCall).toBeUndefined();
+    const commentBodies = fetchMock.mock.calls
+      .filter(
+        ([input, init]) =>
+          String(input).endsWith(`/issues/${issueNumber}/comments`) &&
+          (init as RequestInit | undefined)?.method === "POST"
+      )
+      .map(
+        ([, init]) => (JSON.parse(String((init as RequestInit).body)) as { body: string }).body
+      );
+    expect(commentBodies).toEqual([
+      [
+        "<!-- prs:issue-refinement-questions -->",
+        "Before I write the spec and implementation plan, I need to pin down the intended order workflow.",
+        "",
+        "- Who can view and edit the extra order information?",
+        "- Should it appear in confirmation emails, exports, reports, or admin screens?",
+        "- Is this information required at checkout or optional?",
+        "",
+      ].join("\n"),
+    ]);
+    expect(
+      JSON.parse(
+        readFileSync(getIssueRefineSessionStateFilePath(REPO_ROOT, issueNumber), "utf8")
+      )
+    ).toMatchObject({
+      completionMode: "questions-posted",
+    });
+  });
+
   it("adds Superpowers instructions to issue refine runs and publishes the plan artifact", async () => {
     const beforeRuns = listRunDirectories();
     const issueNumber = 155;
@@ -419,7 +566,7 @@ describe("Issue refine workflow", () => {
     const expectedPlanFile = `.prs/runs/${createdRunDir}/superpowers-plan.md`;
 
     expect(runtimePrompt).toContain("use `superpowers:brainstorming` first");
-    expect(runtimePrompt).toContain("use `superpowers:writing-plans` discipline");
+    expect(runtimePrompt).toContain("only use `superpowers:writing-plans`");
     expect(runtimePrompt).toContain(`Write the Superpowers spec artifact to \`${expectedSpecFile}\`.`);
     expect(runtimePrompt).toContain(`Write the Superpowers plan artifact to \`${expectedPlanFile}\`.`);
     expect(runtimePrompt).toContain("do not create `docs/superpowers/specs/");
@@ -863,7 +1010,7 @@ describe("Issue refine workflow", () => {
     });
   });
 
-  it("updates the existing PRS-managed issue body after review approval", async () => {
+  it("publishes artifacts for an existing PRS-managed issue without changing the issue body", async () => {
     const beforeRuns = listRunDirectories();
     const issueNumber = 59;
     createMockCodexHome();
@@ -871,11 +1018,7 @@ describe("Issue refine workflow", () => {
       const url = String(input);
 
       if (url.endsWith(`/issues/${issueNumber}`) && init?.method === "PATCH") {
-        return createFetchResponse({
-          number: issueNumber,
-          title: "Managed refine title",
-          html_url: getRepositoryIssueUrl(issueNumber),
-        });
+        throw new Error("Issue refinement should not update the issue body.");
       }
 
       if (url.endsWith(`/issues/${issueNumber}`)) {
@@ -955,19 +1098,7 @@ describe("Issue refine workflow", () => {
         String(input).endsWith(`/issues/${issueNumber}`) &&
         (init as RequestInit | undefined)?.method === "PATCH"
     );
-    expect(patchCall).toBeDefined();
-    expect(JSON.parse(String(patchCall?.[1] && (patchCall[1] as RequestInit).body))).toEqual({
-      title: "Managed refine title",
-      body: [
-        "<!-- prs:managed-issue -->",
-        "",
-        "## Summary",
-        "",
-        "Refined managed issue body.",
-        "",
-        "The settled specification and implementation plan are maintained in managed issue comments.",
-      ].join("\n"),
-    });
+    expect(patchCall).toBeUndefined();
     const commentBodies = fetchMock.mock.calls
       .filter(
         ([input, init]) =>
@@ -986,13 +1117,13 @@ describe("Issue refine workflow", () => {
         readFileSync(getIssueRefineSessionStateFilePath(REPO_ROOT, issueNumber), "utf8")
       )
     ).toMatchObject({
-      completionMode: "updated-existing",
+      completionMode: "published-artifacts",
       completedIssueNumber: issueNumber,
       completedIssueUrl: getRepositoryIssueUrl(issueNumber),
     });
   });
 
-  it("updates a non-managed issue without adding the PRS-managed issue marker", async () => {
+  it("does not add the PRS-managed issue marker to a non-managed issue body", async () => {
     const beforeRuns = listRunDirectories();
     const issueNumber = 63;
     createMockCodexHome();
@@ -1000,11 +1131,7 @@ describe("Issue refine workflow", () => {
       const url = String(input);
 
       if (url.endsWith(`/issues/${issueNumber}`) && init?.method === "PATCH") {
-        return createFetchResponse({
-          number: issueNumber,
-          title: "Customer report about marker text refined",
-          html_url: getRepositoryIssueUrl(issueNumber),
-        });
+        throw new Error("Issue refinement should not update the issue body.");
       }
 
       if (url.endsWith(`/issues/${issueNumber}`)) {
@@ -1085,17 +1212,7 @@ describe("Issue refine workflow", () => {
         String(input).endsWith(`/issues/${issueNumber}`) &&
         (init as RequestInit | undefined)?.method === "PATCH"
     );
-    expect(patchCall).toBeDefined();
-    expect(JSON.parse(String(patchCall?.[1] && (patchCall[1] as RequestInit).body))).toEqual({
-      title: "Customer report about marker text refined",
-      body: [
-        "## Summary",
-        "",
-        "Dedicated managed issue body.",
-        "",
-        "The settled specification and implementation plan are maintained in managed issue comments.",
-      ].join("\n"),
-    });
+    expect(patchCall).toBeUndefined();
 
     const createCall = fetchMock.mock.calls.find(
       ([input, init]) =>
@@ -1113,11 +1230,7 @@ describe("Issue refine workflow", () => {
       const url = String(input);
 
       if (url.endsWith(`/issues/${issueNumber}`) && init?.method === "PATCH") {
-        return createFetchResponse({
-          number: issueNumber,
-          title: "Customer request refined",
-          html_url: getRepositoryIssueUrl(issueNumber),
-        });
+        throw new Error("Issue refinement should not update the issue body.");
       }
 
       if (url.endsWith(`/issues/${issueNumber}`)) {
@@ -1201,17 +1314,7 @@ describe("Issue refine workflow", () => {
         String(input).endsWith(`/issues/${issueNumber}`) &&
         (init as RequestInit | undefined)?.method === "PATCH"
     );
-    expect(patchCall).toBeDefined();
-    expect(JSON.parse(String(patchCall?.[1] && (patchCall[1] as RequestInit).body))).toEqual({
-      title: "Customer request refined",
-      body: [
-        "## Summary",
-        "",
-        "Refined linked issue body.",
-        "",
-        "The settled specification and implementation plan are maintained in managed issue comments.",
-      ].join("\n"),
-    });
+    expect(patchCall).toBeUndefined();
 
     const createCall = fetchMock.mock.calls.find(
       ([input, init]) =>
@@ -1237,7 +1340,7 @@ describe("Issue refine workflow", () => {
         readFileSync(getIssueRefineSessionStateFilePath(REPO_ROOT, issueNumber), "utf8")
       )
     ).toMatchObject({
-      completionMode: "updated-existing",
+      completionMode: "published-artifacts",
       completedIssueNumber: issueNumber,
       completedIssueUrl: getRepositoryIssueUrl(issueNumber),
     });

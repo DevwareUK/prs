@@ -153,6 +153,7 @@ export type IssuePlanWorkspace = {
 export type IssueRefineWorkspace = {
   runDir: string;
   draftFilePath: string;
+  questionsFilePath: string;
   issueSetFilePath: string;
   promptFilePath: string;
   metadataFilePath: string;
@@ -189,7 +190,12 @@ export type IssueRefineSessionState = {
   completedIssueNumber?: number;
   completedIssueUrl?: string;
   completedIssues?: Array<{ issueNumber: number; issueUrl: string }>;
-  completionMode?: "updated-existing" | "created-linked" | "kept-on-disk";
+  completionMode?:
+    | "updated-existing"
+    | "created-linked"
+    | "kept-on-disk"
+    | "questions-posted"
+    | "published-artifacts";
   createdAt: string;
   updatedAt: string;
 };
@@ -204,6 +210,7 @@ export function createIssueRefineWorkspace(
   return {
     runDir,
     draftFilePath: resolve(runDir, `issue-refine-${issueNumber}.md`),
+    questionsFilePath: resolve(runDir, "issue-refine-questions.md"),
     issueSetFilePath: resolve(runDir, "issue-set.json"),
     promptFilePath: resolve(runDir, "prompt.md"),
     metadataFilePath: resolve(runDir, "metadata.json"),
@@ -366,7 +373,10 @@ function hasConsistentCompletionMetadata(
     return !hasCompletedIssueMetadata(state);
   }
 
-  if (state.completionMode === "kept-on-disk") {
+  if (
+    state.completionMode === "kept-on-disk" ||
+    state.completionMode === "questions-posted"
+  ) {
     return !hasCompletedIssueMetadata(state);
   }
 
@@ -396,7 +406,10 @@ function hasConsistentCompletionMetadata(
     return false;
   }
 
-  if (state.completionMode === "updated-existing") {
+  if (
+    state.completionMode === "updated-existing" ||
+    state.completionMode === "published-artifacts"
+  ) {
     return state.completedIssueNumber === state.issueNumber;
   }
 
@@ -508,7 +521,9 @@ function normalizeIssueRefineSessionState(
     (parsed.completionMode !== undefined &&
       parsed.completionMode !== "updated-existing" &&
       parsed.completionMode !== "created-linked" &&
-      parsed.completionMode !== "kept-on-disk") ||
+      parsed.completionMode !== "kept-on-disk" &&
+      parsed.completionMode !== "questions-posted" &&
+      parsed.completionMode !== "published-artifacts") ||
     !hasConsistentCompletionMetadata({
       issueNumber,
       repositorySlug,

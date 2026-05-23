@@ -287,6 +287,8 @@ type IssueRunOutcomeSummary = {
 };
 
 const PRS_MANAGED_ISSUE_MARKER = "<!-- prs:managed-issue -->";
+const ISSUE_REFINEMENT_QUESTIONS_COMMENT_MARKER =
+  "<!-- prs:issue-refinement-questions -->";
 const ISSUE_REFINEMENT_COMPLETE_COMMENT_MARKER =
   "<!-- prs:issue-refinement-complete -->";
 const ISSUE_RUN_NO_CHANGES_MESSAGE =
@@ -1252,6 +1254,32 @@ async function publishIssueRefinementCompleteComment(options: {
   );
 }
 
+function formatIssueRefinementQuestionsComment(questionsMarkdown: string): string {
+  const trimmed = questionsMarkdown.trim();
+  if (trimmed.startsWith(ISSUE_REFINEMENT_QUESTIONS_COMMENT_MARKER)) {
+    return `${trimmed}\n`;
+  }
+
+  return `${ISSUE_REFINEMENT_QUESTIONS_COMMENT_MARKER}\n${trimmed}\n`;
+}
+
+async function publishIssueRefinementQuestionsComment(options: {
+  forge: RepositoryForge;
+  issueNumber: number;
+  questionsMarkdown: string;
+  outputLogPath: string;
+}): Promise<RepositoryComment | IssuePlanComment> {
+  const comment = await options.forge.createIssuePlanComment(
+    options.issueNumber,
+    formatIssueRefinementQuestionsComment(options.questionsMarkdown)
+  );
+  logSuperpowersPlanPublicationMessage(
+    options.outputLogPath,
+    `Created issue refinement questions comment: ${comment.url}`
+  );
+  return comment;
+}
+
 async function publishRefinedIssueSpecComment(options: {
   forge: RepositoryForge;
   issueNumber: number;
@@ -1882,6 +1910,10 @@ function buildIssueRefineRuntimePrompt(input: {
   useCodexSuperpowers: boolean;
 }): string {
   const draftFile = toRepoRelativePath(input.repoRoot, input.workspace.draftFilePath);
+  const questionsFile = toRepoRelativePath(
+    input.repoRoot,
+    input.workspace.questionsFilePath
+  );
   const runDir = toRepoRelativePath(input.repoRoot, input.workspace.runDir);
   const superpowersSpecFile = toRepoRelativePath(
     input.repoRoot,
@@ -1907,8 +1939,8 @@ function buildIssueRefineRuntimePrompt(input: {
     : [];
   const superpowersAgentInstructions = input.useCodexSuperpowers
     ? [
-        "- use `superpowers:brainstorming` first for clarification and scope shaping",
-        "- use `superpowers:writing-plans` discipline to make the refined issue implementation-ready",
+        "- use `superpowers:brainstorming` first for clarification and scope shaping; treat GitHub issue comments as the asynchronous user conversation",
+        "- only use `superpowers:writing-plans` once brainstorming is satisfied that no blocking questions remain",
         "- override the normal Superpowers spec/plan continuation for this workflow",
         "- keep any intermediate Superpowers docs inside the provided `.prs/runs/...` directory",
         "- write any Superpowers brainstorming/spec artifact only to the provided spec path",
@@ -1936,7 +1968,8 @@ function buildIssueRefineRuntimePrompt(input: {
     "Relevant issue comments:",
     formatIssueRefineComments(input.comments),
     "",
-    `Only write the refined markdown to \`${draftFile}\` once you are happy the important questions and knock-on effects have been answered.`,
+    `If brainstorming has any unresolved blocking questions, write only the GitHub issue comment body to \`${questionsFile}\` and stop. Do not write the refined draft, specification artifact, or implementation plan artifact in that case.`,
+    `Only write the refined markdown to \`${draftFile}\` once brainstorming is happy the important questions and knock-on effects have been answered.`,
     "Keep this refinement attached to the original GitHub issue. Do not write an issue-set manifest, do not create linked issue drafts, and do not propose linked issue creation in this workflow.",
     "If the work seems too large or naturally split, ask scope and splitting questions in the issue-comment conversation instead of splitting it yourself.",
     ...superpowersArtifactInstructions,
@@ -1944,15 +1977,16 @@ function buildIssueRefineRuntimePrompt(input: {
     "",
     "Instructions to the coding agent:",
     "- inspect the repository to discover nearby code, workflows, and knock-on effects that matter to the user's intention",
+    "- run the equivalent of Superpowers brainstorming before producing any specification or plan",
     "- capture the why and intended outcome before deciding scope",
-    "- ask all currently blocking high-value questions in GitHub issue-comment style when information is missing; do not limit yourself to three questions",
+    "- when information is missing, write all currently blocking high-value questions to the questions file in GitHub issue-comment style; do not limit yourself to three questions",
     "- cover access, data changes, existing users/data, acceptance criteria, and likely adjacent behavior such as emails, reports, exports, admin screens, APIs, permissions, audit logs, migrations, and integrations when relevant",
     "- do not write a partial specification or plan while important questions remain open",
     "- once the issue is settled, write the full specification artifact and implementation plan artifact",
     "- keep the refined draft grounded in the current repository structure and existing patterns",
     ...superpowersAgentInstructions,
-    "- write an implementation-ready Markdown issue draft with a top-level title heading and concise summary body only",
-    "- write the completed draft to the provided draft path before exiting",
+    "- write an implementation-ready Markdown issue draft with a top-level title heading and concise summary body only when the issue is settled",
+    "- write the completed draft to the provided draft path before exiting only when the issue is settled",
     "- do not create or update GitHub issues directly",
     "- do not modify unrelated repository files",
     "- do not modify `.prs/` except for the provided draft file and local workflow artifacts",
@@ -2027,6 +2061,7 @@ function writeIssueRefineWorkspaceFiles(
         ...(requestedChanges ? { requestedChanges } : {}),
         commentCount: comments.length,
         draftFile: toRepoRelativePath(repoRoot, workspace.draftFilePath),
+        questionsFile: toRepoRelativePath(repoRoot, workspace.questionsFilePath),
         issueSetFile: toRepoRelativePath(repoRoot, workspace.issueSetFilePath),
         promptFile: toRepoRelativePath(repoRoot, workspace.promptFilePath),
         outputLog: toRepoRelativePath(repoRoot, workspace.outputLogPath),
@@ -2057,6 +2092,7 @@ function writeIssueRefineWorkspaceFiles(
       `Issue number: ${issueNumber}`,
       `Issue URL: ${issue.url}`,
       `Draft file: ${toRepoRelativePath(repoRoot, workspace.draftFilePath)}`,
+      `Questions file: ${toRepoRelativePath(repoRoot, workspace.questionsFilePath)}`,
       `Issue set file: ${toRepoRelativePath(repoRoot, workspace.issueSetFilePath)}`,
       `Prompt file: ${toRepoRelativePath(repoRoot, workspace.promptFilePath)}`,
       ...(useCodexSuperpowers
@@ -2075,31 +2111,61 @@ function writeIssueRefineWorkspaceFiles(
   );
 }
 
+type IssueRefineCompletion =
+  | {
+      mode: "updated-existing" | "published-artifacts";
+      issueNumber: number;
+      issueUrl: string;
+    }
+  | {
+      mode: "created-linked";
+      issueNumber: number;
+      issueUrl: string;
+    }
+  | {
+      mode: "created-linked";
+      issues: Array<{ issueNumber: number; issueUrl: string }>;
+    }
+  | {
+      mode: "kept-on-disk" | "questions-posted";
+    };
+
 function createIssueRefineSessionState(
   repoRoot: string,
   issueNumber: number,
   runtimeType: InteractiveRuntimeType,
   workspace: IssueRefineWorkspace,
   sessionId?: string,
-  completion?:
-    | {
-        mode: "updated-existing" | "created-linked";
-        issueNumber: number;
-        issueUrl: string;
-      }
-    | {
-        mode: "created-linked";
-        issues: Array<{ issueNumber: number; issueUrl: string }>;
-      }
-    | {
-        mode: "kept-on-disk";
-      }
+  completion?: IssueRefineCompletion
 ): IssueRefineSessionState {
   const previousState = loadIssueRefineSessionState(repoRoot, issueNumber);
   const createdAt =
     previousState && previousState.runDir === workspace.runDir
       ? previousState.createdAt
       : new Date().toISOString();
+  let completionState: Partial<IssueRefineSessionState> = {};
+
+  if (completion) {
+    if (
+      completion.mode === "kept-on-disk" ||
+      completion.mode === "questions-posted"
+    ) {
+      completionState = {
+        completionMode: completion.mode,
+      };
+    } else if ("issues" in completion) {
+      completionState = {
+        completionMode: completion.mode,
+        completedIssues: completion.issues,
+      };
+    } else if ("issueNumber" in completion) {
+      completionState = {
+        completionMode: completion.mode,
+        completedIssueNumber: completion.issueNumber,
+        completedIssueUrl: completion.issueUrl,
+      };
+    }
+  }
 
   return {
     issueNumber,
@@ -2109,23 +2175,7 @@ function createIssueRefineSessionState(
     outputLog: workspace.outputLogPath,
     latestDraftFile: workspace.draftFilePath,
     ...(sessionId ? { sessionId } : {}),
-    ...(completion?.mode === "kept-on-disk"
-      ? {
-          completionMode: "kept-on-disk" as const,
-        }
-      : completion
-        ? {
-            completionMode: completion.mode,
-            ...("issues" in completion
-              ? {
-                  completedIssues: completion.issues,
-                }
-              : {
-                  completedIssueNumber: completion.issueNumber,
-                  completedIssueUrl: completion.issueUrl,
-                }),
-          }
-        : {}),
+    ...completionState,
     createdAt,
     updatedAt: new Date().toISOString(),
   };
@@ -2137,19 +2187,7 @@ function persistIssueRefineSessionState(
   runtimeType: InteractiveRuntimeType,
   workspace: IssueRefineWorkspace,
   sessionId?: string,
-  completion?:
-    | {
-        mode: "updated-existing" | "created-linked";
-        issueNumber: number;
-        issueUrl: string;
-      }
-    | {
-        mode: "created-linked";
-        issues: Array<{ issueNumber: number; issueUrl: string }>;
-      }
-    | {
-        mode: "kept-on-disk";
-      }
+  completion?: IssueRefineCompletion
 ): void {
   writeIssueRefineSessionState(
     repoRoot,
@@ -2173,6 +2211,7 @@ function createIssueRefineWorkspaceFromState(
   return {
     runDir: state.runDir,
     draftFilePath: state.latestDraftFile,
+    questionsFilePath: resolve(state.runDir, "issue-refine-questions.md"),
     issueSetFilePath: resolve(state.runDir, "issue-set.json"),
     promptFilePath: state.promptFile,
     metadataFilePath: resolve(state.runDir, "metadata.json"),
@@ -5585,9 +5624,86 @@ async function runIssueRefineCommand(issueNumber: number): Promise<void> {
     return;
   }
 
+  const questionsContents = existsSync(workspace.questionsFilePath)
+    ? readFileSync(workspace.questionsFilePath, "utf8").trim()
+    : "";
+
+  if (questionsContents) {
+    if (!forge.isAuthenticated()) {
+      printGeneratedTextPreview(
+        "Generated issue refinement questions",
+        questionsContents
+      );
+      console.log(
+        forge.type === "github"
+          ? "Issue refinement questions were not posted because GitHub access is unavailable."
+          : "Issue refinement questions were not posted because repository forge support is disabled by .prs/config.json."
+      );
+      persistIssueRefineSessionState(
+        repoRoot,
+        issueNumber,
+        runtime.type,
+        workspace,
+        resolvedSessionId,
+        {
+          mode: "kept-on-disk",
+        }
+      );
+      return;
+    }
+
+    const reviewedQuestions = await reviewGeneratedText({
+      filePath: workspace.questionsFilePath,
+      initialContent: questionsContents,
+      previewHeading: "Generated issue refinement questions",
+      prompt: `Post these refinement questions to issue #${issueNumber}? [Y/n/m]: `,
+      emptyContentMessage: "Issue refinement questions cannot be empty.",
+      editorDescription: "issue refinement questions",
+      promptForLine,
+    });
+
+    if (!reviewedQuestions) {
+      persistIssueRefineSessionState(
+        repoRoot,
+        issueNumber,
+        runtime.type,
+        workspace,
+        resolvedSessionId,
+        {
+          mode: "kept-on-disk",
+        }
+      );
+      console.log(
+        `Refinement questions kept at ${toRepoRelativePath(
+          repoRoot,
+          workspace.questionsFilePath
+        )}.`
+      );
+      return;
+    }
+
+    await publishIssueRefinementQuestionsComment({
+      forge,
+      issueNumber,
+      questionsMarkdown: reviewedQuestions.content,
+      outputLogPath: workspace.outputLogPath,
+    });
+    persistIssueRefineSessionState(
+      repoRoot,
+      issueNumber,
+      runtime.type,
+      workspace,
+      resolvedSessionId,
+      {
+        mode: "questions-posted",
+      }
+    );
+    return;
+  }
+
   if (!existsSync(workspace.draftFilePath)) {
     throw new Error(
-      `${runtime.displayName} did not write the refined issue draft to ${toRepoRelativePath(repoRoot, workspace.draftFilePath)}.`
+      `${runtime.displayName} did not write refinement questions to ${toRepoRelativePath(repoRoot, workspace.questionsFilePath)} or a refined issue draft to ${toRepoRelativePath(repoRoot, workspace.draftFilePath)}.`
     );
   }
 
@@ -5618,7 +5734,6 @@ async function runIssueRefineCommand(issueNumber: number): Promise<void> {
     return;
   }
 
-  const managedSourceIssue = isPrsManagedIssue(issue);
   const reviewedDraft = await reviewGeneratedText({
     filePath: workspace.draftFilePath,
     initialContent: draftContents,
@@ -5650,12 +5765,6 @@ async function runIssueRefineCommand(issueNumber: number): Promise<void> {
   }
 
   const parsedDraft = parseIssueDraftDocument(reviewedDraft.content);
-  const updatedBody = buildIssueSummaryBodyFromDraftBody(parsedDraft.body);
-  const updatedIssue = await forge.updateIssue(
-    issueNumber,
-    parsedDraft.title,
-    managedSourceIssue ? ensurePrsManagedIssueBody(updatedBody) : updatedBody
-  );
   persistIssueRefineSessionState(
     repoRoot,
     issueNumber,
@@ -5663,19 +5772,19 @@ async function runIssueRefineCommand(issueNumber: number): Promise<void> {
     workspace,
     resolvedSessionId,
     {
-      mode: "updated-existing",
-      issueNumber: updatedIssue.number,
-      issueUrl: updatedIssue.url,
+      mode: "published-artifacts",
+      issueNumber,
+      issueUrl: issue.url,
     }
   );
-  console.log(`Updated issue: ${updatedIssue.url}`);
+  console.log(`Publishing refinement artifacts on issue: ${issue.url}`);
   await publishIssueRefinementArtifacts({
     repoRoot,
     forge,
-    issueNumber: updatedIssue.number,
+    issueNumber,
     issueTitle: parsedDraft.title,
     issueBody: parsedDraft.body,
-    issueUrl: updatedIssue.url,
+    issueUrl: issue.url,
     refinedMarkdown: reviewedDraft.content,
     comments,
     workspace,

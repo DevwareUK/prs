@@ -160,7 +160,10 @@ describe("managed prs Codex skills", () => {
     expect(reviewMarkdown).toContain("/prs:review tests");
     expect(issueMarkdown).toContain("name: prs:issue");
     expect(issueMarkdown).toContain("/prs:issue <number> refine");
-    expect(issueMarkdown).toContain("publish managed `<!-- prs:issue-spec -->` and `<!-- prs:issue-plan -->` comments there");
+    expect(issueMarkdown).toContain("use Superpowers brainstorming through GitHub issue comments");
+    expect(issueMarkdown).toContain("preserve the original issue body");
+    expect(issueMarkdown).toContain("post clarifying questions when brainstorming is not satisfied");
+    expect(issueMarkdown).toContain("publish managed `<!-- prs:issue-spec -->` and `<!-- prs:issue-plan -->` comments only once refinement is settled");
     expect(issueMarkdown).toContain("never create linked issues from this refinement flow");
     expect(issueMarkdown).toContain("/prs:issue <number> --all");
     expect(issueMarkdown).toContain(
