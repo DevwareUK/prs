@@ -1252,6 +1252,113 @@ async function publishIssueRefinementCompleteComment(options: {
   );
 }
 
+async function publishRefinedIssueSpecComment(options: {
+  forge: RepositoryForge;
+  issueNumber: number;
+  refinedMarkdown: string;
+  comments: RepositoryComment[];
+  outputLogPath: string;
+}): Promise<RepositoryComment | IssuePlanComment> {
+  const renderedSpec = formatSuperpowersSpecArtifactComment(options.refinedMarkdown);
+  const existingSpecComment = findLatestIssueSpecComment(options.comments);
+
+  if (existingSpecComment) {
+    const comment = await options.forge.updateIssueComment(
+      existingSpecComment.id,
+      renderedSpec
+    );
+    logSuperpowersPlanPublicationMessage(
+      options.outputLogPath,
+      `Updated issue specification comment from refined issue draft: ${comment.url}`
+    );
+    return comment;
+  }
+
+  const comment = await options.forge.createIssuePlanComment(
+    options.issueNumber,
+    renderedSpec
+  );
+  logSuperpowersPlanPublicationMessage(
+    options.outputLogPath,
+    `Created issue specification comment from refined issue draft: ${comment.url}`
+  );
+  return comment;
+}
+
+async function publishIssueRefinementArtifacts(options: {
+  repoRoot: string;
+  forge: RepositoryForge;
+  issueNumber: number;
+  issueTitle: string;
+  issueBody: string;
+  issueUrl: string;
+  refinedMarkdown: string;
+  comments: RepositoryComment[];
+  workspace: IssueRefineWorkspace;
+  useCodexSuperpowers: boolean;
+}): Promise<void> {
+  let specComment: RepositoryComment | IssuePlanComment | undefined;
+  const existingSpecComment = findLatestIssueSpecComment(options.comments) ?? null;
+  const existingPlanComment = findLatestIssuePlanComment(options.comments) ?? null;
+
+  if (options.useCodexSuperpowers) {
+    specComment = await publishSuperpowersSpecArtifact({
+      repoRoot: options.repoRoot,
+      forge: options.forge,
+      issueNumber: options.issueNumber,
+      specFilePath: options.workspace.superpowersSpecFilePath,
+      outputLogPath: options.workspace.outputLogPath,
+      existingSpecComment,
+    });
+  }
+
+  if (!specComment) {
+    specComment = await publishRefinedIssueSpecComment({
+      forge: options.forge,
+      issueNumber: options.issueNumber,
+      refinedMarkdown: options.refinedMarkdown,
+      comments: options.comments,
+      outputLogPath: options.workspace.outputLogPath,
+    });
+  }
+
+  let planComment: IssuePlanComment | undefined;
+  if (options.useCodexSuperpowers) {
+    planComment = await publishSuperpowersPlanArtifact({
+      repoRoot: options.repoRoot,
+      forge: options.forge,
+      issueNumber: options.issueNumber,
+      planFilePath: options.workspace.superpowersPlanFilePath,
+      outputLogPath: options.workspace.outputLogPath,
+      existingPlanComment,
+    });
+  }
+
+  if (!planComment) {
+    await createStructuredIssuePlanComment({
+      repoRoot: options.repoRoot,
+      forge: options.forge,
+      issueNumber: options.issueNumber,
+      issue: {
+        title: options.issueTitle,
+        body: options.issueBody,
+        url: options.issueUrl,
+      },
+      existingPlanComment: existingPlanComment ?? undefined,
+      mode: "explicit-plan-command",
+      comments: options.comments,
+      specAlreadyEnsured: Boolean(specComment),
+    });
+  }
+
+  await publishIssueRefinementCompleteComment({
+    forge: options.forge,
+    issueNumber: options.issueNumber,
+    comments: options.comments,
+    outputLogPath: options.workspace.outputLogPath,
+  });
+}
+
 function formatNumberedMarkdownList(items: string[]): string {
   return items.map((item, index) => `${index + 1}. ${item}`).join("\n");
 }
@@ -1775,10 +1882,6 @@ function buildIssueRefineRuntimePrompt(input: {
   useCodexSuperpowers: boolean;
 }): string {
   const draftFile = toRepoRelativePath(input.repoRoot, input.workspace.draftFilePath);
-  const issueSetFile = toRepoRelativePath(
-    input.repoRoot,
-    input.workspace.issueSetFilePath
-  );
   const runDir = toRepoRelativePath(input.repoRoot, input.workspace.runDir);
   const superpowersSpecFile = toRepoRelativePath(
     input.repoRoot,
@@ -1834,9 +1937,8 @@ function buildIssueRefineRuntimePrompt(input: {
     formatIssueRefineComments(input.comments),
     "",
     `Only write the refined markdown to \`${draftFile}\` once you are happy the important questions and knock-on effects have been answered.`,
-    `If the work is better split into multiple independent implementation issues, write each issue draft as Markdown under \`${runDir}\` and write an issue-set manifest to \`${issueSetFile}\`.`,
-    "The manifest lets prs create linked issues after review. Use local IDs in manifest relationships; prs will replace them with GitHub issue numbers after creation.",
-    "If one issue is enough, write only the existing final Markdown draft path.",
+    "Keep this refinement attached to the original GitHub issue. Do not write an issue-set manifest, do not create linked issue drafts, and do not propose linked issue creation in this workflow.",
+    "If the work seems too large or naturally split, ask scope and splitting questions in the issue-comment conversation instead of splitting it yourself.",
     ...superpowersArtifactInstructions,
     `Use \`${runDir}\` for run artifacts created by this workflow.`,
     "",
@@ -2112,19 +2214,6 @@ function ensurePrsManagedIssueBody(body: string): string {
   }
 
   return `${PRS_MANAGED_ISSUE_MARKER}\n\n${trimmed}`;
-}
-
-function buildLinkedPrsManagedIssueBody(
-  sourceIssueNumber: number,
-  body: string
-): string {
-  return [
-    PRS_MANAGED_ISSUE_MARKER,
-    "",
-    `Refined from source issue #${sourceIssueNumber}.`,
-    "",
-    body.trim(),
-  ].join("\n");
 }
 
 function getPrsLinkedSourceIssueNumber(issue: IssueDetails): number | undefined {
@@ -5473,68 +5562,6 @@ async function runIssueRefineCommand(issueNumber: number): Promise<void> {
     : undefined;
 
   if (issueSet) {
-    if (!forge.isAuthenticated()) {
-      printGeneratedTextPreview(
-        "Generated refined issue draft set",
-        formatIssueDraftSetPreview(repoRoot, issueSet)
-      );
-      console.log(
-        forge.type === "github"
-          ? "Issue refinement apply step skipped because GitHub access is unavailable."
-          : "Issue refinement apply step skipped because repository forge support is disabled by .prs/config.json."
-      );
-      persistIssueRefineSessionState(
-        repoRoot,
-        issueNumber,
-        runtime.type,
-        workspace,
-        resolvedSessionId,
-        {
-          mode: "kept-on-disk",
-        }
-      );
-      return;
-    }
-
-    const reviewedIssueSet = await reviewIssueDraftSet({
-      repoRoot,
-      issueSet,
-      prompt: "Create these linked PRS-managed issues in GitHub? [Y/n/m]: ",
-      promptForLine,
-      reload: () =>
-        loadIssueDraftSet({
-          repoRoot,
-          runDir: workspace.runDir,
-          issueSetFilePath: workspace.issueSetFilePath,
-          fallbackSourceIssueNumber: issueNumber,
-        }),
-    });
-
-    if (!reviewedIssueSet) {
-      persistIssueRefineSessionState(
-        repoRoot,
-        issueNumber,
-        runtime.type,
-        workspace,
-        resolvedSessionId,
-        {
-          mode: "kept-on-disk",
-        }
-      );
-      console.log(
-        `Refined issue set kept at ${toRepoRelativePath(
-          repoRoot,
-          workspace.issueSetFilePath
-        )}.`
-      );
-      return;
-    }
-
-    const createdIssues = await createLinkedIssueDraftSet({
-      issueSet: reviewedIssueSet,
-      forge,
-      forcePrsManaged: true,
-    });
     persistIssueRefineSessionState(
       repoRoot,
       issueNumber,
@@ -5542,32 +5569,19 @@ async function runIssueRefineCommand(issueNumber: number): Promise<void> {
       workspace,
       resolvedSessionId,
       {
-        mode: "created-linked",
-        issues: createdIssues.map((issue) => ({
-          issueNumber: issue.number,
-          issueUrl: issue.url,
-        })),
+        mode: "kept-on-disk",
       }
     );
-    for (const issue of createdIssues) {
-      console.log(`Created linked issue: ${issue.url}`);
-    }
-    if (shouldUseCodexSuperpowers && createdIssues[0]) {
-      await publishSuperpowersSpecArtifact({
+    printGeneratedTextPreview(
+      "Generated issue set ignored by issue refinement",
+      formatIssueDraftSetPreview(repoRoot, issueSet)
+    );
+    console.log(
+      `Issue refinement no longer creates linked issues. The generated issue set was kept at ${toRepoRelativePath(
         repoRoot,
-        forge,
-        issueNumber: createdIssues[0].number,
-        specFilePath: workspace.superpowersSpecFilePath,
-        outputLogPath: workspace.outputLogPath,
-      });
-      await publishSuperpowersPlanArtifact({
-        repoRoot,
-        forge,
-        issueNumber: createdIssues[0].number,
-        planFilePath: workspace.superpowersPlanFilePath,
-        outputLogPath: workspace.outputLogPath,
-      });
-    }
+        workspace.issueSetFilePath
+      )}; rerun refinement with a single original-issue specification or split the work explicitly outside this refinement flow.`
+    );
     return;
   }
 
@@ -5609,9 +5623,7 @@ async function runIssueRefineCommand(issueNumber: number): Promise<void> {
     filePath: workspace.draftFilePath,
     initialContent: draftContents,
     previewHeading: "Generated refined issue draft",
-    prompt: managedSourceIssue
-      ? `Update PRS-managed issue #${issueNumber} in GitHub with this refined specification? [Y/n/m]: `
-      : "Create a linked PRS-managed issue from this refined specification? [Y/n/m]: ",
+    prompt: `Apply this refinement to issue #${issueNumber} and publish managed spec/plan comments? [Y/n/m]: `,
     emptyContentMessage: "Issue refine draft cannot be empty.",
     editorDescription: "issue refine draft",
     promptForLine,
@@ -5638,63 +5650,11 @@ async function runIssueRefineCommand(issueNumber: number): Promise<void> {
   }
 
   const parsedDraft = parseIssueDraftDocument(reviewedDraft.content);
-
-  if (managedSourceIssue) {
-    const updatedBody = shouldUseCodexSuperpowers
-      ? buildIssueSummaryBodyFromDraftBody(parsedDraft.body)
-      : parsedDraft.body;
-    const updatedIssue = await forge.updateIssue(
-      issueNumber,
-      parsedDraft.title,
-      ensurePrsManagedIssueBody(updatedBody)
-    );
-    persistIssueRefineSessionState(
-      repoRoot,
-      issueNumber,
-      runtime.type,
-      workspace,
-      resolvedSessionId,
-      {
-        mode: "updated-existing",
-        issueNumber: updatedIssue.number,
-        issueUrl: updatedIssue.url,
-      }
-    );
-    console.log(`Updated issue: ${updatedIssue.url}`);
-    if (shouldUseCodexSuperpowers) {
-      await publishSuperpowersSpecArtifact({
-        repoRoot,
-        forge,
-        issueNumber: updatedIssue.number,
-        specFilePath: workspace.superpowersSpecFilePath,
-        outputLogPath: workspace.outputLogPath,
-        existingSpecComment: findLatestIssueSpecComment(comments) ?? null,
-      });
-      await publishSuperpowersPlanArtifact({
-        repoRoot,
-        forge,
-        issueNumber: updatedIssue.number,
-        planFilePath: workspace.superpowersPlanFilePath,
-        outputLogPath: workspace.outputLogPath,
-      });
-      await publishIssueRefinementCompleteComment({
-        forge,
-        issueNumber: updatedIssue.number,
-        comments,
-        outputLogPath: workspace.outputLogPath,
-      });
-    }
-    return;
-  }
-
-  const linkedBody = shouldUseCodexSuperpowers
-    ? buildIssueSummaryBodyFromDraftBody(parsedDraft.body)
-    : parsedDraft.body;
-  const linkedIssue = parseCreatedIssueUrl(
-    await forge.createDraftIssue(
-      parsedDraft.title,
-      buildLinkedPrsManagedIssueBody(issueNumber, linkedBody)
-    )
+  const updatedBody = buildIssueSummaryBodyFromDraftBody(parsedDraft.body);
+  const updatedIssue = await forge.updateIssue(
+    issueNumber,
+    parsedDraft.title,
+    managedSourceIssue ? ensurePrsManagedIssueBody(updatedBody) : updatedBody
   );
   persistIssueRefineSessionState(
     repoRoot,
@@ -5703,34 +5663,24 @@ async function runIssueRefineCommand(issueNumber: number): Promise<void> {
     workspace,
     resolvedSessionId,
     {
-      mode: "created-linked",
-      issueNumber: linkedIssue.issueNumber,
-      issueUrl: linkedIssue.issueUrl,
+      mode: "updated-existing",
+      issueNumber: updatedIssue.number,
+      issueUrl: updatedIssue.url,
     }
   );
-  console.log(`Created linked issue: ${linkedIssue.issueUrl}`);
-  if (shouldUseCodexSuperpowers) {
-    await publishSuperpowersSpecArtifact({
-      repoRoot,
-      forge,
-      issueNumber: linkedIssue.issueNumber,
-      specFilePath: workspace.superpowersSpecFilePath,
-      outputLogPath: workspace.outputLogPath,
-    });
-    await publishSuperpowersPlanArtifact({
-      repoRoot,
-      forge,
-      issueNumber: linkedIssue.issueNumber,
-      planFilePath: workspace.superpowersPlanFilePath,
-      outputLogPath: workspace.outputLogPath,
-    });
-    await publishIssueRefinementCompleteComment({
-      forge,
-      issueNumber: linkedIssue.issueNumber,
-      comments: [],
-      outputLogPath: workspace.outputLogPath,
-    });
-  }
+  console.log(`Updated issue: ${updatedIssue.url}`);
+  await publishIssueRefinementArtifacts({
+    repoRoot,
+    forge,
+    issueNumber: updatedIssue.number,
+    issueTitle: parsedDraft.title,
+    issueBody: parsedDraft.body,
+    issueUrl: updatedIssue.url,
+    refinedMarkdown: reviewedDraft.content,
+    comments,
+    workspace,
+    useCodexSuperpowers: shouldUseCodexSuperpowers,
+  });
 }
 
 type IssuePlanResolutionMode = "explicit-plan-command" | "execution-preflight";

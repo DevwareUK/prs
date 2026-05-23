@@ -322,9 +322,10 @@ describe("Issue refine workflow", () => {
       }
 
       if (url.endsWith(`/issues/${issueNumber}/comments`) && init?.method === "POST") {
+        const body = JSON.parse(String(init.body)) as { body: string };
         return createFetchResponse({
           id: 9155,
-          body: "<!-- prs:issue-plan -->\n## Refine Plan",
+          body: body.body,
           html_url:
             `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-9155`,
           updated_at: "2026-04-26T09:35:00Z",
@@ -385,6 +386,11 @@ describe("Issue refine workflow", () => {
                 "utf8"
               );
               writeFileSync(
+                resolve(REPO_ROOT, metadata.runDir as string, "superpowers-spec.md"),
+                "## Settled Specification\n\nRefined body.\n",
+                "utf8"
+              );
+              writeFileSync(
                 resolve(REPO_ROOT, metadata.runDir as string, "superpowers-plan.md"),
                 "## Refine Plan\n\n- Apply the refined work.\n",
                 "utf8"
@@ -428,15 +434,24 @@ describe("Issue refine workflow", () => {
     expect(outputLog).toContain(`Superpowers spec file: ${expectedSpecFile}`);
     expect(outputLog).toContain(`Superpowers plan file: ${expectedPlanFile}`);
 
-    const planCommentCall = fetchMock.mock.calls.find(
-      ([input, init]) =>
-        String(input).endsWith(`/issues/${issueNumber}/comments`) &&
-        (init as RequestInit | undefined)?.method === "POST"
+    const commentBodies = fetchMock.mock.calls
+      .filter(
+        ([input, init]) =>
+          String(input).endsWith(`/issues/${issueNumber}/comments`) &&
+          (init as RequestInit | undefined)?.method === "POST"
+      )
+      .map(
+        ([, init]) => (JSON.parse(String((init as RequestInit).body)) as { body: string }).body
+      );
+    expect(commentBodies).toContain(
+      "<!-- prs:issue-spec -->\n## Settled Specification\n\nRefined body.\n"
     );
-    expect(planCommentCall).toBeDefined();
-    expect(JSON.parse(String(planCommentCall?.[1] && (planCommentCall[1] as RequestInit).body))).toEqual({
-      body: "<!-- prs:issue-plan -->\n## Refine Plan\n\n- Apply the refined work.\n",
-    });
+    expect(commentBodies).toContain(
+      "<!-- prs:issue-plan -->\n## Refine Plan\n\n- Apply the refined work.\n"
+    );
+    expect(commentBodies).toContain(
+      "<!-- prs:issue-refinement-complete -->\nI'm happy that we have what we need now: the settled specification and implementation plan have been attached to this issue in managed comments, so development can start from those artifacts.\n"
+    );
   });
 
   it("resumes the saved Codex issue refine session when it is still tracked", async () => {
@@ -875,12 +890,24 @@ describe("Issue refine workflow", () => {
         return createFetchResponse([]);
       }
 
+      if (url.endsWith(`/issues/${issueNumber}/comments`) && init?.method === "POST") {
+        const body = JSON.parse(String(init.body)) as { body: string };
+        return createFetchResponse({
+          id: 9059,
+          body: body.body,
+          html_url:
+            `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-9059`,
+          updated_at: "2026-04-26T09:35:00Z",
+        });
+      }
+
       throw new Error(`Unexpected fetch call: ${url}`);
     });
     vi.stubGlobal("fetch", fetchMock);
 
     process.env.GH_TOKEN = "";
     process.env.GITHUB_TOKEN = "test-token";
+    process.env.OPENAI_API_KEY = "test-key";
 
     const { run } = await loadCli({
       readlineAnswers: ["y", "Expand the acceptance criteria.", "y"],
@@ -931,8 +958,29 @@ describe("Issue refine workflow", () => {
     expect(patchCall).toBeDefined();
     expect(JSON.parse(String(patchCall?.[1] && (patchCall[1] as RequestInit).body))).toEqual({
       title: "Managed refine title",
-      body: "<!-- prs:managed-issue -->\n\n## Summary\nRefined managed issue body.",
+      body: [
+        "<!-- prs:managed-issue -->",
+        "",
+        "## Summary",
+        "",
+        "Refined managed issue body.",
+        "",
+        "The settled specification and implementation plan are maintained in managed issue comments.",
+      ].join("\n"),
     });
+    const commentBodies = fetchMock.mock.calls
+      .filter(
+        ([input, init]) =>
+          String(input).endsWith(`/issues/${issueNumber}/comments`) &&
+          (init as RequestInit | undefined)?.method === "POST"
+      )
+      .map(
+        ([, init]) => (JSON.parse(String((init as RequestInit).body)) as { body: string }).body
+      );
+    expect(commentBodies[0]).toContain("<!-- prs:issue-spec -->");
+    expect(commentBodies[0]).toContain("Refined managed issue body.");
+    expect(commentBodies[1]).toContain("<!-- prs:issue-plan -->");
+    expect(commentBodies[2]).toContain("<!-- prs:issue-refinement-complete -->");
     expect(
       JSON.parse(
         readFileSync(getIssueRefineSessionStateFilePath(REPO_ROOT, issueNumber), "utf8")
@@ -944,16 +992,19 @@ describe("Issue refine workflow", () => {
     });
   });
 
-  it("does not treat incidental managed-marker text in a normal issue body as a PRS-managed issue", async () => {
+  it("updates a non-managed issue without adding the PRS-managed issue marker", async () => {
     const beforeRuns = listRunDirectories();
     const issueNumber = 63;
-    const createdIssueNumber = 163;
     createMockCodexHome();
     const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
       const url = String(input);
 
       if (url.endsWith(`/issues/${issueNumber}`) && init?.method === "PATCH") {
-        throw new Error("Issue refine should not overwrite a non-managed source issue.");
+        return createFetchResponse({
+          number: issueNumber,
+          title: "Customer report about marker text refined",
+          html_url: getRepositoryIssueUrl(issueNumber),
+        });
       }
 
       if (url.endsWith(`/issues/${issueNumber}`)) {
@@ -969,11 +1020,14 @@ describe("Issue refine workflow", () => {
         return createFetchResponse([]);
       }
 
-      if (url.endsWith("/issues") && init?.method === "POST") {
+      if (url.endsWith(`/issues/${issueNumber}/comments`) && init?.method === "POST") {
+        const body = JSON.parse(String(init.body)) as { body: string };
         return createFetchResponse({
-          number: createdIssueNumber,
-          title: "Customer report about marker text refined",
-          html_url: getRepositoryIssueUrl(createdIssueNumber),
+          id: 9063,
+          body: body.body,
+          html_url:
+            `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-9063`,
+          updated_at: "2026-04-26T09:35:00Z",
         });
       }
 
@@ -983,6 +1037,7 @@ describe("Issue refine workflow", () => {
 
     process.env.GH_TOKEN = "";
     process.env.GITHUB_TOKEN = "test-token";
+    process.env.OPENAI_API_KEY = "test-key";
 
     const { run } = await loadCli({
       readlineAnswers: ["y", "Turn it into an implementation-ready spec.", "y"],
@@ -1030,27 +1085,40 @@ describe("Issue refine workflow", () => {
         String(input).endsWith(`/issues/${issueNumber}`) &&
         (init as RequestInit | undefined)?.method === "PATCH"
     );
-    expect(patchCall).toBeUndefined();
+    expect(patchCall).toBeDefined();
+    expect(JSON.parse(String(patchCall?.[1] && (patchCall[1] as RequestInit).body))).toEqual({
+      title: "Customer report about marker text refined",
+      body: [
+        "## Summary",
+        "",
+        "Dedicated managed issue body.",
+        "",
+        "The settled specification and implementation plan are maintained in managed issue comments.",
+      ].join("\n"),
+    });
 
     const createCall = fetchMock.mock.calls.find(
       ([input, init]) =>
         String(input).endsWith("/issues") &&
         (init as RequestInit | undefined)?.method === "POST"
     );
-    expect(createCall).toBeDefined();
-    expect(JSON.parse(String(createCall?.[1] && (createCall[1] as RequestInit).body))).toMatchObject({
-      title: "Customer report about marker text refined",
-      body: expect.stringContaining("<!-- prs:managed-issue -->"),
-    });
+    expect(createCall).toBeUndefined();
   });
 
-  it("creates a linked PRS-managed issue instead of overwriting a non-managed source issue", async () => {
+  it("publishes non-managed issue refinement artifacts on the original issue", async () => {
     const beforeRuns = listRunDirectories();
     const issueNumber = 60;
-    const createdIssueNumber = 160;
     createMockCodexHome();
     const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
       const url = String(input);
+
+      if (url.endsWith(`/issues/${issueNumber}`) && init?.method === "PATCH") {
+        return createFetchResponse({
+          number: issueNumber,
+          title: "Customer request refined",
+          html_url: getRepositoryIssueUrl(issueNumber),
+        });
+      }
 
       if (url.endsWith(`/issues/${issueNumber}`)) {
         return createFetchResponse({
@@ -1068,11 +1136,14 @@ describe("Issue refine workflow", () => {
         throw new Error("Issue refine should not search for reusable same-title issues.");
       }
 
-      if (url.endsWith("/issues") && init?.method === "POST") {
+      if (url.endsWith(`/issues/${issueNumber}/comments`) && init?.method === "POST") {
+        const body = JSON.parse(String(init.body)) as { body: string };
         return createFetchResponse({
-          number: createdIssueNumber,
-          title: "Customer request refined",
-          html_url: getRepositoryIssueUrl(createdIssueNumber),
+          id: 9060,
+          body: body.body,
+          html_url:
+            `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-9060`,
+          updated_at: "2026-04-26T09:35:00Z",
         });
       }
 
@@ -1082,6 +1153,7 @@ describe("Issue refine workflow", () => {
 
     process.env.GH_TOKEN = "";
     process.env.GITHUB_TOKEN = "test-token";
+    process.env.OPENAI_API_KEY = "test-key";
 
     const { run } = await loadCli({
       readlineAnswers: ["y", "Turn it into an implementation-ready spec.", "y"],
@@ -1129,36 +1201,49 @@ describe("Issue refine workflow", () => {
         String(input).endsWith(`/issues/${issueNumber}`) &&
         (init as RequestInit | undefined)?.method === "PATCH"
     );
-    expect(patchCall).toBeUndefined();
+    expect(patchCall).toBeDefined();
+    expect(JSON.parse(String(patchCall?.[1] && (patchCall[1] as RequestInit).body))).toEqual({
+      title: "Customer request refined",
+      body: [
+        "## Summary",
+        "",
+        "Refined linked issue body.",
+        "",
+        "The settled specification and implementation plan are maintained in managed issue comments.",
+      ].join("\n"),
+    });
 
     const createCall = fetchMock.mock.calls.find(
       ([input, init]) =>
         String(input).endsWith("/issues") &&
         (init as RequestInit | undefined)?.method === "POST"
     );
-    expect(createCall).toBeDefined();
-    expect(JSON.parse(String(createCall?.[1] && (createCall[1] as RequestInit).body))).toMatchObject({
-      title: "Customer request refined",
-      body: [
-        "<!-- prs:managed-issue -->",
-        "",
-        `Refined from source issue #${issueNumber}.`,
-        "",
-        "## Summary\nRefined linked issue body.",
-      ].join("\n"),
-    });
+    expect(createCall).toBeUndefined();
+    const commentBodies = fetchMock.mock.calls
+      .filter(
+        ([input, init]) =>
+          String(input).endsWith(`/issues/${issueNumber}/comments`) &&
+          (init as RequestInit | undefined)?.method === "POST"
+      )
+      .map(
+        ([, init]) => (JSON.parse(String((init as RequestInit).body)) as { body: string }).body
+      );
+    expect(commentBodies[0]).toContain("<!-- prs:issue-spec -->");
+    expect(commentBodies[0]).toContain("Refined linked issue body.");
+    expect(commentBodies[1]).toContain("<!-- prs:issue-plan -->");
+    expect(commentBodies[2]).toContain("<!-- prs:issue-refinement-complete -->");
     expect(
       JSON.parse(
         readFileSync(getIssueRefineSessionStateFilePath(REPO_ROOT, issueNumber), "utf8")
       )
     ).toMatchObject({
-      completionMode: "created-linked",
-      completedIssueNumber: createdIssueNumber,
-      completedIssueUrl: getRepositoryIssueUrl(createdIssueNumber),
+      completionMode: "updated-existing",
+      completedIssueNumber: issueNumber,
+      completedIssueUrl: getRepositoryIssueUrl(issueNumber),
     });
   });
 
-  it("creates multiple linked PRS-managed issues when refining a non-managed source issue", async () => {
+  it("keeps generated issue sets on disk instead of creating linked issues during refinement", async () => {
     const beforeRuns = listRunDirectories();
     const issueNumber = 66;
     createMockCodexHome();
@@ -1179,29 +1264,15 @@ describe("Issue refine workflow", () => {
       }
 
       if (url.endsWith("/issues") && method === "POST") {
-        const body = JSON.parse(String(init?.body)) as { title: string };
-        const createdNumber = body.title.includes("Contract") ? 301 : 302;
-        return createFetchResponse({
-          number: createdNumber,
-          title: body.title,
-          html_url: getRepositoryIssueUrl(createdNumber),
-        });
+        throw new Error("Issue refinement should not create linked issues.");
       }
 
       if (url.endsWith("/issues/301") && method === "PATCH") {
-        return createFetchResponse({
-          number: 301,
-          title: "Refine Contract Work",
-          html_url: getRepositoryIssueUrl(301),
-        });
+        throw new Error("Issue refinement should not update linked issues.");
       }
 
       if (url.endsWith("/issues/302") && method === "PATCH") {
-        return createFetchResponse({
-          number: 302,
-          title: "Refine CLI Work",
-          html_url: getRepositoryIssueUrl(302),
-        });
+        throw new Error("Issue refinement should not update linked issues.");
       }
 
       throw new Error(`Unexpected fetch call: ${url}`);
@@ -1210,8 +1281,9 @@ describe("Issue refine workflow", () => {
     process.env.GH_TOKEN = "";
     process.env.GITHUB_TOKEN = "test-token";
 
+    const messages: string[] = [];
     const { run } = await loadCli({
-      readlineAnswers: ["n", "y"],
+      readlineAnswers: ["n"],
       execFileSyncImpl: (command, args) => {
         if (command === "git" && args[0] === "remote") {
           return "git@github.com:DevwareUK/prs.git\n";
@@ -1270,6 +1342,9 @@ describe("Issue refine workflow", () => {
         throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
       },
     });
+    vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
+      messages.push(String(message ?? ""));
+    });
 
     process.argv = ["node", "prs", "issue", "refine", String(issueNumber)];
     await run();
@@ -1286,26 +1361,21 @@ describe("Issue refine workflow", () => {
     );
     expect(sourcePatchCall).toBeUndefined();
 
-    const patchBodies = fetchMock.mock.calls
-      .filter(([, init]) => (init as RequestInit | undefined)?.method === "PATCH")
-      .map(([, init]) => JSON.parse(String((init as RequestInit).body)) as { body: string });
-    expect(patchBodies).toHaveLength(2);
-    expect(patchBodies[0]?.body).toContain("<!-- prs:managed-issue -->");
-    expect(patchBodies[0]?.body).toContain(`Source issue: #${issueNumber}`);
-    expect(patchBodies[0]?.body).toContain("Blocks: #302");
-    expect(patchBodies[1]?.body).toContain("<!-- prs:managed-issue -->");
-    expect(patchBodies[1]?.body).toContain(`Source issue: #${issueNumber}`);
-    expect(patchBodies[1]?.body).toContain("Depends on: #301");
+    const createIssueCalls = fetchMock.mock.calls.filter(
+      ([input, init]) =>
+        String(input).endsWith("/issues") &&
+        (init as RequestInit | undefined)?.method === "POST"
+    );
+    expect(createIssueCalls).toHaveLength(0);
+    expect(messages.join("\n")).toContain(
+      "Issue refinement no longer creates linked issues."
+    );
     expect(
       JSON.parse(
         readFileSync(getIssueRefineSessionStateFilePath(REPO_ROOT, issueNumber), "utf8")
       )
     ).toMatchObject({
-      completionMode: "created-linked",
-      completedIssues: [
-        { issueNumber: 301, issueUrl: getRepositoryIssueUrl(301) },
-        { issueNumber: 302, issueUrl: getRepositoryIssueUrl(302) },
-      ],
+      completionMode: "kept-on-disk",
     });
   });
 
