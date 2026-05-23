@@ -22,6 +22,7 @@ import {
   resolveGitHubCli,
   resolveGitHubToken,
 } from "./github-auth";
+import { ALL_ISSUE_PLAN_COMMENT_MARKERS } from "@prs/contracts";
 
 function runCommand(
   command: string,
@@ -1153,7 +1154,11 @@ class GitHubRepositoryForge implements RepositoryForge {
     const comments = await listIssueComments(owner, repo, issueNumber, this.repoRoot);
 
     return comments
-      .filter((comment) => includesManagedMarker(comment.body, ALL_ISSUE_PLAN_COMMENT_MARKERS))
+      .filter((comment) =>
+        ALL_ISSUE_PLAN_COMMENT_MARKERS.some((marker) =>
+          comment.body.trimStart().startsWith(marker)
+        )
+      )
       .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0];
   }
 
@@ -1610,7 +1615,3 @@ class GitHubRepositoryForge implements RepositoryForge {
 export function createGitHubRepositoryForge(repoRoot: string): RepositoryForge {
   return new GitHubRepositoryForge(repoRoot);
 }
-import {
-  ALL_ISSUE_PLAN_COMMENT_MARKERS,
-  includesManagedMarker,
-} from "@prs/contracts";

@@ -18,7 +18,7 @@ describe("issue ready tool", () => {
       fetchIssueComments: vi.fn().mockResolvedValue([
         {
           id: 1,
-          body: "One note",
+          body: "<!-- prs:issue-spec -->\nSpec",
           url: "https://github.com/DevwareUK/prs/issues/151#issuecomment-1",
           createdAt: "2026-05-12T08:00:00Z",
           updatedAt: "2026-05-12T08:00:00Z",
@@ -47,6 +47,10 @@ describe("issue ready tool", () => {
       issueNumber: 151,
       issueTitle: "Tighten create route",
       issueUrl: "https://github.com/DevwareUK/prs/issues/151",
+      spec: {
+        status: "present",
+        url: "https://github.com/DevwareUK/prs/issues/151#issuecomment-1",
+      },
       plan: {
         status: "present",
         url: "https://github.com/DevwareUK/prs/issues/151#issuecomment-2",
@@ -69,5 +73,49 @@ describe("issue ready tool", () => {
       suggestedBranchName: "codex/issue-151-tighten-create-route",
       all: false,
     });
+  });
+
+  it("keeps issue readiness ready when managed specification and plan comments are missing", async () => {
+    const repoRoot = mkdtempSync(join(tmpdir(), "prs-issue-ready-missing-artifacts-"));
+    const forge = {
+      type: "github" as const,
+      isAuthenticated: vi.fn(() => true),
+      fetchIssueDetails: vi.fn().mockResolvedValue({
+        title: "Clarify order metadata",
+        body: "Capture extra order information.",
+        url: "https://github.com/DevwareUK/prs/issues/233",
+      }),
+      fetchIssueComments: vi.fn().mockResolvedValue([
+        {
+          id: 1,
+          body: "Should this affect emails?",
+          url: "https://github.com/DevwareUK/prs/issues/233#issuecomment-1",
+          createdAt: "2026-05-12T08:00:00Z",
+          updatedAt: "2026-05-12T08:00:00Z",
+          author: "james",
+          isBot: false,
+        },
+      ]),
+      fetchIssuePlanComment: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const result = await readyIssueTool({
+      all: true,
+      issueNumber: 233,
+      repoRoot,
+      forge,
+      now: () => new Date("2026-05-12T09:30:00.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      status: "ready",
+      issueNumber: 233,
+      spec: { status: "missing" },
+      plan: { status: "missing" },
+      nextAction: "start-superpowers-worktree",
+    });
+    expect(result.message).toContain(
+      "Missing managed refinement artifacts will be generated and published during issue preparation"
+    );
   });
 });

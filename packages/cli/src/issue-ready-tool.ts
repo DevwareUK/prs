@@ -1,8 +1,13 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
+import { ALL_ISSUE_SPEC_COMMENT_MARKERS } from "@prs/contracts";
 import type { IssueDetails, IssuePlanComment, RepositoryComment, RepositoryForge } from "./forge";
 
 type IssuePlanStatus =
+  | { status: "present"; url: string; updatedAt: string }
+  | { status: "missing" };
+
+type IssueSpecStatus =
   | { status: "present"; url: string; updatedAt: string }
   | { status: "missing" };
 
@@ -12,6 +17,7 @@ export type IssueReadyToolResult =
       issueNumber: number;
       issueTitle: string;
       issueUrl: string;
+      spec: IssueSpecStatus;
       plan: IssuePlanStatus;
       comments: { count: number };
       suggestedBranchName: string;
@@ -85,6 +91,31 @@ function renderPlanStatus(
   };
 }
 
+function findLatestIssueSpecComment(
+  comments: RepositoryComment[]
+): RepositoryComment | undefined {
+  return comments
+    .filter((comment) =>
+      ALL_ISSUE_SPEC_COMMENT_MARKERS.some((marker) =>
+        comment.body.trimStart().startsWith(marker)
+      )
+    )
+    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0];
+}
+
+function renderSpecStatus(comments: RepositoryComment[]): IssueSpecStatus {
+  const specComment = findLatestIssueSpecComment(comments);
+  if (!specComment) {
+    return { status: "missing" };
+  }
+
+  return {
+    status: "present",
+    url: specComment.url,
+    updatedAt: specComment.updatedAt,
+  };
+}
+
 function writeMetadata(input: {
   all: boolean;
   comments: RepositoryComment[];
@@ -106,6 +137,7 @@ function writeMetadata(input: {
         suggestedBranchName: input.suggestedBranchName,
         all: input.all,
         runDir: input.runDir,
+        spec: renderSpecStatus(input.comments),
         plan: renderPlanStatus(input.planComment),
         comments: {
           count: input.comments.length,
@@ -146,6 +178,8 @@ export async function readyIssueTool(
   const suggestedBranchName = createIssueBranchName(options.issueNumber, issue.title);
   const metadataFilePath = resolve(runDir, "metadata.json");
   const relativeRunDir = toRepoRelativePath(options.repoRoot, runDir);
+  const spec = renderSpecStatus(comments);
+  const plan = renderPlanStatus(planComment);
 
   writeMetadata({
     all: options.all,
@@ -163,7 +197,8 @@ export async function readyIssueTool(
     issueNumber: options.issueNumber,
     issueTitle: issue.title,
     issueUrl: issue.url,
-    plan: renderPlanStatus(planComment),
+    spec,
+    plan,
     comments: {
       count: comments.length,
     },
@@ -172,6 +207,8 @@ export async function readyIssueTool(
     metadataFilePath: toRepoRelativePath(options.repoRoot, metadataFilePath),
     nextAction: "start-superpowers-worktree",
     message:
-      "Issue context is ready. Use Superpowers to create a fresh worktree from the updated base branch before implementation.",
+      spec.status === "missing" || plan.status === "missing"
+        ? "Issue context is ready. Missing managed refinement artifacts will be generated and published during issue preparation before implementation."
+        : "Issue context is ready. Use Superpowers to create a fresh worktree from the updated base branch before implementation.",
   };
 }

@@ -33,8 +33,11 @@ import {
 } from "@prs/providers";
 import type { ResolvedRepositoryConfigType } from "@prs/contracts";
 import {
+  ALL_ISSUE_PLAN_COMMENT_MARKERS,
   GIT_AI_ALIAS_DEPRECATION_MESSAGE,
+  ALL_ISSUE_SPEC_COMMENT_MARKERS,
   ISSUE_PLAN_COMMENT_MARKER,
+  ISSUE_SPEC_COMMENT_MARKER,
   IssueDraftSet,
   LEGACY_PRODUCT_SHORT_NAME,
   PRODUCT_SHORT_NAME,
@@ -284,6 +287,8 @@ type IssueRunOutcomeSummary = {
 };
 
 const PRS_MANAGED_ISSUE_MARKER = "<!-- prs:managed-issue -->";
+const ISSUE_REFINEMENT_COMPLETE_COMMENT_MARKER =
+  "<!-- prs:issue-refinement-complete -->";
 const ISSUE_RUN_NO_CHANGES_MESSAGE =
   "The interactive runtime completed without producing any file changes to commit.";
 
@@ -980,12 +985,183 @@ function formatSuperpowersPlanArtifactComment(planMarkdown: string): string {
   return `${ISSUE_PLAN_COMMENT_MARKER}\n${trimmed}\n`;
 }
 
+function formatSuperpowersSpecArtifactComment(specMarkdown: string): string {
+  const trimmed = specMarkdown.trim();
+  if (trimmed.startsWith(ISSUE_SPEC_COMMENT_MARKER)) {
+    return `${trimmed}\n`;
+  }
+
+  return `${ISSUE_SPEC_COMMENT_MARKER}\n${trimmed}\n`;
+}
+
 function logSuperpowersPlanPublicationMessage(
   outputLogPath: string,
   message: string
 ): void {
   console.log(message);
   appendFileSync(outputLogPath, `${message}\n`, "utf8");
+}
+
+function findLatestIssueSpecComment(
+  comments: RepositoryComment[]
+): RepositoryComment | undefined {
+  return comments
+    .filter((comment) =>
+      ALL_ISSUE_SPEC_COMMENT_MARKERS.some((marker) =>
+        comment.body.trimStart().startsWith(marker)
+      )
+    )
+    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0];
+}
+
+function findLatestIssuePlanComment(
+  comments: RepositoryComment[]
+): IssuePlanComment | undefined {
+  const comment = comments
+    .filter((candidate) =>
+      ALL_ISSUE_PLAN_COMMENT_MARKERS.some((marker) =>
+        candidate.body.trimStart().startsWith(marker)
+      )
+    )
+    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0];
+
+  if (!comment) {
+    return undefined;
+  }
+
+  return {
+    id: comment.id,
+    body: comment.body,
+    url: comment.url,
+    updatedAt: comment.updatedAt,
+  };
+}
+
+async function publishSuperpowersSpecArtifact(options: {
+  repoRoot: string;
+  forge: RepositoryForge;
+  issueNumber: number;
+  specFilePath: string;
+  outputLogPath: string;
+  existingSpecComment?: RepositoryComment | null;
+}): Promise<RepositoryComment | IssuePlanComment | undefined> {
+  const specFile = toRepoRelativePath(options.repoRoot, options.specFilePath);
+
+  if (!existsSync(options.specFilePath)) {
+    logSuperpowersPlanPublicationMessage(
+      options.outputLogPath,
+      `Superpowers spec publication skipped because ${specFile} does not exist.`
+    );
+    return undefined;
+  }
+
+  const specMarkdown = readFileSync(options.specFilePath, "utf8").trim();
+  if (!specMarkdown) {
+    logSuperpowersPlanPublicationMessage(
+      options.outputLogPath,
+      `Superpowers spec publication skipped because ${specFile} is empty.`
+    );
+    return undefined;
+  }
+
+  const renderedSpec = formatSuperpowersSpecArtifactComment(specMarkdown);
+  const existingSpecComment =
+    options.existingSpecComment === undefined
+      ? findLatestIssueSpecComment(
+          await options.forge.fetchIssueComments(options.issueNumber)
+        )
+      : options.existingSpecComment ?? undefined;
+
+  if (existingSpecComment) {
+    const comment = await options.forge.updateIssueComment(
+      existingSpecComment.id,
+      renderedSpec
+    );
+    logSuperpowersPlanPublicationMessage(
+      options.outputLogPath,
+      `Updated issue specification comment from Superpowers spec: ${comment.url}`
+    );
+    return comment;
+  }
+
+  const comment = await options.forge.createIssuePlanComment(
+    options.issueNumber,
+    renderedSpec
+  );
+  logSuperpowersPlanPublicationMessage(
+    options.outputLogPath,
+    `Created issue specification comment from Superpowers spec: ${comment.url}`
+  );
+  return comment;
+}
+
+function formatIssueSpecCommentFromIssue(input: {
+  issueNumber: number;
+  issue: IssueDetails;
+}): string {
+  const issueBody = input.issue.body.trim() || "(No issue body provided.)";
+
+  return [
+    ISSUE_SPEC_COMMENT_MARKER,
+    `# Issue Specification: ${input.issue.title}`,
+    "",
+    "## Source",
+    "",
+    `- Issue: #${input.issueNumber}`,
+    `- URL: ${input.issue.url}`,
+    "",
+    "## Summary",
+    "",
+    issueBody,
+    "",
+    "## Notes",
+    "",
+    "This specification was generated from the issue context when implementation preparation started. Refine the issue for a richer settled specification when needed.",
+    "",
+  ].join("\n");
+}
+
+async function ensureIssueSpecComment(options: {
+  repoRoot: string;
+  forge: RepositoryForge;
+  issueNumber: number;
+  issue: IssueDetails;
+  specFilePath?: string;
+  outputLogPath?: string;
+  comments?: RepositoryComment[];
+}): Promise<RepositoryComment | IssuePlanComment> {
+  const existingSpecComment = findLatestIssueSpecComment(
+    options.comments ?? (await options.forge.fetchIssueComments(options.issueNumber))
+  );
+  if (existingSpecComment) {
+    return existingSpecComment;
+  }
+
+  if (options.specFilePath && existsSync(options.specFilePath)) {
+    const specComment = await publishSuperpowersSpecArtifact({
+      repoRoot: options.repoRoot,
+      forge: options.forge,
+      issueNumber: options.issueNumber,
+      specFilePath: options.specFilePath,
+      outputLogPath:
+        options.outputLogPath ?? resolve(options.repoRoot, ".prs", "issue-spec.log"),
+      existingSpecComment: null,
+    });
+
+    if (specComment) {
+      return specComment;
+    }
+  }
+
+  const comment = await options.forge.createIssuePlanComment(
+    options.issueNumber,
+    formatIssueSpecCommentFromIssue({
+      issueNumber: options.issueNumber,
+      issue: options.issue,
+    })
+  );
+  console.log(`Created issue specification comment from issue context: ${comment.url}`);
+  return comment;
 }
 
 async function publishSuperpowersPlanArtifact(options: {
@@ -1042,6 +1218,38 @@ async function publishSuperpowersPlanArtifact(options: {
     `Created issue resolution plan comment from Superpowers plan: ${comment.url}`
   );
   return comment;
+}
+
+async function publishIssueRefinementCompleteComment(options: {
+  forge: RepositoryForge;
+  issueNumber: number;
+  comments: RepositoryComment[];
+  outputLogPath: string;
+}): Promise<void> {
+  if (
+    options.comments.some((comment) =>
+      comment.body.includes(ISSUE_REFINEMENT_COMPLETE_COMMENT_MARKER)
+    )
+  ) {
+    logSuperpowersPlanPublicationMessage(
+      options.outputLogPath,
+      "Issue refinement completion comment already exists."
+    );
+    return;
+  }
+
+  const comment = await options.forge.createIssuePlanComment(
+    options.issueNumber,
+    [
+      ISSUE_REFINEMENT_COMPLETE_COMMENT_MARKER,
+      "I'm happy that we have what we need now: the settled specification and implementation plan have been attached to this issue in managed comments, so development can start from those artifacts.",
+      "",
+    ].join("\n")
+  );
+  logSuperpowersPlanPublicationMessage(
+    options.outputLogPath,
+    `Created issue refinement completion comment: ${comment.url}`
+  );
 }
 
 function formatNumberedMarkdownList(items: string[]): string {
@@ -1158,6 +1366,8 @@ function buildIssueDraftRuntimePrompt(
       "- inspect the repository only as needed to understand the idea and scope the work",
       "- avoid asking questions that are already answerable from the codebase",
       "- ask the user targeted clarifying questions only when repository inspection does not answer an important implementation detail",
+      "- ask every currently blocking high-value question needed to reach a settled specification; do not limit yourself to three questions",
+      "- capture the user's why and intended outcome, then inspect nearby code for knock-on effects such as emails, reports, exports, admin screens, APIs, permissions, audit logs, migrations, and integrations",
       "- use `superpowers:brainstorming` first for clarification and scope shaping",
       "- use `superpowers:writing-plans` discipline to make the final issue draft implementation-ready",
       "- override the normal Superpowers spec/plan continuation for this workflow",
@@ -1167,7 +1377,7 @@ function buildIssueDraftRuntimePrompt(
       "- do not create `docs/superpowers/specs/...` documents",
       "- do not create `docs/superpowers/plans/...` documents",
       "- write the completed draft to the provided draft path before exiting",
-      "- write an implementation-ready Markdown issue draft with a top-level title heading and concrete sections such as summary, motivation, scope, requirements, and acceptance criteria when they add value",
+      "- write a concise Markdown issue draft with a top-level title heading and summary/context body; the full settled specification and plan belong in the provided Superpowers artifact files",
       "- keep the draft grounded in actual repository structure, existing patterns, and likely touchpoints",
       "- do not create the GitHub issue directly",
       "- do not modify unrelated repository files",
@@ -1194,6 +1404,8 @@ function buildIssueDraftRuntimePrompt(
     "Instructions to the coding agent:",
     "- inspect the repository only as needed to understand the idea and scope the work",
     "- ask the user targeted clarifying questions when repository inspection does not answer an important implementation detail",
+    "- ask every currently blocking high-value question needed to reach a settled specification; do not limit yourself to three questions",
+    "- capture the user's why and intended outcome, then inspect nearby code for knock-on effects such as emails, reports, exports, admin screens, APIs, permissions, audit logs, migrations, and integrations",
     "- avoid asking questions that are already answerable from the codebase",
     "- own the discovery, questioning, and drafting flow end to end",
     "- keep the draft grounded in actual repository structure, existing patterns, and likely touchpoints",
@@ -1606,10 +1818,10 @@ function buildIssueRefineRuntimePrompt(input: {
   return [
     "You are working in the current repository.",
     "",
-    `Refine GitHub issue #${input.issueNumber} into an implementation-ready specification.`,
+    `Refine GitHub issue #${input.issueNumber} through a non-technical GitHub issue refinement process.`,
     "",
-    "The issue body remains the canonical source of truth for execution.",
-    "Issue comments are refinement context only.",
+    "The issue body is summary context. The settled specification and implementation plan belong in managed issue comments, not in the issue body.",
+    "Issue comments are the refinement conversation. Treat user answers in comments as authoritative refinement context.",
     "",
     ...requestedChangesSection,
     "Current issue title:",
@@ -1621,7 +1833,7 @@ function buildIssueRefineRuntimePrompt(input: {
     "Relevant issue comments:",
     formatIssueRefineComments(input.comments),
     "",
-    `Write the refined markdown to \`${draftFile}\`.`,
+    `Only write the refined markdown to \`${draftFile}\` once you are happy the important questions and knock-on effects have been answered.`,
     `If the work is better split into multiple independent implementation issues, write each issue draft as Markdown under \`${runDir}\` and write an issue-set manifest to \`${issueSetFile}\`.`,
     "The manifest lets prs create linked issues after review. Use local IDs in manifest relationships; prs will replace them with GitHub issue numbers after creation.",
     "If one issue is enough, write only the existing final Markdown draft path.",
@@ -1629,11 +1841,15 @@ function buildIssueRefineRuntimePrompt(input: {
     `Use \`${runDir}\` for run artifacts created by this workflow.`,
     "",
     "Instructions to the coding agent:",
-    "- inspect the repository only as needed to refine the specification",
+    "- inspect the repository to discover nearby code, workflows, and knock-on effects that matter to the user's intention",
+    "- capture the why and intended outcome before deciding scope",
+    "- ask all currently blocking high-value questions in GitHub issue-comment style when information is missing; do not limit yourself to three questions",
+    "- cover access, data changes, existing users/data, acceptance criteria, and likely adjacent behavior such as emails, reports, exports, admin screens, APIs, permissions, audit logs, migrations, and integrations when relevant",
+    "- do not write a partial specification or plan while important questions remain open",
+    "- once the issue is settled, write the full specification artifact and implementation plan artifact",
     "- keep the refined draft grounded in the current repository structure and existing patterns",
-    "- treat issue comments as context, not as the canonical spec",
     ...superpowersAgentInstructions,
-    "- write an implementation-ready Markdown issue draft with a top-level title heading and concrete sections when they add value",
+    "- write an implementation-ready Markdown issue draft with a top-level title heading and concise summary body only",
     "- write the completed draft to the provided draft path before exiting",
     "- do not create or update GitHub issues directly",
     "- do not modify unrelated repository files",
@@ -2957,6 +3173,56 @@ function parseIssueDraftDocument(content: string): { title: string; body: string
     title,
     body,
   };
+}
+
+function extractMarkdownSection(body: string, heading: string): string | undefined {
+  const lines = body.trim().split(/\r?\n/);
+  const headingPattern = new RegExp(`^##\\s+${heading}\\s*$`, "i");
+  const startIndex = lines.findIndex((line) => headingPattern.test(line.trim()));
+  if (startIndex === -1) {
+    return undefined;
+  }
+
+  const remainingLines = lines.slice(startIndex + 1);
+  const nextHeadingIndex = remainingLines.findIndex((line) =>
+    /^##\s+/.test(line.trim())
+  );
+  const sectionLines =
+    nextHeadingIndex === -1
+      ? remainingLines
+      : remainingLines.slice(0, nextHeadingIndex);
+  const sectionBody = sectionLines.join("\n").trim();
+  return sectionBody.length > 0 ? sectionBody : undefined;
+}
+
+function extractOpeningParagraphs(body: string, maxParagraphs: number): string {
+  const withoutHeadings = body
+    .split(/\r?\n/)
+    .filter((line) => !/^#{1,6}\s+/.test(line.trim()))
+    .join("\n")
+    .trim();
+  const paragraphs = withoutHeadings
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.trim())
+    .filter((paragraph) => paragraph.length > 0);
+
+  return paragraphs.slice(0, maxParagraphs).join("\n\n");
+}
+
+function buildIssueSummaryBodyFromDraftBody(body: string): string {
+  const summary =
+    extractMarkdownSection(body, "Summary") ??
+    extractMarkdownSection(body, "Context") ??
+    extractOpeningParagraphs(body, 2);
+  const lines = [
+    "## Summary",
+    "",
+    summary || "See the managed issue specification comment for the settled scope.",
+    "",
+    "The settled specification and implementation plan are maintained in managed issue comments.",
+  ];
+
+  return lines.join("\n").trim();
 }
 
 type ParsedIssueDraftSetIssue = {
@@ -4711,6 +4977,7 @@ async function runIssueDraftCommand(
 
   const repoRoot = getDefaultRepoRoot();
   const workspace = createIssueDraftWorkspace(repoRoot);
+  const shouldPublishSuperpowersSpec = Boolean(options.superpowersSpecFilePath);
   const shouldPublishSuperpowersPlan = Boolean(options.superpowersPlanFilePath);
 
   writeCallerIssueDraftWorkspaceFiles(repoRoot, options, workspace);
@@ -4771,6 +5038,15 @@ async function runIssueDraftCommand(
     for (const issue of createdIssues) {
       console.log(`Created issue: ${issue.url}`);
     }
+    if (shouldPublishSuperpowersSpec && createdIssues[0]) {
+      await publishSuperpowersSpecArtifact({
+        repoRoot,
+        forge,
+        issueNumber: createdIssues[0].number,
+        specFilePath: workspace.superpowersSpecFilePath,
+        outputLogPath: workspace.outputLogPath,
+      });
+    }
     if (shouldPublishSuperpowersPlan && createdIssues[0]) {
       await publishSuperpowersPlanArtifact({
         repoRoot,
@@ -4828,8 +5104,21 @@ async function runIssueDraftCommand(
   }
 
   const parsedDraft = parseIssueDraftDocument(reviewedDraft.content);
-  const issueUrl = await forge.createDraftIssue(parsedDraft.title, parsedDraft.body);
+  const issueBody = shouldPublishSuperpowersSpec
+    ? buildIssueSummaryBodyFromDraftBody(parsedDraft.body)
+    : parsedDraft.body;
+  const issueUrl = await forge.createDraftIssue(parsedDraft.title, issueBody);
   console.log(`Created issue: ${issueUrl}`);
+  if (shouldPublishSuperpowersSpec) {
+    const createdIssue = parseCreatedIssueUrl(issueUrl);
+    await publishSuperpowersSpecArtifact({
+      repoRoot,
+      forge,
+      issueNumber: createdIssue.issueNumber,
+      specFilePath: workspace.superpowersSpecFilePath,
+      outputLogPath: workspace.outputLogPath,
+    });
+  }
   if (shouldPublishSuperpowersPlan) {
     const createdIssue = parseCreatedIssueUrl(issueUrl);
     await publishSuperpowersPlanArtifact({
@@ -4939,6 +5228,15 @@ async function runIssueDraftRuntimeCommand(): Promise<void> {
       console.log(`Created issue: ${issue.url}`);
     }
     if (shouldUseCodexSuperpowers && createdIssues[0]) {
+      await publishSuperpowersSpecArtifact({
+        repoRoot,
+        forge,
+        issueNumber: createdIssues[0].number,
+        specFilePath: workspace.superpowersSpecFilePath,
+        outputLogPath: workspace.outputLogPath,
+      });
+    }
+    if (shouldUseCodexSuperpowers && createdIssues[0]) {
       await publishSuperpowersPlanArtifact({
         repoRoot,
         forge,
@@ -5002,8 +5300,21 @@ async function runIssueDraftRuntimeCommand(): Promise<void> {
   }
 
   const parsedDraft = parseIssueDraftDocument(reviewedDraft.content);
-  const issueUrl = await forge.createDraftIssue(parsedDraft.title, parsedDraft.body);
+  const issueBody = shouldUseCodexSuperpowers
+    ? buildIssueSummaryBodyFromDraftBody(parsedDraft.body)
+    : parsedDraft.body;
+  const issueUrl = await forge.createDraftIssue(parsedDraft.title, issueBody);
   console.log(`Created issue: ${issueUrl}`);
+  if (shouldUseCodexSuperpowers) {
+    const createdIssue = parseCreatedIssueUrl(issueUrl);
+    await publishSuperpowersSpecArtifact({
+      repoRoot,
+      forge,
+      issueNumber: createdIssue.issueNumber,
+      specFilePath: workspace.superpowersSpecFilePath,
+      outputLogPath: workspace.outputLogPath,
+    });
+  }
   if (shouldUseCodexSuperpowers) {
     const createdIssue = parseCreatedIssueUrl(issueUrl);
     await publishSuperpowersPlanArtifact({
@@ -5242,6 +5553,13 @@ async function runIssueRefineCommand(issueNumber: number): Promise<void> {
       console.log(`Created linked issue: ${issue.url}`);
     }
     if (shouldUseCodexSuperpowers && createdIssues[0]) {
+      await publishSuperpowersSpecArtifact({
+        repoRoot,
+        forge,
+        issueNumber: createdIssues[0].number,
+        specFilePath: workspace.superpowersSpecFilePath,
+        outputLogPath: workspace.outputLogPath,
+      });
       await publishSuperpowersPlanArtifact({
         repoRoot,
         forge,
@@ -5322,10 +5640,13 @@ async function runIssueRefineCommand(issueNumber: number): Promise<void> {
   const parsedDraft = parseIssueDraftDocument(reviewedDraft.content);
 
   if (managedSourceIssue) {
+    const updatedBody = shouldUseCodexSuperpowers
+      ? buildIssueSummaryBodyFromDraftBody(parsedDraft.body)
+      : parsedDraft.body;
     const updatedIssue = await forge.updateIssue(
       issueNumber,
       parsedDraft.title,
-      ensurePrsManagedIssueBody(parsedDraft.body)
+      ensurePrsManagedIssueBody(updatedBody)
     );
     persistIssueRefineSessionState(
       repoRoot,
@@ -5341,6 +5662,14 @@ async function runIssueRefineCommand(issueNumber: number): Promise<void> {
     );
     console.log(`Updated issue: ${updatedIssue.url}`);
     if (shouldUseCodexSuperpowers) {
+      await publishSuperpowersSpecArtifact({
+        repoRoot,
+        forge,
+        issueNumber: updatedIssue.number,
+        specFilePath: workspace.superpowersSpecFilePath,
+        outputLogPath: workspace.outputLogPath,
+        existingSpecComment: findLatestIssueSpecComment(comments) ?? null,
+      });
       await publishSuperpowersPlanArtifact({
         repoRoot,
         forge,
@@ -5348,14 +5677,23 @@ async function runIssueRefineCommand(issueNumber: number): Promise<void> {
         planFilePath: workspace.superpowersPlanFilePath,
         outputLogPath: workspace.outputLogPath,
       });
+      await publishIssueRefinementCompleteComment({
+        forge,
+        issueNumber: updatedIssue.number,
+        comments,
+        outputLogPath: workspace.outputLogPath,
+      });
     }
     return;
   }
 
+  const linkedBody = shouldUseCodexSuperpowers
+    ? buildIssueSummaryBodyFromDraftBody(parsedDraft.body)
+    : parsedDraft.body;
   const linkedIssue = parseCreatedIssueUrl(
     await forge.createDraftIssue(
       parsedDraft.title,
-      buildLinkedPrsManagedIssueBody(issueNumber, parsedDraft.body)
+      buildLinkedPrsManagedIssueBody(issueNumber, linkedBody)
     )
   );
   persistIssueRefineSessionState(
@@ -5372,11 +5710,24 @@ async function runIssueRefineCommand(issueNumber: number): Promise<void> {
   );
   console.log(`Created linked issue: ${linkedIssue.issueUrl}`);
   if (shouldUseCodexSuperpowers) {
+    await publishSuperpowersSpecArtifact({
+      repoRoot,
+      forge,
+      issueNumber: linkedIssue.issueNumber,
+      specFilePath: workspace.superpowersSpecFilePath,
+      outputLogPath: workspace.outputLogPath,
+    });
     await publishSuperpowersPlanArtifact({
       repoRoot,
       forge,
       issueNumber: linkedIssue.issueNumber,
       planFilePath: workspace.superpowersPlanFilePath,
+      outputLogPath: workspace.outputLogPath,
+    });
+    await publishIssueRefinementCompleteComment({
+      forge,
+      issueNumber: linkedIssue.issueNumber,
+      comments: [],
       outputLogPath: workspace.outputLogPath,
     });
   }
@@ -5551,7 +5902,23 @@ async function createStructuredIssuePlanComment(options: {
   issue: IssueDetails;
   existingPlanComment?: IssuePlanComment;
   mode: IssuePlanResolutionMode;
+  comments?: RepositoryComment[];
+  specAlreadyEnsured?: boolean;
 }): Promise<IssuePlanComment> {
+  if (
+    options.mode === "execution-preflight" &&
+    !options.existingPlanComment &&
+    !options.specAlreadyEnsured
+  ) {
+    await ensureIssueSpecComment({
+      repoRoot: options.repoRoot,
+      forge: options.forge,
+      issueNumber: options.issueNumber,
+      issue: options.issue,
+      comments: options.comments,
+    });
+  }
+
   const { provider } = await createProvider(options.repoRoot);
   const plan = await generateIssueResolutionPlan(provider, {
     issueNumber: options.issueNumber,
@@ -5591,6 +5958,7 @@ async function createSuperpowersIssuePlanComment(options: {
   issue: IssueDetails;
   existingPlanComment?: IssuePlanComment;
   mode: IssuePlanResolutionMode;
+  comments?: RepositoryComment[];
 }): Promise<IssuePlanComment | undefined> {
   const workspace = createIssuePlanWorkspace(options.repoRoot, options.issueNumber);
   writeIssuePlanWorkspaceFiles(
@@ -5602,11 +5970,23 @@ async function createSuperpowersIssuePlanComment(options: {
   );
 
   console.log("Creating issue resolution plan with Codex Superpowers...");
-  if (options.mode === "execution-preflight") {
+  if (options.mode === "execution-preflight" && !options.existingPlanComment) {
     launchUnattendedRuntime("codex", options.repoRoot, workspace);
   } else {
     const runtime = getInteractiveRuntimeByType("codex");
     runtime.launch(options.repoRoot, workspace);
+  }
+
+  if (options.mode === "execution-preflight") {
+    await ensureIssueSpecComment({
+      repoRoot: options.repoRoot,
+      forge: options.forge,
+      issueNumber: options.issueNumber,
+      issue: options.issue,
+      specFilePath: workspace.superpowersSpecFilePath,
+      outputLogPath: workspace.outputLogPath,
+      comments: options.comments,
+    });
   }
 
   const comment = await publishSuperpowersPlanArtifact({
@@ -5636,9 +6016,13 @@ async function resolveIssuePlanComment(options: {
   issue?: IssueDetails;
   runtimeType?: InteractiveRuntimeType;
 }): Promise<IssuePlanComment> {
-  const existingPlanComment = await options.forge.fetchIssuePlanComment(
-    options.issueNumber
-  );
+  const issueComments =
+    options.mode === "execution-preflight"
+      ? await options.forge.fetchIssueComments(options.issueNumber)
+      : undefined;
+  const existingPlanComment = issueComments
+    ? findLatestIssuePlanComment(issueComments)
+    : await options.forge.fetchIssuePlanComment(options.issueNumber);
 
   if (existingPlanComment && !options.refresh) {
     if (options.mode === "explicit-plan-command") {
@@ -5669,6 +6053,7 @@ async function resolveIssuePlanComment(options: {
       issue,
       existingPlanComment: existingPlanComment,
       mode: options.mode,
+      comments: issueComments,
     });
     if (comment) {
       return comment;
@@ -5684,6 +6069,11 @@ async function resolveIssuePlanComment(options: {
     issue,
     existingPlanComment,
     mode: options.mode,
+    comments: issueComments,
+    specAlreadyEnsured:
+      options.mode === "execution-preflight" &&
+      !existingPlanComment &&
+      superpowersDecision.useSuperpowers,
   });
 }
 

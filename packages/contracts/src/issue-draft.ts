@@ -57,8 +57,7 @@ export const IssueDraftGuidanceClarify = z.object({
     .default([]),
   questions: z
     .array(z.string().trim().min(1, "questions items must be non-empty"))
-    .min(1, "questions must contain at least one item")
-    .max(3, "questions must contain at most three items"),
+    .min(1, "questions must contain at least one item"),
 });
 
 export const IssueDraftGuidanceReady = z.object({

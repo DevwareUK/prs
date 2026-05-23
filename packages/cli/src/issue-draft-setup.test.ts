@@ -740,7 +740,7 @@ describe("Issue draft and setup workflows", () => {
     expect(outputLog).toContain(`Superpowers plan file: ${expectedPlanFile}`);
   });
 
-  it("creates a managed issue plan comment from a Superpowers draft plan artifact", async () => {
+  it("creates managed issue spec and plan comments from Superpowers draft artifacts", async () => {
     const beforeDrafts = listIssueDraftFiles();
     const beforeRuns = listRunDirectories();
     const createdIssueNumber = 101;
@@ -761,11 +761,13 @@ describe("Issue draft and setup workflows", () => {
       }
 
       if (url.endsWith(`/issues/${createdIssueNumber}/comments`) && init?.method === "POST") {
+        const requestBody = JSON.parse(String(init.body)) as { body: string };
+        const isSpec = requestBody.body.includes("<!-- prs:issue-spec -->");
         return createFetchResponse({
-          id: 9001,
-          body: "<!-- prs:issue-plan -->\n## Superpowers Plan",
+          id: isSpec ? 9000 : 9001,
+          body: requestBody.body,
           html_url:
-            `https://github.com/DevwareUK/prs/issues/${createdIssueNumber}#issuecomment-9001`,
+            `https://github.com/DevwareUK/prs/issues/${createdIssueNumber}#issuecomment-${isSpec ? 9000 : 9001}`,
           updated_at: "2026-04-26T09:30:00Z",
         });
       }
@@ -809,7 +811,12 @@ describe("Issue draft and setup workflows", () => {
               const { metadata, runDir } = readLatestRunMetadata();
               writeFileSync(
                 resolve(REPO_ROOT, metadata.draftFile as string),
-                "# Superpowers draft title\n\n## Summary\nDraft body.\n",
+                "# Superpowers draft title\n\n## Summary\nDraft body.\n\n## Requirements\n- Full requirement belongs in the spec comment.\n",
+                "utf8"
+              );
+              writeFileSync(
+                resolve(REPO_ROOT, metadata.runDir as string, "superpowers-spec.md"),
+                "## Superpowers Spec\n\n- Publish this spec.\n",
                 "utf8"
               );
               writeFileSync(
@@ -840,10 +847,35 @@ describe("Issue draft and setup workflows", () => {
     expect(createdRunDir).toBeDefined();
     cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
 
+    const issueCreateCall = fetchMock.mock.calls.find(
+      ([input, init]) =>
+        String(input).endsWith("/issues") &&
+        (init as RequestInit | undefined)?.method === "POST"
+    );
+    expect(issueCreateCall).toBeDefined();
+    expect(JSON.parse(String(issueCreateCall?.[1] && (issueCreateCall[1] as RequestInit).body))).toEqual({
+      title: "Superpowers draft title",
+      body:
+        "## Summary\n\nDraft body.\n\nThe settled specification and implementation plan are maintained in managed issue comments.",
+      labels: [],
+    });
+
+    const specCommentCall = fetchMock.mock.calls.find(
+      ([input, init]) =>
+        String(input).endsWith(`/issues/${createdIssueNumber}/comments`) &&
+        (init as RequestInit | undefined)?.method === "POST" &&
+        String((init as RequestInit).body).includes("prs:issue-spec")
+    );
+    expect(specCommentCall).toBeDefined();
+    expect(JSON.parse(String(specCommentCall?.[1] && (specCommentCall[1] as RequestInit).body))).toEqual({
+      body: "<!-- prs:issue-spec -->\n## Superpowers Spec\n\n- Publish this spec.\n",
+    });
+
     const planCommentCall = fetchMock.mock.calls.find(
       ([input, init]) =>
         String(input).endsWith(`/issues/${createdIssueNumber}/comments`) &&
-        (init as RequestInit | undefined)?.method === "POST"
+        (init as RequestInit | undefined)?.method === "POST" &&
+        String((init as RequestInit).body).includes("prs:issue-plan")
     );
     expect(planCommentCall).toBeDefined();
     expect(JSON.parse(String(planCommentCall?.[1] && (planCommentCall[1] as RequestInit).body))).toEqual({

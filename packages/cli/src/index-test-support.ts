@@ -1427,6 +1427,10 @@ async function loadCli(options: {
       "<!-- prs:issue-plan -->",
       "<!-- git-ai:issue-plan -->",
     ],
+    ALL_ISSUE_SPEC_COMMENT_MARKERS: [
+      "<!-- prs:issue-spec -->",
+      "<!-- git-ai:issue-spec -->",
+    ],
     ALL_PR_ASSISTANT_START_MARKERS: [
       "<!-- prs:pr-assistant:start -->",
       "<!-- git-ai:pr-assistant:start -->",
@@ -1452,6 +1456,7 @@ async function loadCli(options: {
     includesManagedMarker: (body: string, markers: string[]) =>
       markers.some((marker) => body.includes(marker)),
     ISSUE_PLAN_COMMENT_MARKER: "<!-- prs:issue-plan -->",
+    ISSUE_SPEC_COMMENT_MARKER: "<!-- prs:issue-spec -->",
     IssueDraftSet: {
       parse: (value: unknown) => {
         const manifest = value as {

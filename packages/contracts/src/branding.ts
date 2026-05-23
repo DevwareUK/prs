@@ -32,6 +32,13 @@ export const ALL_ISSUE_PLAN_COMMENT_MARKERS = [
   LEGACY_ISSUE_PLAN_COMMENT_MARKER,
 ] as const;
 
+export const ISSUE_SPEC_COMMENT_MARKER = "<!-- prs:issue-spec -->";
+export const LEGACY_ISSUE_SPEC_COMMENT_MARKER = "<!-- git-ai:issue-spec -->";
+export const ALL_ISSUE_SPEC_COMMENT_MARKERS = [
+  ISSUE_SPEC_COMMENT_MARKER,
+  LEGACY_ISSUE_SPEC_COMMENT_MARKER,
+] as const;
+
 export const PR_REVIEW_COMMENT_MARKER = "<!-- prs:pr-review -->";
 export const LEGACY_PR_REVIEW_COMMENT_MARKER = "<!-- git-ai-pr-review -->";
 export const ALL_PR_REVIEW_COMMENT_MARKERS = [
