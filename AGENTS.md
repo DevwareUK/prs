@@ -11,7 +11,7 @@ These instructions apply to the entire repository.
 - Treat these as command-surface changes that require a README update:
   - root `package.json` scripts
   - workspace package scripts under `packages/` or `actions/`
-  - `git-ai` CLI commands, subcommands, flags, defaults, prerequisites, or outputs
+  - `prs` CLI commands, subcommands, flags, defaults, prerequisites, or outputs
   - GitHub Action local entrypoints, inputs, outputs, or required environment variables
   - workflow commands in documented setup or usage flows
 - Do not leave README command examples stale. If an example command would no longer work after your change, update or remove it.

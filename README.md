@@ -26,8 +26,6 @@ Recommended launch path today:
 
 `bedrock-claude` and `claude-code` remain supported for advanced customization, but they are not the default first-offer path and some workflows remain intentionally asymmetric.
 
-`prs` is the canonical CLI name. The legacy `git-ai` command still works during the migration window, but it now prints a deprecation warning before continuing.
-
 ## Primary offer
 
 Start here if you are evaluating `prs` for a team:

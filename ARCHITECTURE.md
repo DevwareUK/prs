@@ -1,4 +1,4 @@
-# git-ai Architecture
+# prs Architecture
 
 This repository is a pnpm monorepo for reusable AI tooling, provider adapters, GitHub Actions, a CLI, and Husky Git hook integration.
 

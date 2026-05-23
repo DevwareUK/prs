@@ -5,7 +5,7 @@ import {
 } from "./actionable-github";
 import { formatGitHubAuthDiagnostics, resolveGitHubToken } from "./github-auth";
 
-const ISSUE_PLAN_MARKERS = ["<!-- prs:issue-plan -->", "<!-- git-ai:issue-plan -->"];
+const ISSUE_PLAN_MARKERS = ["<!-- prs:issue-plan -->"];
 
 export type IssueListToolResult =
   | {

@@ -11,10 +11,6 @@ import {
 import { delimiter, isAbsolute, resolve } from "node:path";
 import {
   GENERATED_BY_SETUP_HEADER,
-  LEGACY_ACTION_REPOSITORY,
-  LEGACY_GENERATED_BY_SETUP_HEADER,
-  LEGACY_SETUP_SECTION_END,
-  LEGACY_SETUP_SECTION_START,
   SETUP_SECTION_END,
   SETUP_SECTION_START,
   type RepositoryLocalRuntimeConfigType,
@@ -40,9 +36,9 @@ import { getInteractiveRuntimeByType, isCodexSuperpowersAvailable } from "./runt
 const SETUP_USAGE = ["Usage:", "  prs setup", "  prs setup --update-skills"].join("\n");
 const AGENTS_SECTION_START = SETUP_SECTION_START;
 const AGENTS_SECTION_END = SETUP_SECTION_END;
-const GIT_AI_WORKFLOW_MARKER = GENERATED_BY_SETUP_HEADER;
-const GIT_AI_ACTION_REF = "main";
-const GIT_AI_ACTION_REPOSITORY = "DevwareUK/prs";
+const PRS_WORKFLOW_MARKER = GENERATED_BY_SETUP_HEADER;
+const PRS_ACTION_REF = "main";
+const PRS_ACTION_REPOSITORY = "DevwareUK/prs";
 
 type ForgeType = "github" | "none";
 type PackageManagerType = "pnpm" | "yarn" | "npm";
@@ -573,76 +569,32 @@ function detectIssueUseCodexSuperpowers(
       };
 }
 
-function getGitAiWorkflowPath(repoRoot: string, fileName: string): string {
+function getGitHubWorkflowPath(repoRoot: string, fileName: string): string {
   return resolve(repoRoot, ".github", "workflows", fileName);
-}
-
-function getLegacyWorkflowFileName(workflowId: GitHubWorkflowId): string {
-  if (workflowId === "pr-review") {
-    return "git-ai-pr-review.yml";
-  }
-
-  if (workflowId === "pr-assistant") {
-    return "git-ai-pr-assistant.yml";
-  }
-
-  return "git-ai-test-suggestions.yml";
-}
-
-function getLegacyWorkflowPath(repoRoot: string, workflowId: GitHubWorkflowId): string {
-  return getGitAiWorkflowPath(repoRoot, getLegacyWorkflowFileName(workflowId));
-}
-
-function isLegacyManagedGitHubWorkflowContent(
-  content: string,
-  workflowId: GitHubWorkflowId
-): boolean {
-  const actionPath =
-    workflowId === "pr-review"
-      ? "actions/pr-review"
-      : workflowId === "pr-assistant"
-        ? "actions/pr-assistant"
-        : "actions/test-suggestions";
-
-  return (
-    content.includes(LEGACY_GENERATED_BY_SETUP_HEADER) ||
-    content.includes(`DevwareUK/ai-actions/${actionPath}@`) ||
-    content.includes(`${LEGACY_ACTION_REPOSITORY}/${actionPath}@`)
-  );
 }
 
 function isManagedGitHubWorkflow(
   repoRoot: string,
   workflow: GitHubWorkflowTemplate
 ): boolean {
-  const filePath = getGitAiWorkflowPath(repoRoot, workflow.fileName);
+  const filePath = getGitHubWorkflowPath(repoRoot, workflow.fileName);
   if (existsSync(filePath)) {
     const content = readFileSync(filePath, "utf8");
-    return (
-      content.includes(GIT_AI_WORKFLOW_MARKER) ||
-      isLegacyManagedGitHubWorkflowContent(content, workflow.id)
-    );
+    return content.includes(PRS_WORKFLOW_MARKER);
   }
 
-  const legacyPath = getLegacyWorkflowPath(repoRoot, workflow.id);
-  if (!existsSync(legacyPath)) {
-    return false;
-  }
-
-  return isLegacyManagedGitHubWorkflowContent(readFileSync(legacyPath, "utf8"), workflow.id);
+  return false;
 }
 
 function findMissingGitHubWorkflowIds(repoRoot: string): GitHubWorkflowId[] {
   return RECOMMENDED_GITHUB_WORKFLOWS.filter(
-    (workflow) =>
-      !existsSync(getGitAiWorkflowPath(repoRoot, workflow.fileName)) &&
-      !existsSync(getLegacyWorkflowPath(repoRoot, workflow.id))
+    (workflow) => !existsSync(getGitHubWorkflowPath(repoRoot, workflow.fileName))
   ).map((workflow) => workflow.id);
 }
 
 function findActionableGitHubWorkflowIds(repoRoot: string): GitHubWorkflowId[] {
   return RECOMMENDED_GITHUB_WORKFLOWS.filter((workflow) => {
-    const filePath = getGitAiWorkflowPath(repoRoot, workflow.fileName);
+    const filePath = getGitHubWorkflowPath(repoRoot, workflow.fileName);
     return !existsSync(filePath) || isManagedGitHubWorkflow(repoRoot, workflow);
   }).map((workflow) => workflow.id);
 }
@@ -668,7 +620,7 @@ function detectEnabledGitHubWorkflowIds(
       return true;
     }
 
-    return !existsSync(getGitAiWorkflowPath(repoRoot, workflow.fileName));
+    return !existsSync(getGitHubWorkflowPath(repoRoot, workflow.fileName));
   }).map((workflow) => workflow.id);
 }
 
@@ -690,14 +642,14 @@ function renderGitHubWorkflowStateSummary(
   return `enabled ${enabledLabel}; disabled ${disabledLabel}`;
 }
 
-function renderGitAiWorkflowHeader(description: string): string[] {
-  return [GIT_AI_WORKFLOW_MARKER, `# ${description}`, ""];
+function renderPrsWorkflowHeader(description: string): string[] {
+  return [PRS_WORKFLOW_MARKER, `# ${description}`, ""];
 }
 
 function renderPrReviewWorkflow(): string {
   return [
-    ...renderGitAiWorkflowHeader(
-      "Requires repository secret OPENAI_API_KEY. Optional repository variables: GIT_AI_OPENAI_MODEL, GIT_AI_OPENAI_BASE_URL."
+    ...renderPrsWorkflowHeader(
+      "Requires repository secret OPENAI_API_KEY. Optional repository variables: PRS_OPENAI_MODEL, PRS_OPENAI_BASE_URL."
     ),
     "name: Pull Request Smith PR Review",
     "",
@@ -742,7 +694,7 @@ function renderPrReviewWorkflow(): string {
     "        id: linked_issue",
     "        uses: actions/github-script@v7",
     "        with:",
-    "          github-token: ${{ secrets.GITHUB_TOKEN }}",
+    "          github-token: ${{ github.token }}",
     "          script: |",
     "            const { owner, repo } = context.repo;",
     "            const pull_number = context.payload.pull_request.number;",
@@ -781,7 +733,7 @@ function renderPrReviewWorkflow(): string {
     "      - name: Generate AI PR review",
     "        id: pr_review",
     "        if: ${{ steps.diff.outputs.has_diff == 'true' }}",
-    `        uses: ${GIT_AI_ACTION_REPOSITORY}/actions/pr-review@${GIT_AI_ACTION_REF}`,
+    `        uses: ${PRS_ACTION_REPOSITORY}/actions/pr-review@${PRS_ACTION_REF}`,
     "        with:",
     "          diff_file: ${{ steps.diff.outputs.diff_file }}",
     "          pr_title: ${{ github.event.pull_request.title }}",
@@ -791,8 +743,8 @@ function renderPrReviewWorkflow(): string {
     "          issue_body: ${{ steps.linked_issue.outputs.issue_body }}",
     "          issue_url: ${{ steps.linked_issue.outputs.issue_url }}",
     "          openai_api_key: ${{ secrets.OPENAI_API_KEY }}",
-    "          openai_model: ${{ vars.GIT_AI_OPENAI_MODEL }}",
-    "          openai_base_url: ${{ vars.GIT_AI_OPENAI_BASE_URL }}",
+    "          openai_model: ${{ vars.PRS_OPENAI_MODEL }}",
+    "          openai_base_url: ${{ vars.PRS_OPENAI_BASE_URL }}",
     "",
     "      - name: Create or update managed PR review comment",
     "        if: ${{ steps.pr_review.outputs.body != '' }}",
@@ -800,7 +752,7 @@ function renderPrReviewWorkflow(): string {
     "        env:",
     "          PR_REVIEW_BODY: ${{ steps.pr_review.outputs.body }}",
     "        with:",
-    "          github-token: ${{ secrets.GITHUB_TOKEN }}",
+    "          github-token: ${{ github.token }}",
     "          script: |",
     "            const marker = \"<!-- prs:pr-review -->\";",
     "            const managedBody = `${marker}\\n${process.env.PR_REVIEW_BODY}`;",
@@ -846,7 +798,7 @@ function renderPrReviewWorkflow(): string {
     "          DIFF_FILE: ${{ steps.diff.outputs.diff_file }}",
     "          HEAD_SHA: ${{ github.event.pull_request.head.sha }}",
     "        with:",
-    "          github-token: ${{ secrets.GITHUB_TOKEN }}",
+    "          github-token: ${{ github.token }}",
     "          script: |",
     "            const { readFileSync } = require(\"node:fs\");",
     "",
@@ -1120,8 +1072,8 @@ function renderPrReviewWorkflow(): string {
 
 function renderPrAssistantWorkflow(): string {
   return [
-    ...renderGitAiWorkflowHeader(
-      "Requires repository secret OPENAI_API_KEY. Optional repository variables: GIT_AI_OPENAI_MODEL, GIT_AI_OPENAI_BASE_URL."
+    ...renderPrsWorkflowHeader(
+      "Requires repository secret OPENAI_API_KEY. Optional repository variables: PRS_OPENAI_MODEL, PRS_OPENAI_BASE_URL."
     ),
     "name: Pull Request Smith PR Assistant",
     "",
@@ -1174,15 +1126,15 @@ function renderPrAssistantWorkflow(): string {
     "      - name: Generate PR assistant section",
     "        id: pr_assistant",
     "        if: ${{ steps.diff.outputs.has_diff == 'true' }}",
-    `        uses: ${GIT_AI_ACTION_REPOSITORY}/actions/pr-assistant@${GIT_AI_ACTION_REF}`,
+    `        uses: ${PRS_ACTION_REPOSITORY}/actions/pr-assistant@${PRS_ACTION_REF}`,
     "        with:",
     "          diff_file: ${{ steps.diff.outputs.diff_file }}",
     "          commit_messages_file: ${{ steps.commits.outputs.commit_messages_file }}",
     "          pr_title: ${{ github.event.pull_request.title }}",
     "          pr_body: ${{ github.event.pull_request.body }}",
     "          openai_api_key: ${{ secrets.OPENAI_API_KEY }}",
-    "          openai_model: ${{ vars.GIT_AI_OPENAI_MODEL }}",
-    "          openai_base_url: ${{ vars.GIT_AI_OPENAI_BASE_URL }}",
+    "          openai_model: ${{ vars.PRS_OPENAI_MODEL }}",
+    "          openai_base_url: ${{ vars.PRS_OPENAI_BASE_URL }}",
     "",
     "      - name: Update PR body",
     "        if: ${{ steps.pr_assistant.outputs.body != '' }}",
@@ -1190,7 +1142,7 @@ function renderPrAssistantWorkflow(): string {
     "        env:",
     "          BODY: ${{ steps.pr_assistant.outputs.body }}",
     "        with:",
-    "          github-token: ${{ secrets.GITHUB_TOKEN }}",
+    "          github-token: ${{ github.token }}",
     "          script: |",
     "            await github.rest.pulls.update({",
     "              owner: context.repo.owner,",
@@ -1204,8 +1156,8 @@ function renderPrAssistantWorkflow(): string {
 
 function renderTestSuggestionsWorkflow(): string {
   return [
-    ...renderGitAiWorkflowHeader(
-      "Requires repository secret OPENAI_API_KEY. Optional repository variables: GIT_AI_OPENAI_MODEL, GIT_AI_OPENAI_BASE_URL."
+    ...renderPrsWorkflowHeader(
+      "Requires repository secret OPENAI_API_KEY. Optional repository variables: PRS_OPENAI_MODEL, PRS_OPENAI_BASE_URL."
     ),
     "name: Pull Request Smith Test Suggestions",
     "",
@@ -1250,7 +1202,7 @@ function renderTestSuggestionsWorkflow(): string {
     "        id: existing_comment",
     "        uses: actions/github-script@v7",
     "        with:",
-    "          github-token: ${{ secrets.GITHUB_TOKEN }}",
+    "          github-token: ${{ github.token }}",
     "          script: |",
     "            const fs = require(\"node:fs\");",
     "            const path = require(\"node:path\");",
@@ -1289,15 +1241,15 @@ function renderTestSuggestionsWorkflow(): string {
     "      - name: Generate test suggestions",
     "        id: test_suggestions",
     "        if: ${{ steps.diff.outputs.has_diff == 'true' }}",
-    `        uses: ${GIT_AI_ACTION_REPOSITORY}/actions/test-suggestions@${GIT_AI_ACTION_REF}`,
+    `        uses: ${PRS_ACTION_REPOSITORY}/actions/test-suggestions@${PRS_ACTION_REF}`,
     "        with:",
     "          diff_file: ${{ steps.diff.outputs.diff_file }}",
     "          existing_comment_file: ${{ steps.existing_comment.outputs.existing_comment_file }}",
     "          pr_title: ${{ github.event.pull_request.title }}",
     "          pr_body: ${{ github.event.pull_request.body }}",
     "          openai_api_key: ${{ secrets.OPENAI_API_KEY }}",
-    "          openai_model: ${{ vars.GIT_AI_OPENAI_MODEL }}",
-    "          openai_base_url: ${{ vars.GIT_AI_OPENAI_BASE_URL }}",
+    "          openai_model: ${{ vars.PRS_OPENAI_MODEL }}",
+    "          openai_base_url: ${{ vars.PRS_OPENAI_BASE_URL }}",
     "",
     "      - name: Create or update managed PR comment",
     "        if: ${{ steps.test_suggestions.outputs.body != '' }}",
@@ -1306,7 +1258,7 @@ function renderTestSuggestionsWorkflow(): string {
     "          TEST_SUGGESTIONS_BODY: ${{ steps.test_suggestions.outputs.body }}",
     "          EXISTING_COMMENT_ID: ${{ steps.existing_comment.outputs.comment_id }}",
     "        with:",
-    "          github-token: ${{ secrets.GITHUB_TOKEN }}",
+    "          github-token: ${{ github.token }}",
     "          script: |",
     "            const { owner, repo } = context.repo;",
     "            const issue_number = context.payload.pull_request.number;",
@@ -1359,7 +1311,6 @@ function installGitHubWorkflows(
 
   for (const workflow of RECOMMENDED_GITHUB_WORKFLOWS) {
     const filePath = resolve(workflowsDir, workflow.fileName);
-    const legacyPath = getLegacyWorkflowPath(repoRoot, workflow.id);
     const nextContent = `${renderGitHubWorkflow(workflow.id)}\n`;
     const enabled = workflowIds.includes(workflow.id);
 
@@ -1373,23 +1324,12 @@ function installGitHubWorkflows(
         }
       }
 
-      if (
-        existsSync(legacyPath) &&
-        isLegacyManagedGitHubWorkflowContent(readFileSync(legacyPath, "utf8"), workflow.id)
-      ) {
-        rmSync(legacyPath, { force: true });
-        result.removed.push(legacyPath);
-      }
-
       continue;
     }
 
     if (!existsSync(filePath)) {
       writeFileSync(filePath, nextContent, "utf8");
       result.installed.push(filePath);
-      if (existsSync(legacyPath) && isLegacyManagedGitHubWorkflowContent(readFileSync(legacyPath, "utf8"), workflow.id)) {
-        rmSync(legacyPath, { force: true });
-      }
       continue;
     }
 
@@ -1400,9 +1340,6 @@ function installGitHubWorkflows(
 
     writeFileSync(filePath, nextContent, "utf8");
     result.updated.push(filePath);
-    if (existsSync(legacyPath) && isLegacyManagedGitHubWorkflowContent(readFileSync(legacyPath, "utf8"), workflow.id)) {
-      rmSync(legacyPath, { force: true });
-    }
   }
 
   return result;
@@ -2095,7 +2032,7 @@ function upsertAgentsSection(repoRoot: string, section: string): void {
   const agentsPath = resolve(repoRoot, "AGENTS.md");
   const existing = existsSync(agentsPath) ? readFileSync(agentsPath, "utf8") : "";
   const markerPattern = new RegExp(
-    `(?:${escapeRegExp(AGENTS_SECTION_START)}|${escapeRegExp(LEGACY_SETUP_SECTION_START)})[\\s\\S]*?(?:${escapeRegExp(AGENTS_SECTION_END)}|${escapeRegExp(LEGACY_SETUP_SECTION_END)})\\n?`,
+    `${escapeRegExp(AGENTS_SECTION_START)}[\\s\\S]*?${escapeRegExp(AGENTS_SECTION_END)}\\n?`,
     "m"
   );
   const nextContent = markerPattern.test(existing)
@@ -2499,7 +2436,7 @@ export async function runSetupCommand(options: {
       "Next step: add the `OPENAI_API_KEY` repository secret in GitHub before enabling the installed workflows."
     );
     console.log(
-      "Optional GitHub repository variables: `GIT_AI_OPENAI_MODEL`, `GIT_AI_OPENAI_BASE_URL`."
+      "Optional GitHub repository variables: `PRS_OPENAI_MODEL`, `PRS_OPENAI_BASE_URL`."
     );
   }
 }

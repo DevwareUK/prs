@@ -1,20 +1,16 @@
 import {
-  ALL_PR_ASSISTANT_END_MARKERS,
-  ALL_PR_ASSISTANT_START_MARKERS,
   PRAssistantOutputType,
+  PR_ASSISTANT_END_MARKER,
+  PR_ASSISTANT_START_MARKER,
 } from "@prs/contracts";
 import { formatPRImpactProfileMarkdown } from "./pr-impact-profile";
 export {
   PR_ASSISTANT_END_MARKER,
   PR_ASSISTANT_START_MARKER,
 } from "@prs/contracts";
-import {
-  PR_ASSISTANT_END_MARKER,
-  PR_ASSISTANT_START_MARKER,
-} from "@prs/contracts";
 
 const PR_ASSISTANT_SECTION_PATTERN = new RegExp(
-  `${buildMarkerGroup(ALL_PR_ASSISTANT_START_MARKERS)}[\\s\\S]*?${buildMarkerGroup(ALL_PR_ASSISTANT_END_MARKERS)}`,
+  `${escapeRegExp(PR_ASSISTANT_START_MARKER)}[\\s\\S]*?${escapeRegExp(PR_ASSISTANT_END_MARKER)}`,
   "m"
 );
 
@@ -24,10 +20,6 @@ type PRAssistantSectionInput =
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function buildMarkerGroup(markers: readonly string[]): string {
-  return `(?:${markers.map((marker) => escapeRegExp(marker)).join("|")})`;
 }
 
 function renderBulletSection(

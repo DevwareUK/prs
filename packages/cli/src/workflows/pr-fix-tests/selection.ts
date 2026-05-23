@@ -1,5 +1,5 @@
 import type { RepositoryComment } from "../../forge";
-import { ALL_TEST_SUGGESTIONS_COMMENT_MARKERS } from "@prs/contracts";
+import { TEST_SUGGESTIONS_COMMENT_MARKER } from "@prs/contracts";
 import type {
   PullRequestTestSuggestion,
   PullRequestTestSuggestionPriority,
@@ -266,9 +266,7 @@ export function findManagedTestSuggestionsComment(
   comments: RepositoryComment[]
 ): RepositoryComment | undefined {
   return comments
-    .filter((comment) =>
-      ALL_TEST_SUGGESTIONS_COMMENT_MARKERS.some((marker) => comment.body.includes(marker))
-    )
+    .filter((comment) => comment.body.includes(TEST_SUGGESTIONS_COMMENT_MARKER))
     .sort((left, right) => {
       const updatedAtComparison = Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
       if (updatedAtComparison !== 0) {
@@ -284,9 +282,7 @@ export function parseManagedTestSuggestionsComment(
 ): PullRequestTestSuggestionsComment {
   const bodyWithoutMarker = stripResolvedTestSuggestionsBlocks(comment.body)
     .split(/\r?\n/)
-    .filter(
-      (line) => !ALL_TEST_SUGGESTIONS_COMMENT_MARKERS.includes(line.trim() as never)
-    );
+    .filter((line) => line.trim() !== TEST_SUGGESTIONS_COMMENT_MARKER);
   if (!bodyWithoutMarker.some((line) => line.trim() === "## AI Test Suggestions")) {
     throw new Error('The managed comment is missing the "## AI Test Suggestions" heading.');
   }

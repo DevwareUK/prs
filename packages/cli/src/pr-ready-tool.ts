@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import type { RepositoryLocalRuntimeConfigType } from "@prs/contracts";
-import { ALL_TEST_SUGGESTIONS_COMMENT_MARKERS } from "@prs/contracts";
+import { TEST_SUGGESTIONS_COMMENT_MARKER } from "@prs/contracts";
 import { formatRunTimestamp, toRepoRelativePath } from "./run-artifacts";
 import type {
   PullRequestCheckSignal,
@@ -535,9 +535,7 @@ function createGroupTitle(category: PrReadyCommentSummaryCategory): string {
 }
 
 function hasManagedTestSuggestionsMarker(comment: RepositoryComment): boolean {
-  return ALL_TEST_SUGGESTIONS_COMMENT_MARKERS.some((marker) =>
-    comment.body.includes(marker)
-  );
+  return comment.body.includes(TEST_SUGGESTIONS_COMMENT_MARKER);
 }
 
 function buildManagedTestSuggestionsSummary(
@@ -719,7 +717,7 @@ async function collectPullRequestContext(
     if (!comment) {
       context.testSuggestions = {
         status: "not-found",
-        markers: ALL_TEST_SUGGESTIONS_COMMENT_MARKERS,
+        markers: [TEST_SUGGESTIONS_COMMENT_MARKER],
       };
     } else {
       const suggestionsComment = parseManagedTestSuggestionsComment(comment);

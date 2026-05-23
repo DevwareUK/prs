@@ -5,8 +5,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "prs": "dist/index.js",
-    "git-ai": "dist/index.js"
+    "prs": "dist/index.js"
   },
   "scripts": {
     "build": "tsup src/index.ts --format cjs --dts --out-dir dist",

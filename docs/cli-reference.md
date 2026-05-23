@@ -99,7 +99,7 @@ When `forge.type` is `github`, setup asks whether to enable each recommended pul
 - `.github/workflows/prs-pr-assistant.yml`
 - `.github/workflows/prs-test-suggestions.yml`
 
-The choices are stored in `.prs/config.json` under `githubActions.workflows.<action-id>.enabled`, where the current action IDs are `pr-review`, `pr-assistant`, and `test-suggestions`. Enabled prs-managed workflows are installed or updated. Disabled prs-managed workflow files are removed so they do not keep running, while disabled unmanaged workflow files are left untouched. Installed workflows reference `DevwareUK/prs/actions/...@main` and require a GitHub repository secret named `OPENAI_API_KEY`. Optional repository variables: `GIT_AI_OPENAI_MODEL` and `GIT_AI_OPENAI_BASE_URL`.
+The choices are stored in `.prs/config.json` under `githubActions.workflows.<action-id>.enabled`, where the current action IDs are `pr-review`, `pr-assistant`, and `test-suggestions`. Enabled prs-managed workflows are installed or updated. Disabled prs-managed workflow files are removed so they do not keep running, while disabled unmanaged workflow files are left untouched. Installed workflows reference `DevwareUK/prs/actions/...@main` and require a GitHub repository secret named `OPENAI_API_KEY`. Optional repository variables: `PRS_OPENAI_MODEL` and `PRS_OPENAI_BASE_URL`.
 
 When you opt into the `AGENTS.md` scaffold, setup adds only placeholder prompts such as protected paths, generated files, deployment caveats, and domain rules. It intentionally does not copy repository config values like branch names or build commands into `AGENTS.md`.
 

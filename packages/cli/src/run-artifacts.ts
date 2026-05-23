@@ -1,9 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
-import {
-  LEGACY_REPOSITORY_STATE_DIRECTORY,
-  REPOSITORY_STATE_DIRECTORY,
-} from "@prs/contracts";
+import { REPOSITORY_STATE_DIRECTORY } from "@prs/contracts";
 import type { InteractiveRuntimeType } from "./runtime";
 
 export function toRepoRelativePath(repoRoot: string, filePath: string): string {
@@ -31,10 +28,6 @@ export function getIssueStateDir(repoRoot: string, issueNumber: number): string 
   return resolve(repoRoot, REPOSITORY_STATE_DIRECTORY, "issues", String(issueNumber));
 }
 
-export function getLegacyIssueStateDir(repoRoot: string, issueNumber: number): string {
-  return resolve(repoRoot, LEGACY_REPOSITORY_STATE_DIRECTORY, "issues", String(issueNumber));
-}
-
 export function getIssueSessionStateFilePath(
   repoRoot: string,
   issueNumber: number
@@ -49,21 +42,11 @@ export function getIssueRefineSessionStateFilePath(
   return resolve(getIssueStateDir(repoRoot, issueNumber), "refine-session.json");
 }
 
-export function getLegacyIssueSessionStateFilePath(
-  repoRoot: string,
-  issueNumber: number
-): string {
-  return resolve(getLegacyIssueStateDir(repoRoot, issueNumber), "session.json");
-}
-
 export function resolveExistingIssueSessionStateFilePath(
   repoRoot: string,
   issueNumber: number
 ): string {
-  const canonicalPath = getIssueSessionStateFilePath(repoRoot, issueNumber);
-  return existsSync(canonicalPath)
-    ? canonicalPath
-    : getLegacyIssueSessionStateFilePath(repoRoot, issueNumber);
+  return getIssueSessionStateFilePath(repoRoot, issueNumber);
 }
 
 function formatBatchKey(issueNumbers: number[]): string {
@@ -74,10 +57,6 @@ export function getIssueBatchStateDir(repoRoot: string): string {
   return resolve(repoRoot, REPOSITORY_STATE_DIRECTORY, "batches");
 }
 
-export function getLegacyIssueBatchStateDir(repoRoot: string): string {
-  return resolve(repoRoot, LEGACY_REPOSITORY_STATE_DIRECTORY, "batches");
-}
-
 export function getIssueBatchStateFilePath(
   repoRoot: string,
   issueNumbers: number[]
@@ -85,21 +64,11 @@ export function getIssueBatchStateFilePath(
   return resolve(getIssueBatchStateDir(repoRoot), `${formatBatchKey(issueNumbers)}.json`);
 }
 
-export function getLegacyIssueBatchStateFilePath(
-  repoRoot: string,
-  issueNumbers: number[]
-): string {
-  return resolve(getLegacyIssueBatchStateDir(repoRoot), `${formatBatchKey(issueNumbers)}.json`);
-}
-
 export function resolveExistingIssueBatchStateFilePath(
   repoRoot: string,
   issueNumbers: number[]
 ): string {
-  const canonicalPath = getIssueBatchStateFilePath(repoRoot, issueNumbers);
-  return existsSync(canonicalPath)
-    ? canonicalPath
-    : getLegacyIssueBatchStateFilePath(repoRoot, issueNumbers);
+  return getIssueBatchStateFilePath(repoRoot, issueNumbers);
 }
 
 export function getIssueBatchRunDir(

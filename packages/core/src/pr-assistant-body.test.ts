@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  LEGACY_PR_ASSISTANT_END_MARKER,
-  LEGACY_PR_ASSISTANT_START_MARKER,
   PR_ASSISTANT_END_MARKER,
   PR_ASSISTANT_START_MARKER,
 } from "@prs/contracts";
@@ -17,13 +15,13 @@ describe("pr assistant body markers", () => {
     );
   });
 
-  it("replaces a legacy prs managed section in place", () => {
+  it("replaces a prs managed section in place", () => {
     const existingBody = [
       "Manual intro",
       "",
-      LEGACY_PR_ASSISTANT_START_MARKER,
-      "Legacy managed content",
-      LEGACY_PR_ASSISTANT_END_MARKER,
+      PR_ASSISTANT_START_MARKER,
+      "Managed content",
+      PR_ASSISTANT_END_MARKER,
     ].join("\n");
 
     expect(mergePRAssistantSection(existingBody, "## PR Assistant")).toBe(
@@ -37,13 +35,13 @@ describe("pr assistant body markers", () => {
     );
   });
 
-  it("strips legacy prs managed sections as well as canonical prs sections", () => {
+  it("strips prs managed sections", () => {
     const existingBody = [
       "Manual intro",
       "",
-      LEGACY_PR_ASSISTANT_START_MARKER,
-      "Legacy managed content",
-      LEGACY_PR_ASSISTANT_END_MARKER,
+      PR_ASSISTANT_START_MARKER,
+      "Managed content",
+      PR_ASSISTANT_END_MARKER,
       "",
       "Manual outro",
     ].join("\n");
