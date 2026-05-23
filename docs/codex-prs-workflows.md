@@ -11,7 +11,7 @@ Codex is the default interactive runtime when `ai.runtime.type` is unset.
 Runtime-specific behavior:
 
 - `prs pr resolve-conflicts <pr-number>` always requires `codex` on `PATH` for guided merge-conflict resolution, even though Codex only opens when the base merge conflicts.
-- `prs issue <number> --mode unattended`, multi-issue `prs issue <number> <number> ...`, and `prs issue batch ...` require `ai.runtime.type` to be `codex`.
+- `prs issue <number> --unattended`, multi-issue `prs issue <number> <number> ...`, and `prs issue batch ...` require `ai.runtime.type` to be `codex`.
 - Interactive local workflows such as `prs issue refine <number>` and `prs issue <number>` use the configured runtime, with fallback to Codex when a configured non-default runtime is unavailable. PR fix commands prepare handoff artifacts for the active Codex session and do not launch another runtime. `prs issue draft --draft-file <path>` ingests a draft from the active Codex skill context and does not launch another runtime.
 - Structured-text workflows such as `prs commit`, `prs diff`, `prs review`, issue-plan generation, commit-message generation, and PR text generation use the configured provider, defaulting to OpenAI.
 
@@ -32,8 +32,8 @@ Use the local `prs` skill aliases as workflow routing, not as a separate command
 prs issue draft --draft-file <path>
 prs issue refine <number>
 prs issue plan <number> [--refresh]
-prs issue <number> [--mode <interactive|unattended>]
-prs issue <number> <number> [...number] [--mode unattended]
+prs issue <number> [--unattended|--auto|--jdi|--mode <interactive|unattended>]
+prs issue <number> <number> [...number] [--unattended|--auto|--jdi]
 prs issue prepare <number> [--mode <local|github-action>]
 prs issue finalize <number>
 prs tool pr review <pr-number> --json
@@ -49,7 +49,7 @@ For `/prs pr <number> review`, keep the review in the active Codex conversation.
 
 For `/prs pr <number> address-comments`, `/prs pr <number> fix-tests`, and `/prs pr <number> add-tests`, keep the fix work in the active Codex conversation. The skill should run the deterministic `prs tool pr <action> <number> --json` preparation command, read the returned prompt and snapshot, apply the selected fixes, run configured verification, commit reviewed changes, and then run `prs tool pr push-reviewed <number> --json`. That final tool fetches the PR head, checks ahead/behind status, and pushes only when `HEAD` is ahead and not behind `origin/<pr-head-branch>`.
 
-When the Codex skill alias `/prs issue <number> --all` is requested, treat it as an operator workflow rather than a literal CLI flag. The intended end-to-end path is:
+When the Codex skill alias `/prs issue <number> --unattended` is requested, treat it as an operator workflow. `--auto` and `--jdi` are equivalent aliases. The intended end-to-end path is:
 
 1. inspect the issue and verify the implemented command surface from source
 2. work from an updated `origin/<baseBranch>` rather than the user's current checkout
@@ -58,7 +58,7 @@ When the Codex skill alias `/prs issue <number> --all` is requested, treat it as
 5. run the configured verification command
 6. commit, push, and open or update a pull request
 
-For one issue, the built-in `prs issue <number> --mode unattended` path prepares a branch, launches Codex non-interactively, verifies, commits, pushes, and opens a pull request. For multiple issues, `prs issue <number> <number> ...` and `prs issue batch ...` create one isolated worktree per issue from the configured updated `baseBranch`.
+For one issue, the built-in `prs issue <number> --unattended` path prepares a branch, launches Codex non-interactively, verifies, commits, pushes, and opens a pull request. For multiple issues, `prs issue <number> <number> ...` and `prs issue batch ...` create one isolated worktree per issue from the configured updated `baseBranch`.
 
 ## Superpowers-backed issue planning
 

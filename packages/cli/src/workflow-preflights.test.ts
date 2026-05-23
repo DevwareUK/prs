@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  ensureGuidedCheckoutReady,
   ensureVerificationCommandAvailable,
   preflightIssueBaseBranch,
 } from "./workflow-preflights";
@@ -124,6 +125,67 @@ describe("workflow preflights", () => {
 
     expect(() => preflightIssueBaseBranch(repoRoot, "release")).toThrow(
       'Configured base branch "release" could not be fetched from origin. Ensure "origin/release" exists and is reachable'
+    );
+  });
+
+  it("accepts a guided checkout on the clean updated base branch", () => {
+    const repoRoot = "/tmp/example-repo";
+    spawnSyncMock
+      .mockReturnValueOnce(createSpawnResult(0, { stdout: "main\n" }))
+      .mockReturnValueOnce(createSpawnResult(0))
+      .mockReturnValueOnce(createSpawnResult(0, { stdout: "abc123\n" }))
+      .mockReturnValueOnce(createSpawnResult(0, { stdout: "abc123\n" }));
+
+    expect(() => ensureGuidedCheckoutReady(repoRoot, "main")).not.toThrow();
+
+    expect(spawnSyncMock).toHaveBeenNthCalledWith(1, "git", ["branch", "--show-current"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+    });
+    expect(spawnSyncMock).toHaveBeenNthCalledWith(2, "git", ["status", "--porcelain"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+    });
+    expect(spawnSyncMock).toHaveBeenNthCalledWith(3, "git", ["rev-parse", "main"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+    });
+    expect(spawnSyncMock).toHaveBeenNthCalledWith(4, "git", ["rev-parse", "origin/main"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+    });
+  });
+
+  it("hard-fails guided checkout when not on the configured base branch", () => {
+    const repoRoot = "/tmp/example-repo";
+    spawnSyncMock.mockReturnValueOnce(createSpawnResult(0, { stdout: "feature\n" }));
+
+    expect(() => ensureGuidedCheckoutReady(repoRoot, "main")).toThrow(
+      'Guided prs workflows must start from the configured base branch "main". Current branch is "feature".'
+    );
+  });
+
+  it("hard-fails guided checkout with uncommitted changes", () => {
+    const repoRoot = "/tmp/example-repo";
+    spawnSyncMock
+      .mockReturnValueOnce(createSpawnResult(0, { stdout: "main\n" }))
+      .mockReturnValueOnce(createSpawnResult(0, { stdout: " M README.md\n" }));
+
+    expect(() => ensureGuidedCheckoutReady(repoRoot, "main")).toThrow(
+      "Guided prs workflows require a clean working tree."
+    );
+  });
+
+  it("hard-fails guided checkout when local base is not up to date with origin", () => {
+    const repoRoot = "/tmp/example-repo";
+    spawnSyncMock
+      .mockReturnValueOnce(createSpawnResult(0, { stdout: "main\n" }))
+      .mockReturnValueOnce(createSpawnResult(0))
+      .mockReturnValueOnce(createSpawnResult(0, { stdout: "local123\n" }))
+      .mockReturnValueOnce(createSpawnResult(0, { stdout: "remote456\n" }));
+
+    expect(() => ensureGuidedCheckoutReady(repoRoot, "main")).toThrow(
+      'Guided prs workflows require "main" to be up to date with "origin/main".'
     );
   });
 });

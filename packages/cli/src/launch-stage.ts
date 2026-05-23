@@ -90,7 +90,7 @@ const LAUNCH_STAGE_NOTICE_DEFINITIONS: Record<
     recommendedFirst:
       "Codex + Superpowers + GitHub audit for issue work, or `prs review`, `prs pr address-comments <pr-number>`, `prs pr fix-tests <pr-number>`, and `prs pr add-tests <pr-number>` for narrower PR work.",
     constraints:
-      'Requires a clean working tree, issue access through the configured forge, and a usable text provider; interactive runs need an available runtime CLI, while `--mode unattended` also needs authenticated GitHub access and `ai.runtime.type: "codex"`.',
+      'Requires a clean working tree, issue access through the configured forge, and a usable text provider; interactive runs need an available runtime CLI, while `--unattended` also needs authenticated GitHub access and `ai.runtime.type: "codex"`.',
   },
   "pr-prepare-review": {
     tier: "beta",

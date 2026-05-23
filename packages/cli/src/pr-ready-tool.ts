@@ -201,7 +201,7 @@ export type PrReadyToolResult =
     };
 
 type PrReadyToolOptions = {
-  all: boolean;
+  unattended?: boolean;
   buildCommand: string[];
   ensureCleanWorkingTree: (repoRoot: string) => void;
   ensureVerificationCommandAvailable: (
@@ -870,7 +870,8 @@ export async function readyPullRequestTool(
     return result;
   }
 
-  const startedRuntime = options.all ? startRuntime(runCommand, runtime) : runtime;
+  const unattended = options.unattended ?? false;
+  const startedRuntime = unattended ? startRuntime(runCommand, runtime) : runtime;
   if (startedRuntime.kind === "command" && startedRuntime.status === "failed") {
     result = {
       status: "blocked",
@@ -890,7 +891,7 @@ export async function readyPullRequestTool(
     return result;
   }
 
-  if (!options.all && startedRuntime.kind === "command") {
+  if (!unattended && startedRuntime.kind === "command") {
     result = {
       status: "needs-action",
       prNumber: pullRequest.number,

@@ -60,15 +60,25 @@ describe("prs command surface", () => {
       mode: "direct",
       issueNumber: 123,
       action: "work",
-      all: false,
+      unattended: false,
     });
-    expect(parsePrsCommandSurfaceArgs(["issue", "123", "--all"])).toEqual({
+    expect(parsePrsCommandSurfaceArgs(["issue", "123", "--unattended"])).toEqual({
       kind: "issue",
       mode: "direct",
       issueNumber: 123,
       action: "work",
-      all: true,
+      unattended: true,
     });
+    expect(parsePrsCommandSurfaceArgs(["issue", "123", "--jdi"])).toEqual({
+      kind: "issue",
+      mode: "direct",
+      issueNumber: 123,
+      action: "work",
+      unattended: true,
+    });
+    expect(() => parsePrsCommandSurfaceArgs(["issue", "123", "--all"])).toThrow(
+      renderPrsCommandSurfaceHelp()
+    );
   });
 
   it("parses direct issue subactions", () => {
@@ -99,14 +109,14 @@ describe("prs command surface", () => {
       mode: "direct",
       prNumber: 456,
       action: "choose",
-      all: false,
+      unattended: false,
     });
-    expect(parsePrsCommandSurfaceArgs(["pr", "456", "--all"])).toEqual({
+    expect(parsePrsCommandSurfaceArgs(["pr", "456", "--auto"])).toEqual({
       kind: "pr",
       mode: "direct",
       prNumber: 456,
       action: "choose",
-      all: true,
+      unattended: true,
     });
   });
 
@@ -281,7 +291,7 @@ describe("prs command surface routing", () => {
         mode: "direct",
         issueNumber: 123,
         action: "work",
-        all: false,
+        unattended: false,
       })
     ).toEqual({
       interaction: "direct",
@@ -296,12 +306,12 @@ describe("prs command surface routing", () => {
         mode: "direct",
         issueNumber: 123,
         action: "work",
-        all: true,
+        unattended: true,
       })
     ).toEqual({
       interaction: "direct",
       skillName: "prs",
-      cliArgs: ["tool", "issue", "ready", "123", "--all", "--json"],
+      cliArgs: ["tool", "issue", "ready", "123", "--unattended", "--json"],
       target: { type: "issue", number: 123 },
     });
     expect(
@@ -372,12 +382,12 @@ describe("prs command surface routing", () => {
         mode: "direct",
         prNumber: 456,
         action: "choose",
-        all: true,
+        unattended: true,
       })
     ).toEqual({
       interaction: "direct",
       skillName: "prs",
-      cliArgs: ["tool", "pr", "ready", "456", "--all", "--json"],
+      cliArgs: ["tool", "pr", "ready", "456", "--unattended", "--json"],
       target: { type: "pull-request", number: 456 },
       toolOnly: true,
     });
@@ -602,7 +612,7 @@ describe("prs interactive picker models", () => {
   it("only builds picker models for interactive list actions", () => {
     expect(
       buildPrsInteractivePickerModel(
-        { kind: "issue", mode: "direct", issueNumber: 123, action: "work", all: false },
+        { kind: "issue", mode: "direct", issueNumber: 123, action: "work", unattended: false },
         { currentUser: "me", issues: [] }
       )
     ).toBeUndefined();

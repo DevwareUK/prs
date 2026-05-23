@@ -35,7 +35,7 @@ describe("issue ready tool", () => {
     };
 
     const result = await readyIssueTool({
-      all: false,
+      unattended: false,
       issueNumber: 151,
       repoRoot,
       forge,
@@ -71,7 +71,7 @@ describe("issue ready tool", () => {
       flow: "issue-ready",
       issueNumber: 151,
       suggestedBranchName: "codex/issue-151-tighten-create-route",
-      all: false,
+      unattended: false,
     });
   });
 
@@ -100,7 +100,7 @@ describe("issue ready tool", () => {
     };
 
     const result = await readyIssueTool({
-      all: true,
+      unattended: true,
       issueNumber: 233,
       repoRoot,
       forge,

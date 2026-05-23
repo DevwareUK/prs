@@ -14,15 +14,33 @@ describe("prs tool command parser", () => {
     expect(parsePrsToolCommandArgs(["issue", "ready", "151", "--json"])).toEqual({
       kind: "issue-ready",
       issueNumber: 151,
-      all: false,
+      unattended: false,
       json: true,
     });
-    expect(parsePrsToolCommandArgs(["issue", "ready", "151", "--all", "--json"])).toEqual({
+    expect(parsePrsToolCommandArgs(["issue", "ready", "151", "--unattended", "--json"])).toEqual({
       kind: "issue-ready",
       issueNumber: 151,
-      all: true,
+      unattended: true,
       json: true,
     });
+    expect(parsePrsToolCommandArgs(["issue", "ready", "151", "--auto", "--json"])).toEqual({
+      kind: "issue-ready",
+      issueNumber: 151,
+      unattended: true,
+      json: true,
+    });
+    expect(parsePrsToolCommandArgs(["issue", "ready", "151", "--jdi", "--json"])).toEqual({
+      kind: "issue-ready",
+      issueNumber: 151,
+      unattended: true,
+      json: true,
+    });
+  });
+
+  it("rejects removed --all issue readiness shorthand", () => {
+    expect(() =>
+      parsePrsToolCommandArgs(["issue", "ready", "151", "--all", "--json"])
+    ).toThrow('Unknown tool option "--all"');
   });
 
   it("parses issue create JSON command", () => {
@@ -185,13 +203,19 @@ describe("prs tool command parser", () => {
     expect(parsePrsToolCommandArgs(["pr", "ready", "115", "--json"])).toEqual({
       kind: "pr-ready",
       prNumber: 115,
-      all: false,
+      unattended: false,
       json: true,
     });
-    expect(parsePrsToolCommandArgs(["pr", "ready", "115", "--all", "--json"])).toEqual({
+    expect(parsePrsToolCommandArgs(["pr", "ready", "115", "--unattended", "--json"])).toEqual({
       kind: "pr-ready",
       prNumber: 115,
-      all: true,
+      unattended: true,
+      json: true,
+    });
+    expect(parsePrsToolCommandArgs(["pr", "ready", "115", "--jdi", "--json"])).toEqual({
+      kind: "pr-ready",
+      prNumber: 115,
+      unattended: true,
       json: true,
     });
   });

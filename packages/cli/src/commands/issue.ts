@@ -54,9 +54,9 @@ export type IssueCommandOptions =
 
 const ISSUE_USAGE = [
   "Usage:",
-  "  prs issue <number> [--mode <interactive|unattended>]",
-  "  prs issue <number> <number> [...number] [--mode unattended]",
-  "  prs issue batch <number> <number> [...number] [--mode unattended]",
+  "  prs issue <number> [--unattended|--auto|--jdi|--mode <interactive|unattended>]",
+  "  prs issue <number> <number> [...number] [--unattended|--auto|--jdi]",
+  "  prs issue batch <number> <number> [...number] [--unattended|--auto|--jdi]",
   "  prs issue draft --draft-file <path> [--rough-idea <text>|--rough-idea-file <path>] [--context <text>] [--context-file <path>] [--superpowers-spec-file <path>] [--superpowers-plan-file <path>]",
   "  prs issue draft --issue-set-file <path> [--rough-idea <text>|--rough-idea-file <path>] [--context <text>] [--context-file <path>] [--superpowers-spec-file <path>] [--superpowers-plan-file <path>]",
   "  prs issue draft --runtime",
@@ -96,6 +96,11 @@ function parseIssueModeOption(rawArgs: string[]): string | undefined {
 
     if (rawArg.startsWith("--mode=")) {
       mode = rawArg.slice("--mode=".length);
+      continue;
+    }
+
+    if (rawArg === "--unattended" || rawArg === "--auto" || rawArg === "--jdi") {
+      mode = "unattended";
       continue;
     }
 
@@ -170,6 +175,11 @@ function parseIssueBatchArgs(
 
     if (rawArg.startsWith("--mode=")) {
       mode = rawArg.slice("--mode=".length);
+      continue;
+    }
+
+    if (rawArg === "--unattended" || rawArg === "--auto" || rawArg === "--jdi") {
+      mode = "unattended";
       continue;
     }
 

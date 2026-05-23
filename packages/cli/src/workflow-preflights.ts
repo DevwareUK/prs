@@ -31,6 +31,16 @@ function runGitCommand(repoRoot: string, args: string[]): SpawnResult {
   return runCommand("git", args, repoRoot);
 }
 
+function requireGitOutput(repoRoot: string, args: string[], message: string): string {
+  const result = runGitCommand(repoRoot, args);
+  const output = result.stdout.trim();
+  if (result.error || result.status !== 0 || !output) {
+    throw new Error(formatGitFailure(result, message));
+  }
+
+  return output;
+}
+
 function runPnpmVersionFallback(repoRoot: string): SpawnResult | undefined {
   const corepackCommand = resolve(dirname(process.execPath), "corepack");
   return runCommand(corepackCommand, ["pnpm", "--version"], repoRoot);
@@ -101,6 +111,51 @@ export function branchContainsCommit(
       ? `Failed to determine whether "${branchish}" already contains ${commitish}. ${detail}`
       : `Failed to determine whether "${branchish}" already contains ${commitish}.`
   );
+}
+
+export function ensureGuidedCheckoutReady(repoRoot: string, baseBranch: string): void {
+  const currentBranch = requireGitOutput(
+    repoRoot,
+    ["branch", "--show-current"],
+    "Failed to determine the current branch before starting a guided prs workflow."
+  );
+  if (currentBranch !== baseBranch) {
+    throw new Error(
+      `Guided prs workflows must start from the configured base branch "${baseBranch}". Current branch is "${currentBranch}". Switch to "${baseBranch}" and pull the latest origin state before retrying.`
+    );
+  }
+
+  const status = runGitCommand(repoRoot, ["status", "--porcelain"]);
+  if (status.error || status.status !== 0) {
+    throw new Error(
+      formatGitFailure(
+        status,
+        "Failed to inspect the working tree before starting a guided prs workflow."
+      )
+    );
+  }
+  if (status.stdout.trim()) {
+    throw new Error(
+      "Guided prs workflows require a clean working tree. Commit, stash, or discard uncommitted changes before retrying."
+    );
+  }
+
+  const localTip = requireGitOutput(
+    repoRoot,
+    ["rev-parse", baseBranch],
+    `Failed to resolve local base branch "${baseBranch}" before starting a guided prs workflow.`
+  );
+  const remoteRef = `origin/${baseBranch}`;
+  const remoteTip = requireGitOutput(
+    repoRoot,
+    ["rev-parse", remoteRef],
+    `Failed to resolve "${remoteRef}" before starting a guided prs workflow.`
+  );
+  if (localTip !== remoteTip) {
+    throw new Error(
+      `Guided prs workflows require "${baseBranch}" to be up to date with "${remoteRef}". Run \`git fetch origin ${baseBranch}\` and \`git pull --ff-only\` before retrying.`
+    );
+  }
 }
 
 export function preflightIssueBaseBranch(

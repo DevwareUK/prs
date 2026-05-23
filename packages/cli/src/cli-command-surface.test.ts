@@ -1085,7 +1085,7 @@ describe("CLI command surface", () => {
     const { parseIssueCommandArgs } = await loadCli();
 
     expect(
-      parseIssueCommandArgs(["issue", "batch", "123", "124", "--mode", "unattended"])
+      parseIssueCommandArgs(["issue", "batch", "123", "124", "--unattended"])
     ).toEqual({
       action: "batch",
       issueNumbers: [123, 124],
@@ -1097,11 +1097,24 @@ describe("CLI command surface", () => {
     process.env.PRS_DISABLE_AUTO_RUN = "1";
     const { parseIssueCommandArgs } = await loadCli();
 
-    expect(parseIssueCommandArgs(["issue", "123", "124", "--mode", "unattended"])).toEqual({
+    expect(parseIssueCommandArgs(["issue", "123", "124", "--jdi"])).toEqual({
       action: "batch",
       issueNumbers: [123, 124],
       mode: "unattended",
     });
+  });
+
+  it("parses unattended aliases for single issue runs", async () => {
+    process.env.PRS_DISABLE_AUTO_RUN = "1";
+    const { parseIssueCommandArgs } = await loadCli();
+
+    for (const flag of ["--unattended", "--auto", "--jdi"]) {
+      expect(parseIssueCommandArgs(["issue", "123", flag])).toEqual({
+        action: "run",
+        issueNumber: 123,
+        mode: "unattended",
+      });
+    }
   });
 
   it("rejects interactive batch issue mode", async () => {

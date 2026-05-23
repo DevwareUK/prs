@@ -1,6 +1,6 @@
 export type PrsToolCommand =
   | { kind: "issue-list"; actionable: boolean; json: boolean }
-  | { kind: "issue-ready"; issueNumber: number; all: boolean; json: boolean }
+  | { kind: "issue-ready"; issueNumber: number; unattended: boolean; json: boolean }
   | {
       kind: "issue-create";
       draftFilePath?: string;
@@ -28,26 +28,26 @@ export type PrsToolCommand =
       selection: string;
       json: boolean;
     }
-  | { kind: "pr-ready"; prNumber: number; all: boolean; json: boolean };
+  | { kind: "pr-ready"; prNumber: number; unattended: boolean; json: boolean };
 
 export function renderPrsToolCommandHelp(): string {
   return [
     "Usage:",
     "  prs tool issue list [--actionable] --json",
-    "  prs tool issue ready <issue-number> [--all] --json",
+    "  prs tool issue ready <issue-number> [--unattended|--auto|--jdi] --json",
     "  prs tool issue create (--draft-file <path>|--issue-set <path>) --json",
     "                        [--run-dir <path>] [--plan-file <path>]",
     "                        [--label <name>] [--labels <a,b>]",
     "                        [--force-prs-managed]",
-  "  prs tool pr list [--actionable] --json",
-  "  prs tool pr review <pr-number> --json",
-  "  prs tool pr publish-review <pr-number> --report <path> --comments <path> --json",
-  "  prs tool pr prepare-review <pr-number> --json",
+    "  prs tool pr list [--actionable] --json",
+    "  prs tool pr review <pr-number> --json",
+    "  prs tool pr publish-review <pr-number> --report <path> --comments <path> --json",
+    "  prs tool pr prepare-review <pr-number> --json",
     "  prs tool pr push-reviewed <pr-number> --json",
     "  prs tool pr address-comments <pr-number> [--selection <value>] --json",
     "  prs tool pr fix-tests <pr-number> --json",
     "  prs tool pr add-tests <pr-number> [--selection <value>] --json",
-    "  prs tool pr ready <pr-number> [--all] --json",
+    "  prs tool pr ready <pr-number> [--unattended|--auto|--jdi] --json",
     "",
     "Compatibility aliases:",
     "  prs tool pr fix-comments <pr-number> [--selection <value>] --json      (use address-comments)",
@@ -79,6 +79,10 @@ function parseCommaSeparatedLabels(value: string | undefined): string[] {
     .filter(Boolean);
 }
 
+function isUnattendedAlias(rawArg: string | undefined): boolean {
+  return rawArg === "--unattended" || rawArg === "--auto" || rawArg === "--jdi";
+}
+
 export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
   const [scope, command, third, fourth, ...rest] = args;
 
@@ -107,10 +111,13 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
 
       const issueNumber = parseToolNumber(third, "issue");
       if (fourth === "--json" && rest.length === 0) {
-        return { kind: "issue-ready", issueNumber, all: false, json: true };
+        return { kind: "issue-ready", issueNumber, unattended: false, json: true };
       }
-      if (fourth === "--all" && rest[0] === "--json" && rest.length === 1) {
-        return { kind: "issue-ready", issueNumber, all: true, json: true };
+      if (isUnattendedAlias(fourth) && rest[0] === "--json" && rest.length === 1) {
+        return { kind: "issue-ready", issueNumber, unattended: true, json: true };
+      }
+      if (fourth === "--all") {
+        throw new Error(`Unknown tool option "--all". ${renderPrsToolCommandHelp()}`);
       }
       throw new Error(renderPrsToolCommandHelp());
     }
@@ -449,10 +456,13 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
 
     const prNumber = parseToolNumber(third, "pr");
     if (fourth === "--json" && rest.length === 0) {
-      return { kind: "pr-ready", prNumber, all: false, json: true };
+      return { kind: "pr-ready", prNumber, unattended: false, json: true };
     }
-    if (fourth === "--all" && rest[0] === "--json" && rest.length === 1) {
-      return { kind: "pr-ready", prNumber, all: true, json: true };
+    if (isUnattendedAlias(fourth) && rest[0] === "--json" && rest.length === 1) {
+      return { kind: "pr-ready", prNumber, unattended: true, json: true };
+    }
+    if (fourth === "--all") {
+      throw new Error(`Unknown tool option "--all". ${renderPrsToolCommandHelp()}`);
     }
     throw new Error(renderPrsToolCommandHelp());
   }

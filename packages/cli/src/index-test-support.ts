@@ -630,6 +630,10 @@ function isGitListUntrackedFilesCommand(command: string, args: string[]): boolea
   );
 }
 
+function isGitStatusPorcelainCommand(command: string, args: string[]): boolean {
+  return command === "git" && args[0] === "status" && args[1] === "--porcelain";
+}
+
 function syntheticGitRefTip(ref: string): string {
   return `${ref.replace(/[^a-z0-9]+/gi, "-")}-tip`;
 }
@@ -1135,6 +1139,18 @@ async function loadCli(options: {
     generatePRReview.mockResolvedValue(options.prReviewResult);
   }
   const runtimeRepoRoot = options.runtimeRepoRoot ?? REPO_ROOT;
+  const getConfiguredBaseBranch = () => {
+    try {
+      const parsed = JSON.parse(
+        readFileSync(resolve(runtimeRepoRoot, ".prs", "config.json"), "utf8")
+      ) as { baseBranch?: unknown };
+      return typeof parsed.baseBranch === "string" && parsed.baseBranch.trim()
+        ? parsed.baseBranch.trim()
+        : "main";
+    } catch {
+      return "main";
+    }
+  };
 
   const execFileSync = vi.fn((command: string, args: string[]) => {
     if (
@@ -1158,7 +1174,8 @@ async function loadCli(options: {
           return options.execFileSyncImpl(command, normalizedArgs);
         } catch (error: unknown) {
           if (
-            isGitListUntrackedFilesCommand(command, normalizedArgs) &&
+            (isGitListUntrackedFilesCommand(command, normalizedArgs) ||
+              isGitStatusPorcelainCommand(command, normalizedArgs)) &&
             isUnexpectedExecFileSyncCall(error)
           ) {
             return "";
@@ -1172,7 +1189,8 @@ async function loadCli(options: {
         return options.execFileSyncImpl(command, normalizedArgs);
       } catch (error: unknown) {
         if (
-          isGitListUntrackedFilesCommand(command, normalizedArgs) &&
+          (isGitListUntrackedFilesCommand(command, normalizedArgs) ||
+            isGitStatusPorcelainCommand(command, normalizedArgs)) &&
           isUnexpectedExecFileSyncCall(error)
         ) {
           return "";
@@ -1185,12 +1203,16 @@ async function loadCli(options: {
     if (
       command === "git" &&
       args[0] === "-C" &&
-      isGitListUntrackedFilesCommand(command, args.slice(2))
+      (isGitListUntrackedFilesCommand(command, args.slice(2)) ||
+        isGitStatusPorcelainCommand(command, args.slice(2)))
     ) {
       return "";
     }
 
-    if (isGitListUntrackedFilesCommand(command, args)) {
+    if (
+      isGitListUntrackedFilesCommand(command, args) ||
+      isGitStatusPorcelainCommand(command, args)
+    ) {
       return "";
     }
 
@@ -1281,6 +1303,52 @@ async function loadCli(options: {
       try {
         return invokeCustomSpawnSync();
       } catch (error: unknown) {
+        if (
+          command === "git" &&
+          normalizedArgs[0] === "branch" &&
+          normalizedArgs[1] === "--show-current" &&
+          isUnexpectedSpawnSyncCall(error)
+        ) {
+          return { status: 0, stdout: `${getConfiguredBaseBranch()}\n`, stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          normalizedArgs[0] === "status" &&
+          normalizedArgs[1] === "--porcelain" &&
+          isUnexpectedSpawnSyncCall(error)
+        ) {
+          if (options.execFileSyncImpl) {
+            try {
+              return {
+                status: 0,
+                stdout: options.execFileSyncImpl("git", normalizedArgs),
+                stderr: "",
+              };
+            } catch (execError: unknown) {
+              if (!isUnexpectedExecFileSyncCall(execError)) {
+                throw execError;
+              }
+            }
+          }
+
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          normalizedArgs[0] === "rev-parse" &&
+          (normalizedArgs[1] === getConfiguredBaseBranch() ||
+            normalizedArgs[1] === `origin/${getConfiguredBaseBranch()}`) &&
+          isUnexpectedSpawnSyncCall(error)
+        ) {
+          return {
+            status: 0,
+            stdout: `${getConfiguredBaseBranch()}-tip\n`,
+            stderr: "",
+          };
+        }
+
         if (
           command === "git" &&
           normalizedArgs[0] === "fetch" &&
