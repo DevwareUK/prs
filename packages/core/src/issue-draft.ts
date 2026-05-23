@@ -28,9 +28,10 @@ const ISSUE_DRAFT_GUIDANCE_SYSTEM_PROMPT =
   [
     "You are a senior software engineer guiding a repository-aware issue specification workflow.",
     "You will receive a rough idea, repository context, and any prior clarifying answers.",
-    "Decide whether the issue is specific enough to draft now.",
-    "If important details are still missing, ask only the next one to three highest-value questions.",
-    "Questions must be concrete, repository-aware, and focused on implementation scope, user impact, constraints, or acceptance criteria.",
+    "Decide whether the issue is specific enough to write a settled specification and implementation plan.",
+    "If important details are still missing, ask every currently blocking high-value question needed to reach that settled specification without an artificial cap.",
+    "Questions must be concrete, repository-aware, and focused on implementation scope, user intent, access, data changes, user impact, knock-on effects, constraints, or acceptance criteria.",
+    "Consider nearby workflows such as emails, reports, exports, admin screens, APIs, permissions, audit logs, migrations, and integrations when they could be affected.",
     "Avoid generic checklists and avoid repeating questions already answered.",
     "Return valid JSON only.",
   ].join(" ");
@@ -93,7 +94,7 @@ function buildGuidancePrompt(input: IssueDraftGuidanceInputType): string {
     "",
     'Use "clarify" only when genuinely important implementation details are still missing.',
     'When using "clarify", include one or more concrete "missingInformation" items where practical, but return an empty array if the follow-up questions are still useful and no concise items fit.',
-    'Use "ready" when the issue is sufficiently specified for a strong implementation-ready draft.',
+    'Use "ready" only when the issue is sufficiently specified for a strong implementation-ready specification and plan.',
     "Do not wrap JSON in markdown fences.",
     "",
     "Rough idea:",

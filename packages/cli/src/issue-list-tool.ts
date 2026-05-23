@@ -100,7 +100,9 @@ function isCanonicalGitHubIssueUrl(value: string | undefined): value is string {
 
 function issueHasPlanComment(comments: Array<{ body?: string }>): boolean {
   return comments.some((comment) =>
-    ISSUE_PLAN_MARKERS.some((marker) => comment.body?.includes(marker))
+    ISSUE_PLAN_MARKERS.some((marker) =>
+      (comment.body ?? "").trimStart().startsWith(marker)
+    )
   );
 }
 

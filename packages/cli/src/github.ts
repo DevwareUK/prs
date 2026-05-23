@@ -1153,7 +1153,11 @@ class GitHubRepositoryForge implements RepositoryForge {
     const comments = await listIssueComments(owner, repo, issueNumber, this.repoRoot);
 
     return comments
-      .filter((comment) => includesManagedMarker(comment.body, ALL_ISSUE_PLAN_COMMENT_MARKERS))
+      .filter((comment) =>
+        ALL_ISSUE_PLAN_COMMENT_MARKERS.some((marker) =>
+          comment.body.trimStart().startsWith(marker)
+        )
+      )
       .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0];
   }
 

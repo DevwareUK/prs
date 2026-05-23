@@ -16073,6 +16073,7 @@ var require_dist = __commonJS({
     __export2(index_exports, {
       ACTION_REPOSITORY: () => ACTION_REPOSITORY,
       ALL_ISSUE_PLAN_COMMENT_MARKERS: () => ALL_ISSUE_PLAN_COMMENT_MARKERS,
+      ALL_ISSUE_SPEC_COMMENT_MARKERS: () => ALL_ISSUE_SPEC_COMMENT_MARKERS,
       ALL_ISSUE_TO_PR_COMMENT_MARKERS: () => ALL_ISSUE_TO_PR_COMMENT_MARKERS,
       ALL_PR_ASSISTANT_END_MARKERS: () => ALL_PR_ASSISTANT_END_MARKERS,
       ALL_PR_ASSISTANT_START_MARKERS: () => ALL_PR_ASSISTANT_START_MARKERS,
@@ -16098,6 +16099,7 @@ var require_dist = __commonJS({
       GENERATED_BY_SETUP_HEADER: () => GENERATED_BY_SETUP_HEADER,
       GIT_AI_ALIAS_DEPRECATION_MESSAGE: () => GIT_AI_ALIAS_DEPRECATION_MESSAGE,
       ISSUE_PLAN_COMMENT_MARKER: () => ISSUE_PLAN_COMMENT_MARKER,
+      ISSUE_SPEC_COMMENT_MARKER: () => ISSUE_SPEC_COMMENT_MARKER,
       ISSUE_TO_PR_COMMENT_MARKER: () => ISSUE_TO_PR_COMMENT_MARKER,
       IssueDraftClarificationAnswer: () => IssueDraftClarificationAnswer,
       IssueDraftGuidanceClarify: () => IssueDraftGuidanceClarify,
@@ -16115,6 +16117,7 @@ var require_dist = __commonJS({
       LEGACY_ACTION_REPOSITORY: () => LEGACY_ACTION_REPOSITORY,
       LEGACY_GENERATED_BY_SETUP_HEADER: () => LEGACY_GENERATED_BY_SETUP_HEADER,
       LEGACY_ISSUE_PLAN_COMMENT_MARKER: () => LEGACY_ISSUE_PLAN_COMMENT_MARKER,
+      LEGACY_ISSUE_SPEC_COMMENT_MARKER: () => LEGACY_ISSUE_SPEC_COMMENT_MARKER,
       LEGACY_ISSUE_TO_PR_COMMENT_MARKER: () => LEGACY_ISSUE_TO_PR_COMMENT_MARKER,
       LEGACY_PACKAGE_SCOPE: () => LEGACY_PACKAGE_SCOPE,
       LEGACY_PRODUCT_SHORT_NAME: () => LEGACY_PRODUCT_SHORT_NAME,
@@ -16211,6 +16214,12 @@ var require_dist = __commonJS({
     var ALL_ISSUE_PLAN_COMMENT_MARKERS = [
       ISSUE_PLAN_COMMENT_MARKER,
       LEGACY_ISSUE_PLAN_COMMENT_MARKER
+    ];
+    var ISSUE_SPEC_COMMENT_MARKER = "<!-- prs:issue-spec -->";
+    var LEGACY_ISSUE_SPEC_COMMENT_MARKER = "<!-- git-ai:issue-spec -->";
+    var ALL_ISSUE_SPEC_COMMENT_MARKERS = [
+      ISSUE_SPEC_COMMENT_MARKER,
+      LEGACY_ISSUE_SPEC_COMMENT_MARKER
     ];
     var PR_REVIEW_COMMENT_MARKER = "<!-- prs:pr-review -->";
     var LEGACY_PR_REVIEW_COMMENT_MARKER = "<!-- git-ai-pr-review -->";
@@ -16339,7 +16348,7 @@ var require_dist = __commonJS({
       status: import_zod4.z.literal("clarify"),
       assistantSummary: import_zod4.z.string().trim().min(1, "assistantSummary must be non-empty"),
       missingInformation: import_zod4.z.array(import_zod4.z.string().trim().min(1, "missingInformation items must be non-empty")).default([]),
-      questions: import_zod4.z.array(import_zod4.z.string().trim().min(1, "questions items must be non-empty")).min(1, "questions must contain at least one item").max(3, "questions must contain at most three items")
+      questions: import_zod4.z.array(import_zod4.z.string().trim().min(1, "questions items must be non-empty")).min(1, "questions must contain at least one item")
     });
     var IssueDraftGuidanceReady = import_zod4.z.object({
       status: import_zod4.z.literal("ready"),
@@ -17615,9 +17624,10 @@ ${formatValidationIssues(validationIssues)}`,
     var ISSUE_DRAFT_GUIDANCE_SYSTEM_PROMPT = [
       "You are a senior software engineer guiding a repository-aware issue specification workflow.",
       "You will receive a rough idea, repository context, and any prior clarifying answers.",
-      "Decide whether the issue is specific enough to draft now.",
-      "If important details are still missing, ask only the next one to three highest-value questions.",
-      "Questions must be concrete, repository-aware, and focused on implementation scope, user impact, constraints, or acceptance criteria.",
+      "Decide whether the issue is specific enough to write a settled specification and implementation plan.",
+      "If important details are still missing, ask every currently blocking high-value question needed to reach that settled specification without an artificial cap.",
+      "Questions must be concrete, repository-aware, and focused on implementation scope, user intent, access, data changes, user impact, knock-on effects, constraints, or acceptance criteria.",
+      "Consider nearby workflows such as emails, reports, exports, admin screens, APIs, permissions, audit logs, migrations, and integrations when they could be affected.",
       "Avoid generic checklists and avoid repeating questions already answered.",
       "Return valid JSON only."
     ].join(" ");
@@ -17674,7 +17684,7 @@ ${formatValidationIssues(validationIssues)}`,
         "",
         'Use "clarify" only when genuinely important implementation details are still missing.',
         'When using "clarify", include one or more concrete "missingInformation" items where practical, but return an empty array if the follow-up questions are still useful and no concise items fit.',
-        'Use "ready" when the issue is sufficiently specified for a strong implementation-ready draft.',
+        'Use "ready" only when the issue is sufficiently specified for a strong implementation-ready specification and plan.',
         "Do not wrap JSON in markdown fences.",
         "",
         "Rough idea:",

@@ -86,6 +86,24 @@ describe("Issue draft schemas", () => {
     });
   });
 
+  it("accepts all blocking clarification questions without an artificial cap", () => {
+    const parsed = IssueDraftGuidanceOutput.parse({
+      status: "clarify",
+      assistantSummary:
+        "The issue needs a full refinement pass before a specification can be written.",
+      questions: [
+        "Who can access the new order information?",
+        "Should the new information appear in confirmation emails?",
+        "Should the new information appear in admin reports?",
+        "What should happen to existing orders that do not have this data?",
+        "How will support users know the change is complete?",
+      ],
+    });
+
+    expect(parsed.status).toBe("clarify");
+    expect(parsed.questions).toHaveLength(5);
+  });
+
   describe("issue set manifests", () => {
     it("accepts a valid multi-issue manifest", () => {
       const parsed = IssueDraftSet.parse({

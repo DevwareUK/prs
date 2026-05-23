@@ -1,8 +1,13 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
+import { ALL_ISSUE_SPEC_COMMENT_MARKERS } from "@prs/contracts";
 import type { IssueDetails, IssuePlanComment, RepositoryComment, RepositoryForge } from "./forge";
 
 type IssuePlanStatus =
+  | { status: "present"; url: string; updatedAt: string }
+  | { status: "missing" };
+
+type IssueSpecStatus =
   | { status: "present"; url: string; updatedAt: string }
   | { status: "missing" };
 
@@ -12,6 +17,7 @@ export type IssueReadyToolResult =
       issueNumber: number;
       issueTitle: string;
       issueUrl: string;
+      spec: IssueSpecStatus;
       plan: IssuePlanStatus;
       comments: { count: number };
       suggestedBranchName: string;
@@ -22,7 +28,12 @@ export type IssueReadyToolResult =
     }
   | {
       status: "blocked";
-      reason: "not-github";
+      reason: "not-github" | "missing-refinement-artifacts";
+      issueNumber?: number;
+      issueTitle?: string;
+      issueUrl?: string;
+      spec?: IssueSpecStatus;
+      plan?: IssuePlanStatus;
       message: string;
       nextAction: string;
     };
@@ -85,6 +96,31 @@ function renderPlanStatus(
   };
 }
 
+function findLatestIssueSpecComment(
+  comments: RepositoryComment[]
+): RepositoryComment | undefined {
+  return comments
+    .filter((comment) =>
+      ALL_ISSUE_SPEC_COMMENT_MARKERS.some((marker) =>
+        comment.body.trimStart().startsWith(marker)
+      )
+    )
+    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0];
+}
+
+function renderSpecStatus(comments: RepositoryComment[]): IssueSpecStatus {
+  const specComment = findLatestIssueSpecComment(comments);
+  if (!specComment) {
+    return { status: "missing" };
+  }
+
+  return {
+    status: "present",
+    url: specComment.url,
+    updatedAt: specComment.updatedAt,
+  };
+}
+
 function writeMetadata(input: {
   all: boolean;
   comments: RepositoryComment[];
@@ -106,6 +142,7 @@ function writeMetadata(input: {
         suggestedBranchName: input.suggestedBranchName,
         all: input.all,
         runDir: input.runDir,
+        spec: renderSpecStatus(input.comments),
         plan: renderPlanStatus(input.planComment),
         comments: {
           count: input.comments.length,
@@ -146,6 +183,8 @@ export async function readyIssueTool(
   const suggestedBranchName = createIssueBranchName(options.issueNumber, issue.title);
   const metadataFilePath = resolve(runDir, "metadata.json");
   const relativeRunDir = toRepoRelativePath(options.repoRoot, runDir);
+  const spec = renderSpecStatus(comments);
+  const plan = renderPlanStatus(planComment);
 
   writeMetadata({
     all: options.all,
@@ -158,12 +197,32 @@ export async function readyIssueTool(
     suggestedBranchName,
   });
 
+  if (spec.status === "missing" || plan.status === "missing") {
+    const missing = [
+      spec.status === "missing" ? "managed issue specification" : undefined,
+      plan.status === "missing" ? "managed issue plan" : undefined,
+    ].filter((value): value is string => value !== undefined);
+
+    return {
+      status: "blocked",
+      reason: "missing-refinement-artifacts",
+      issueNumber: options.issueNumber,
+      issueTitle: issue.title,
+      issueUrl: issue.url,
+      spec,
+      plan,
+      message: `Issue #${options.issueNumber} is not ready for implementation. Missing ${missing.join(" and ")}. Run \`prs issue refine ${options.issueNumber}\` and continue refinement until the managed specification and plan comments are published.`,
+      nextAction: `Run \`prs issue refine ${options.issueNumber}\` before starting development.`,
+    };
+  }
+
   return {
     status: "ready",
     issueNumber: options.issueNumber,
     issueTitle: issue.title,
     issueUrl: issue.url,
-    plan: renderPlanStatus(planComment),
+    spec,
+    plan,
     comments: {
       count: comments.length,
     },
