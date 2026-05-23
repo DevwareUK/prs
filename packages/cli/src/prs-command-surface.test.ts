@@ -69,6 +69,13 @@ describe("prs command surface", () => {
       action: "work",
       unattended: true,
     });
+    expect(parsePrsCommandSurfaceArgs(["issue", "123", "--auto"])).toEqual({
+      kind: "issue",
+      mode: "direct",
+      issueNumber: 123,
+      action: "work",
+      unattended: true,
+    });
     expect(parsePrsCommandSurfaceArgs(["issue", "123", "--jdi"])).toEqual({
       kind: "issue",
       mode: "direct",
@@ -118,6 +125,23 @@ describe("prs command surface", () => {
       action: "choose",
       unattended: true,
     });
+    expect(parsePrsCommandSurfaceArgs(["pr", "456", "--unattended"])).toEqual({
+      kind: "pr",
+      mode: "direct",
+      prNumber: 456,
+      action: "choose",
+      unattended: true,
+    });
+    expect(parsePrsCommandSurfaceArgs(["pr", "456", "--jdi"])).toEqual({
+      kind: "pr",
+      mode: "direct",
+      prNumber: 456,
+      action: "choose",
+      unattended: true,
+    });
+    expect(() => parsePrsCommandSurfaceArgs(["pr", "456", "--all"])).toThrow(
+      renderPrsCommandSurfaceHelp()
+    );
   });
 
   it("parses direct PR actions in object-first order", () => {

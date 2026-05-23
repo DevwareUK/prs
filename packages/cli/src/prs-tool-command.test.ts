@@ -212,12 +212,24 @@ describe("prs tool command parser", () => {
       unattended: true,
       json: true,
     });
+    expect(parsePrsToolCommandArgs(["pr", "ready", "115", "--auto", "--json"])).toEqual({
+      kind: "pr-ready",
+      prNumber: 115,
+      unattended: true,
+      json: true,
+    });
     expect(parsePrsToolCommandArgs(["pr", "ready", "115", "--jdi", "--json"])).toEqual({
       kind: "pr-ready",
       prNumber: 115,
       unattended: true,
       json: true,
     });
+  });
+
+  it("rejects removed --all PR readiness shorthand", () => {
+    expect(() =>
+      parsePrsToolCommandArgs(["pr", "ready", "115", "--all", "--json"])
+    ).toThrow('Unknown tool option "--all"');
   });
 
   it("rejects non-numeric PR numbers", () => {

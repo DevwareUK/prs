@@ -98,6 +98,22 @@ describe("CLI command surface", () => {
     });
   });
 
+  it("parses direct issue unattended mode aliases", async () => {
+    process.env.PRS_DISABLE_AUTO_RUN = "1";
+    const { parseIssueCommandArgs } = await loadCli();
+
+    for (const alias of ["--unattended", "--auto", "--jdi"]) {
+      expect(parseIssueCommandArgs(["issue", "42", alias])).toEqual({
+        action: "run",
+        issueNumber: 42,
+        mode: "unattended",
+      });
+    }
+    expect(() => parseIssueCommandArgs(["issue", "42", "--all"])).toThrow(
+      'Unknown issue option "--all".'
+    );
+  });
+
   it("extracts concrete likely files from managed issue plan comments", async () => {
     const { extractIssuePlanLikelyFiles } = await loadCli();
 
