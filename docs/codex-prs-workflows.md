@@ -10,11 +10,17 @@ Codex is the default interactive runtime when `ai.runtime.type` is unset.
 
 Runtime-specific behavior:
 
-- `prs codex pr prepare-review <pr-number>` always requires `codex` on `PATH`.
 - `prs pr resolve-conflicts <pr-number>` always requires `codex` on `PATH` for guided merge-conflict resolution, even though Codex only opens when the base merge conflicts.
 - `prs issue <number> --mode unattended`, multi-issue `prs issue <number> <number> ...`, and `prs issue batch ...` require `ai.runtime.type` to be `codex`.
 - Interactive local workflows such as `prs issue refine <number>` and `prs issue <number>` use the configured runtime, with fallback to Codex when a configured non-default runtime is unavailable. PR fix commands prepare handoff artifacts for the active Codex session and do not launch another runtime. `prs issue draft --draft-file <path>` ingests a draft from the active Codex skill context and does not launch another runtime.
 - Structured-text workflows such as `prs commit`, `prs diff`, `prs review`, issue-plan generation, commit-message generation, and PR text generation use the configured provider, defaulting to OpenAI.
+
+The `prs codex ...` nested launcher group is retired. From a shell, run Codex directly with the `/prs` skill request:
+
+```bash
+codex -C /path/to/repo "/prs issue <number> refine"
+codex exec -C /path/to/repo "/prs pr <number> review"
+```
 
 GitHub Actions in this repository are OpenAI-only today. They do not expose Bedrock Claude or runtime-selection inputs.
 

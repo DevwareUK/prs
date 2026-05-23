@@ -2376,7 +2376,7 @@ export async function runSetupCommand(options: {
     "Advanced customization stays available through `bedrock-claude` and `claude-code`, but those paths are not the default launch recommendation."
   );
   console.log(
-    "Runtime/provider asymmetry to keep in mind: prs GitHub Actions are OpenAI-only today, and unattended issue runs plus `prs codex pr prepare-review` remain Codex-specific."
+    "Runtime/provider asymmetry to keep in mind: prs GitHub Actions are OpenAI-only today, and unattended issue runs remain Codex-specific."
   );
   console.log("");
   logInspection(options.repoRoot, inspection);

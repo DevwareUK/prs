@@ -39,7 +39,6 @@ Supporting commands:
 - `prs tool pr ready <pr-number> [--all] --json`: fast local PR readiness for `/prs:pr`; checks out the actual PR head branch, fetches and merges the latest PR base branch, reports GitHub-hosted review signals in `prContext`, includes grouped PR comment summaries with source links when comments are available, reports actionable/handled/duplicate/resolved/outdated review-thread counts, and skips broad local verification
 - `prs tool pr review <pr-number> --json`: deterministic local Codex PR review preparation; checks out/syncs the PR head, writes review context plus prompt artifacts, and returns paths where the active Codex session should write the Markdown report plus structured inline review candidates
 - `prs tool pr publish-review <pr-number> --report <path> --comments <path> --json`: publishes the completed local Codex PR review report to the managed PR audit comment and posts high-confidence line-linked review comments on changed lines
-- `prs codex pr prepare-review <pr-number>`: explicit legacy launcher for reviewer workspace preparation and live Codex follow-up
 - `prs tool pr prepare-review <pr-number> --json`: deterministic Codex-safe review preparation
 - `prs tool pr address-comments <pr-number> [--selection <value>] --json`: deterministic Codex-safe review-comment fix preparation; writes `.prs/` artifacts and returns file paths without launching a runtime
 - `prs tool pr fix-tests <pr-number> --json`: deterministic Codex-safe failing-test fix preparation; captures failing verification output and returns file paths without launching a runtime
@@ -47,6 +46,8 @@ Supporting commands:
 - `prs tool pr push-reviewed <pr-number> --json`: deterministic guarded push for reviewed PR fix commits; fetches the PR head and pushes only when local `HEAD` is ahead and not behind
 - `prs commit`: generate a commit message from staged changes
 - `prs diff`: summarize `git diff HEAD`
+
+The old `prs codex ...` command group is retired. Start agentic `/prs` workflows with Codex itself, for example `codex -C <repo> "/prs issue <number> refine"` or `codex exec -C <repo> "/prs pr <number> review"`. Use `prs tool ... --json` for deterministic handoff data inside an active Codex session.
 
 ## CLI command reference
 
@@ -204,7 +205,7 @@ Important behavior:
 
 ### `prs pr`
 
-The direct `prs pr prepare-review <pr-number>` launcher is retired. Use `prs tool pr prepare-review <pr-number> --json` for deterministic Codex-safe review preparation, or `prs codex pr prepare-review <pr-number>` when you explicitly want the legacy live Codex launcher.
+The direct `prs pr prepare-review <pr-number>` launcher is retired. Use `prs tool pr prepare-review <pr-number> --json` for deterministic Codex-safe review preparation, or run Codex directly with `/prs pr <pr-number> review` when you want an agentic review workflow.
 
 The managed `/prs pr <number> review` skill route uses `prs tool pr review <number> --json` to prepare a live PR checkout for deeper local Codex review. The tool writes `.prs/runs/<timestamp>-pr-<number>-review/pr-review-context.md`, `prompt.md`, `metadata.json`, `output.log`, and target `codex-pr-review.md` plus `codex-pr-review-comments.json` paths, then returns those paths without launching a nested runtime. The active Codex session reads the context and prompt, inspects the checked-out repository, writes one consolidated report to `reportFilePath`, writes structured inline review candidates to `commentsFilePath`, and publishes both with `prs tool pr publish-review <number> --report <reportFilePath> --comments <commentsFilePath> --json`.
 
@@ -221,7 +222,6 @@ prs tool pr address-comments <pr-number> [--selection <value>] --json
 prs tool pr fix-tests <pr-number> --json
 prs tool pr add-tests <pr-number> [--selection <value>] --json
 prs tool pr push-reviewed <pr-number> --json
-prs codex pr prepare-review <pr-number>
 prs pr resolve-conflicts <pr-number>
 prs pr address-comments <pr-number>
 prs pr fix-tests <pr-number>
@@ -238,7 +238,6 @@ Available subcommands:
 | `prs tool pr fix-tests <pr-number> --json` | Requires a clean working tree, preflights and runs the configured verification command, exits with `Configured verification command passed. No failing test output was captured.` when it already passes, otherwise writes `failing-tests.md`, `prompt.md`, `metadata.json`, and `output.log`, and returns JSON file paths plus `nextAction: "continue-in-current-codex-session"` without launching a runtime, committing, or pushing. |
 | `prs tool pr add-tests <pr-number> [--selection <value>] --json` | Requires a clean working tree, preflights the configured verification command, fetches pull request metadata and PR issue comments, parses unchecked managed AI Test Suggestions, defaults `--selection` to `all`, writes selected-suggestion `pr-test-suggestions.md`, `prompt.md`, `metadata.json`, and `output.log`, and returns JSON file paths plus `nextAction: "continue-in-current-codex-session"` without launching a runtime, marking suggestions resolved, committing, or pushing. |
 | `prs tool pr push-reviewed <pr-number> --json` | Requires a clean working tree, fetches pull request metadata, writes `.prs/runs/<timestamp>-pr-<number>-push-reviewed/output.log`, fetches `origin/<pr-head-branch>`, compares `origin/<pr-head-branch>...HEAD`, returns `status: "already-up-to-date"` without pushing when `HEAD` is not ahead, pushes `HEAD:<pr-head-branch>` only when local `HEAD` is ahead and not behind, and fails clearly while keeping local commits when the remote head diverged or cannot be resolved. |
-| `prs codex pr prepare-review <pr-number>` | Fetches pull request metadata and linked issues, requires a clean working tree, preflights the configured verification command plus the live PR base branch on `origin`, checks out the best available local review branch for the PR, fetches the latest `origin/<base-branch>` tip, skips merging when the checked-out branch already contains that tip, otherwise merges the base branch into the review branch before brief generation, routes merge conflicts through an interactive Codex conflict-resolution session when needed, writes `.prs/` run artifacts, generates `review-brief.md`, prints the saved brief path plus a terminal preview, and then leaves you in an interactive Codex session on that branch for follow-up review questions or requested fixes. After that session exits, `prs` exits cleanly if there are no new reviewed commits to sync, or else runs the configured build command when there are follow-up file changes, offers the same reviewed commit-message flow used by the other local fix workflows, and pushes any new reviewed commits back to `origin/<pr-head-branch>`. |
 | `prs pr resolve-conflicts <pr-number>` | Requires a clean working tree, requires `codex` on `PATH`, preflights the configured verification command plus the live PR base branch on `origin`, checks out the PR head branch, fetches the latest `origin/<base-branch>` tip, exits without build or push when the checked-out branch already contains that tip, otherwise merges the base branch into the PR head branch, opens a focused Codex conflict-resolution session when the merge conflicts, verifies that the final branch has no in-progress merge or unmerged paths and contains the fetched base tip, runs the configured build command after a completed merge, writes `prompt.md`, `conflict-resolution-prompt.md`, `metadata.json`, and `output.log` under `.prs/runs/<timestamp>-pr-<number>-resolve-conflicts/`, and pushes the resolved branch back to `origin/<pr-head-branch>` only when `HEAD` is ahead and not behind. |
 | `prs pr address-comments <pr-number>` | Requires a clean working tree, preflights the configured verification command, fetches pull request metadata and lifecycle-aware review threads from the configured forge, filters out obviously non-actionable comments plus resolved and outdated GitHub review threads, groups nearby threads into selectable review tasks, preserves non-trivial replies as thread context, suppresses duplicate PRS-authored bot findings and PRS-authored bot threads that predate the latest successful `address-comments` or legacy `fix-comments` commit unless a newer reply reopened the concern, writes `pr-review-comments.md`, `prompt.md`, `metadata.json`, and `output.log`, and prints file paths plus `nextAction: "continue-in-current-codex-session"` without launching a runtime, committing, resolving comments, or pushing. |
 | `prs pr fix-tests <pr-number>` | Requires a clean working tree, preflights and runs the configured verification command, fetches pull request metadata and linked issues from the configured forge, exits with `Configured verification command passed. No failing test output was captured.` when verification already passes, otherwise writes `.prs/runs/<timestamp>-pr-<number>-fix-tests` artifacts with captured stdout and stderr and prints file paths plus `nextAction: "continue-in-current-codex-session"` without launching a runtime, rerunning final verification, committing, or pushing. |
@@ -246,37 +245,24 @@ Available subcommands:
 
 Important behavior:
 
-- `prs codex pr prepare-review <pr-number>` prints a beta workflow notice before execution
 - `prs pr resolve-conflicts <pr-number>` prints a beta workflow notice before execution
 - `prs tool pr review <pr-number> --json` requires a clean working tree before it starts and does not require a configured runtime CLI on `PATH`
-- `prs codex pr prepare-review <pr-number>` requires a clean working tree before it starts
 - `prs pr resolve-conflicts <pr-number>` requires a clean working tree before it starts
 - `prs pr address-comments <pr-number>` requires a clean working tree before it starts
 - `prs pr address-comments <pr-number>` ignores resolved and outdated GitHub review threads by default; when only old PRS-authored bot comments remain after a successful fix run and checks are green, it exits with a no-new-actionable-comments message instead of opening another fix cycle
 - `prs pr fix-tests <pr-number>` requires a clean working tree before it starts
 - `prs pr add-tests <pr-number>` requires a clean working tree before it starts
-- `prs tool pr review <pr-number> --json`, `prs codex pr prepare-review <pr-number>`, `prs pr resolve-conflicts <pr-number>`, `prs pr address-comments <pr-number>`, `prs pr fix-tests <pr-number>`, and `prs pr add-tests <pr-number>` fail early when the configured verification command cannot run from the repository root
-- `prs codex pr prepare-review <pr-number>` requires `codex` on `PATH`
+- `prs tool pr review <pr-number> --json`, `prs pr resolve-conflicts <pr-number>`, `prs pr address-comments <pr-number>`, `prs pr fix-tests <pr-number>`, and `prs pr add-tests <pr-number>` fail early when the configured verification command cannot run from the repository root
 - `prs pr resolve-conflicts <pr-number>` requires `codex` on `PATH` for the guided conflict-resolution session
-- `prs codex pr prepare-review <pr-number>` validates that the live PR base branch still exists on `origin` before it checks out or fetches a review branch
 - `prs pr resolve-conflicts <pr-number>` validates that the live PR base branch still exists on `origin` before it checks out or fetches the PR head branch
 - `prs pr resolve-conflicts <pr-number>` checks out the local PR head branch when it already exists, or fetches the PR head from `origin` into a same-named local branch so it can be pushed back to `origin/<pr-head-branch>`
-- `prs codex pr prepare-review <pr-number>` reuses a linked issue branch when exactly one linked issue has saved local state and that branch still exists locally
-- otherwise `prs codex pr prepare-review <pr-number>` checks out the local PR head branch when it already exists, or fetches the PR head into a dedicated `review/pr-<pr-number>-<slug>` branch
-- after checkout, `prs codex pr prepare-review <pr-number>` fetches the latest `origin/<pr-base-branch>` tip and records whether the branch was already current or had to be merged with the latest base branch
 - after checkout, `prs tool pr review <pr-number> --json` fetches the latest `origin/<pr-base-branch>` tip and records whether the branch was already current, cleanly merged, or blocked by conflicts
 - after checkout, `prs pr resolve-conflicts <pr-number>` fetches the latest `origin/<pr-base-branch>` tip and records whether the PR branch was already current, cleanly merged, or blocked by conflicts
-- if that base-branch merge conflicts, `prs codex pr prepare-review <pr-number>` opens a focused Codex conflict-resolution session and only continues to review-brief generation after the merge is fully resolved
 - if the resolve-conflicts base merge conflicts, `prs pr resolve-conflicts <pr-number>` writes `conflict-resolution-prompt.md`, opens a focused Codex conflict-resolution session, and fails with recovery guidance if a merge is still in progress, unmerged paths remain, or `HEAD` does not contain the fetched base tip after Codex exits
-- `prs codex pr prepare-review <pr-number>` writes `prompt.md`, `metadata.json`, `output.log`, and `review-brief.md` under a timestamped `.prs/runs/` directory and may also write supporting workflow artifacts there
 - `prs tool pr review <pr-number> --json` writes a prompt that asks active Codex to separate blocking concerns, non-blocking concerns, test/QA gaps, rollout/documentation concerns, and evidence/confidence for each finding in `codex-pr-review.md`, write high-confidence line-linked comments to `codex-pr-review-comments.json`, then publish both through `prs tool pr publish-review`
 - `prs pr resolve-conflicts <pr-number>` writes `prompt.md`, `conflict-resolution-prompt.md`, `metadata.json`, and `output.log` under `.prs/runs/<timestamp>-pr-<number>-resolve-conflicts/`
-- after generating the brief, `prs codex pr prepare-review <pr-number>` drops you into an interactive Codex shell so you can ask follow-up questions or request fixes before exiting Codex
-- after that interactive session exits, `prs codex pr prepare-review <pr-number>` skips build and commit review if there are no follow-up file changes, but still pushes any new reviewed commits created by the workflow, such as a base-sync merge
 - after a clean or Codex-resolved resolve-conflicts merge, `prs pr resolve-conflicts <pr-number>` runs the configured build command before pushing
-- if the follow-up session changed files, `prs codex pr prepare-review <pr-number>` runs the configured build command, previews a proposed commit message that you can accept, edit, or skip, and then pushes the resulting reviewed branch state back to the PR head branch when it is ahead of `origin/<pr-head-branch>`
 - after a completed resolve-conflicts merge, `prs pr resolve-conflicts <pr-number>` fetches `origin/<pr-head-branch>` and only pushes when `HEAD` is ahead and not behind; if the branch diverged or the remote head cannot be resolved, the command fails clearly and keeps the local branch state
-- when a linked issue has a live saved Codex session, `prs codex pr prepare-review <pr-number>` reuses it for brief generation and the follow-up interactive session; stale sessions are warned about and fall back to a fresh run
 - local PR comment-fix and test-addition preparation runs do not require a configured runtime CLI on `PATH`
 - local PR failing-test-fix preparation runs do not require a configured runtime CLI on `PATH`; they run the configured verification command once to capture the initial failure
 - PR comment-fix and test-addition preparation runs preflight the configured `buildCommand`, defaulting to `pnpm build`; failing-test-fix preparation runs execute it once before writing artifacts and exits without a run directory if it already passes

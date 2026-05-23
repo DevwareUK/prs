@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CODEX_USAGE, parseCodexCommandArgs } from "./codex";
+import { CODEX_RETIRED_MESSAGE, parseCodexCommandArgs } from "./codex";
 
 function parseNumber(rawValue: string | undefined): number {
   if (!rawValue || !/^\d+$/.test(rawValue)) {
@@ -10,61 +10,48 @@ function parseNumber(rawValue: string | undefined): number {
 }
 
 describe("codex command parser", () => {
-  it("parses an explicit unattended Codex issue launcher", () => {
-    expect(parseCodexCommandArgs(["codex", "issue", "123"], parseNumber)).toEqual({
-      action: "issue",
-      issueNumber: 123,
-    });
+  it("retires explicit Codex issue launchers", () => {
+    expect(() => parseCodexCommandArgs(["codex", "issue", "123"], parseNumber)).toThrow(
+      CODEX_RETIRED_MESSAGE
+    );
     expect(
-      parseCodexCommandArgs(
+      () => parseCodexCommandArgs(
         ["codex", "issue", "123", "--mode", "unattended"],
         parseNumber
       )
-    ).toEqual({
-      action: "issue",
-      issueNumber: 123,
-    });
+    ).toThrow(CODEX_RETIRED_MESSAGE);
   });
 
-  it("parses explicit unattended Codex issue batches", () => {
+  it("retires explicit unattended Codex issue batches", () => {
     expect(
-      parseCodexCommandArgs(
+      () => parseCodexCommandArgs(
         ["codex", "issue", "batch", "123", "124", "--mode=unattended"],
         parseNumber
       )
-    ).toEqual({
-      action: "issue-batch",
-      issueNumbers: [123, 124],
-    });
+    ).toThrow(CODEX_RETIRED_MESSAGE);
   });
 
-  it("parses explicit Codex PR launchers", () => {
+  it("retires explicit Codex PR launchers", () => {
     expect(
-      parseCodexCommandArgs(["codex", "pr", "prepare-review", "115"], parseNumber)
-    ).toEqual({
-      action: "pr-prepare-review",
-      prNumber: 115,
-    });
+      () => parseCodexCommandArgs(["codex", "pr", "prepare-review", "115"], parseNumber)
+    ).toThrow(CODEX_RETIRED_MESSAGE);
     expect(
-      parseCodexCommandArgs(["codex", "pr", "resolve-conflicts", "116"], parseNumber)
-    ).toEqual({
-      action: "pr-resolve-conflicts",
-      prNumber: 116,
-    });
+      () => parseCodexCommandArgs(["codex", "pr", "resolve-conflicts", "116"], parseNumber)
+    ).toThrow(CODEX_RETIRED_MESSAGE);
   });
 
-  it("rejects unsupported or ambiguous Codex forms", () => {
+  it("uses one migration message for unsupported or ambiguous Codex forms", () => {
     expect(() =>
       parseCodexCommandArgs(["codex", "issue", "123", "--mode", "interactive"], parseNumber)
-    ).toThrow('Invalid codex mode "interactive". Expected "unattended".');
+    ).toThrow(CODEX_RETIRED_MESSAGE);
     expect(() =>
       parseCodexCommandArgs(["codex", "issue", "123", "--mode"], parseNumber)
-    ).toThrow("Missing codex mode value.");
+    ).toThrow(CODEX_RETIRED_MESSAGE);
     expect(() =>
       parseCodexCommandArgs(["codex", "issue", "batch", "123"], parseNumber)
-    ).toThrow(CODEX_USAGE);
+    ).toThrow(CODEX_RETIRED_MESSAGE);
     expect(() =>
       parseCodexCommandArgs(["codex", "pr", "fix-comments", "115"], parseNumber)
-    ).toThrow(CODEX_USAGE);
+    ).toThrow(CODEX_RETIRED_MESSAGE);
   });
 });

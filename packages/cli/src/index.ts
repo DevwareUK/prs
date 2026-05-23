@@ -57,6 +57,7 @@ import {
   type LaunchStageNoticeId,
 } from "./launch-stage";
 import {
+  CODEX_RETIRED_MESSAGE,
   parseCodexCommandArgs,
   type CodexCommandOptions,
 } from "./commands/codex";
@@ -146,10 +147,7 @@ import {
 import { runPrFixCommentsCommand } from "./workflows/pr-fix-comments/run";
 import { runPrFixFailingTestsCommand } from "./workflows/pr-fix-failing-tests/run";
 import type { VerificationFailure } from "./workflows/pr-fix-failing-tests/types";
-import {
-  preparePullRequestReviewTool,
-  runPrPrepareReviewCommand,
-} from "./workflows/pr-prepare-review/run";
+import { preparePullRequestReviewTool } from "./workflows/pr-prepare-review/run";
 import { preparePullRequestLocalReviewTool } from "./workflows/pr-local-review/run";
 import { publishPullRequestLocalReview } from "./workflows/pr-local-review/publish";
 import { runPrResolveConflictsCommand } from "./workflows/pr-resolve-conflicts/run";
@@ -371,11 +369,7 @@ const TOP_LEVEL_HELP = [
   "  prs pr resolve-conflicts <pr-number>",
   "  prs review features [repo-path]",
   "",
-  "Legacy interactive launchers:",
-  "  prs codex issue <number>",
-  "  prs codex issue batch <number> <number> [...number] [--mode unattended]",
-  "  prs codex pr prepare-review <pr-number>",
-  "  prs codex pr resolve-conflicts <pr-number>",
+  "Compatibility aliases:",
   "  prs pr address-comments <pr-number>",
   "  prs pr fix-tests <pr-number>",
   "  prs pr add-tests <pr-number>",
@@ -829,22 +823,6 @@ function resolveLaunchStageNoticeId(args: string[]): LaunchStageNoticeId | undef
       return "pr-resolve-conflicts";
     }
     return undefined;
-  }
-
-  if (command === "codex") {
-    const codexCommand = parseCodexCommand(args);
-    if (codexCommand.action === "issue") {
-      return "issue-run";
-    }
-    if (codexCommand.action === "issue-batch") {
-      return "issue-batch";
-    }
-    if (codexCommand.action === "pr-prepare-review") {
-      return "pr-prepare-review";
-    }
-    if (codexCommand.action === "pr-resolve-conflicts") {
-      return "pr-resolve-conflicts";
-    }
   }
 
   return undefined;
@@ -4233,28 +4211,6 @@ async function runPrCommand(): Promise<void> {
   }
 }
 
-async function runPrPrepareReviewCodexLauncher(
-  prNumber: number,
-  repoRoot: string,
-  repositoryConfig: ReturnType<typeof getRepositoryConfig>
-): Promise<void> {
-  await runPrPrepareReviewCommand({
-    prNumber,
-    repoRoot,
-    buildCommand: repositoryConfig.buildCommand,
-    ensureVerificationCommandAvailable,
-    preflightBaseBranch: preflightRemoteBranch,
-    forge: getRepositoryForge(repoRoot),
-    ensureCleanWorkingTree,
-    promptForLine,
-    hasChanges,
-    verifyBuild,
-    commitGeneratedChanges,
-    readDiff: readIssueWorkflowDiff,
-    createProvider: async (providerRepoRoot) => createProvider(providerRepoRoot),
-  });
-}
-
 async function runPrResolveConflictsCodexLauncher(
   prNumber: number,
   repoRoot: string,
@@ -4270,37 +4226,6 @@ async function runPrResolveConflictsCodexLauncher(
     ensureCleanWorkingTree,
     verifyBuild,
   });
-}
-
-async function runCodexCommand(): Promise<void> {
-  const repoRoot = getDefaultRepoRoot();
-  const repositoryConfig = getRepositoryConfig(repoRoot);
-  const codexCommand = parseCodexCommand(getCliArgs());
-
-  if (codexCommand.action === "issue") {
-    await runUnattendedIssueCommand(codexCommand.issueNumber);
-    return;
-  }
-
-  if (codexCommand.action === "issue-batch") {
-    await runIssueBatchCommand(codexCommand.issueNumbers);
-    return;
-  }
-
-  if (codexCommand.action === "pr-prepare-review") {
-    await runPrPrepareReviewCodexLauncher(
-      codexCommand.prNumber,
-      repoRoot,
-      repositoryConfig
-    );
-    return;
-  }
-
-  await runPrResolveConflictsCodexLauncher(
-    codexCommand.prNumber,
-    repoRoot,
-    repositoryConfig
-  );
 }
 
 async function runToolCommand(): Promise<void> {
@@ -7306,6 +7231,10 @@ export async function run(): Promise<void> {
   }
 
   const command = args[0] ?? "commit";
+  if (command === "codex") {
+    throw new Error(CODEX_RETIRED_MESSAGE);
+  }
+
   if (
     command !== "commit" &&
     command !== "diff" &&
@@ -7314,7 +7243,6 @@ export async function run(): Promise<void> {
     command !== "audit" &&
     command !== "issue" &&
     command !== "pr" &&
-    command !== "codex" &&
     command !== "tool" &&
     command !== "review" &&
     command !== "test-backlog" &&
@@ -7365,11 +7293,6 @@ export async function run(): Promise<void> {
 
   if (command === "pr") {
     await runPrCommand();
-    return;
-  }
-
-  if (command === "codex") {
-    await runCodexCommand();
     return;
   }
 

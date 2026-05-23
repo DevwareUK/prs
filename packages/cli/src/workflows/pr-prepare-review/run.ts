@@ -235,7 +235,7 @@ function synchronizePullRequestBaseBranch(
       mergeStillInProgress,
       remainingUnmergedPaths,
       nowContainsBaseTip,
-      rerunCommand: `prs codex pr prepare-review ${pullRequest.number}`,
+      rerunCommand: `/prs pr ${pullRequest.number} review`,
     });
 
     appendPullRequestPrepareReviewWarning(workspace, recoveryMessage);
@@ -476,7 +476,7 @@ function ensureCodexAvailable(): void {
   const availability = runtime.checkAvailability();
   if (!availability.available) {
     throw new Error(
-      `\`prs codex pr prepare-review\` requires Codex because it generates the review brief in an unattended runtime. Configured Codex is unavailable because ${availability.reason}.`
+      `The legacy PR prepare-review runtime requires Codex because it generates the review brief in an unattended runtime. Configured Codex is unavailable because ${availability.reason}.`
     );
   }
 }
@@ -632,7 +632,7 @@ export async function runPrPrepareReviewCommand(
   (options.ensureVerificationCommandAvailable ?? ensureVerificationCommandAvailable)(
     options.repoRoot,
     options.buildCommand,
-    "prs codex pr prepare-review"
+    "legacy PR prepare-review"
   );
 
   console.log(`Fetching pull request #${options.prNumber}...`);
