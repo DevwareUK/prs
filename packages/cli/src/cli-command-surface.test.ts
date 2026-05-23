@@ -1175,26 +1175,20 @@ describe("CLI command surface", () => {
     });
   });
 
-  it("parses explicit codex launcher commands", async () => {
+  it("rejects explicit codex launcher commands with migration guidance", async () => {
     process.env.GIT_AI_DISABLE_AUTO_RUN = "1";
     const { parseCodexCommand } = await loadCli();
 
-    expect(parseCodexCommand(["codex", "issue", "77"])).toEqual({
-      action: "issue",
-      issueNumber: 77,
-    });
-    expect(parseCodexCommand(["codex", "issue", "batch", "77", "78"])).toEqual({
-      action: "issue-batch",
-      issueNumbers: [77, 78],
-    });
-    expect(parseCodexCommand(["codex", "pr", "prepare-review", "79"])).toEqual({
-      action: "pr-prepare-review",
-      prNumber: 79,
-    });
-    expect(parseCodexCommand(["codex", "pr", "resolve-conflicts", "80"])).toEqual({
-      action: "pr-resolve-conflicts",
-      prNumber: 80,
-    });
+    for (const args of [
+      ["codex", "issue", "77"],
+      ["codex", "issue", "batch", "77", "78"],
+      ["codex", "pr", "prepare-review", "79"],
+      ["codex", "pr", "resolve-conflicts", "80"],
+    ]) {
+      expect(() => parseCodexCommand(args)).toThrow(
+        "`prs codex ...` has been retired because prs is skill-first."
+      );
+    }
   });
 
   it("parses audit publish for issue artifacts", async () => {
@@ -1453,9 +1447,8 @@ describe("CLI command surface", () => {
     expect(stdout.output()).not.toContain("  prs pr prepare-review <pr-number>");
     expect(stdout.output()).toContain("prs review features [repo-path]");
     expect(stdout.output()).toContain("prs pr resolve-conflicts <pr-number>");
-    expect(stdout.output()).toContain("Legacy interactive launchers:");
-    expect(stdout.output()).toContain("prs codex issue <number>");
-    expect(stdout.output()).toContain("prs codex pr prepare-review <pr-number>");
+    expect(stdout.output()).not.toContain("Legacy interactive launchers:");
+    expect(stdout.output()).not.toContain("prs codex");
     expect(stdout.output()).toContain("prs pr address-comments <pr-number>");
     expect(stdout.output()).toContain("prs pr add-tests <pr-number>");
   });

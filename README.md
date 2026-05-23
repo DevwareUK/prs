@@ -138,10 +138,6 @@ Supporting commands:
 - `prs setup --update-skills`
 - `prs update skills`
 - `prs audit publish (--issue <number>|--pr <number>) --file <path> --section <name> [--local-run <path>]`
-- `prs codex issue <number>`
-- `prs codex issue batch <number> <number> [...number] [--mode unattended]`
-- `prs codex pr prepare-review <pr-number>`
-- `prs codex pr resolve-conflicts <pr-number>`
 - `prs tool issue list [--actionable] --json`
 - `prs tool issue ready <issue-number> [--all] --json`
 - `prs tool issue create (--draft-file <path>|--issue-set <path>) --json`
@@ -153,6 +149,8 @@ Supporting commands:
 - `prs tool pr push-reviewed <pr-number> --json`
 - `prs commit`
 - `prs diff`
+
+The old `prs codex ...` nested launcher group has been retired. To start an agentic `/prs` workflow from a shell, run Codex directly in the repository, for example `codex -C <repo> "/prs issue <number> refine"` or `codex exec -C <repo> "/prs pr <number> review"`. Inside an active Codex session, use the deterministic `prs tool ... --json` commands for handoff data.
 
 `prs tool issue list [--actionable] --json` and `prs tool pr list [--actionable] --json` include a `url` field for every returned issue or pull request. The interactive `/prs issue` and `/prs pr` entrypoints use those list tools and should show each returned item with its number, title, and GitHub URL before offering follow-up actions.
 

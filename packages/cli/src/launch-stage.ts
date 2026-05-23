@@ -94,13 +94,13 @@ const LAUNCH_STAGE_NOTICE_DEFINITIONS: Record<
   },
   "pr-prepare-review": {
     tier: "beta",
-    command: "`prs codex pr prepare-review <pr-number>`",
+    command: "`/prs pr <pr-number> review`",
     reason:
-      "It automates reviewer workspace setup, base-branch sync, and a live Codex handoff around a pull request.",
+      "It prepares reviewer workspace context and hands the review to the active Codex session.",
     recommendedFirst:
       "`prs review` for the lower-risk review path, then `prs pr address-comments <pr-number>`, `prs pr fix-tests <pr-number>`, or `prs pr add-tests <pr-number>` when you want guided local changes.",
     constraints:
-      "Requires a clean working tree, pull-request access through the configured forge, and `codex` on PATH; it may check out a review branch and merge the latest base branch before generating the brief.",
+      "Requires a clean working tree and pull-request access through the configured forge; deterministic tool commands should prepare context before active Codex writes the review.",
   },
   "pr-resolve-conflicts": {
     tier: "beta",

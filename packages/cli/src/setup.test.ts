@@ -283,7 +283,7 @@ describe("setup command", () => {
       "Superpowers worktrees and agents handle execution isolation."
     );
     expect(messages.join("\n")).toContain(
-      "prs GitHub Actions are OpenAI-only today, and unattended issue runs plus `prs codex pr prepare-review` remain Codex-specific."
+      "prs GitHub Actions are OpenAI-only today, and unattended issue runs remain Codex-specific."
     );
     expect(existsSync(resolve(repoRoot, "AGENTS.md"))).toBe(false);
     expect(messages.join("\n")).toContain("Next step: create `.env`");

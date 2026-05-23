@@ -18,7 +18,7 @@ export const PR_USAGE = [
 export const PR_PREPARE_REVIEW_RETIRED_MESSAGE = [
   "`prs pr prepare-review <pr-number>` has been retired because it launched Codex from inside a PR workflow.",
   "Use `prs tool pr prepare-review <pr-number> --json` for deterministic Codex-safe review preparation.",
-  "Use `prs codex pr prepare-review <pr-number>` only when you explicitly want the legacy Codex launcher.",
+  "Run Codex directly with `/prs pr <pr-number> review` when you want an agentic review workflow.",
 ].join(" ");
 
 export function parsePrCommandArgs(

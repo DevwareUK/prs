@@ -78,7 +78,6 @@ You only need extra tooling for advanced or deeper local workflows:
   default: `codex`
   `ai.runtime.type: "claude-code"`: `claude`
   if the configured non-default runtime is unavailable, `prs` falls back to `codex` when it is installed
-- `codex` on `PATH` for `prs codex pr prepare-review <pr-number>`, which checks out a reviewer workspace, syncs it with the latest PR base branch, resolves merge conflicts in Codex when needed, generates the review brief, leaves you in an interactive Codex session for follow-up questions or fixes, offers the same reviewed commit-message flow as other local fix workflows when that session makes changes, and pushes any new reviewed commits back to the PR head branch before exiting
 - `codex` on `PATH` for `prs pr resolve-conflicts <pr-number>`, which checks out the PR head branch, syncs it with the latest PR base branch, opens a focused Codex session only when merge conflicts need local resolution, verifies the completed merge with the configured build command, writes `.prs/` run artifacts, and pushes the synced branch back to the PR head branch through the guarded push flow
 - `codex` plus authenticated GitHub access for `prs issue <number> --mode unattended`, `prs issue <number> <number> ...`, and `prs issue batch ...`
 - authenticated `gh`, `GH_TOKEN`, or `GITHUB_TOKEN` for GitHub-backed issue and pull request flows
@@ -90,7 +89,7 @@ You only need extra tooling for advanced or deeper local workflows:
 The launch path is not presented as full runtime or provider parity:
 
 - GitHub Actions in this repository are OpenAI-only today. They do not expose Bedrock Claude or runtime-selection inputs.
-- `prs codex pr prepare-review <pr-number>` always requires `codex` on `PATH` and keeps its merge-conflict and review-brief flow Codex-specific.
+- The retired `prs codex ...` launcher group is replaced by direct Codex usage, such as `codex -C <repo> "/prs pr <number> review"`.
 - `prs pr resolve-conflicts <pr-number>` always requires `codex` on `PATH` for guided merge-conflict resolution, even though it only opens Codex when the base merge conflicts.
 - `prs issue <number> --mode unattended`, multi-issue `prs issue <number> <number> ...`, and `prs issue batch ...` require `ai.runtime.type` to be `codex`.
 - Interactive local workflows such as `prs issue draft`, `prs issue refine <number>`, and `prs issue <number>` use the configured runtime, with fallback to Codex when a configured non-default runtime is unavailable. PR fix commands prepare artifacts for the active session and do not launch a runtime.
