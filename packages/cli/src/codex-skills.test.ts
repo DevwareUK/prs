@@ -159,6 +159,9 @@ describe("managed prs Codex skills", () => {
     expect(reviewMarkdown).toContain("testing strategy and coverage review");
     expect(reviewMarkdown).toContain("/prs:review tests");
     expect(issueMarkdown).toContain("name: prs:issue");
+    expect(issueMarkdown).toContain("/prs:issue <number> refine");
+    expect(issueMarkdown).toContain("publish managed `<!-- prs:issue-spec -->` and `<!-- prs:issue-plan -->` comments there");
+    expect(issueMarkdown).toContain("never create linked issues from this refinement flow");
     expect(issueMarkdown).toContain("/prs:issue <number> --all");
     expect(issueMarkdown).toContain(
       "For interactive issue selection, use `prs tool issue list --actionable --json` as the source of truth and show each returned issue with its number, title, and GitHub URL."
