@@ -1237,7 +1237,7 @@ describe("Issue prepare workflow", () => {
     );
     expect(readFileSync(promptFilePath, "utf8")).not.toContain("[1] Continue refining");
     expect(readFileSync(promptFilePath, "utf8")).not.toContain("/commit");
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
   });
 
 });

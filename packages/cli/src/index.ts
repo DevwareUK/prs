@@ -33,6 +33,7 @@ import {
 } from "@prs/providers";
 import type { ResolvedRepositoryConfigType } from "@prs/contracts";
 import {
+  ALL_ISSUE_PLAN_COMMENT_MARKERS,
   GIT_AI_ALIAS_DEPRECATION_MESSAGE,
   ALL_ISSUE_SPEC_COMMENT_MARKERS,
   ISSUE_PLAN_COMMENT_MARKER,
@@ -1013,6 +1014,29 @@ function findLatestIssueSpecComment(
     .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0];
 }
 
+function findLatestIssuePlanComment(
+  comments: RepositoryComment[]
+): IssuePlanComment | undefined {
+  const comment = comments
+    .filter((candidate) =>
+      ALL_ISSUE_PLAN_COMMENT_MARKERS.some((marker) =>
+        candidate.body.trimStart().startsWith(marker)
+      )
+    )
+    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0];
+
+  if (!comment) {
+    return undefined;
+  }
+
+  return {
+    id: comment.id,
+    body: comment.body,
+    url: comment.url,
+    updatedAt: comment.updatedAt,
+  };
+}
+
 async function publishSuperpowersSpecArtifact(options: {
   repoRoot: string;
   forge: RepositoryForge;
@@ -1068,6 +1092,75 @@ async function publishSuperpowersSpecArtifact(options: {
     options.outputLogPath,
     `Created issue specification comment from Superpowers spec: ${comment.url}`
   );
+  return comment;
+}
+
+function formatIssueSpecCommentFromIssue(input: {
+  issueNumber: number;
+  issue: IssueDetails;
+}): string {
+  const issueBody = input.issue.body.trim() || "(No issue body provided.)";
+
+  return [
+    ISSUE_SPEC_COMMENT_MARKER,
+    `# Issue Specification: ${input.issue.title}`,
+    "",
+    "## Source",
+    "",
+    `- Issue: #${input.issueNumber}`,
+    `- URL: ${input.issue.url}`,
+    "",
+    "## Summary",
+    "",
+    issueBody,
+    "",
+    "## Notes",
+    "",
+    "This specification was generated from the issue context when implementation preparation started. Refine the issue for a richer settled specification when needed.",
+    "",
+  ].join("\n");
+}
+
+async function ensureIssueSpecComment(options: {
+  repoRoot: string;
+  forge: RepositoryForge;
+  issueNumber: number;
+  issue: IssueDetails;
+  specFilePath?: string;
+  outputLogPath?: string;
+  comments?: RepositoryComment[];
+}): Promise<RepositoryComment | IssuePlanComment> {
+  const existingSpecComment = findLatestIssueSpecComment(
+    options.comments ?? (await options.forge.fetchIssueComments(options.issueNumber))
+  );
+  if (existingSpecComment) {
+    return existingSpecComment;
+  }
+
+  if (options.specFilePath && existsSync(options.specFilePath)) {
+    const specComment = await publishSuperpowersSpecArtifact({
+      repoRoot: options.repoRoot,
+      forge: options.forge,
+      issueNumber: options.issueNumber,
+      specFilePath: options.specFilePath,
+      outputLogPath:
+        options.outputLogPath ?? resolve(options.repoRoot, ".prs", "issue-spec.log"),
+      existingSpecComment: null,
+    });
+
+    if (specComment) {
+      return specComment;
+    }
+  }
+
+  const comment = await options.forge.createIssuePlanComment(
+    options.issueNumber,
+    formatIssueSpecCommentFromIssue({
+      issueNumber: options.issueNumber,
+      issue: options.issue,
+    })
+  );
+  console.log(`Created issue specification comment from issue context: ${comment.url}`);
   return comment;
 }
 
@@ -5809,7 +5902,23 @@ async function createStructuredIssuePlanComment(options: {
   issue: IssueDetails;
   existingPlanComment?: IssuePlanComment;
   mode: IssuePlanResolutionMode;
+  comments?: RepositoryComment[];
+  specAlreadyEnsured?: boolean;
 }): Promise<IssuePlanComment> {
+  if (
+    options.mode === "execution-preflight" &&
+    !options.existingPlanComment &&
+    !options.specAlreadyEnsured
+  ) {
+    await ensureIssueSpecComment({
+      repoRoot: options.repoRoot,
+      forge: options.forge,
+      issueNumber: options.issueNumber,
+      issue: options.issue,
+      comments: options.comments,
+    });
+  }
+
   const { provider } = await createProvider(options.repoRoot);
   const plan = await generateIssueResolutionPlan(provider, {
     issueNumber: options.issueNumber,
@@ -5849,6 +5958,7 @@ async function createSuperpowersIssuePlanComment(options: {
   issue: IssueDetails;
   existingPlanComment?: IssuePlanComment;
   mode: IssuePlanResolutionMode;
+  comments?: RepositoryComment[];
 }): Promise<IssuePlanComment | undefined> {
   const workspace = createIssuePlanWorkspace(options.repoRoot, options.issueNumber);
   writeIssuePlanWorkspaceFiles(
@@ -5860,11 +5970,23 @@ async function createSuperpowersIssuePlanComment(options: {
   );
 
   console.log("Creating issue resolution plan with Codex Superpowers...");
-  if (options.mode === "execution-preflight") {
+  if (options.mode === "execution-preflight" && !options.existingPlanComment) {
     launchUnattendedRuntime("codex", options.repoRoot, workspace);
   } else {
     const runtime = getInteractiveRuntimeByType("codex");
     runtime.launch(options.repoRoot, workspace);
+  }
+
+  if (options.mode === "execution-preflight") {
+    await ensureIssueSpecComment({
+      repoRoot: options.repoRoot,
+      forge: options.forge,
+      issueNumber: options.issueNumber,
+      issue: options.issue,
+      specFilePath: workspace.superpowersSpecFilePath,
+      outputLogPath: workspace.outputLogPath,
+      comments: options.comments,
+    });
   }
 
   const comment = await publishSuperpowersPlanArtifact({
@@ -5894,9 +6016,13 @@ async function resolveIssuePlanComment(options: {
   issue?: IssueDetails;
   runtimeType?: InteractiveRuntimeType;
 }): Promise<IssuePlanComment> {
-  const existingPlanComment = await options.forge.fetchIssuePlanComment(
-    options.issueNumber
-  );
+  const issueComments =
+    options.mode === "execution-preflight"
+      ? await options.forge.fetchIssueComments(options.issueNumber)
+      : undefined;
+  const existingPlanComment = issueComments
+    ? findLatestIssuePlanComment(issueComments)
+    : await options.forge.fetchIssuePlanComment(options.issueNumber);
 
   if (existingPlanComment && !options.refresh) {
     if (options.mode === "explicit-plan-command") {
@@ -5927,6 +6053,7 @@ async function resolveIssuePlanComment(options: {
       issue,
       existingPlanComment: existingPlanComment,
       mode: options.mode,
+      comments: issueComments,
     });
     if (comment) {
       return comment;
@@ -5942,6 +6069,11 @@ async function resolveIssuePlanComment(options: {
     issue,
     existingPlanComment,
     mode: options.mode,
+    comments: issueComments,
+    specAlreadyEnsured:
+      options.mode === "execution-preflight" &&
+      !existingPlanComment &&
+      superpowersDecision.useSuperpowers,
   });
 }
 

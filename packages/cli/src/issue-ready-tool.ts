@@ -28,12 +28,7 @@ export type IssueReadyToolResult =
     }
   | {
       status: "blocked";
-      reason: "not-github" | "missing-refinement-artifacts";
-      issueNumber?: number;
-      issueTitle?: string;
-      issueUrl?: string;
-      spec?: IssueSpecStatus;
-      plan?: IssuePlanStatus;
+      reason: "not-github";
       message: string;
       nextAction: string;
     };
@@ -197,25 +192,6 @@ export async function readyIssueTool(
     suggestedBranchName,
   });
 
-  if (spec.status === "missing" || plan.status === "missing") {
-    const missing = [
-      spec.status === "missing" ? "managed issue specification" : undefined,
-      plan.status === "missing" ? "managed issue plan" : undefined,
-    ].filter((value): value is string => value !== undefined);
-
-    return {
-      status: "blocked",
-      reason: "missing-refinement-artifacts",
-      issueNumber: options.issueNumber,
-      issueTitle: issue.title,
-      issueUrl: issue.url,
-      spec,
-      plan,
-      message: `Issue #${options.issueNumber} is not ready for implementation. Missing ${missing.join(" and ")}. Run \`prs issue refine ${options.issueNumber}\` and continue refinement until the managed specification and plan comments are published.`,
-      nextAction: `Run \`prs issue refine ${options.issueNumber}\` before starting development.`,
-    };
-  }
-
   return {
     status: "ready",
     issueNumber: options.issueNumber,
@@ -231,6 +207,8 @@ export async function readyIssueTool(
     metadataFilePath: toRepoRelativePath(options.repoRoot, metadataFilePath),
     nextAction: "start-superpowers-worktree",
     message:
-      "Issue context is ready. Use Superpowers to create a fresh worktree from the updated base branch before implementation.",
+      spec.status === "missing" || plan.status === "missing"
+        ? "Issue context is ready. Missing managed refinement artifacts will be generated and published during issue preparation before implementation."
+        : "Issue context is ready. Use Superpowers to create a fresh worktree from the updated base branch before implementation.",
   };
 }

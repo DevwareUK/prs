@@ -22,6 +22,7 @@ import {
   resolveGitHubCli,
   resolveGitHubToken,
 } from "./github-auth";
+import { ALL_ISSUE_PLAN_COMMENT_MARKERS } from "@prs/contracts";
 
 function runCommand(
   command: string,
@@ -1614,7 +1615,3 @@ class GitHubRepositoryForge implements RepositoryForge {
 export function createGitHubRepositoryForge(repoRoot: string): RepositoryForge {
   return new GitHubRepositoryForge(repoRoot);
 }
-import {
-  ALL_ISSUE_PLAN_COMMENT_MARKERS,
-  includesManagedMarker,
-} from "@prs/contracts";

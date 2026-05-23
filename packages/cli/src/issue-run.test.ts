@@ -242,7 +242,7 @@ describe("Full issue run workflow", () => {
     expect(readFileSync(issueFilePath, "utf8")).toContain(
       "Generated plan summary for full issue execution."
     );
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
   });
 
   it("resumes the saved Codex session for later full issue runs", async () => {
@@ -756,6 +756,15 @@ describe("Full issue run workflow", () => {
       .mockResolvedValueOnce(createFetchResponse([]))
       .mockResolvedValueOnce(
         createFetchResponse({
+          id: 8145,
+          body: "<!-- prs:issue-spec -->\nGenerated spec.",
+          html_url:
+            `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-8145`,
+          updated_at: "2026-04-26T11:09:00Z",
+        })
+      )
+      .mockResolvedValueOnce(
+        createFetchResponse({
           id: 9145,
           body: "<!-- prs:issue-plan -->\nGenerated plan.",
           html_url:
@@ -900,7 +909,7 @@ describe("Full issue run workflow", () => {
       ["commit", "-F", expect.stringContaining("commit-message.txt")],
       expect.any(Object)
     );
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     const createdRunDir = listRunDirectories().find(
       (entry) => !beforeRuns.includes(entry) && /-issue-145$/.test(entry)
     );
@@ -957,6 +966,15 @@ describe("Full issue run workflow", () => {
         })
       )
       .mockResolvedValueOnce(createFetchResponse([]))
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          id: 8510,
+          body: "<!-- prs:issue-spec -->\nGenerated spec.",
+          html_url:
+            `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-8510`,
+          updated_at: "2026-04-26T12:04:00Z",
+        })
+      )
       .mockResolvedValueOnce(
         createFetchResponse({
           id: 1510,
@@ -1121,6 +1139,15 @@ describe("Full issue run workflow", () => {
       .mockResolvedValueOnce(createFetchResponse([]))
       .mockResolvedValueOnce(
         createFetchResponse({
+          id: 8512,
+          body: "<!-- prs:issue-spec -->\nGenerated spec.",
+          html_url:
+            `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-8512`,
+          updated_at: "2026-04-26T12:14:00Z",
+        })
+      )
+      .mockResolvedValueOnce(
+        createFetchResponse({
           id: 1512,
           body: "<!-- prs:issue-plan -->\nGenerated plan.",
           html_url:
@@ -1275,6 +1302,15 @@ describe("Full issue run workflow", () => {
         })
       )
       .mockResolvedValueOnce(createFetchResponse([]))
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          id: 8513,
+          body: "<!-- prs:issue-spec -->\nGenerated spec.",
+          html_url:
+            `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-8513`,
+          updated_at: "2026-04-26T12:19:00Z",
+        })
+      )
       .mockResolvedValueOnce(
         createFetchResponse({
           id: 1513,
@@ -1480,6 +1516,15 @@ describe("Full issue run workflow", () => {
         })
       )
       .mockResolvedValueOnce(createFetchResponse([]))
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          id: 8514,
+          body: "<!-- prs:issue-spec -->\nGenerated spec.",
+          html_url:
+            `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-8514`,
+          updated_at: "2026-04-26T12:24:00Z",
+        })
+      )
       .mockResolvedValueOnce(
         createFetchResponse({
           id: 1514,
@@ -1990,6 +2035,15 @@ describe("Full issue run workflow", () => {
       .mockResolvedValueOnce(createFetchResponse([]))
       .mockResolvedValueOnce(
         createFetchResponse({
+          id: 8147,
+          body: "<!-- prs:issue-spec -->\nGenerated spec.",
+          html_url:
+            `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-8147`,
+          updated_at: "2026-04-26T11:14:00Z",
+        })
+      )
+      .mockResolvedValueOnce(
+        createFetchResponse({
           id: 9147,
           body: "<!-- prs:issue-plan -->\nGenerated plan.",
           html_url:
@@ -2184,7 +2238,7 @@ describe("Full issue run workflow", () => {
         encoding: "utf8",
       })
     );
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
   it("uses repository config for issue build verification and pull request base branch", async () => {
@@ -2228,6 +2282,15 @@ describe("Full issue run workflow", () => {
         })
       )
       .mockResolvedValueOnce(createFetchResponse([]))
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          id: 8144,
+          body: "<!-- prs:issue-spec -->\nGenerated spec.",
+          html_url:
+            `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-8144`,
+          updated_at: "2026-04-26T11:19:00Z",
+        })
+      )
       .mockResolvedValueOnce(
         createFetchResponse({
           id: 9144,
@@ -2493,6 +2556,14 @@ describe("Full issue run workflow", () => {
       .mockResolvedValueOnce(createFetchResponse([]))
       .mockResolvedValueOnce(
         createFetchResponse({
+          id: 8245,
+          body: "<!-- prs:issue-spec -->\nGenerated spec.",
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-8245`,
+          updated_at: "2026-04-26T11:44:00Z",
+        })
+      )
+      .mockResolvedValueOnce(
+        createFetchResponse({
           id: 9245,
           body: "<!-- prs:issue-plan -->\nGenerated plan.",
           html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-9245`,
@@ -2624,6 +2695,14 @@ describe("Full issue run workflow", () => {
         })
       )
       .mockResolvedValueOnce(createFetchResponse([]))
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          id: 8246,
+          body: "<!-- prs:issue-spec -->\nGenerated spec.",
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-8246`,
+          updated_at: "2026-04-26T11:45:00Z",
+        })
+      )
       .mockResolvedValueOnce(
         createFetchResponse({
           id: 9246,
@@ -2758,6 +2837,14 @@ describe("Full issue run workflow", () => {
         })
       )
       .mockResolvedValueOnce(createFetchResponse([]))
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          id: 8247,
+          body: "<!-- prs:issue-spec -->\nGenerated spec.",
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-8247`,
+          updated_at: "2026-04-26T11:46:00Z",
+        })
+      )
       .mockResolvedValueOnce(
         createFetchResponse({
           id: 9247,

@@ -75,8 +75,8 @@ describe("issue ready tool", () => {
     });
   });
 
-  it("blocks issue readiness until managed specification and plan comments exist", async () => {
-    const repoRoot = mkdtempSync(join(tmpdir(), "prs-issue-ready-blocked-"));
+  it("keeps issue readiness ready when managed specification and plan comments are missing", async () => {
+    const repoRoot = mkdtempSync(join(tmpdir(), "prs-issue-ready-missing-artifacts-"));
     const forge = {
       type: "github" as const,
       isAuthenticated: vi.fn(() => true),
@@ -108,13 +108,14 @@ describe("issue ready tool", () => {
     });
 
     expect(result).toMatchObject({
-      status: "blocked",
-      reason: "missing-refinement-artifacts",
+      status: "ready",
       issueNumber: 233,
       spec: { status: "missing" },
       plan: { status: "missing" },
-      nextAction: "Run `prs issue refine 233` before starting development.",
+      nextAction: "start-superpowers-worktree",
     });
-    expect(result.message).toContain("Missing managed issue specification and managed issue plan");
+    expect(result.message).toContain(
+      "Missing managed refinement artifacts will be generated and published during issue preparation"
+    );
   });
 });
