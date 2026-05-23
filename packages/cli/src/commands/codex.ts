@@ -28,5 +28,7 @@ export function parseCodexCommandArgs(
   _args: string[],
   _parseNumber: (rawValue: string | undefined) => number
 ): CodexCommandOptions {
+  void _args;
+  void _parseNumber;
   throw new Error(CODEX_RETIRED_MESSAGE);
 }
