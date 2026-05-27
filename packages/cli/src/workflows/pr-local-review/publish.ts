@@ -1,6 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { PRReviewComment } from "@prs/contracts";
+import {
+  applyGitHubOutputFraming,
+  PRReviewComment,
+  type GitHubOutputMode,
+} from "@prs/contracts";
 import { publishAuditArtifact } from "../../audit-artifacts";
 import type {
   PullRequestInlineReviewCommentInput,
@@ -16,6 +20,7 @@ type PublishPullRequestLocalReviewOptions = {
   reportFilePath: string;
   commentsFilePath: string;
   forge: RepositoryForge;
+  outputMode?: GitHubOutputMode;
 };
 
 type PrsInlineMetadata = {
@@ -138,7 +143,8 @@ function toTitleCase(value: string): string {
 
 function formatInlineCommentBody(
   comment: ReturnType<typeof PRReviewComment.parse>,
-  headSha?: string
+  headSha?: string,
+  outputMode?: GitHubOutputMode
 ): string {
   const findingKey = buildFindingKey(comment);
   const metadata = JSON.stringify({
@@ -164,7 +170,7 @@ function formatInlineCommentBody(
   }
 
   lines.push("", `<!-- prs:pr-review-inline ${metadata} -->`);
-  return lines.join("\n");
+  return applyGitHubOutputFraming(lines.join("\n"), outputMode);
 }
 
 async function collectExistingFindingKeys(
@@ -306,7 +312,7 @@ export async function publishPullRequestLocalReview(
       path: comment.path,
       line: comment.line,
       side: "RIGHT",
-      body: formatInlineCommentBody(comment, pullRequest.headSha),
+      body: formatInlineCommentBody(comment, pullRequest.headSha, options.outputMode),
     });
   }
 
@@ -314,6 +320,7 @@ export async function publishPullRequestLocalReview(
     target: { type: "pull-request", number: options.prNumber },
     sectionName: "Codex PR review",
     content: reportContent,
+    outputMode: options.outputMode,
   });
 
   let inlineReviewUrl: string | undefined;
@@ -324,9 +331,12 @@ export async function publishPullRequestLocalReview(
     const review = await options.forge.createPullRequestReview({
       prNumber: options.prNumber,
       commitSha: pullRequest.headSha,
-      body: `Local Codex PR review generated ${inlineComments.length} high-confidence inline comment${
-        inlineComments.length === 1 ? "" : "s"
-      } on changed lines.`,
+      body: applyGitHubOutputFraming(
+        `Local Codex PR review generated ${inlineComments.length} high-confidence inline comment${
+          inlineComments.length === 1 ? "" : "s"
+        } on changed lines.`,
+        options.outputMode
+      ),
       comments: inlineComments,
     });
     inlineReviewUrl = review.url;

@@ -1,5 +1,7 @@
 import {
+  applyGitHubOutputFraming,
   TEST_SUGGESTIONS_COMMENT_MARKER,
+  type GitHubOutputMode,
   type TestSuggestionsOutputType,
 } from "@prs/contracts";
 
@@ -327,13 +329,14 @@ export function parseChecklistCommentBody(body: string): ChecklistComment {
 
 export function applyAddressedSuggestionUpdates(
   body: string,
-  addressedIds: string[]
+  addressedIds: string[],
+  outputMode: GitHubOutputMode = "unattended"
 ): string {
   const addressedIdSet = new Set(addressedIds);
   const lines = stripResolvedTestSuggestionsBlocks(body).split(/\r?\n/);
   let suggestionIndex = -1;
 
-  return lines
+  const updatedBody = lines
     .map((line) => {
       if (line.trim().match(/^#### (.+)$/)) {
         suggestionIndex += 1;
@@ -354,9 +357,14 @@ export function applyAddressedSuggestionUpdates(
       return line;
     })
     .join("\n");
+
+  return applyGitHubOutputFraming(updatedBody, outputMode);
 }
 
-export function buildCommentBody(suggestions: TestSuggestionsOutputType): string {
+export function buildCommentBody(
+  suggestions: TestSuggestionsOutputType,
+  outputMode: GitHubOutputMode = "unattended"
+): string {
   const lines: string[] = [
     TEST_SUGGESTIONS_COMMENT_MARKER,
     "## AI Test Suggestions",
@@ -410,5 +418,5 @@ export function buildCommentBody(suggestions: TestSuggestionsOutputType): string
     lines.pop();
   }
 
-  return lines.join("\n");
+  return applyGitHubOutputFraming(lines.join("\n"), outputMode);
 }

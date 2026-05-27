@@ -2,6 +2,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { UNATTENDED_GITHUB_OUTPUT_NOTE } from "@prs/contracts";
 import type { RepositoryForge } from "../../forge";
 import { publishPullRequestLocalReview } from "./publish";
 
@@ -157,10 +158,15 @@ describe("publishPullRequestLocalReview", () => {
     });
 
     expect(forge.createAuditComment).toHaveBeenCalled();
+    expect(vi.mocked(forge.createAuditComment).mock.calls[0]?.[1]).not.toContain(
+      UNATTENDED_GITHUB_OUTPUT_NOTE
+    );
     expect(forge.createPullRequestReview).toHaveBeenCalledWith({
       prNumber: 224,
       commitSha: "abc123head",
-      body: "Local Codex PR review generated 1 high-confidence inline comment on changed lines.",
+      body: expect.stringContaining(
+        "Local Codex PR review generated 1 high-confidence inline comment on changed lines."
+      ),
       comments: [
         expect.objectContaining({
           path: "src/filter.ts",
@@ -181,5 +187,72 @@ describe("publishPullRequestLocalReview", () => {
         duplicate: 1,
       },
     });
+  });
+
+  it("frames unattended audit and inline review comments as automation output", async () => {
+    const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-pr-local-review-publish-"));
+    cleanupTargets.add(repoRoot);
+    const runDir = resolve(repoRoot, ".prs/runs/20260521T100000000Z-pr-224-review");
+    mkdirSync(runDir, { recursive: true });
+    const reportFilePath = resolve(runDir, "codex-pr-review.md");
+    const commentsFilePath = resolve(runDir, "codex-pr-review-comments.json");
+    writeFileSync(
+      resolve(runDir, "pr-review-context.md"),
+      [
+        "## Diff",
+        "",
+        "```diff",
+        "diff --git a/src/filter.ts b/src/filter.ts",
+        "+++ b/src/filter.ts",
+        "@@ -10,2 +10,3 @@",
+        " context();",
+        "+applyFilter();",
+        "+renderEmptyFilters();",
+        "```",
+        "",
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(reportFilePath, "# Codex PR Review\n\nFound one issue.\n", "utf8");
+    writeFileSync(
+      commentsFilePath,
+      `${JSON.stringify(
+        [
+          {
+            path: "src/filter.ts",
+            line: 12,
+            severity: "high",
+            confidence: "high",
+            category: "bug",
+            affectedFile: "src/filter.ts",
+            body: "Guard empty filters.",
+            whyThisMatters: "Empty filters crash.",
+          },
+        ],
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const forge = createForge();
+    await publishPullRequestLocalReview({
+      repoRoot,
+      prNumber: 224,
+      reportFilePath,
+      commentsFilePath,
+      forge,
+      outputMode: "unattended",
+    });
+
+    expect(vi.mocked(forge.createAuditComment).mock.calls[0]?.[1]).toContain(
+      UNATTENDED_GITHUB_OUTPUT_NOTE
+    );
+    expect(vi.mocked(forge.createPullRequestReview).mock.calls[0]?.[0].body).toContain(
+      UNATTENDED_GITHUB_OUTPUT_NOTE
+    );
+    expect(
+      vi.mocked(forge.createPullRequestReview).mock.calls[0]?.[0].comments[0]?.body
+    ).toContain(UNATTENDED_GITHUB_OUTPUT_NOTE);
   });
 });

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { UNATTENDED_GITHUB_OUTPUT_NOTE } from "@prs/contracts";
 import type { AuditTarget, RepositoryForge, RepositoryComment } from "./forge";
 import {
   AUDIT_COMMENT_MARKER,
@@ -30,6 +31,21 @@ describe("audit artifacts", () => {
     expect(body).toContain("## Spec");
     expect(body).toContain("# Spec\n\nApproved.");
     expect(body).toContain("Local run: `.prs/runs/example`");
+    expect(body).not.toContain(UNATTENDED_GITHUB_OUTPUT_NOTE);
+  });
+
+  it("renders unattended audit comments with visible automation framing after the marker", () => {
+    const body = renderAuditCommentBody({
+      title: "Pull request #42 audit",
+      sections: [{ name: "Review", content: "Review body" }],
+      outputMode: "unattended",
+    });
+
+    expect(body).toContain(AUDIT_COMMENT_MARKER);
+    expect(body).toContain(UNATTENDED_GITHUB_OUTPUT_NOTE);
+    expect(body.indexOf(AUDIT_COMMENT_MARKER)).toBeLessThan(
+      body.indexOf(UNATTENDED_GITHUB_OUTPUT_NOTE)
+    );
   });
 
   it("rejects section names without marker-safe alphanumeric content", () => {
@@ -105,5 +121,32 @@ describe("audit artifacts", () => {
     expect(updatedBody).not.toContain("Old plan");
     expect(updatedBody).toContain("Local run: `.prs/runs/new`");
     expect(updatedBody).not.toContain("Local run: `.prs/runs/old`");
+  });
+
+  it("removes unattended framing when updating in manual mode", async () => {
+    const existing = renderAuditCommentBody({
+      title: "Issue #42 audit",
+      sections: [{ name: "Plan", content: "Old plan" }],
+      outputMode: "unattended",
+    });
+    let updatedBody = "";
+    const forge = {
+      type: "github",
+      isAuthenticated: () => true,
+      fetchAuditComment: async () => comment(existing),
+      updateIssueComment: async (_commentId: number, body: string) => {
+        updatedBody = body;
+        return comment(body);
+      },
+    } as unknown as RepositoryForge;
+
+    await publishAuditArtifact(forge, {
+      target: { type: "issue", number: 42 },
+      sectionName: "Plan",
+      content: "New plan",
+    });
+
+    expect(updatedBody).toContain("New plan");
+    expect(updatedBody).not.toContain(UNATTENDED_GITHUB_OUTPUT_NOTE);
   });
 });

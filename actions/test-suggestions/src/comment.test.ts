@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { TestSuggestionsOutputType } from "@prs/contracts";
+import {
+  UNATTENDED_GITHUB_OUTPUT_NOTE,
+  type TestSuggestionsOutputType,
+} from "@prs/contracts";
 import {
   applyAddressedSuggestionUpdates,
   buildCommentBody,
@@ -39,6 +42,7 @@ describe("buildCommentBody", () => {
     } satisfies TestSuggestionsOutputType);
 
     expect(body).toContain("## AI Test Suggestions");
+    expect(body).toContain(UNATTENDED_GITHUB_OUTPUT_NOTE);
     expect(body).toContain("#### Verify pr fix-tests snapshot keeps task context");
     expect(body).toContain("- [ ] Addressed");
     expect(body).toContain("- Test type: integration");
@@ -63,11 +67,27 @@ describe("buildCommentBody", () => {
     expect(body).toContain("No new unresolved AI test suggestions were found");
     expect(body).not.toContain("### Suggested test areas");
   });
+
+  it("can render developer-approved manual comments without automation framing", () => {
+    const body = buildCommentBody(
+      {
+        summary: "No new unresolved AI test suggestions were found for the current PR diff.",
+        suggestedTests: [],
+      } satisfies TestSuggestionsOutputType,
+      "manual"
+    );
+
+    expect(body).toContain("## AI Test Suggestions");
+    expect(body).not.toContain(UNATTENDED_GITHUB_OUTPUT_NOTE);
+  });
 });
 
 describe("parseChecklistCommentBody", () => {
   const existingBody = [
     "<!-- prs:test-suggestions -->",
+    "",
+    UNATTENDED_GITHUB_OUTPUT_NOTE,
+    "",
     "## AI Test Suggestions",
     "",
     "### Overview",

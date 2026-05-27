@@ -1,4 +1,8 @@
 import type { AuditTarget, RepositoryComment, RepositoryForge } from "./forge";
+import {
+  applyGitHubOutputFraming,
+  type GitHubOutputMode,
+} from "@prs/contracts";
 
 export const AUDIT_COMMENT_MARKER = "<!-- prs:audit -->";
 
@@ -12,6 +16,7 @@ export type PublishAuditArtifactInput = {
   sectionName: string;
   content: string;
   localRun?: string;
+  outputMode?: GitHubOutputMode;
 };
 
 export type PublishAuditArtifactResult = {
@@ -64,6 +69,7 @@ export function renderAuditCommentBody(input: {
   title: string;
   sections: AuditSection[];
   localRun?: string;
+  outputMode?: GitHubOutputMode;
 }): string {
   assertUniqueSectionMarkerIds(input.sections);
 
@@ -82,7 +88,10 @@ export function renderAuditCommentBody(input: {
     lines.push("");
   }
 
-  return `${lines.join("\n").trim()}\n`;
+  return applyGitHubOutputFraming(
+    `${lines.join("\n").trim()}\n`,
+    input.outputMode
+  );
 }
 
 function replaceOrAppendSection(body: string, section: AuditSection): string {
@@ -134,6 +143,7 @@ export async function publishAuditArtifact(
       title: targetTitle(input.target),
       sections: [section],
       localRun: input.localRun,
+      outputMode: input.outputMode,
     });
     return {
       status: "created",
@@ -145,9 +155,12 @@ export async function publishAuditArtifact(
     status: "updated",
     comment: await forge.updateIssueComment(
       existing.id,
-      replaceOrInsertLocalRun(
-        replaceOrAppendSection(existing.body, section),
-        input.localRun
+      applyGitHubOutputFraming(
+        replaceOrInsertLocalRun(
+          replaceOrAppendSection(existing.body, section),
+          input.localRun
+        ),
+        input.outputMode
       )
     ),
   };

@@ -33,6 +33,8 @@ import {
 } from "@prs/providers";
 import type { ResolvedRepositoryConfigType } from "@prs/contracts";
 import {
+  applyGitHubOutputFraming,
+  type GitHubOutputMode,
   ISSUE_PLAN_COMMENT_MARKER,
   ISSUE_SPEC_COMMENT_MARKER,
   IssueDraftSet,
@@ -1020,6 +1022,7 @@ async function publishSuperpowersSpecArtifact(options: {
   specFilePath: string;
   outputLogPath: string;
   existingSpecComment?: RepositoryComment | null;
+  outputMode?: GitHubOutputMode;
 }): Promise<RepositoryComment | IssuePlanComment | undefined> {
   const specFile = toRepoRelativePath(options.repoRoot, options.specFilePath);
 
@@ -1040,7 +1043,10 @@ async function publishSuperpowersSpecArtifact(options: {
     return undefined;
   }
 
-  const renderedSpec = formatSuperpowersSpecArtifactComment(specMarkdown);
+  const renderedSpec = applyGitHubOutputFraming(
+    formatSuperpowersSpecArtifactComment(specMarkdown),
+    options.outputMode
+  );
   const existingSpecComment =
     options.existingSpecComment === undefined
       ? findLatestIssueSpecComment(
@@ -1074,10 +1080,11 @@ async function publishSuperpowersSpecArtifact(options: {
 function formatIssueSpecCommentFromIssue(input: {
   issueNumber: number;
   issue: IssueDetails;
+  outputMode?: GitHubOutputMode;
 }): string {
   const issueBody = input.issue.body.trim() || "(No issue body provided.)";
 
-  return [
+  return applyGitHubOutputFraming([
     ISSUE_SPEC_COMMENT_MARKER,
     `# Issue Specification: ${input.issue.title}`,
     "",
@@ -1094,7 +1101,7 @@ function formatIssueSpecCommentFromIssue(input: {
     "",
     "This specification was generated from the issue context when implementation preparation started. Refine the issue for a richer settled specification when needed.",
     "",
-  ].join("\n");
+  ].join("\n"), input.outputMode);
 }
 
 async function ensureIssueSpecComment(options: {
@@ -1105,6 +1112,7 @@ async function ensureIssueSpecComment(options: {
   specFilePath?: string;
   outputLogPath?: string;
   comments?: RepositoryComment[];
+  outputMode?: GitHubOutputMode;
 }): Promise<RepositoryComment | IssuePlanComment> {
   const existingSpecComment = findLatestIssueSpecComment(
     options.comments ?? (await options.forge.fetchIssueComments(options.issueNumber))
@@ -1122,6 +1130,7 @@ async function ensureIssueSpecComment(options: {
       outputLogPath:
         options.outputLogPath ?? resolve(options.repoRoot, ".prs", "issue-spec.log"),
       existingSpecComment: null,
+      outputMode: options.outputMode,
     });
 
     if (specComment) {
@@ -1134,6 +1143,7 @@ async function ensureIssueSpecComment(options: {
     formatIssueSpecCommentFromIssue({
       issueNumber: options.issueNumber,
       issue: options.issue,
+      outputMode: options.outputMode,
     })
   );
   console.log(`Created issue specification comment from issue context: ${comment.url}`);
@@ -1147,6 +1157,7 @@ async function publishSuperpowersPlanArtifact(options: {
   planFilePath: string;
   outputLogPath: string;
   existingPlanComment?: IssuePlanComment | null;
+  outputMode?: GitHubOutputMode;
 }): Promise<IssuePlanComment | undefined> {
   const planFile = toRepoRelativePath(options.repoRoot, options.planFilePath);
 
@@ -1167,7 +1178,10 @@ async function publishSuperpowersPlanArtifact(options: {
     return undefined;
   }
 
-  const renderedPlan = formatSuperpowersPlanArtifactComment(planMarkdown);
+  const renderedPlan = applyGitHubOutputFraming(
+    formatSuperpowersPlanArtifactComment(planMarkdown),
+    options.outputMode
+  );
   const existingPlanComment =
     options.existingPlanComment === undefined
       ? await options.forge.fetchIssuePlanComment(options.issueNumber)
@@ -1201,6 +1215,7 @@ async function publishIssueRefinementCompleteComment(options: {
   issueNumber: number;
   comments: RepositoryComment[];
   outputLogPath: string;
+  outputMode?: GitHubOutputMode;
 }): Promise<void> {
   if (
     options.comments.some((comment) =>
@@ -1216,11 +1231,14 @@ async function publishIssueRefinementCompleteComment(options: {
 
   const comment = await options.forge.createIssuePlanComment(
     options.issueNumber,
-    [
-      ISSUE_REFINEMENT_COMPLETE_COMMENT_MARKER,
-      "Refinement is complete. The settled specification and implementation plan have been attached to this issue in managed comments, so development can start from those artifacts.",
-      "",
-    ].join("\n")
+    applyGitHubOutputFraming(
+      [
+        ISSUE_REFINEMENT_COMPLETE_COMMENT_MARKER,
+        "Refinement is complete. The settled specification and implementation plan have been attached to this issue in managed comments, so development can start from those artifacts.",
+        "",
+      ].join("\n"),
+      options.outputMode
+    )
   );
   logSuperpowersPlanPublicationMessage(
     options.outputLogPath,
@@ -1228,13 +1246,19 @@ async function publishIssueRefinementCompleteComment(options: {
   );
 }
 
-function formatIssueRefinementQuestionsComment(questionsMarkdown: string): string {
+function formatIssueRefinementQuestionsComment(
+  questionsMarkdown: string,
+  outputMode?: GitHubOutputMode
+): string {
   const trimmed = questionsMarkdown.trim();
   if (trimmed.startsWith(ISSUE_REFINEMENT_QUESTIONS_COMMENT_MARKER)) {
-    return `${trimmed}\n`;
+    return applyGitHubOutputFraming(`${trimmed}\n`, outputMode);
   }
 
-  return `${ISSUE_REFINEMENT_QUESTIONS_COMMENT_MARKER}\n${trimmed}\n`;
+  return applyGitHubOutputFraming(
+    `${ISSUE_REFINEMENT_QUESTIONS_COMMENT_MARKER}\n${trimmed}\n`,
+    outputMode
+  );
 }
 
 async function publishIssueRefinementQuestionsComment(options: {
@@ -1242,10 +1266,11 @@ async function publishIssueRefinementQuestionsComment(options: {
   issueNumber: number;
   questionsMarkdown: string;
   outputLogPath: string;
+  outputMode?: GitHubOutputMode;
 }): Promise<RepositoryComment | IssuePlanComment> {
   const comment = await options.forge.createIssuePlanComment(
     options.issueNumber,
-    formatIssueRefinementQuestionsComment(options.questionsMarkdown)
+    formatIssueRefinementQuestionsComment(options.questionsMarkdown, options.outputMode)
   );
   logSuperpowersPlanPublicationMessage(
     options.outputLogPath,
@@ -1260,8 +1285,12 @@ async function publishRefinedIssueSpecComment(options: {
   refinedMarkdown: string;
   comments: RepositoryComment[];
   outputLogPath: string;
+  outputMode?: GitHubOutputMode;
 }): Promise<RepositoryComment | IssuePlanComment> {
-  const renderedSpec = formatSuperpowersSpecArtifactComment(options.refinedMarkdown);
+  const renderedSpec = applyGitHubOutputFraming(
+    formatSuperpowersSpecArtifactComment(options.refinedMarkdown),
+    options.outputMode
+  );
   const existingSpecComment = findLatestIssueSpecComment(options.comments);
 
   if (existingSpecComment) {
@@ -1298,6 +1327,7 @@ async function publishIssueRefinementArtifacts(options: {
   comments: RepositoryComment[];
   workspace: IssueRefineWorkspace;
   useCodexSuperpowers: boolean;
+  outputMode?: GitHubOutputMode;
 }): Promise<void> {
   let specComment: RepositoryComment | IssuePlanComment | undefined;
   const existingSpecComment = findLatestIssueSpecComment(options.comments) ?? null;
@@ -1311,6 +1341,7 @@ async function publishIssueRefinementArtifacts(options: {
       specFilePath: options.workspace.superpowersSpecFilePath,
       outputLogPath: options.workspace.outputLogPath,
       existingSpecComment,
+      outputMode: options.outputMode,
     });
   }
 
@@ -1321,6 +1352,7 @@ async function publishIssueRefinementArtifacts(options: {
       refinedMarkdown: options.refinedMarkdown,
       comments: options.comments,
       outputLogPath: options.workspace.outputLogPath,
+      outputMode: options.outputMode,
     });
   }
 
@@ -1333,6 +1365,7 @@ async function publishIssueRefinementArtifacts(options: {
       planFilePath: options.workspace.superpowersPlanFilePath,
       outputLogPath: options.workspace.outputLogPath,
       existingPlanComment,
+      outputMode: options.outputMode,
     });
   }
 
@@ -1350,6 +1383,7 @@ async function publishIssueRefinementArtifacts(options: {
       mode: "explicit-plan-command",
       comments: options.comments,
       specAlreadyEnsured: Boolean(specComment),
+      outputMode: options.outputMode,
     });
   }
 
@@ -1358,6 +1392,7 @@ async function publishIssueRefinementArtifacts(options: {
     issueNumber: options.issueNumber,
     comments: options.comments,
     outputLogPath: options.workspace.outputLogPath,
+    outputMode: options.outputMode,
   });
 }
 
@@ -1367,7 +1402,8 @@ function formatNumberedMarkdownList(items: string[]): string {
 
 function renderIssueResolutionPlanComment(
   issueNumber: number,
-  plan: GeneratedIssueResolutionPlan
+  plan: GeneratedIssueResolutionPlan,
+  outputMode?: GitHubOutputMode
 ): string {
   const lines = [
     ISSUE_PLAN_COMMENT_MARKER,
@@ -1399,7 +1435,7 @@ function renderIssueResolutionPlanComment(
   }
 
   lines.push("");
-  return lines.join("\n");
+  return applyGitHubOutputFraming(lines.join("\n"), outputMode);
 }
 
 function slugifyIssueTitle(title: string): string {
@@ -5886,6 +5922,7 @@ async function createStructuredIssuePlanComment(options: {
   mode: IssuePlanResolutionMode;
   comments?: RepositoryComment[];
   specAlreadyEnsured?: boolean;
+  outputMode?: GitHubOutputMode;
 }): Promise<IssuePlanComment> {
   if (
     options.mode === "execution-preflight" &&
@@ -5898,6 +5935,7 @@ async function createStructuredIssuePlanComment(options: {
       issueNumber: options.issueNumber,
       issue: options.issue,
       comments: options.comments,
+      outputMode: options.outputMode,
     });
   }
 
@@ -5908,7 +5946,11 @@ async function createStructuredIssuePlanComment(options: {
     issueBody: options.issue.body,
     issueUrl: options.issue.url,
   });
-  const renderedPlan = renderIssueResolutionPlanComment(options.issueNumber, plan);
+  const renderedPlan = renderIssueResolutionPlanComment(
+    options.issueNumber,
+    plan,
+    options.outputMode
+  );
 
   if (options.existingPlanComment) {
     const comment = await options.forge.updateIssuePlanComment(
@@ -5941,6 +5983,7 @@ async function createSuperpowersIssuePlanComment(options: {
   existingPlanComment?: IssuePlanComment;
   mode: IssuePlanResolutionMode;
   comments?: RepositoryComment[];
+  outputMode?: GitHubOutputMode;
 }): Promise<IssuePlanComment | undefined> {
   const workspace = createIssuePlanWorkspace(options.repoRoot, options.issueNumber);
   writeIssuePlanWorkspaceFiles(
@@ -5968,6 +6011,7 @@ async function createSuperpowersIssuePlanComment(options: {
       specFilePath: workspace.superpowersSpecFilePath,
       outputLogPath: workspace.outputLogPath,
       comments: options.comments,
+      outputMode: options.outputMode,
     });
   }
 
@@ -5978,6 +6022,7 @@ async function createSuperpowersIssuePlanComment(options: {
     planFilePath: workspace.superpowersPlanFilePath,
     outputLogPath: workspace.outputLogPath,
     existingPlanComment: options.existingPlanComment ?? null,
+    outputMode: options.outputMode,
   });
 
   if (!comment) {
@@ -5997,6 +6042,7 @@ async function resolveIssuePlanComment(options: {
   mode: IssuePlanResolutionMode;
   issue?: IssueDetails;
   runtimeType?: InteractiveRuntimeType;
+  outputMode?: GitHubOutputMode;
 }): Promise<IssuePlanComment> {
   const issueComments =
     options.mode === "execution-preflight"
@@ -6036,6 +6082,7 @@ async function resolveIssuePlanComment(options: {
       existingPlanComment: existingPlanComment,
       mode: options.mode,
       comments: issueComments,
+      outputMode: options.outputMode,
     });
     if (comment) {
       return comment;
@@ -6052,6 +6099,7 @@ async function resolveIssuePlanComment(options: {
     existingPlanComment,
     mode: options.mode,
     comments: issueComments,
+    outputMode: options.outputMode,
     specAlreadyEnsured:
       options.mode === "execution-preflight" &&
       !existingPlanComment &&
@@ -6118,6 +6166,7 @@ async function prepareIssueRun(
   console.log(`Fetching issue #${issueNumber}...`);
   const issue = await forge.fetchIssueDetails(issueNumber);
   const sessionStateFilePath = getIssueSessionStateFilePath(repoRoot, issueNumber);
+  const outputMode: GitHubOutputMode = mode === "unattended" ? "unattended" : "manual";
   const resolvePlanCommentForRun = () =>
     resolveIssuePlanComment({
       repoRoot,
@@ -6127,6 +6176,7 @@ async function prepareIssueRun(
       mode: "execution-preflight",
       issue,
       runtimeType: runtime.type,
+      outputMode,
     });
   const existingSessionState =
     options.allowResume && mode !== "github-action"

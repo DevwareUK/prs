@@ -2,6 +2,7 @@ export * from "./branding";
 export * from "./commit-message";
 export * from "./diff-summary";
 export * from "./feature-backlog";
+export * from "./github-output-framing";
 export * from "./issue-draft";
 export * from "./issue-resolution-plan";
 export * from "./pr-assistant";

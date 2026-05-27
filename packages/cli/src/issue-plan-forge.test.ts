@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { UNATTENDED_GITHUB_OUTPUT_NOTE } from "@prs/contracts";
 import {
   REPO_ROOT,
   cleanupTargets,
@@ -87,6 +88,9 @@ describe("Issue plan and GitHub forge workflows", () => {
     });
     expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toMatchObject({
       body: expect.stringContaining("<!-- prs:issue-plan -->"),
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toMatchObject({
+      body: expect.not.stringContaining(UNATTENDED_GITHUB_OUTPUT_NOTE),
     });
     expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toMatchObject({
       body: expect.stringContaining(issuePlan.summary),
