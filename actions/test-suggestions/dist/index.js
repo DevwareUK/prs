@@ -16160,7 +16160,10 @@ var require_dist = __commonJS({
       TestSuggestionsInput: () => TestSuggestionsInput2,
       TestSuggestionsOutput: () => TestSuggestionsOutput,
       TestingSetupStatus: () => TestingSetupStatus,
-      includesManagedMarker: () => includesManagedMarker
+      UNATTENDED_GITHUB_OUTPUT_NOTE: () => UNATTENDED_GITHUB_OUTPUT_NOTE,
+      applyGitHubOutputFraming: () => applyGitHubOutputFraming2,
+      includesManagedMarker: () => includesManagedMarker,
+      stripGitHubOutputFraming: () => stripGitHubOutputFraming
     });
     module2.exports = __toCommonJS2(index_exports);
     var PRODUCT_SHORT_NAME = "prs";
@@ -16250,6 +16253,29 @@ var require_dist = __commonJS({
       notableOpportunities: import_zod3.z.array(import_zod3.z.string().trim().min(1)),
       suggestions: import_zod3.z.array(FeatureBacklogSuggestion).min(1)
     });
+    var UNATTENDED_GITHUB_OUTPUT_NOTE = "prs automation note: this GitHub-visible output was generated and posted by prs unattended automation.";
+    function isManagedCommentMarker(line) {
+      return /^<!--\s*prs:[^>]+-->$/.test(line.trim());
+    }
+    function stripGitHubOutputFraming(body) {
+      return `${body.split(/\r?\n/).filter((line) => line.trim() !== UNATTENDED_GITHUB_OUTPUT_NOTE).join("\n").replace(/\n{3,}/g, "\n\n").trim()}
+`;
+    }
+    function applyGitHubOutputFraming2(body, mode = "manual") {
+      const stripped = stripGitHubOutputFraming(body);
+      if (mode !== "unattended") {
+        return stripped;
+      }
+      const lines = stripped.trimEnd().split(/\r?\n/);
+      if (lines.length > 0 && isManagedCommentMarker(lines[0])) {
+        const rest = lines.slice(1);
+        while (rest[0]?.trim() === "") {
+          rest.shift();
+        }
+        return [lines[0], "", UNATTENDED_GITHUB_OUTPUT_NOTE, "", ...rest].join("\n") + "\n";
+      }
+      return [UNATTENDED_GITHUB_OUTPUT_NOTE, "", ...lines].join("\n") + "\n";
+    }
     var import_zod4 = require_zod();
     var IssueDraftInput = import_zod4.z.object({
       featureIdea: import_zod4.z.string().trim().min(1, "featureIdea must be non-empty"),
@@ -46683,11 +46709,11 @@ function parseChecklistCommentBody(body) {
     suggestions: parseSuggestedTestsSection(suggestedTestsSection)
   };
 }
-function applyAddressedSuggestionUpdates(body, addressedIds) {
+function applyAddressedSuggestionUpdates(body, addressedIds, outputMode = "unattended") {
   const addressedIdSet = new Set(addressedIds);
   const lines = stripResolvedTestSuggestionsBlocks(body).split(/\r?\n/);
   let suggestionIndex = -1;
-  return lines.map((line) => {
+  const updatedBody = lines.map((line) => {
     if (line.trim().match(/^#### (.+)$/)) {
       suggestionIndex += 1;
       return line;
@@ -46703,8 +46729,9 @@ function applyAddressedSuggestionUpdates(body, addressedIds) {
     }
     return line;
   }).join("\n");
+  return (0, import_contracts.applyGitHubOutputFraming)(updatedBody, outputMode);
 }
-function buildCommentBody(suggestions) {
+function buildCommentBody(suggestions, outputMode = "unattended") {
   const lines = [
     import_contracts.TEST_SUGGESTIONS_COMMENT_MARKER,
     "## AI Test Suggestions",
@@ -46752,7 +46779,7 @@ function buildCommentBody(suggestions) {
   while (lines[lines.length - 1] === "") {
     lines.pop();
   }
-  return lines.join("\n");
+  return (0, import_contracts.applyGitHubOutputFraming)(lines.join("\n"), outputMode);
 }
 
 // src/index.ts

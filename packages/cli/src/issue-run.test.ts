@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { UNATTENDED_GITHUB_OUTPUT_NOTE } from "@prs/contracts";
 import {
   REPO_ROOT,
   cleanupTargets,
@@ -1845,6 +1846,19 @@ describe("Full issue run workflow", () => {
         method: "POST",
       })
     );
+    const postedCommentBodies = fetchMock.mock.calls
+      .filter(
+        ([input, init]) =>
+          String(input).endsWith(`/issues/${issueNumber}/comments`) &&
+          (init as RequestInit | undefined)?.method === "POST"
+      )
+      .map(([, init]) => JSON.parse(String((init as RequestInit).body)).body as string);
+    expect(postedCommentBodies).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining(UNATTENDED_GITHUB_OUTPUT_NOTE),
+      ])
+    );
+    expect(postedCommentBodies.every((body) => body.startsWith("<!-- prs:"))).toBe(true);
   });
 
   it("summarizes manual pull request creation when GitHub authentication is unavailable", async () => {

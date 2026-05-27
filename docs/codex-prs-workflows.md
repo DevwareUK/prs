@@ -60,6 +60,8 @@ When the Codex skill alias `/prs issue <number> --unattended` is requested, trea
 
 For one issue, the built-in `prs issue <number> --unattended` path prepares a branch, launches Codex non-interactively, verifies, commits, pushes, and opens a pull request. For multiple issues, `prs issue <number> <number> ...` and `prs issue batch ...` create one isolated worktree per issue from the configured updated `baseBranch`.
 
+GitHub-visible output should match that mode split. Manual/guided output is treated as developer-approved and does not include automation framing. Unattended output can be posted directly, but managed issue comments, audit comments, local PR review comments, and test suggestion comments include a visible `prs automation note` after any hidden marker.
+
 ## Superpowers-backed issue planning
 
 `ai.issue.useCodexSuperpowers` controls Superpowers-backed issue refine and plan workflows, plus any explicit legacy `prs issue draft --runtime` run.

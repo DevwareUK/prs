@@ -1484,6 +1484,30 @@ async function loadCli(options: {
   };
   });
   vi.doMock("@prs/contracts", () => ({
+    UNATTENDED_GITHUB_OUTPUT_NOTE:
+      "prs automation note: this GitHub-visible output was generated and posted by prs unattended automation.",
+    applyGitHubOutputFraming: (body: string, mode = "manual") => {
+      const note =
+        "prs automation note: this GitHub-visible output was generated and posted by prs unattended automation.";
+      const stripped = `${body
+        .split(/\r?\n/)
+        .filter((line) => line.trim() !== note)
+        .join("\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim()}\n`;
+      if (mode !== "unattended") {
+        return stripped;
+      }
+      const lines = stripped.trimEnd().split(/\r?\n/);
+      if (/^<!--\s*prs:[^>]+-->$/.test(lines[0]?.trim() ?? "")) {
+        const rest = lines.slice(1);
+        while (rest[0]?.trim() === "") {
+          rest.shift();
+        }
+        return [lines[0], "", note, "", ...rest].join("\n") + "\n";
+      }
+      return [note, "", ...lines].join("\n") + "\n";
+    },
     DEFAULT_PR_IMPACT_PROFILE: {
       riskLevel: "none",
       riskReasons: [],
