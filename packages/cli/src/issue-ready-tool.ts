@@ -39,7 +39,7 @@ type IssueReadyForge = Pick<
 >;
 
 type IssueReadyToolOptions = {
-  all: boolean;
+  unattended?: boolean;
   issueNumber: number;
   repoRoot: string;
   forge: IssueReadyForge;
@@ -115,7 +115,7 @@ function renderSpecStatus(comments: RepositoryComment[]): IssueSpecStatus {
 }
 
 function writeMetadata(input: {
-  all: boolean;
+  unattended: boolean;
   comments: RepositoryComment[];
   issue: IssueDetails;
   issueNumber: number;
@@ -133,7 +133,7 @@ function writeMetadata(input: {
         issueTitle: input.issue.title,
         issueUrl: input.issue.url,
         suggestedBranchName: input.suggestedBranchName,
-        all: input.all,
+        unattended: input.unattended,
         runDir: input.runDir,
         spec: renderSpecStatus(input.comments),
         plan: renderPlanStatus(input.planComment),
@@ -160,6 +160,7 @@ export async function readyIssueTool(
   }
 
   const timestamp = formatRunTimestamp((options.now ?? (() => new Date()))());
+  const unattended = options.unattended ?? false;
   const runDir = resolve(
     options.repoRoot,
     ".prs",
@@ -180,7 +181,7 @@ export async function readyIssueTool(
   const plan = renderPlanStatus(planComment);
 
   writeMetadata({
-    all: options.all,
+    unattended,
     comments,
     issue,
     issueNumber: options.issueNumber,

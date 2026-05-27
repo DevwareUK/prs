@@ -27,9 +27,15 @@ export type PrsCommandSurfaceAction =
       passthroughArgs: string[];
     }
   | { kind: "issue"; mode: "interactive" }
-  | { kind: "issue"; mode: "direct"; issueNumber: number; action: PrsIssueAction; all?: boolean }
+  | {
+      kind: "issue";
+      mode: "direct";
+      issueNumber: number;
+      action: PrsIssueAction;
+      unattended?: boolean;
+    }
   | { kind: "pr"; mode: "interactive" }
-  | { kind: "pr"; mode: "direct"; prNumber: number; action: PrsPrAction; all?: boolean }
+  | { kind: "pr"; mode: "direct"; prNumber: number; action: PrsPrAction; unattended?: boolean }
   | { kind: "audit"; action: "publish"; passthroughArgs: string[] }
   | { kind: "finish" };
 
@@ -90,12 +96,16 @@ export function renderPrsCommandSurfaceHelp(): string {
     "  /prs review tests [--format <markdown|json>] [--top <count>] [--create-issues]",
     "  /prs review features [repo-path] [--format <markdown|json>] [--top <count>] [--create-issues]",
     "  /prs issue",
-    "  /prs issue <number> [--all|refine|plan|finish]",
+    "  /prs issue <number> [--unattended|--auto|--jdi|refine|plan|finish]",
     "  /prs pr",
-    "  /prs pr <number> [--all|review|prepare-review|resolve-conflicts|address-comments|fix-tests|add-tests]",
+    "  /prs pr <number> [--unattended|--auto|--jdi|review|prepare-review|resolve-conflicts|address-comments|fix-tests|add-tests]",
     "  /prs audit publish [--issue <number>|--pr <number>] [--file <path>] [--section <name>] [--local-run <path>]",
     "  /prs finish",
   ].join("\n");
+}
+
+function isUnattendedAlias(rawArg: string | undefined): boolean {
+  return rawArg === "--unattended" || rawArg === "--auto" || rawArg === "--jdi";
 }
 
 export function parsePrsCommandSurfaceArgs(args: string[]): PrsCommandSurfaceAction {
@@ -145,11 +155,11 @@ export function parsePrsCommandSurfaceArgs(args: string[]): PrsCommandSurfaceAct
     }
 
     const issueNumber = parsePositiveNumber(second, "issue");
-    if (third === "--all") {
-      return { kind: "issue", mode: "direct", issueNumber, action: "work", all: true };
+    if (isUnattendedAlias(third)) {
+      return { kind: "issue", mode: "direct", issueNumber, action: "work", unattended: true };
     }
     if (!third) {
-      return { kind: "issue", mode: "direct", issueNumber, action: "work", all: false };
+      return { kind: "issue", mode: "direct", issueNumber, action: "work", unattended: false };
     }
     if (!ISSUE_ACTIONS.has(third)) {
       throw new Error(renderPrsCommandSurfaceHelp());
@@ -175,11 +185,11 @@ export function parsePrsCommandSurfaceArgs(args: string[]): PrsCommandSurfaceAct
     }
 
     const prNumber = parsePositiveNumber(second, "pr");
-    if (third === "--all") {
-      return { kind: "pr", mode: "direct", prNumber, action: "choose", all: true };
+    if (isUnattendedAlias(third)) {
+      return { kind: "pr", mode: "direct", prNumber, action: "choose", unattended: true };
     }
     if (!third) {
-      return { kind: "pr", mode: "direct", prNumber, action: "choose", all: false };
+      return { kind: "pr", mode: "direct", prNumber, action: "choose", unattended: false };
     }
     if (!PR_ACTIONS.has(third)) {
       throw new Error(renderPrsCommandSurfaceHelp());
@@ -269,11 +279,11 @@ export function routePrsCommandSurfaceAction(action: PrsCommandSurfaceAction): P
       return {
         interaction: "direct",
         skillName: "prs",
-        cliArgs: action.all
-          ? ["tool", "issue", "ready", String(action.issueNumber), "--all", "--json"]
+        cliArgs: action.unattended
+          ? ["tool", "issue", "ready", String(action.issueNumber), "--unattended", "--json"]
           : ["tool", "issue", "ready", String(action.issueNumber), "--json"],
         target: { type: "issue", number: action.issueNumber },
-        toolOnly: action.all ? undefined : true,
+        toolOnly: action.unattended ? undefined : true,
       };
     }
 
@@ -317,8 +327,8 @@ export function routePrsCommandSurfaceAction(action: PrsCommandSurfaceAction): P
       return {
         interaction: "direct",
         skillName: "prs",
-        cliArgs: action.all
-          ? ["tool", "pr", "ready", String(action.prNumber), "--all", "--json"]
+        cliArgs: action.unattended
+          ? ["tool", "pr", "ready", String(action.prNumber), "--unattended", "--json"]
           : ["tool", "pr", "ready", String(action.prNumber), "--json"],
         target: { type: "pull-request", number: action.prNumber },
         toolOnly: true,

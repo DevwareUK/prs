@@ -79,13 +79,13 @@ describe("managed prs Codex skills", () => {
       "/prs issue <number>`: run `prs tool issue ready <number> --json`"
     );
     expect(markdown).toContain(
-      "/prs issue <number> --all`: run `prs tool issue ready <number> --all --json`"
+      "/prs issue <number> --unattended` (aliases: `--auto`, `--jdi`): run `prs tool issue ready <number> --unattended --json`"
     );
     expect(markdown).toContain(
-      "continue into Superpowers worktree creation and issue implementation"
+      "Continue into Superpowers worktree creation and issue implementation"
     );
     expect(markdown).toContain(
-      "do not stop after the readiness JSON when `--all` is present."
+      "do not stop after the readiness JSON."
     );
     expect(markdown).toContain("/prs issue <number> finish");
     expect(markdown).toContain("offer the next `/prs pr` step for that pull request");
@@ -102,7 +102,7 @@ describe("managed prs Codex skills", () => {
     expect(markdown).toContain("remove that clean worktree");
     expect(markdown).toContain("If that worktree has uncommitted changes");
     expect(markdown).toContain(
-      "/prs pr <number> --all`: run `prs tool pr ready <number> --all --json`"
+      "/prs pr <number> --unattended` (aliases: `--auto`, `--jdi`): run `prs tool pr ready <number> --unattended --json`"
     );
     expect(markdown).toContain("starting the configured local app runtime");
     expect(markdown).toContain(
@@ -167,7 +167,7 @@ describe("managed prs Codex skills", () => {
     expect(issueMarkdown).toContain("post one normal GitHub issue comment containing all currently blocking high-value questions");
     expect(issueMarkdown).toContain("publish or update the managed `<!-- prs:issue-spec -->` and `<!-- prs:issue-plan -->` comments");
     expect(issueMarkdown).toContain("never create linked issues from this refinement flow");
-    expect(issueMarkdown).toContain("/prs:issue <number> --all");
+    expect(issueMarkdown).toContain("/prs:issue <number> --unattended");
     expect(issueMarkdown).toContain(
       "For interactive issue selection, use `prs tool issue list --actionable --json` as the source of truth and show each returned issue with its number, title, and GitHub URL."
     );

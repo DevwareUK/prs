@@ -135,6 +135,7 @@ import {
 } from "./setup";
 import {
   branchContainsCommit,
+  ensureGuidedCheckoutReady,
   ensureVerificationCommandAvailable,
   preflightIssueBaseBranch,
   preflightRemoteBranch,
@@ -354,13 +355,13 @@ const TOP_LEVEL_HELP = [
   "  prs issue draft --draft-file <path>",
   "  prs issue refine <number>",
   "  prs issue plan <number> [--refresh]",
-  "  prs issue <number> [--mode <interactive|unattended>]",
-  "  prs issue <number> <number> [...number] [--mode unattended]",
+  "  prs issue <number> [--unattended|--auto|--jdi|--mode <interactive|unattended>]",
+  "  prs issue <number> <number> [...number] [--unattended|--auto|--jdi]",
   "  prs issue prepare <number> [--mode <local|github-action>]",
   "  prs issue finalize <number>",
   "",
   "Beta:",
-  "  prs issue batch <number> <number> [...number] [--mode unattended]",
+  "  prs issue batch <number> <number> [...number] [--unattended|--auto|--jdi]",
   "  prs pr resolve-conflicts <pr-number>",
   "  prs review features [repo-path]",
   "",
@@ -374,10 +375,10 @@ const TOP_LEVEL_HELP = [
   "  prs setup --update-skills",
   "  prs update skills",
   "  prs tool issue list [--actionable] --json",
-  "  prs tool issue ready <issue-number> [--all] --json",
+  "  prs tool issue ready <issue-number> [--unattended|--auto|--jdi] --json",
   "  prs tool issue create (--draft-file <path>|--issue-set <path>) --json",
   "  prs tool pr list [--actionable] --json",
-  "  prs tool pr ready <pr-number> [--all] --json",
+  "  prs tool pr ready <pr-number> [--unattended|--auto|--jdi] --json",
   "  prs tool pr review <pr-number> --json",
   "  prs tool pr publish-review <pr-number> --report <path> --comments <path> --json",
   "  prs tool pr prepare-review <pr-number> --json",
@@ -758,6 +759,15 @@ function ensureCleanWorkingTree(repoRoot: string): void {
       "Working tree is not clean. Commit or stash existing changes before running prs issue workflows."
     );
   }
+}
+
+function ensureGuidedCheckoutReadyForRuntime(repoRoot: string, baseBranch: string): void {
+  if (process.env.PRS_DISABLE_AUTO_RUN === "1") {
+    ensureCleanWorkingTree(repoRoot);
+    return;
+  }
+
+  ensureGuidedCheckoutReady(repoRoot, baseBranch);
 }
 
 export function parsePrCommandArgs(args: string[]): PrCommandOptions {
@@ -1208,7 +1218,7 @@ async function publishIssueRefinementCompleteComment(options: {
     options.issueNumber,
     [
       ISSUE_REFINEMENT_COMPLETE_COMMENT_MARKER,
-      "I'm happy that we have what we need now: the settled specification and implementation plan have been attached to this issue in managed comments, so development can start from those artifacts.",
+      "Refinement is complete. The settled specification and implementation plan have been attached to this issue in managed comments, so development can start from those artifacts.",
       "",
     ].join("\n")
   );
@@ -4240,7 +4250,7 @@ async function runToolCommand(): Promise<void> {
 
   if (toolCommand.kind === "issue-ready") {
     const result = await readyIssueTool({
-      all: toolCommand.all,
+      unattended: toolCommand.unattended,
       issueNumber: toolCommand.issueNumber,
       repoRoot,
       forge: getRepositoryForge(repoRoot),
@@ -4575,7 +4585,7 @@ async function runToolCommand(): Promise<void> {
     let result: Awaited<ReturnType<typeof readyPullRequestTool>>;
     try {
       result = await readyPullRequestTool({
-        all: toolCommand.all,
+        unattended: toolCommand.unattended,
         prNumber: toolCommand.prNumber,
         repoRoot,
         buildCommand: repositoryConfig.buildCommand,
@@ -5370,6 +5380,8 @@ async function runIssueRefineCommand(issueNumber: number): Promise<void> {
   const repoRoot = getDefaultRepoRoot();
   const forge = getRepositoryForge(repoRoot);
   const repositoryConfig = getRepositoryConfig(repoRoot);
+  preflightIssueBaseBranch(repoRoot, repositoryConfig.baseBranch);
+  ensureGuidedCheckoutReadyForRuntime(repoRoot, repositoryConfig.baseBranch);
   const runtime = selectInteractiveRuntime(repositoryConfig.ai.runtime, {
     onFallback: (message) => {
       console.log(message);
@@ -6098,7 +6110,11 @@ async function prepareIssueRun(
     repoRoot,
     repositoryConfig.baseBranch
   );
-  ensureCleanWorkingTree(repoRoot);
+  if (mode === "local") {
+    ensureGuidedCheckoutReadyForRuntime(repoRoot, repositoryConfig.baseBranch);
+  } else {
+    ensureCleanWorkingTree(repoRoot);
+  }
   console.log(`Fetching issue #${issueNumber}...`);
   const issue = await forge.fetchIssueDetails(issueNumber);
   const sessionStateFilePath = getIssueSessionStateFilePath(repoRoot, issueNumber);

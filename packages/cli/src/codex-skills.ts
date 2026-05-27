@@ -83,9 +83,9 @@ function renderPrPublishReviewToolCommand(): string {
   return "prs tool pr publish-review <number> --report <reportFilePath> --comments <commentsFilePath> --json";
 }
 
-function renderIssueReadyToolCommand(all = false): string {
+function renderIssueReadyToolCommand(unattended = false): string {
   const route = routePrsCommandSurfaceAction(
-    parsePrsCommandSurfaceArgs(all ? ["issue", "123", "--all"] : ["issue", "123"])
+    parsePrsCommandSurfaceArgs(unattended ? ["issue", "123", "--unattended"] : ["issue", "123"])
   );
   const cliArgs = route.cliArgs?.join(" ");
   if (!cliArgs) {
@@ -95,9 +95,9 @@ function renderIssueReadyToolCommand(all = false): string {
   return `prs ${cliArgs.replace("123", "<number>")}`;
 }
 
-function renderPrReadyToolCommand(all = false): string {
+function renderPrReadyToolCommand(unattended = false): string {
   const route = routePrsCommandSurfaceAction(
-    parsePrsCommandSurfaceArgs(all ? ["pr", "123", "--all"] : ["pr", "123"])
+    parsePrsCommandSurfaceArgs(unattended ? ["pr", "123", "--unattended"] : ["pr", "123"])
   );
   const cliArgs = route.cliArgs?.join(" ");
   if (!route.toolOnly || !cliArgs) {
@@ -263,12 +263,12 @@ export const PRS_CODEX_SKILLS: ManagedCodexSkill[] = [
       "### Direct forms",
       "",
       `- \`/prs issue <number>\`: run \`${renderIssueReadyToolCommand()}\`; gather issue context, write readiness metadata, and stop with the next sensible action so Superpowers can create the implementation worktree.`,
-      `- \`/prs issue <number> --all\`: run \`${renderIssueReadyToolCommand(true)}\`; if the result is ready, do not stop after the readiness JSON when \`--all\` is present. Instead, continue into Superpowers worktree creation and issue implementation from the updated base branch, publish approved spec/plan artifacts to GitHub audit, and then use \`/prs finish\` discipline for verification, commit, push, PR, audit, and safe cleanup.`,
+      `- \`/prs issue <number> --unattended\` (aliases: \`--auto\`, \`--jdi\`): run \`${renderIssueReadyToolCommand(true)}\`; if the result is ready, do not stop after the readiness JSON. Continue into Superpowers worktree creation and issue implementation from the updated base branch, publish unattended artifacts with automation framing, and then use \`/prs finish\` discipline for verification, commit, push, PR, audit, and safe cleanup.`,
       "- `/prs issue <number> refine`: run guided issue refinement on the GitHub issue comments until the user's intention, scope, access, data changes, acceptance criteria, existing-user impact, and nearby knock-on effects are clear. Ask all currently blocking high-value questions; once settled, publish managed specification and plan comments plus a final confidence comment.",
       "- `/prs issue <number> plan`: publish or refresh the issue plan.",
       "- `/prs issue <number> finish`: finish work with the issue context preserved; after a pull request exists, offer the next `/prs pr` step for that pull request.",
       `- \`/prs pr <number>\`: run \`${renderPrReadyToolCommand()}\`; prepare the actual PR head branch in the current repository checkout used by the user's normal local runtime, fetch and merge the latest PR base branch, summarize \`prContext\` signals from GitHub, including grouped \`commentSummary\` entries with source links when available, and stop with the next sensible action so the user can browse the app quickly. If the PR head branch is locked by a clean prs worktree, the tool may remove that clean worktree and then check out the actual PR branch in the current checkout. If that worktree has uncommitted changes, stop and report the blocker.`,
-      `- \`/prs pr <number> --all\`: run \`${renderPrReadyToolCommand(true)}\`; take all sensible readiness steps without prompting in the current repository checkout, including starting the configured local app runtime when needed. Do not push, review, fix, approve, merge, switch to an existing PR worktree, or run broad local verification.`,
+      `- \`/prs pr <number> --unattended\` (aliases: \`--auto\`, \`--jdi\`): run \`${renderPrReadyToolCommand(true)}\`; take all sensible readiness steps without prompting in the current repository checkout, including starting the configured local app runtime when needed. Do not push, review, fix, approve, merge, switch to an existing PR worktree, or run broad local verification.`,
       `- \`/prs pr <number> review\`: run \`${renderPrReviewToolCommand()}\`, read the returned \`promptFilePath\` and \`contextFilePath\`, inspect the prepared checkout in this active Codex session, write the final report to the returned \`reportFilePath\`, write inline review candidates to the returned \`commentsFilePath\`, and publish both with \`${renderPrPublishReviewToolCommand()}\`. Do not edit code, commit, push, resolve comments, or post directly to GitHub outside the publish tool.`,
       `- \`/prs pr <number> prepare-review\`: run \`${renderPrPrepareReviewToolCommand()}\`, keep the prepared branch checked out in the current repository, read the returned \`snapshotFilePath\` when useful, then continue review in this Codex session. The deterministic tool does not generate \`review-brief.md\`; do not look for one unless a separate command created it.`,
       "- `/prs pr <number> resolve-conflicts`: run `prs pr resolve-conflicts <number>`.",
@@ -410,8 +410,8 @@ export const PRS_CODEX_SKILLS: ManagedCodexSkill[] = [
       "For `/prs:issue <number> refine`, do not run `prs issue refine <number>` and do not launch a nested Codex/runtime. Handle refinement directly in this Codex session: fetch the GitHub issue body and comments, use Superpowers brainstorming through GitHub issue comments against that thread, inspect nearby repository behavior for knock-on effects, and preserve the original issue body.",
       "If brainstorming is not satisfied, post one normal GitHub issue comment containing all currently blocking high-value questions with the `<!-- prs:issue-refinement-questions -->` marker, then stop. Do not write or publish a partial spec or plan while important questions remain open.",
       "Only once refinement is settled, publish or update the managed `<!-- prs:issue-spec -->` and `<!-- prs:issue-plan -->` comments on the same issue, then add the final `<!-- prs:issue-refinement-complete -->` confidence comment, and never create linked issues from this refinement flow.",
-      `For \`/prs:issue <number>\`, run \`${renderIssueReadyToolCommand()}\` and stop with the next sensible action unless \`--all\` is present.`,
-      `For \`/prs:issue <number> --all\`, run \`${renderIssueReadyToolCommand(true)}\`, then continue into Superpowers worktree creation and issue implementation from the updated base branch.`,
+      `For \`/prs:issue <number>\`, run \`${renderIssueReadyToolCommand()}\` and stop with the next sensible action unless \`--unattended\`, \`--auto\`, or \`--jdi\` is present.`,
+      `For \`/prs:issue <number> --unattended\` (aliases: \`--auto\`, \`--jdi\`), run \`${renderIssueReadyToolCommand(true)}\`, then continue into Superpowers worktree creation and issue implementation from the updated base branch.`,
       "For interactive issue selection, use `prs tool issue list --actionable --json` as the source of truth and show each returned issue with its number, title, and GitHub URL.",
       "When implementation opens or updates a pull request, clean up the issue worktree only when no uncommitted or unpushed work would be lost.",
     ].join("\n"),
@@ -429,7 +429,7 @@ export const PRS_CODEX_SKILLS: ManagedCodexSkill[] = [
       "Use this alias exactly like `/prs pr`.",
       "For interactive PR selection, use `prs tool pr list --actionable --json` as the source of truth and show each returned pull request with its number, title, and GitHub URL.",
       `For \`/prs:pr <number>\`, run \`${renderPrReadyToolCommand()}\`; prepare the actual PR head branch in the current repository checkout used by the user's local runtime, fetch and merge the latest PR base branch, summarize \`prContext\` GitHub signals, including grouped \`commentSummary\` entries with source links when available, and stop once the app is ready to browse or a blocker is clear.`,
-      `For \`/prs:pr <number> --all\`, run \`${renderPrReadyToolCommand(true)}\`; take all sensible readiness steps but do not push, review, fix, approve, merge, switch into an existing PR worktree, or run broad local verification.`,
+      `For \`/prs:pr <number> --unattended\` (aliases: \`--auto\`, \`--jdi\`), run \`${renderPrReadyToolCommand(true)}\`; take all sensible readiness steps but do not push, review, fix, approve, merge, switch into an existing PR worktree, or run broad local verification.`,
       `For \`/prs:pr <number> review\`, run \`${renderPrReviewToolCommand()}\`; read the returned \`promptFilePath\` and \`contextFilePath\`, inspect the prepared checkout in this active Codex session, write the final report to the returned \`reportFilePath\`, write inline review candidates to the returned \`commentsFilePath\`, and publish both with \`${renderPrPublishReviewToolCommand()}\`. Do not edit code, commit, push, resolve comments, or post directly to GitHub outside the publish tool.`,
       `For \`/prs:pr <number> prepare-review\`, run \`${renderPrPrepareReviewToolCommand()}\`; keep the prepared branch checked out in the current repository, read the returned \`snapshotFilePath\` when useful, then continue review in this Codex session. The deterministic tool does not generate \`review-brief.md\`; do not look for one unless a separate command created it.`,
       "If the PR head branch is locked by a clean prs worktree, let the tool remove that worktree and check out the actual PR branch in the current checkout. If the worktree is dirty, stop and report the blocker.",

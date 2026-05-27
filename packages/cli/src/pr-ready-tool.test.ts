@@ -138,7 +138,7 @@ describe("PR ready tool", () => {
     const { calls, runCommand } = createCommandRecorder({ containsBase: false });
 
     const result = await readyPullRequestTool({
-      all: false,
+      unattended: false,
       forge: createForge(),
       prNumber: 115,
       repoRoot,
@@ -182,12 +182,12 @@ describe("PR ready tool", () => {
     expect(calls.some((call) => call.command === "ddev")).toBe(false);
   });
 
-  it("syncs base and starts the configured local runtime when --all is set", async () => {
+  it("syncs base and starts the configured local runtime when unattended is set", async () => {
     const repoRoot = createRepo();
     const { calls, runCommand } = createCommandRecorder({ containsBase: false });
 
     const result = await readyPullRequestTool({
-      all: true,
+      unattended: true,
       forge: createForge(),
       prNumber: 115,
       repoRoot,
@@ -228,7 +228,7 @@ describe("PR ready tool", () => {
     });
 
     const result = await readyPullRequestTool({
-      all: true,
+      unattended: true,
       forge: createForge(),
       prNumber: 115,
       repoRoot,
@@ -273,7 +273,7 @@ describe("PR ready tool", () => {
 
     await expect(
       readyPullRequestTool({
-        all: true,
+        unattended: true,
         forge: createForge(),
         prNumber: 115,
         repoRoot,
@@ -295,7 +295,7 @@ describe("PR ready tool", () => {
     });
 
     const result = await readyPullRequestTool({
-      all: true,
+      unattended: true,
       forge: createForge(),
       prNumber: 115,
       repoRoot,
@@ -331,7 +331,7 @@ describe("PR ready tool", () => {
     const { calls, runCommand } = createCommandRecorder({ containsBase: true });
 
     const result = await readyPullRequestTool({
-      all: true,
+      unattended: true,
       forge: createForge(),
       prNumber: 115,
       repoRoot,
@@ -358,7 +358,7 @@ describe("PR ready tool", () => {
     expect(calls.some((call) => call.command === ddevPath && call.args[0] === "start")).toBe(true);
   });
 
-  it("blocks when --all base sync hits merge conflicts", async () => {
+  it("blocks when unattended base sync hits merge conflicts", async () => {
     const repoRoot = createRepo();
     const { calls, runCommand } = createCommandRecorder({
       containsBase: false,
@@ -366,7 +366,7 @@ describe("PR ready tool", () => {
     });
 
     const result = await readyPullRequestTool({
-      all: true,
+      unattended: true,
       forge: createForge(),
       prNumber: 115,
       repoRoot,
@@ -477,7 +477,7 @@ describe("PR ready tool", () => {
     });
 
     const result = await readyPullRequestTool({
-      all: false,
+      unattended: false,
       forge,
       prNumber: 115,
       repoRoot,
@@ -574,7 +574,7 @@ describe("PR ready tool", () => {
     const { runCommand } = createCommandRecorder({ containsBase: true });
 
     const result = await readyPullRequestTool({
-      all: false,
+      unattended: false,
       forge: createForge({
         fetchPullRequestIssueComments: vi.fn().mockResolvedValue([
           {
@@ -642,7 +642,7 @@ describe("PR ready tool", () => {
       "Product lookup failures still need a guard.\n\n<!-- prs:pr-review-inline {\"findingKey\":\"lookup-products\"} -->";
 
     const result = await readyPullRequestTool({
-      all: false,
+      unattended: false,
       forge: createForge({
         fetchPullRequestReviewThreads: vi.fn().mockResolvedValue([
           {
@@ -779,7 +779,7 @@ describe("PR ready tool", () => {
     const { runCommand } = createCommandRecorder({ containsBase: true });
 
     const result = await readyPullRequestTool({
-      all: false,
+      unattended: false,
       forge: createForge({
         fetchPullRequestChecks: vi.fn().mockRejectedValue(new Error("checks API failed")),
         fetchPullRequestIssueComments: vi.fn().mockRejectedValue(new Error("comments API failed")),

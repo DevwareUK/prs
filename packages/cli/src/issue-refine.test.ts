@@ -597,7 +597,7 @@ describe("Issue refine workflow", () => {
       "<!-- prs:issue-plan -->\n## Refine Plan\n\n- Apply the refined work.\n"
     );
     expect(commentBodies).toContain(
-      "<!-- prs:issue-refinement-complete -->\nI'm happy that we have what we need now: the settled specification and implementation plan have been attached to this issue in managed comments, so development can start from those artifacts.\n"
+      "<!-- prs:issue-refinement-complete -->\nRefinement is complete. The settled specification and implementation plan have been attached to this issue in managed comments, so development can start from those artifacts.\n"
     );
   });
 
