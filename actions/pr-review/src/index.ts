@@ -1,16 +1,13 @@
 import { appendFileSync } from "node:fs";
 import { PRReviewInput } from "@prs/contracts";
-import {
-  formatPRReviewMarkdown,
-  generatePRReview,
-  serializePRImpactProfile,
-} from "@prs/core";
+import { generatePRReview, serializePRImpactProfile } from "@prs/core";
 import { OpenAIProvider } from "@prs/providers";
 import {
   getOptionalInput,
   getRequiredInlineOrFileInput,
   getRequiredInput,
 } from "../../shared/src/inputs";
+import { buildCommentBody } from "./comment";
 
 function setOutput(name: string, value: string): void {
   const outputPath = process.env.GITHUB_OUTPUT;
@@ -39,17 +36,6 @@ function parseOptionalIssueNumber(value: string | undefined): number | undefined
   }
 
   return parsed;
-}
-
-function buildCommentBody(
-  review: Awaited<ReturnType<typeof generatePRReview>>,
-  issue: {
-    number?: number;
-    title?: string;
-    url?: string;
-  }
-): string {
-  return formatPRReviewMarkdown(review, issue);
 }
 
 async function run(): Promise<void> {

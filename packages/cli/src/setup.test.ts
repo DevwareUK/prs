@@ -237,6 +237,7 @@ describe("setup command", () => {
     expect(prReviewWorkflow).toContain("resolveReviewThread");
     expect(prReviewWorkflow).toContain("existingFindingKeys");
     expect(prReviewWorkflow).toContain("hasLaterHumanReply");
+    expect(prReviewWorkflow).toContain("prs automation note:");
     expect(
       readFileSync(resolve(repoRoot, ".github", "workflows", "prs-pr-assistant.yml"), "utf8")
     ).toContain("DevwareUK/prs/actions/pr-assistant@main");

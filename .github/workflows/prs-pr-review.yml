@@ -219,7 +219,10 @@ jobs:
             }
 
             function formatCommentBody(comment) {
+              const automationNote = "prs automation note: this GitHub-visible output was generated and posted by prs unattended automation.";
               const lines = [
+                automationNote,
+                "",
                 `**${toTitleCase(comment.severity)} severity, ${toTitleCase(comment.confidence)} confidence ${toTitleCase(comment.category)}**`,
                 "",
                 comment.body,

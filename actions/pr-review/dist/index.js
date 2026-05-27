@@ -16161,7 +16161,7 @@ var require_dist = __commonJS({
       TestSuggestionsOutput: () => TestSuggestionsOutput,
       TestingSetupStatus: () => TestingSetupStatus,
       UNATTENDED_GITHUB_OUTPUT_NOTE: () => UNATTENDED_GITHUB_OUTPUT_NOTE,
-      applyGitHubOutputFraming: () => applyGitHubOutputFraming,
+      applyGitHubOutputFraming: () => applyGitHubOutputFraming2,
       includesManagedMarker: () => includesManagedMarker,
       stripGitHubOutputFraming: () => stripGitHubOutputFraming
     });
@@ -16261,7 +16261,7 @@ var require_dist = __commonJS({
       return `${body.split(/\r?\n/).filter((line) => line.trim() !== UNATTENDED_GITHUB_OUTPUT_NOTE).join("\n").replace(/\n{3,}/g, "\n\n").trim()}
 `;
     }
-    function applyGitHubOutputFraming(body, mode = "manual") {
+    function applyGitHubOutputFraming2(body, mode = "manual") {
       const stripped = stripGitHubOutputFraming(body);
       if (mode !== "unattended") {
         return stripped;
@@ -16783,7 +16783,7 @@ var require_dist2 = __commonJS({
       stripManagedPRAssistantSection: () => stripManagedPRAssistantSection
     });
     module2.exports = __toCommonJS2(index_exports);
-    var import_contracts2 = require_dist();
+    var import_contracts3 = require_dist();
     var StructuredGenerationError = class extends Error {
       kind;
       rawResponse;
@@ -16935,19 +16935,19 @@ ${formatValidationIssues(validationIssues)}`,
       ].join("\n");
     }
     function normalizeCommitMessageOutput(value) {
-      return import_contracts2.CommitMessageOutput.parse({
+      return import_contracts3.CommitMessageOutput.parse({
         title: value.title,
         body: value.body ?? void 0
       });
     }
     async function generateCommitMessage(provider, diff) {
-      const parsedInput = import_contracts2.CommitMessageInput.parse({ diff });
+      const parsedInput = import_contracts3.CommitMessageInput.parse({ diff });
       const prompt = buildPrompt(parsedInput);
       const modelOutput = await generateStructuredOutput({
         provider,
         systemPrompt: COMMIT_MESSAGE_SYSTEM_PROMPT,
         prompt,
-        schema: import_contracts2.CommitMessageModelOutput,
+        schema: import_contracts3.CommitMessageModelOutput,
         validationErrorPrefix: "Model output failed commit message schema validation"
       });
       return normalizeCommitMessageOutput(modelOutput);
@@ -17078,7 +17078,7 @@ ${formatValidationIssues(validationIssues)}`,
       const matchesExcludedPath = createRepositoryPathMatcher(excludePaths);
       return filePaths.filter((filePath) => !matchesExcludedPath(filePath));
     }
-    var import_contracts3 = require_dist();
+    var import_contracts32 = require_dist();
     var DEFAULT_REPOSITORY_BASE_BRANCH = "main";
     var DEFAULT_REPOSITORY_BUILD_COMMAND = ["pnpm", "build"];
     var DEFAULT_REPOSITORY_FORGE_TYPE = "github";
@@ -17096,9 +17096,9 @@ ${formatValidationIssues(validationIssues)}`,
       return [...new Set(paths.map((path) => path.trim()).filter(Boolean))];
     }
     function resolveRepositoryConfig(config) {
-      const parsedConfig = import_contracts3.RepositoryConfig.parse(config ?? {});
+      const parsedConfig = import_contracts32.RepositoryConfig.parse(config ?? {});
       const useCodexSuperpowers = parsedConfig.ai?.issue?.useCodexSuperpowers ?? parsedConfig.ai?.issueDraft?.useCodexSuperpowers ?? DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS;
-      return import_contracts3.ResolvedRepositoryConfig.parse({
+      return import_contracts32.ResolvedRepositoryConfig.parse({
         ai: {
           issue: {
             useCodexSuperpowers
@@ -46427,8 +46427,8 @@ var require_dist3 = __commonJS({
 
 // src/index.ts
 var import_node_fs6 = require("fs");
-var import_contracts = __toESM(require_dist());
-var import_core18 = __toESM(require_dist2());
+var import_contracts2 = __toESM(require_dist());
+var import_core19 = __toESM(require_dist2());
 var import_providers = __toESM(require_dist3());
 
 // ../shared/src/inputs.ts
@@ -46474,6 +46474,16 @@ function getRequiredInlineOrFileInput(inputName, fileInputName) {
   return value;
 }
 
+// src/comment.ts
+var import_contracts = __toESM(require_dist());
+var import_core18 = __toESM(require_dist2());
+function buildCommentBody(review, issue, outputMode = "unattended") {
+  return (0, import_contracts.applyGitHubOutputFraming)(
+    (0, import_core18.formatPRReviewMarkdown)(review, issue),
+    outputMode
+  );
+}
+
 // src/index.ts
 function setOutput(name, value) {
   const outputPath = process.env.GITHUB_OUTPUT;
@@ -46501,12 +46511,9 @@ function parseOptionalIssueNumber(value) {
   }
   return parsed;
 }
-function buildCommentBody(review, issue) {
-  return (0, import_core18.formatPRReviewMarkdown)(review, issue);
-}
 async function run() {
   const issueNumber = parseOptionalIssueNumber(getOptionalInput("issue_number"));
-  const input = import_contracts.PRReviewInput.parse({
+  const input = import_contracts2.PRReviewInput.parse({
     diff: getRequiredInlineOrFileInput("diff", "diff_file"),
     prTitle: getOptionalInput("pr_title"),
     prBody: getOptionalInput("pr_body"),
@@ -46520,7 +46527,7 @@ async function run() {
     model: getOptionalInput("openai_model"),
     baseUrl: getOptionalInput("openai_base_url")
   });
-  const result = await (0, import_core18.generatePRReview)(provider, input);
+  const result = await (0, import_core19.generatePRReview)(provider, input);
   setOutput("summary", result.summary);
   setOutput(
     "body",
@@ -46530,7 +46537,7 @@ async function run() {
       url: input.issueUrl
     })
   );
-  setOutput("impact_profile_json", (0, import_core18.serializePRImpactProfile)(result.impactProfile));
+  setOutput("impact_profile_json", (0, import_core19.serializePRImpactProfile)(result.impactProfile));
   setOutput("findings_json", JSON.stringify(result.findings, null, 2));
   setOutput("comments_json", JSON.stringify(result.comments, null, 2));
 }
