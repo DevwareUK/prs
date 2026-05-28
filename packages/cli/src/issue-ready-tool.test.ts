@@ -118,4 +118,71 @@ describe("issue ready tool", () => {
       "Missing managed refinement artifacts will be generated and published during issue preparation"
     );
   });
+
+  it("detects issue specifications nested inside audit comments", async () => {
+    const repoRoot = mkdtempSync(join(tmpdir(), "prs-issue-ready-audit-spec-"));
+    const forge = {
+      type: "github" as const,
+      isAuthenticated: vi.fn(() => true),
+      fetchIssueDetails: vi.fn().mockResolvedValue({
+        title: "Detect audit-wrapped spec",
+        body: "Read managed spec markers inside audit comments.",
+        url: "https://github.com/DevwareUK/prs/issues/255",
+      }),
+      fetchIssueComments: vi.fn().mockResolvedValue([
+        {
+          id: 1,
+          body: [
+            "<!-- prs:audit -->",
+            "",
+            "# Issue #255 audit",
+            "",
+            "<!-- prs:audit:spec:start -->",
+            "## spec",
+            "",
+            "<!-- prs:issue-spec -->",
+            "# Settled specification",
+            "<!-- prs:audit:spec:end -->",
+          ].join("\n"),
+          url: "https://github.com/DevwareUK/prs/issues/255#issuecomment-1",
+          createdAt: "2026-05-28T19:00:00Z",
+          updatedAt: "2026-05-28T19:05:00Z",
+          author: "james",
+          isBot: false,
+        },
+      ]),
+      fetchIssuePlanComment: vi.fn().mockResolvedValue({
+        id: 2,
+        body: "<!-- prs:issue-plan -->\nPlan",
+        url: "https://github.com/DevwareUK/prs/issues/255#issuecomment-2",
+        updatedAt: "2026-05-28T19:06:00Z",
+      }),
+    };
+
+    const result = await readyIssueTool({
+      unattended: true,
+      issueNumber: 255,
+      repoRoot,
+      forge,
+      now: () => new Date("2026-05-28T19:30:00.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      status: "ready",
+      issueNumber: 255,
+      spec: {
+        status: "present",
+        url: "https://github.com/DevwareUK/prs/issues/255#issuecomment-1",
+        updatedAt: "2026-05-28T19:05:00Z",
+      },
+    });
+
+    const metadata = JSON.parse(readFileSync(join(repoRoot, result.metadataFilePath), "utf8"));
+    expect(metadata).toMatchObject({
+      spec: {
+        status: "present",
+        url: "https://github.com/DevwareUK/prs/issues/255#issuecomment-1",
+      },
+    });
+  });
 });

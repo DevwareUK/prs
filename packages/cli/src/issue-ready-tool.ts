@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
-import { ISSUE_SPEC_COMMENT_MARKER } from "@prs/contracts";
+import { includesManagedMarker, ISSUE_SPEC_COMMENT_MARKER } from "@prs/contracts";
 import type { IssueDetails, IssuePlanComment, RepositoryComment, RepositoryForge } from "./forge";
 
 type IssuePlanStatus =
@@ -95,9 +95,7 @@ function findLatestIssueSpecComment(
   comments: RepositoryComment[]
 ): RepositoryComment | undefined {
   return comments
-    .filter((comment) =>
-      comment.body.trimStart().startsWith(ISSUE_SPEC_COMMENT_MARKER)
-    )
+    .filter((comment) => includesManagedMarker(comment.body, [ISSUE_SPEC_COMMENT_MARKER]))
     .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0];
 }
 
