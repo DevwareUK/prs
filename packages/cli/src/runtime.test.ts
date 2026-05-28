@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   getInteractiveRuntimeLaunchBlocker,
   getInteractiveRuntimeByType,
+  getUnattendedRuntimeLaunchBlocker,
   isCodexSuperpowersAvailable,
   selectInteractiveRuntime,
 } from "./runtime";
@@ -40,6 +41,9 @@ function writeSuperpowersPlugin(codexHome: string, version = "test-version"): vo
 
 afterEach(() => {
   delete process.env.CODEX_HOME;
+  delete process.env.CODEX_SESSION_ID;
+  delete process.env.CODEX_SANDBOX;
+  delete process.env.CODEX_WORKSPACE_ID;
 
   for (const target of cleanupTargets) {
     rmSync(target, { recursive: true, force: true });
@@ -192,6 +196,28 @@ describe("getInteractiveRuntimeLaunchBlocker", () => {
         { TERM: "dumb", PRS_ALLOW_INTERACTIVE_RUNTIME_LAUNCH: "1" },
         { stdin: { isTTY: false }, stdout: { isTTY: false } }
       )
+    ).toBeUndefined();
+  });
+});
+
+describe("getUnattendedRuntimeLaunchBlocker", () => {
+  it("blocks nested unattended Codex launches inside an active Codex session", () => {
+    expect(
+      getUnattendedRuntimeLaunchBlocker({
+        TERM: "xterm-256color",
+        CODEX_SESSION_ID: "session-1",
+      })
+    ).toBe(
+      "Legacy unattended runtime launch is disabled inside an active Codex session (CODEX_SESSION_ID is set). Use `prs tool issue ready <number> --unattended --json` from the active Codex session instead."
+    );
+  });
+
+  it("allows unattended Codex launch in tests even when the harness has Codex markers", () => {
+    expect(
+      getUnattendedRuntimeLaunchBlocker({
+        VITEST: "true",
+        CODEX_SANDBOX: "workspace-write",
+      })
     ).toBeUndefined();
   });
 });
