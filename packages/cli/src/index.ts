@@ -21,10 +21,7 @@ import {
   generateDiffSummary,
   generatePRReview,
   generateIssueResolutionPlan,
-  generatePRAssistant,
-  generatePRDescription,
   mergePRAssistantSection,
-  StructuredGenerationError,
 } from "@prs/core";
 import {
   createProviderFromConfig,
@@ -99,7 +96,6 @@ import {
 } from "./generated-text-review";
 import {
   finalizeRuntimeChanges,
-  generateDiffBasedCommitProposal,
 } from "./runtime-change-review";
 import { resolveRuntimeRepoRoot } from "./repo-root";
 import {
@@ -3798,16 +3794,6 @@ function createAutoAcceptedGeneratedText(
   };
 }
 
-async function createIssueTextProvider(
-  repoRoot: string
-): Promise<{ provider: AIProvider; providerType: ResolvedRepositoryConfigType["ai"]["provider"]["type"] } | undefined> {
-  try {
-    return await createProvider(repoRoot);
-  } catch {
-    return undefined;
-  }
-}
-
 function formatFallbackCommitMessage(
   title: string,
   body?: string
@@ -3818,18 +3804,9 @@ function formatFallbackCommitMessage(
 async function resolveIssueCommitProposal(options: {
   repoRoot: string;
   issueNumber: number;
-  provider?: AIProvider;
   issue?: IssueDetails;
   mode: "address" | "finalize";
 }): Promise<{ diff: string; initialMessage: string }> {
-  if (options.provider) {
-    return generateDiffBasedCommitProposal(
-      options.repoRoot,
-      options.provider,
-      readIssueWorkflowDiff
-    );
-  }
-
   const diff = readIssueWorkflowDiff(options.repoRoot);
   const title =
     options.mode === "finalize"
@@ -3847,13 +3824,11 @@ async function finalizeIssueRunUnattended(
   repoRoot: string,
   issueNumber: number,
   runDir: string,
-  provider?: AIProvider,
   issue?: IssueDetails
 ): Promise<Extract<FinalizeIssueRunResult, { committed: true }>> {
   const proposal = await resolveIssueCommitProposal({
     repoRoot,
     issueNumber,
-    provider,
     issue,
     mode: "address",
   });
@@ -3938,34 +3913,6 @@ function writeIssuePullRequestFiles(
   };
 }
 
-function writePRDescriptionFailureArtifact(
-  repoRoot: string,
-  runDir: string,
-  error: StructuredGenerationError
-): string {
-  const artifactPath = resolve(runDir, "pr-description-generation-error.json");
-
-  writeFileSync(
-    artifactPath,
-    `${JSON.stringify(
-      {
-        stage: "pr-description",
-        kind: error.kind,
-        message: error.message,
-        rawResponse: error.rawResponse,
-        parsedJson: error.parsedJson,
-        normalizedJson: error.normalizedJson,
-        validationIssues: error.validationIssues,
-      },
-      null,
-      2
-    )}\n`,
-    "utf8"
-  );
-
-  return toRepoRelativePath(repoRoot, artifactPath);
-}
-
 function appendIssueOverlapDependencyNote(
   body: string,
   decision: IssueBranchBaseDecision | undefined
@@ -4001,72 +3948,8 @@ async function generateIssuePullRequest(
     commitMessage: ReviewedGeneratedText;
     overlapDecision?: IssueBranchBaseDecision;
     runDir?: string;
-    provider?: AIProvider;
   }
 ): Promise<GeneratedIssuePullRequest> {
-  if (options.provider) {
-    let description: Awaited<ReturnType<typeof generatePRDescription>>;
-    try {
-      description = await generatePRDescription(options.provider, {
-        diff: options.diff,
-        issueTitle: options.issue.title,
-        issueBody: options.issue.body,
-      });
-    } catch (error: unknown) {
-      if (error instanceof StructuredGenerationError) {
-        const artifactSuffix =
-          options.runDir !== undefined
-            ? ` Diagnostic artifact: ${writePRDescriptionFailureArtifact(
-                options.repoRoot,
-                options.runDir,
-                error
-              )}.`
-            : "";
-        throw new Error(
-          `Failed to generate PR description. ${error.message}${artifactSuffix}`
-        );
-      }
-
-      throw error;
-    }
-
-    const assistant = await generatePRAssistant(options.provider, {
-      diff: options.diff,
-      prTitle: description.title,
-      prBody: description.body,
-      commitMessages: options.commitMessage.content.trim(),
-    });
-
-    const linkedSourceIssueNumber = getPrsLinkedSourceIssueNumber(options.issue);
-    const closingIssueNumbers =
-      linkedSourceIssueNumber === undefined ||
-      linkedSourceIssueNumber === options.issueNumber
-        ? [options.issueNumber]
-        : [options.issueNumber, linkedSourceIssueNumber];
-
-    const bodyWithOverlapNote = appendIssueOverlapDependencyNote(
-      ensureIssueClosingReferences(description.body, closingIssueNumbers),
-      options.overlapDecision
-    );
-    const body = mergePRAssistantSection(
-      bodyWithOverlapNote,
-      buildPRAssistantSection(assistant)
-    );
-    const pullRequest: GeneratedIssuePullRequest = {
-      title: description.title,
-      body,
-    };
-
-    if (!options.runDir) {
-      return pullRequest;
-    }
-
-    return {
-      ...pullRequest,
-      ...writeIssuePullRequestFiles(options.runDir, pullRequest.title, pullRequest.body),
-    };
-  }
-
   const changedFiles = collectChangedFilesFromDiff(options.diff);
   const title = options.issue.title.trim() || `Issue #${options.issueNumber}`;
   const linkedSourceIssueNumber = getPrsLinkedSourceIssueNumber(options.issue);
@@ -6438,16 +6321,14 @@ async function prepareIssueRun(
 async function finalizeIssueRun(
   repoRoot: string,
   issueNumber: number,
-  provider?: AIProvider,
   issue?: IssueDetails,
   runDir?: string
 ): Promise<FinalizeIssueRunResult> {
   const proposal = await resolveIssueCommitProposal({
     repoRoot,
     issueNumber,
-    provider,
     issue,
-    mode: provider ? "address" : "finalize",
+    mode: issue ? "address" : "finalize",
   });
   const reviewRunDir = runDir ?? createStandaloneIssueFinalizeRunDir(repoRoot, issueNumber);
   const finalized = await finalizeRuntimeChanges({
@@ -6551,14 +6432,12 @@ async function runUnattendedIssueCommand(
   console.log("Verifying build...");
   verifyBuild(repoRoot, repositoryConfig.buildCommand, context.workspace.outputLogPath);
 
-  const textProvider = await createIssueTextProvider(repoRoot);
   let finalized: Awaited<ReturnType<typeof finalizeIssueRunUnattended>>;
   try {
     finalized = await finalizeIssueRunUnattended(
       repoRoot,
       context.issueNumber,
       context.workspace.runDir,
-      textProvider?.provider,
       context.issue
     );
   } catch (error: unknown) {
@@ -6586,16 +6465,7 @@ async function runUnattendedIssueCommand(
     commitMessage: finalized.commitMessage,
     overlapDecision: context.overlapDecision,
     runDir: context.workspace.runDir,
-    provider: textProvider?.provider,
   });
-  if (textProvider) {
-    updateIssueWorkspaceMetadata(context.workspace, (currentMetadata) => ({
-      ...currentMetadata,
-      provider: {
-        type: textProvider.providerType,
-      },
-    }));
-  }
 
   console.log("Pushing branch and opening a pull request...");
   const createdPullRequest = await forge.createPullRequest({
@@ -7192,8 +7062,7 @@ async function runIssueCommand(): Promise<void> {
   }
 
   if (issueCommand.action === "finalize") {
-    const textProvider = await createIssueTextProvider(repoRoot);
-    await finalizeIssueRun(repoRoot, issueCommand.issueNumber, textProvider?.provider);
+    await finalizeIssueRun(repoRoot, issueCommand.issueNumber);
     return;
   }
 
@@ -7249,13 +7118,11 @@ async function runIssueCommand(): Promise<void> {
   console.log("Verifying build...");
   verifyBuild(repoRoot, repositoryConfig.buildCommand, context.workspace.outputLogPath);
 
-  const textProvider = await createIssueTextProvider(repoRoot);
   let finalized: FinalizeIssueRunResult;
   try {
     finalized = await finalizeIssueRun(
       repoRoot,
       context.issueNumber,
-      textProvider?.provider,
       context.issue,
       context.workspace.runDir
     );
@@ -7306,16 +7173,7 @@ async function runIssueCommand(): Promise<void> {
     commitMessage: finalized.commitMessage,
     overlapDecision: context.overlapDecision,
     runDir: context.workspace.runDir,
-    provider: textProvider?.provider,
   });
-  if (textProvider) {
-    updateIssueWorkspaceMetadata(context.workspace, (currentMetadata) => ({
-      ...currentMetadata,
-      provider: {
-        type: textProvider.providerType,
-      },
-    }));
-  }
 
   if (forge.isAuthenticated()) {
     console.log("Pushing branch and opening a pull request...");

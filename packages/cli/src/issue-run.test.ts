@@ -1452,10 +1452,7 @@ describe("Full issue run workflow", () => {
     process.argv = ["node", "prs", "issue", String(issueNumber), "--mode", "unattended"];
     await run();
 
-    expect(generateCommitMessage).toHaveBeenCalledWith(
-      expect.any(Object),
-      expect.stringContaining("SalesEventManagerTest.php")
-    );
+    expect(generateCommitMessage).not.toHaveBeenCalled();
     expect(
       spawnSync.mock.calls.some(
         ([command, args]) =>
@@ -1476,6 +1473,12 @@ describe("Full issue run workflow", () => {
     );
     expect(createdRunDir).toBeDefined();
     cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
+    expect(
+      readFileSync(
+        resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string, "commit-message.txt"),
+        "utf8"
+      )
+    ).toContain("feat: address issue #1513");
     const metadata = JSON.parse(
       readFileSync(
         resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string, "metadata.json"),
@@ -1491,7 +1494,7 @@ describe("Full issue run workflow", () => {
     expect(messages.join("\n")).toContain("Pull request: https://github.com/DevwareUK/prs/pull/1513");
   });
 
-  it("completes an unattended Codex issue run without requiring provider-generated text", async () => {
+  it("completes an unattended Codex issue run without using provider-generated text", async () => {
     const beforeRuns = listRunDirectories();
     const issueNumber = 1517;
     const branchName = "feat/issue-1517-provider-free-unattended-finalization";
@@ -2251,7 +2254,7 @@ describe("Full issue run workflow", () => {
     });
   });
 
-  it("writes a PR description diagnostic artifact during full issue runs when schema validation fails", async () => {
+  it("does not use provider PR description generation during full issue runs", async () => {
     const beforeRuns = listRunDirectories();
     const issueNumber = 147;
     const sessionStateDir = resolve(REPO_ROOT, ".prs", "issues", String(issueNumber));
@@ -2389,6 +2392,18 @@ describe("Full issue run workflow", () => {
             return { status: 0 };
           }
 
+          if (command === "git" && args[0] === "push") {
+            return { status: 0, stdout: "", stderr: "" };
+          }
+
+          if (command === "gh" && args[0] === "pr" && args[1] === "create") {
+            return {
+              status: 0,
+              stdout: "https://github.com/DevwareUK/prs/pull/1470\n",
+              stderr: "",
+            };
+          }
+
           throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
         },
       });
@@ -2419,14 +2434,8 @@ describe("Full issue run workflow", () => {
 
     process.argv = ["node", "prs", "issue", String(issueNumber)];
 
-    let caughtError: unknown;
-    try {
-      await run();
-    } catch (error: unknown) {
-      caughtError = error;
-    }
+    await run();
 
-    expect(caughtError).toBeInstanceOf(Error);
     const createdRunDir = listRunDirectories().find(
       (entry) => !beforeRuns.includes(entry) && /-issue-147$/.test(entry)
     );
@@ -2434,46 +2443,8 @@ describe("Full issue run workflow", () => {
     cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
 
     const artifactRelativePath = `.prs/runs/${createdRunDir}/pr-description-generation-error.json`;
-    expect((caughtError as Error).message).toContain(
-      `Failed to generate PR description. Model output failed PR description schema validation:`
-    );
-    expect((caughtError as Error).message).toContain(
-      `Diagnostic artifact: ${artifactRelativePath}.`
-    );
-
-    const artifact = JSON.parse(
-      readFileSync(resolve(REPO_ROOT, artifactRelativePath), "utf8")
-    ) as {
-      stage: string;
-      kind: string;
-      rawResponse: string;
-      parsedJson: Record<string, unknown>;
-      normalizedJson: Record<string, unknown>;
-      validationIssues: Array<{
-        path: string;
-        message: string;
-        code: string;
-      }>;
-    };
-
-    expect(artifact).toMatchObject({
-      stage: "pr-description",
-      kind: "schema_validation",
-      rawResponse: '{"title":"feat: broken"}',
-      parsedJson: {
-        title: "feat: broken",
-      },
-      normalizedJson: {
-        title: "feat: broken",
-      },
-      validationIssues: [
-        {
-          path: "body",
-          message: "Invalid input: expected string, received undefined",
-          code: "invalid_type",
-        },
-      ],
-    });
+    expect(existsSync(resolve(REPO_ROOT, artifactRelativePath))).toBe(false);
+    expect(generatePRDescription).not.toHaveBeenCalled();
     expect(spawnSync).toHaveBeenCalledWith(
       "pnpm",
       ["build"],
@@ -2744,15 +2715,15 @@ describe("Full issue run workflow", () => {
       expect(prCreateCall).toBeDefined();
       const prArgs = prCreateCall?.[1] as string[];
       expect(prArgs[prArgs.indexOf("--title") + 1]).toBe(
-        "refactor: use configured issue run defaults"
+        "Use repository config in issue runs"
       );
       expect(prArgs[prArgs.indexOf("--base") + 1]).toBe("develop");
+      expect(prArgs[prArgs.indexOf("--body") + 1]).toContain(
+        `Implements #${issueNumber}: Use repository config in issue runs.`
+      );
       expect(prArgs[prArgs.indexOf("--body") + 1]).toContain(`Closes #${issueNumber}`);
       expect(prArgs[prArgs.indexOf("--body") + 1]).toContain(
         "<!-- prs:pr-assistant:start -->"
-      );
-      expect(prArgs[prArgs.indexOf("--body") + 1]).toContain(
-        "### Reviewer checklist"
       );
     } finally {
       if (hadOriginalConfig && originalConfig !== undefined) {

@@ -66,7 +66,7 @@ describe("Issue finalize workflow", () => {
     expect(generateCommitMessage).not.toHaveBeenCalled();
   });
 
-  it("lets issue finalize review and modify the proposed commit message before committing", async () => {
+  it("lets issue finalize review and modify deterministic commit text before committing", async () => {
     process.env.OPENAI_API_KEY = "test-key";
     const { run, spawnSync, generateCommitMessage } = await loadCli({
       commitMessageResult: {
@@ -143,10 +143,7 @@ describe("Issue finalize workflow", () => {
       "feat: refine issue finalize commit message"
     );
     expect(stdout.output()).toContain("Proposed commit message");
-    expect(generateCommitMessage).toHaveBeenCalledWith(
-      expect.any(Object),
-      expect.stringContaining('diff --git a/packages/cli/src/index.ts b/packages/cli/src/index.ts')
-    );
+    expect(generateCommitMessage).not.toHaveBeenCalled();
   });
 
   it("leaves issue finalize changes uncommitted when the reviewed message is declined", async () => {

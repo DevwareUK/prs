@@ -60,7 +60,7 @@ const LAUNCH_STAGE_NOTICE_DEFINITIONS: Record<
     recommendedFirst:
       "`prs review` and the PR fix workflows before moving into full issue automation.",
     constraints:
-      "Requires local file changes to review; it uses the configured text provider when available and falls back to deterministic commit text.",
+      "Requires local file changes to review; it always uses deterministic local commit text and never calls the configured text provider.",
   },
   "issue-plan": {
     tier: "advanced",
@@ -90,7 +90,7 @@ const LAUNCH_STAGE_NOTICE_DEFINITIONS: Record<
     recommendedFirst:
       "Codex + Superpowers + GitHub audit for issue work, or `prs review`, `prs pr address-comments <pr-number>`, `prs pr fix-tests <pr-number>`, and `prs pr add-tests <pr-number>` for narrower PR work.",
     constraints:
-      'Requires a clean working tree and issue access through the configured forge; interactive runs need an available runtime CLI, while `--unattended` also needs authenticated GitHub access and `ai.runtime.type: "codex"`. Commit and PR text use the configured provider when available and deterministic fallback text otherwise.',
+      'Requires a clean working tree and issue access through the configured forge; interactive runs need an available runtime CLI, while `--unattended` also needs authenticated GitHub access and `ai.runtime.type: "codex"`. Commit and PR text are deterministic local finalization artifacts and never call the configured text provider.',
   },
   "pr-prepare-review": {
     tier: "beta",

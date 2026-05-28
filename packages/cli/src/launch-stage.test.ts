@@ -6,7 +6,8 @@ describe("formatLaunchStageNotice", () => {
     const notice = formatLaunchStageNotice("issue-finalize");
 
     expect(notice).toContain("Requires local file changes to review");
-    expect(notice).toContain("falls back to deterministic commit text");
+    expect(notice).toContain("always uses deterministic local commit text");
+    expect(notice).toContain("never calls the configured text provider");
     expect(notice).not.toContain("existing issue-run branch");
   });
 
@@ -19,13 +20,14 @@ describe("formatLaunchStageNotice", () => {
     );
   });
 
-  it("mentions skill-produced draft and fallback text behavior for advanced issue runs", () => {
+  it("mentions skill-produced draft and local finalization text behavior for advanced issue runs", () => {
     const draftNotice = formatLaunchStageNotice("issue-draft");
     const runNotice = formatLaunchStageNotice("issue-run");
 
     expect(draftNotice).toContain("completed issue draft from the active skill flow");
     expect(draftNotice).toContain("--runtime");
-    expect(runNotice).toContain("deterministic fallback text");
+    expect(runNotice).toContain("deterministic local finalization artifacts");
+    expect(runNotice).toContain("never call the configured text provider");
     expect(runNotice).toContain("authenticated GitHub access");
   });
 
