@@ -14,7 +14,7 @@ Runtime-specific behavior:
 - `prs issue <number> --unattended`, multi-issue `prs issue <number> <number> ...`, and `prs issue batch ...` require `ai.runtime.type` to be `codex`.
 - Interactive local workflows such as `prs issue refine <number>` and `prs issue <number>` use the configured runtime, with fallback to Codex when a configured non-default runtime is unavailable. PR fix commands prepare handoff artifacts for the active Codex session and do not launch another runtime. `prs issue draft --draft-file <path>` ingests a draft from the active Codex skill context and does not launch another runtime.
 - Legacy unattended issue commands launch `codex exec` only from an outer terminal or automation context. When Codex session markers are already present, prs blocks the nested launch and tells the active session to use `prs tool issue ready <issue-number> --unattended --json` instead.
-- Structured-text workflows such as `prs commit`, `prs diff`, `prs review`, issue-plan generation, commit-message generation, and PR text generation use the configured provider, defaulting to OpenAI.
+- Structured-text workflows such as `prs commit`, `prs diff`, `prs review`, and provider-backed issue-plan generation use the configured provider, defaulting to OpenAI. Codex-first issue finalization never uses the configured provider; Codex performs the repository work, and `prs` uses deterministic local commit and PR text for the CLI-owned final step.
 
 The `prs codex ...` nested launcher group is retired. From a shell, run Codex directly with the `/prs` skill request:
 
@@ -101,4 +101,4 @@ The manual `.github/workflows/issue-to-pr.yml` workflow:
 7. creates or reuses a pull request
 8. comments on the issue with the PR link
 
-The workflow requires `OPENAI_API_KEY` and uses the repository `GITHUB_TOKEN` for issue and pull request writes.
+The workflow requires `OPENAI_API_KEY` for `openai/codex-action@v1` and uses the repository `GITHUB_TOKEN` for issue and pull request writes. The final `prs issue finalize` step itself never uses a configured text provider.

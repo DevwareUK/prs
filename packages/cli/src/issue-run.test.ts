@@ -1452,10 +1452,7 @@ describe("Full issue run workflow", () => {
     process.argv = ["node", "prs", "issue", String(issueNumber), "--mode", "unattended"];
     await run();
 
-    expect(generateCommitMessage).toHaveBeenCalledWith(
-      expect.any(Object),
-      expect.stringContaining("SalesEventManagerTest.php")
-    );
+    expect(generateCommitMessage).not.toHaveBeenCalled();
     expect(
       spawnSync.mock.calls.some(
         ([command, args]) =>
@@ -1476,6 +1473,12 @@ describe("Full issue run workflow", () => {
     );
     expect(createdRunDir).toBeDefined();
     cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
+    expect(
+      readFileSync(
+        resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string, "commit-message.txt"),
+        "utf8"
+      )
+    ).toContain("feat: address issue #1513");
     const metadata = JSON.parse(
       readFileSync(
         resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string, "metadata.json"),
@@ -1489,6 +1492,235 @@ describe("Full issue run workflow", () => {
       },
     });
     expect(messages.join("\n")).toContain("Pull request: https://github.com/DevwareUK/prs/pull/1513");
+  });
+
+  it("completes an unattended Codex issue run without using provider-generated text", async () => {
+    const beforeRuns = listRunDirectories();
+    const issueNumber = 1517;
+    const branchName = "feat/issue-1517-provider-free-unattended-finalization";
+    const untrackedPath = "packages/cli/src/provider-free-finalize.ts";
+    const sessionStateDir = resolve(REPO_ROOT, ".prs", "issues", String(issueNumber));
+    const issueWorkspaceDir = resolve(
+      REPO_ROOT,
+      ".prs",
+      "issues",
+      "1517-provider-free-unattended-finalization"
+    );
+    rmSync(sessionStateDir, { recursive: true, force: true });
+    rmSync(issueWorkspaceDir, { recursive: true, force: true });
+    cleanupTargets.add(sessionStateDir);
+    cleanupTargets.add(issueWorkspaceDir);
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          title: "Provider-free unattended finalization",
+          body: "Do not require a provider after Codex has produced issue changes.",
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
+        })
+      )
+      .mockResolvedValueOnce(
+        createFetchResponse([
+          {
+            id: 8517,
+            body: "<!-- prs:issue-spec -->\nGenerated spec.",
+            html_url:
+              `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-8517`,
+            updated_at: "2026-04-26T12:30:00Z",
+          },
+          {
+            id: 1517,
+            body: "<!-- prs:issue-plan -->\nGenerated plan.",
+            html_url:
+              `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-1517`,
+            updated_at: "2026-04-26T12:31:00Z",
+          },
+        ])
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.GITHUB_TOKEN = "test-token";
+    const messages: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
+      messages.push(message === undefined ? "" : String(message));
+    });
+    let gitStatusCallCount = 0;
+
+    const {
+      run,
+      generateCommitMessage,
+      generatePRDescription,
+      generatePRAssistant,
+      spawnSync,
+    } = await loadCli({
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          gitStatusCallCount += 1;
+          return gitStatusCallCount === 1 ? "" : `?? ${untrackedPath}\n`;
+        }
+
+        if (command === "git" && args[0] === "diff" && args[1] === "--name-only") {
+          return "";
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "ls-files" &&
+          args[1] === "--others" &&
+          args[2] === "--exclude-standard"
+        ) {
+          return `${untrackedPath}\n`;
+        }
+
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/prs.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "gh" && args[0] === "auth" && args[1] === "status") {
+          return { status: 0 };
+        }
+
+        if (command === "gh" && args[0] === "issue" && args[1] === "view") {
+          return {
+            status: 1,
+            error: new Error("force API fallback"),
+          };
+        }
+
+        if (command === "git" && args[0] === "rev-parse") {
+          return { status: 1 };
+        }
+
+        if (command === "git" && args[0] === "checkout" && args[1] === "main") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "pull") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "checkout" && args[1] === "-b") {
+          return { status: 0 };
+        }
+
+        if (command === "codex" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "codex") {
+          return { status: 0 };
+        }
+
+        if (command === "pnpm" && args[0] === "--version") {
+          return { status: 0 };
+        }
+
+        if (command === "pnpm" && args[0] === "build") {
+          return { status: 0, stdout: "built\n", stderr: "" };
+        }
+
+        if (
+          command === "git" &&
+          args[0] === "diff" &&
+          args[1] === "--no-index" &&
+          args.includes(untrackedPath)
+        ) {
+          return {
+            status: 1,
+            stdout: [
+              `diff --git a/${untrackedPath} b/${untrackedPath}`,
+              "new file mode 100644",
+              "index 0000000..1111111",
+              "--- /dev/null",
+              `+++ b/${untrackedPath}`,
+              "@@ -0,0 +1,1 @@",
+              "+export const finalized = true;",
+            ].join("\n"),
+            stderr: "",
+          };
+        }
+
+        if (command === "git" && args[0] === "add") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "commit") {
+          return { status: 0 };
+        }
+
+        if (command === "git" && args[0] === "push") {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+
+        if (command === "gh" && args[0] === "pr" && args[1] === "create") {
+          return {
+            status: 0,
+            stdout: "https://github.com/DevwareUK/prs/pull/1517\n",
+            stderr: "",
+          };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.argv = ["node", "prs", "issue", String(issueNumber), "--jdi"];
+    await run();
+
+    expect(generateCommitMessage).not.toHaveBeenCalled();
+    expect(generatePRDescription).not.toHaveBeenCalled();
+    expect(generatePRAssistant).not.toHaveBeenCalled();
+    expect(
+      spawnSync.mock.calls.some(
+        ([command, args]) =>
+          command === "git" && Array.isArray(args) && args[0] === "commit"
+      )
+    ).toBe(true);
+    expect(messages.join("\n")).toContain("Pull request: https://github.com/DevwareUK/prs/pull/1517");
+    const createdRunDir = listRunDirectories().find(
+      (entry) => !beforeRuns.includes(entry) && /-issue-1517$/.test(entry)
+    );
+    expect(createdRunDir).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
+    expect(
+      readFileSync(
+        resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string, "commit-message.txt"),
+        "utf8"
+      )
+    ).toContain("feat: address issue #1517");
+    expect(
+      readFileSync(
+        resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string, "pull-request-title.txt"),
+        "utf8"
+      )
+    ).toContain("Provider-free unattended finalization");
+    expect(
+      readFileSync(
+        resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string, "pull-request-body.md"),
+        "utf8"
+      )
+    ).toContain("Closes #1517");
+    const metadata = JSON.parse(
+      readFileSync(
+        resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string, "metadata.json"),
+        "utf8"
+      )
+    ) as Record<string, unknown>;
+    expect(metadata.outcome).toMatchObject({
+      issueNumber,
+      branchName,
+      committed: true,
+      pullRequest: {
+        status: "created",
+      },
+    });
   });
 
   it("records a skipped no-changes outcome when an unattended issue run produces no changes", async () => {
@@ -2022,7 +2254,7 @@ describe("Full issue run workflow", () => {
     });
   });
 
-  it("writes a PR description diagnostic artifact during full issue runs when schema validation fails", async () => {
+  it("does not use provider PR description generation during full issue runs", async () => {
     const beforeRuns = listRunDirectories();
     const issueNumber = 147;
     const sessionStateDir = resolve(REPO_ROOT, ".prs", "issues", String(issueNumber));
@@ -2160,6 +2392,18 @@ describe("Full issue run workflow", () => {
             return { status: 0 };
           }
 
+          if (command === "git" && args[0] === "push") {
+            return { status: 0, stdout: "", stderr: "" };
+          }
+
+          if (command === "gh" && args[0] === "pr" && args[1] === "create") {
+            return {
+              status: 0,
+              stdout: "https://github.com/DevwareUK/prs/pull/1470\n",
+              stderr: "",
+            };
+          }
+
           throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
         },
       });
@@ -2190,14 +2434,8 @@ describe("Full issue run workflow", () => {
 
     process.argv = ["node", "prs", "issue", String(issueNumber)];
 
-    let caughtError: unknown;
-    try {
-      await run();
-    } catch (error: unknown) {
-      caughtError = error;
-    }
+    await run();
 
-    expect(caughtError).toBeInstanceOf(Error);
     const createdRunDir = listRunDirectories().find(
       (entry) => !beforeRuns.includes(entry) && /-issue-147$/.test(entry)
     );
@@ -2205,46 +2443,8 @@ describe("Full issue run workflow", () => {
     cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
 
     const artifactRelativePath = `.prs/runs/${createdRunDir}/pr-description-generation-error.json`;
-    expect((caughtError as Error).message).toContain(
-      `Failed to generate PR description. Model output failed PR description schema validation:`
-    );
-    expect((caughtError as Error).message).toContain(
-      `Diagnostic artifact: ${artifactRelativePath}.`
-    );
-
-    const artifact = JSON.parse(
-      readFileSync(resolve(REPO_ROOT, artifactRelativePath), "utf8")
-    ) as {
-      stage: string;
-      kind: string;
-      rawResponse: string;
-      parsedJson: Record<string, unknown>;
-      normalizedJson: Record<string, unknown>;
-      validationIssues: Array<{
-        path: string;
-        message: string;
-        code: string;
-      }>;
-    };
-
-    expect(artifact).toMatchObject({
-      stage: "pr-description",
-      kind: "schema_validation",
-      rawResponse: '{"title":"feat: broken"}',
-      parsedJson: {
-        title: "feat: broken",
-      },
-      normalizedJson: {
-        title: "feat: broken",
-      },
-      validationIssues: [
-        {
-          path: "body",
-          message: "Invalid input: expected string, received undefined",
-          code: "invalid_type",
-        },
-      ],
-    });
+    expect(existsSync(resolve(REPO_ROOT, artifactRelativePath))).toBe(false);
+    expect(generatePRDescription).not.toHaveBeenCalled();
     expect(spawnSync).toHaveBeenCalledWith(
       "pnpm",
       ["build"],
@@ -2515,15 +2715,15 @@ describe("Full issue run workflow", () => {
       expect(prCreateCall).toBeDefined();
       const prArgs = prCreateCall?.[1] as string[];
       expect(prArgs[prArgs.indexOf("--title") + 1]).toBe(
-        "refactor: use configured issue run defaults"
+        "Use repository config in issue runs"
       );
       expect(prArgs[prArgs.indexOf("--base") + 1]).toBe("develop");
+      expect(prArgs[prArgs.indexOf("--body") + 1]).toContain(
+        `Implements #${issueNumber}: Use repository config in issue runs.`
+      );
       expect(prArgs[prArgs.indexOf("--body") + 1]).toContain(`Closes #${issueNumber}`);
       expect(prArgs[prArgs.indexOf("--body") + 1]).toContain(
         "<!-- prs:pr-assistant:start -->"
-      );
-      expect(prArgs[prArgs.indexOf("--body") + 1]).toContain(
-        "### Reviewer checklist"
       );
     } finally {
       if (hadOriginalConfig && originalConfig !== undefined) {

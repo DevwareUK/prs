@@ -1097,7 +1097,7 @@ async function loadCli(options: {
       body: [
         "Generate commit and pull request authoring from the completed issue diff.",
         "",
-        "- Reuse the AI-backed commit message path for issue finalization.",
+        "- Use deterministic local commit text for issue finalization.",
         "- Generate a concise PR description before opening the pull request.",
       ].join("\n"),
     }
