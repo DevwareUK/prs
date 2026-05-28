@@ -5692,17 +5692,13 @@ async function runIssueRefineCommand(issueNumber: number): Promise<void> {
     return;
   }
 
-  const reviewedDraft = await reviewGeneratedText({
-    filePath: workspace.draftFilePath,
-    initialContent: draftContents,
-    previewHeading: "Generated refined issue draft",
-    prompt: `Apply this refinement to issue #${issueNumber} and publish managed spec/plan comments? [Y/n/m]: `,
-    emptyContentMessage: "Issue refine draft cannot be empty.",
-    editorDescription: "issue refine draft",
+  const reviewedDraft = await reviewIssueRefinementPublicationArtifacts({
+    repoRoot,
+    issueNumber,
+    workspace,
+    draftContents,
+    useCodexSuperpowers: shouldUseCodexSuperpowers,
     promptForLine,
-    validate: (content) => {
-      parseIssueDraftDocument(content);
-    },
   });
 
   if (!reviewedDraft) {
@@ -5719,6 +5715,20 @@ async function runIssueRefineCommand(issueNumber: number): Promise<void> {
     console.log(
       `Refined draft kept at ${toRepoRelativePath(repoRoot, workspace.draftFilePath)}.`
     );
+    if (shouldUseCodexSuperpowers) {
+      console.log(
+        `Issue specification kept at ${toRepoRelativePath(
+          repoRoot,
+          workspace.superpowersSpecFilePath
+        )}.`
+      );
+      console.log(
+        `Issue implementation plan kept at ${toRepoRelativePath(
+          repoRoot,
+          workspace.superpowersPlanFilePath
+        )}.`
+      );
+    }
     return;
   }
 
@@ -5748,6 +5758,91 @@ async function runIssueRefineCommand(issueNumber: number): Promise<void> {
     workspace,
     useCodexSuperpowers: shouldUseCodexSuperpowers,
   });
+}
+
+function readRequiredIssueRefineArtifact(
+  repoRoot: string,
+  filePath: string,
+  label: string
+): string {
+  if (!existsSync(filePath)) {
+    throw new Error(
+      `${label} was not written to ${toRepoRelativePath(repoRoot, filePath)}.`
+    );
+  }
+
+  const contents = readFileSync(filePath, "utf8").trim();
+  if (!contents) {
+    throw new Error(`${label} is empty: ${toRepoRelativePath(repoRoot, filePath)}`);
+  }
+
+  return contents;
+}
+
+async function reviewIssueRefinementPublicationArtifacts(options: {
+  repoRoot: string;
+  issueNumber: number;
+  workspace: IssueRefineWorkspace;
+  draftContents: string;
+  useCodexSuperpowers: boolean;
+  promptForLine(prompt: string): Promise<string>;
+}): Promise<ReviewedGeneratedText | null> {
+  const reviewedDraft = await reviewGeneratedText({
+    filePath: options.workspace.draftFilePath,
+    initialContent: options.draftContents,
+    previewHeading: "Generated refined issue draft",
+    prompt: `Apply this refinement to issue #${options.issueNumber} and review managed spec/plan comments? [Y/n/m]: `,
+    emptyContentMessage: "Issue refine draft cannot be empty.",
+    editorDescription: "issue refine draft",
+    promptForLine: options.promptForLine,
+    validate: (content) => {
+      parseIssueDraftDocument(content);
+    },
+  });
+
+  if (!reviewedDraft || !options.useCodexSuperpowers) {
+    return reviewedDraft;
+  }
+
+  const specContents = readRequiredIssueRefineArtifact(
+    options.repoRoot,
+    options.workspace.superpowersSpecFilePath,
+    "Issue specification"
+  );
+  const reviewedSpec = await reviewGeneratedText({
+    filePath: options.workspace.superpowersSpecFilePath,
+    initialContent: specContents,
+    previewHeading: "Generated issue specification",
+    prompt: `Publish this issue specification comment on issue #${options.issueNumber}? [Y/n/m]: `,
+    emptyContentMessage: "Issue specification cannot be empty.",
+    editorDescription: "issue specification",
+    promptForLine: options.promptForLine,
+  });
+
+  if (!reviewedSpec) {
+    return null;
+  }
+
+  const planContents = readRequiredIssueRefineArtifact(
+    options.repoRoot,
+    options.workspace.superpowersPlanFilePath,
+    "Issue implementation plan"
+  );
+  const reviewedPlan = await reviewGeneratedText({
+    filePath: options.workspace.superpowersPlanFilePath,
+    initialContent: planContents,
+    previewHeading: "Generated issue implementation plan",
+    prompt: `Publish this issue implementation plan comment on issue #${options.issueNumber}? [Y/n/m]: `,
+    emptyContentMessage: "Issue implementation plan cannot be empty.",
+    editorDescription: "issue implementation plan",
+    promptForLine: options.promptForLine,
+  });
+
+  if (!reviewedPlan) {
+    return null;
+  }
+
+  return reviewedDraft;
 }
 
 type IssuePlanResolutionMode = "explicit-plan-command" | "execution-preflight";
