@@ -497,7 +497,7 @@ describe("Issue refine workflow", () => {
       ),
       async () => {
         const { run } = await loadCli({
-          readlineAnswers: ["y", "Make it implementation ready.", "y"],
+          readlineAnswers: ["y", "Make it implementation ready.", "y", "y", "y"],
           execFileSyncImpl: (command, args) => {
             if (command === "git" && args[0] === "remote") {
               return "git@github.com:DevwareUK/prs.git\n";
@@ -599,6 +599,127 @@ describe("Issue refine workflow", () => {
     expect(commentBodies).toContain(
       "<!-- prs:issue-refinement-complete -->\nRefinement is complete. The settled specification and implementation plan have been attached to this issue in managed comments, so development can start from those artifacts.\n"
     );
+  });
+
+  it("keeps Superpowers refinement artifacts on disk when spec approval is declined", async () => {
+    const beforeRuns = listRunDirectories();
+    const issueNumber = 159;
+    const messages: string[] = [];
+    createMockCodexSuperpowersHome();
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url.endsWith(`/issues/${issueNumber}`) && init?.method === "PATCH") {
+        throw new Error("Issue refinement should not update GitHub before artifact approval.");
+      }
+
+      if (url.endsWith(`/issues/${issueNumber}`)) {
+        return createFetchResponse({
+          title: "Review generated refinement artifacts",
+          body: "<!-- prs:managed-issue -->\n\nOriginal managed issue body.",
+          html_url: getRepositoryIssueUrl(issueNumber),
+        });
+      }
+
+      if (url.includes(`/issues/${issueNumber}/comments?`)) {
+        return createFetchResponse([]);
+      }
+
+      if (url.endsWith(`/issues/${issueNumber}/comments`) && init?.method === "POST") {
+        throw new Error("Issue refinement should not publish comments before spec approval.");
+      }
+
+      throw new Error(`Unexpected fetch call: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
+      messages.push(String(message ?? ""));
+    });
+
+    await withRepositoryConfig(
+      JSON.stringify(
+        {
+          ai: {
+            issue: {
+              useCodexSuperpowers: true,
+            },
+          },
+        },
+        null,
+        2
+      ),
+      async () => {
+        const { run } = await loadCli({
+          readlineAnswers: ["n", "y", "n"],
+          execFileSyncImpl: (command, args) => {
+            if (command === "git" && args[0] === "remote") {
+              return "git@github.com:DevwareUK/prs.git\n";
+            }
+
+            throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+          },
+          spawnSyncImpl: (command, args) => {
+            if (command === "gh" && args[0] === "--version") {
+              return { status: 1, error: new Error("gh is unavailable") };
+            }
+
+            if (command === "codex" && args[0] === "--version") {
+              return { status: 0 };
+            }
+
+            if (command === "codex") {
+              const { metadata, runDir } = readLatestRunMetadata();
+              writeFileSync(
+                resolve(REPO_ROOT, metadata.draftFile as string),
+                "# Review generated refinement artifacts\n\n## Summary\nRefined body.\n",
+                "utf8"
+              );
+              writeFileSync(
+                resolve(REPO_ROOT, metadata.runDir as string, "superpowers-spec.md"),
+                "## Settled Specification\n\nRefined spec content.\n",
+                "utf8"
+              );
+              writeFileSync(
+                resolve(REPO_ROOT, metadata.runDir as string, "superpowers-plan.md"),
+                "## Implementation Plan\n\n- Implement the refined behavior.\n",
+                "utf8"
+              );
+              cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", runDir));
+              return { status: 0 };
+            }
+
+            throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+          },
+        });
+
+        process.env.GH_TOKEN = "";
+        process.env.GITHUB_TOKEN = "test-token";
+        process.argv = ["node", "prs", "issue", "refine", String(issueNumber)];
+        await run();
+      }
+    );
+
+    const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
+    expect(createdRunDir).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "issues", String(issueNumber)));
+
+    expect(messages.join("\n")).toContain(
+      `Issue specification kept at .prs/runs/${createdRunDir}/superpowers-spec.md.`
+    );
+    expect(
+      JSON.parse(
+        readFileSync(getIssueRefineSessionStateFilePath(REPO_ROOT, issueNumber), "utf8")
+      )
+    ).toMatchObject({
+      completionMode: "kept-on-disk",
+    });
+    const commentCalls = fetchMock.mock.calls.filter(
+      ([input, init]) =>
+        String(input).endsWith(`/issues/${issueNumber}/comments`) &&
+        (init as RequestInit | undefined)?.method === "POST"
+    );
+    expect(commentCalls).toHaveLength(0);
   });
 
   it("resumes the saved Codex issue refine session when it is still tracked", async () => {

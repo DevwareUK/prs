@@ -165,7 +165,10 @@ describe("managed prs Codex skills", () => {
     expect(issueMarkdown).toContain("use Superpowers brainstorming through GitHub issue comments");
     expect(issueMarkdown).toContain("preserve the original issue body");
     expect(issueMarkdown).toContain("post one normal GitHub issue comment containing all currently blocking high-value questions");
-    expect(issueMarkdown).toContain("publish or update the managed `<!-- prs:issue-spec -->` and `<!-- prs:issue-plan -->` comments");
+    expect(issueMarkdown).toContain(
+      "present the proposed managed `<!-- prs:issue-spec -->` and `<!-- prs:issue-plan -->` comment bodies for approval"
+    );
+    expect(issueMarkdown).toContain("keep the artifacts local and stop without posting them");
     expect(issueMarkdown).toContain("never create linked issues from this refinement flow");
     expect(issueMarkdown).toContain("/prs:issue <number> --unattended");
     expect(issueMarkdown).toContain(
