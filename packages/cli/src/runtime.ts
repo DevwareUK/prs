@@ -69,6 +69,11 @@ type CodexSessionRecord = {
 const DEFAULT_RUNTIME_TYPE: InteractiveRuntimeType = "codex";
 const CODEX_SANDBOX_MODE = "workspace-write";
 const CODEX_APPROVAL_POLICY = "on-request";
+const NESTED_CODEX_MARKERS = [
+  "CODEX_SESSION_ID",
+  "CODEX_SANDBOX",
+  "CODEX_WORKSPACE_ID",
+] as const;
 
 function appendRunLog(
   outputLogPath: string,
@@ -158,6 +163,10 @@ function canRunCommand(command: string, args: string[] = ["--version"]): boolean
   return !result.error && result.status === 0;
 }
 
+function findNestedCodexMarker(env: NodeJS.ProcessEnv): string | undefined {
+  return NESTED_CODEX_MARKERS.find((name) => env[name]?.trim());
+}
+
 export function getInteractiveRuntimeLaunchBlocker(
   env: NodeJS.ProcessEnv = process.env,
   stdio: {
@@ -181,17 +190,27 @@ export function getInteractiveRuntimeLaunchBlocker(
     return "Legacy interactive runtime launch requires an interactive terminal. Use the skill-first `prs tool ... --json` preparation command instead.";
   }
 
-  const nestedCodexMarkers = [
-    "CODEX_SESSION_ID",
-    "CODEX_SANDBOX",
-    "CODEX_WORKSPACE_ID",
-  ];
-  const marker = nestedCodexMarkers.find((name) => env[name]?.trim());
+  const marker = findNestedCodexMarker(env);
   if (marker) {
     return `Legacy interactive runtime launch is disabled inside an active Codex session (${marker} is set). Use the skill-first \`prs tool ... --json\` preparation command instead.`;
   }
 
   return undefined;
+}
+
+export function getUnattendedRuntimeLaunchBlocker(
+  env: NodeJS.ProcessEnv = process.env
+): string | undefined {
+  if (env.VITEST === "true" || env.NODE_ENV === "test") {
+    return undefined;
+  }
+
+  const marker = findNestedCodexMarker(env);
+  if (!marker) {
+    return undefined;
+  }
+
+  return `Legacy unattended runtime launch is disabled inside an active Codex session (${marker} is set). Use \`prs tool issue ready <number> --unattended --json\` from the active Codex session instead.`;
 }
 
 function getCodexHome(): string {
@@ -415,6 +434,11 @@ function createCodexRuntime(): InteractiveRuntime {
       };
     },
     launchUnattended(repoRoot, workspace, options = {}) {
+      const launchBlocker = getUnattendedRuntimeLaunchBlocker();
+      if (launchBlocker) {
+        throw new Error(launchBlocker);
+      }
+
       const prompt = `Read and follow the instructions in ${toRepoRelativePath(
         repoRoot,
         workspace.promptFilePath

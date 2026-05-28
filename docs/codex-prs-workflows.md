@@ -13,6 +13,7 @@ Runtime-specific behavior:
 - `prs pr resolve-conflicts <pr-number>` always requires `codex` on `PATH` for guided merge-conflict resolution, even though Codex only opens when the base merge conflicts.
 - `prs issue <number> --unattended`, multi-issue `prs issue <number> <number> ...`, and `prs issue batch ...` require `ai.runtime.type` to be `codex`.
 - Interactive local workflows such as `prs issue refine <number>` and `prs issue <number>` use the configured runtime, with fallback to Codex when a configured non-default runtime is unavailable. PR fix commands prepare handoff artifacts for the active Codex session and do not launch another runtime. `prs issue draft --draft-file <path>` ingests a draft from the active Codex skill context and does not launch another runtime.
+- Legacy unattended issue commands launch `codex exec` only from an outer terminal or automation context. When Codex session markers are already present, prs blocks the nested launch and tells the active session to use `prs tool issue ready <issue-number> --unattended --json` instead.
 - Structured-text workflows such as `prs commit`, `prs diff`, `prs review`, issue-plan generation, commit-message generation, and PR text generation use the configured provider, defaulting to OpenAI.
 
 The `prs codex ...` nested launcher group is retired. From a shell, run Codex directly with the `/prs` skill request:
@@ -58,7 +59,7 @@ When the Codex skill alias `/prs issue <number> --unattended` is requested, trea
 5. run the configured verification command
 6. commit, push, and open or update a pull request
 
-For one issue, the built-in `prs issue <number> --unattended` path prepares a branch, launches Codex non-interactively, verifies, commits, pushes, and opens a pull request. For multiple issues, `prs issue <number> <number> ...` and `prs issue batch ...` create one isolated worktree per issue from the configured updated `baseBranch`.
+For one issue, the built-in `prs issue <number> --unattended` path prepares a branch, launches Codex non-interactively, verifies, commits, pushes, and opens a pull request when it is run from an outer terminal or automation context. From inside an active Codex session, use `prs tool issue ready <number> --unattended --json` and continue the implementation in that session instead of launching the built-in unattended path. For multiple issues, `prs issue <number> <number> ...` and `prs issue batch ...` create one isolated worktree per issue from the configured updated `baseBranch`.
 
 GitHub-visible output should match that mode split. Manual/guided output is treated as developer-approved and does not include automation framing. Unattended output can be posted directly, but managed issue comments, audit comments, local PR review comments, and test suggestion comments include a visible `prs automation note` after any hidden marker.
 

@@ -148,7 +148,7 @@ Supporting commands:
 - `prs commit`
 - `prs diff`
 
-The old `prs codex ...` nested launcher group has been retired. To start an agentic `/prs` workflow from a shell, run Codex directly in the repository, for example `codex -C <repo> "/prs issue <number> refine"` or `codex exec -C <repo> "/prs pr <number> review"`. Inside an active Codex session, use the deterministic `prs tool ... --json` commands for handoff data.
+The old `prs codex ...` nested launcher group has been retired. To start an agentic `/prs` workflow from a shell, run Codex directly in the repository, for example `codex -C <repo> "/prs issue <number> refine"` or `codex exec -C <repo> "/prs pr <number> review"`. Inside an active Codex session, use the deterministic `prs tool ... --json` commands for handoff data. Legacy runtime-launching commands that would start a child Codex process are blocked when Codex session markers are present; for unattended issue work, use `prs tool issue ready <issue-number> --unattended --json` and continue in the active session.
 
 `prs tool issue list [--actionable] --json` and `prs tool pr list [--actionable] --json` include a `url` field for every returned issue or pull request. The interactive `/prs issue` and `/prs pr` entrypoints use those list tools and should show each returned item with its number, title, and GitHub URL before offering follow-up actions.
 
