@@ -32,6 +32,7 @@ import type { ResolvedRepositoryConfigType } from "@prs/contracts";
 import {
   applyGitHubOutputFraming,
   type GitHubOutputMode,
+  includesManagedMarker,
   ISSUE_PLAN_COMMENT_MARKER,
   ISSUE_SPEC_COMMENT_MARKER,
   IssueDraftSet,
@@ -984,9 +985,7 @@ function findLatestIssueSpecComment(
   comments: RepositoryComment[]
 ): RepositoryComment | undefined {
   return comments
-    .filter((comment) =>
-      comment.body.trimStart().startsWith(ISSUE_SPEC_COMMENT_MARKER)
-    )
+    .filter((comment) => includesManagedMarker(comment.body, [ISSUE_SPEC_COMMENT_MARKER]))
     .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0];
 }
 
@@ -994,9 +993,7 @@ function findLatestIssuePlanComment(
   comments: RepositoryComment[]
 ): IssuePlanComment | undefined {
   const comment = comments
-    .filter((candidate) =>
-      candidate.body.trimStart().startsWith(ISSUE_PLAN_COMMENT_MARKER)
-    )
+    .filter((candidate) => includesManagedMarker(candidate.body, [ISSUE_PLAN_COMMENT_MARKER]))
     .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0];
 
   if (!comment) {

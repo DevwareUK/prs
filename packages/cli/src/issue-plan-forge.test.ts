@@ -429,6 +429,61 @@ describe("Issue plan and GitHub forge workflows", () => {
     );
   });
 
+  it("finds issue plan comments nested inside audit comments", async () => {
+    const issueNumber = 255;
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      createFetchResponse([
+        {
+          id: 4001,
+          body: "Plain discussion comment.",
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-4001`,
+          created_at: "2026-05-28T19:00:00Z",
+          updated_at: "2026-05-28T19:00:00Z",
+          user: {
+            login: "alice",
+            type: "User",
+          },
+        },
+        {
+          id: 4002,
+          body: [
+            "<!-- prs:audit -->",
+            "",
+            "# Issue #255 audit",
+            "",
+            "<!-- prs:audit:plan:start -->",
+            "## plan",
+            "",
+            "<!-- prs:issue-plan -->",
+            "# Implementation plan",
+            "<!-- prs:audit:plan:end -->",
+          ].join("\n"),
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-4002`,
+          created_at: "2026-05-28T19:05:00Z",
+          updated_at: "2026-05-28T19:10:00Z",
+          user: {
+            login: "prs-bot",
+            type: "Bot",
+          },
+        },
+      ])
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    process.env.GH_TOKEN = "";
+    process.env.GITHUB_TOKEN = "test-token";
+
+    const { createGitHubRepositoryForge } = await loadGitHubForge();
+    const forge = createGitHubRepositoryForge(REPO_ROOT);
+
+    await expect((forge as any).fetchIssuePlanComment(issueNumber)).resolves.toMatchObject({
+      id: 4002,
+      url: `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-4002`,
+      updatedAt: "2026-05-28T19:10:00Z",
+      body: expect.stringContaining("<!-- prs:issue-plan -->"),
+    });
+  });
+
   it("fetches pull request review threads with lifecycle state through GraphQL", async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(
       createFetchResponse({

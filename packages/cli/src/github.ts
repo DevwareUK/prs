@@ -22,7 +22,7 @@ import {
   resolveGitHubCli,
   resolveGitHubToken,
 } from "./github-auth";
-import { ISSUE_PLAN_COMMENT_MARKER } from "@prs/contracts";
+import { includesManagedMarker, ISSUE_PLAN_COMMENT_MARKER } from "@prs/contracts";
 
 function runCommand(
   command: string,
@@ -1154,9 +1154,7 @@ class GitHubRepositoryForge implements RepositoryForge {
     const comments = await listIssueComments(owner, repo, issueNumber, this.repoRoot);
 
     return comments
-      .filter((comment) =>
-        comment.body.trimStart().startsWith(ISSUE_PLAN_COMMENT_MARKER)
-      )
+      .filter((comment) => includesManagedMarker(comment.body, [ISSUE_PLAN_COMMENT_MARKER]))
       .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0];
   }
 

@@ -4,8 +4,7 @@ import {
   type ActionableIssue,
 } from "./actionable-github";
 import { formatGitHubAuthDiagnostics, resolveGitHubToken } from "./github-auth";
-
-const ISSUE_PLAN_MARKERS = ["<!-- prs:issue-plan -->"];
+import { includesManagedMarker, ISSUE_PLAN_COMMENT_MARKER } from "@prs/contracts";
 
 export type IssueListToolResult =
   | {
@@ -100,9 +99,7 @@ function isCanonicalGitHubIssueUrl(value: string | undefined): value is string {
 
 function issueHasPlanComment(comments: Array<{ body?: string }>): boolean {
   return comments.some((comment) =>
-    ISSUE_PLAN_MARKERS.some((marker) =>
-      (comment.body ?? "").trimStart().startsWith(marker)
-    )
+    includesManagedMarker(comment.body ?? "", [ISSUE_PLAN_COMMENT_MARKER])
   );
 }
 
