@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS,
+  DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS,
   DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
   DEFAULT_REPOSITORY_AI_PROVIDER_TYPE,
   DEFAULT_REPOSITORY_AI_RUNTIME_TYPE,
@@ -18,6 +19,9 @@ describe("resolveRepositoryConfig", () => {
 
     expect(resolved.baseBranch).toBe("develop");
     expect(resolved.ai).toEqual({
+      codex: {
+        preferSubagents: DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS,
+      },
       issue: {
         useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
       },
@@ -48,6 +52,9 @@ describe("resolveRepositoryConfig", () => {
     });
 
     expect(resolved.ai).toEqual({
+      codex: {
+        preferSubagents: DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS,
+      },
       issue: {
         useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
       },
@@ -93,6 +100,9 @@ describe("resolveRepositoryConfig", () => {
         },
       }).ai
     ).toEqual({
+      codex: {
+        preferSubagents: DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS,
+      },
       issue: {
         useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
       },
@@ -118,6 +128,9 @@ describe("resolveRepositoryConfig", () => {
         },
       }).ai
     ).toEqual({
+      codex: {
+        preferSubagents: DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS,
+      },
       issue: {
         useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
       },
@@ -132,6 +145,24 @@ describe("resolveRepositoryConfig", () => {
         model: "gpt-5-mini",
         baseUrl: "https://example.test/v1",
       },
+    });
+  });
+
+  it("defaults and preserves ai.codex.preferSubagents", () => {
+    expect(resolveRepositoryConfig().ai.codex).toEqual({
+      preferSubagents: DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS,
+    });
+
+    expect(
+      resolveRepositoryConfig({
+        ai: {
+          codex: {
+            preferSubagents: false,
+          },
+        },
+      }).ai.codex
+    ).toEqual({
+      preferSubagents: false,
     });
   });
 

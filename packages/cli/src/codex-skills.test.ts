@@ -138,6 +138,11 @@ describe("managed prs Codex skills", () => {
     expect(markdown).toContain("node packages/cli/dist/index.js <args>");
     expect(markdown).toContain("do not call that an actionable-for-me list");
     expect(markdown).toContain("Existing managed skills are backing behaviors");
+    expect(markdown).toContain("Read `.prs/config.json` before starting prs workflow work.");
+    expect(markdown).toContain("ai.codex.preferSubagents");
+    expect(markdown).toContain(
+      "standing request to delegate suitable independent tasks to subagents"
+    );
   });
 
   it("renders top-level alias skills for the shorter /prs colon commands", () => {

@@ -8,6 +8,8 @@ The recommended launch path remains GitHub forge, OpenAI provider, and Codex run
 
 Codex is the default interactive runtime when `ai.runtime.type` is unset.
 
+Managed `/prs` Codex skills also read `ai.codex.preferSubagents` from the active repository `.prs/config.json`. The setting defaults to `true`; when it is enabled or omitted, that repository config is treated as the user's standing request to delegate suitable independent tasks to subagents when the subagent tool is available. Setting it to `false` opts the repository out. Subagents are for independent exploration, implementation, review, or verification work; approval gates, sandbox/network restrictions, final coordination, and final verification stay in the main Codex session.
+
 Runtime-specific behavior:
 
 - `prs pr resolve-conflicts <pr-number>` always requires `codex` on `PATH` for guided merge-conflict resolution, even though Codex only opens when the base merge conflicts.

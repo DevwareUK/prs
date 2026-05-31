@@ -79,6 +79,36 @@ describe("repository config schema", () => {
     ).toThrow();
   });
 
+  it("accepts ai.codex.preferSubagents as a boolean", () => {
+    expect(
+      RepositoryConfig.parse({
+        ai: {
+          codex: {
+            preferSubagents: false,
+          },
+        },
+      })
+    ).toEqual({
+      ai: {
+        codex: {
+          preferSubagents: false,
+        },
+      },
+    });
+  });
+
+  it("requires ai.codex.preferSubagents to be a boolean when present", () => {
+    expect(() =>
+      RepositoryConfig.parse({
+        ai: {
+          codex: {
+            preferSubagents: "yes",
+          },
+        },
+      })
+    ).toThrow();
+  });
+
   it("accepts ai.issueDraft.useCodexSuperpowers as a boolean", () => {
     expect(
       RepositoryConfig.parse({
@@ -169,6 +199,9 @@ describe("repository config schema", () => {
     expect(() =>
       ResolvedRepositoryConfig.parse({
         ai: {
+          codex: {
+            preferSubagents: true,
+          },
           issueDraft: {
             useCodexSuperpowers: false,
           },
@@ -187,6 +220,36 @@ describe("repository config schema", () => {
         forge: {
           type: "github",
         },
+      })
+    ).toThrow();
+  });
+
+  it("requires resolved ai.codex.preferSubagents to be present", () => {
+    expect(() =>
+      ResolvedRepositoryConfig.parse({
+        ai: {
+          issue: {
+            useCodexSuperpowers: false,
+          },
+          issueDraft: {
+            useCodexSuperpowers: false,
+          },
+          runtime: {
+            type: "codex",
+          },
+          provider: {
+            type: "openai",
+          },
+        },
+        aiContext: {
+          excludePaths: [],
+        },
+        baseBranch: "main",
+        buildCommand: ["pnpm", "build"],
+        forge: {
+          type: "github",
+        },
+        githubActions: {},
       })
     ).toThrow();
   });

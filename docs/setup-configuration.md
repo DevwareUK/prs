@@ -43,7 +43,7 @@ cd /path/to/your-repo
 prs setup
 ```
 
-`prs setup` detects the repository root, suggests repo-aware defaults for the base branch, verification command, forge, Codex-first runtime, the Codex-only `ai.issue.useCodexSuperpowers` flag, and extra AI exclusions, then offers a fast "use the recommended setup" confirmation path. It writes setup-managed `.prs/config.json` and `.prs/.gitignore`, can optionally add a minimal `AGENTS.md` scaffold for repo-specific agent guidance, and for GitHub repositories asks which recommended PR-focused workflows should be enabled under `.github/workflows/prs-*.yml`. Enabled managed workflows are installed or updated; disabled prs-managed workflow files are removed so they do not keep running. Unmanaged workflow files with the same names are left untouched. When setup cannot determine a value confidently, it prints an explicit warning before asking you to confirm or replace the suggestion.
+`prs setup` detects the repository root, suggests repo-aware defaults for the base branch, verification command, forge, Codex-first runtime, the Codex-only `ai.issue.useCodexSuperpowers` flag, the default-on `ai.codex.preferSubagents` flag, and extra AI exclusions, then offers a fast "use the recommended setup" confirmation path. It writes setup-managed `.prs/config.json` and `.prs/.gitignore`, can optionally add a minimal `AGENTS.md` scaffold for repo-specific agent guidance, and for GitHub repositories asks which recommended PR-focused workflows should be enabled under `.github/workflows/prs-*.yml`. Enabled managed workflows are installed or updated; disabled prs-managed workflow files are removed so they do not keep running. Unmanaged workflow files with the same names are left untouched. When setup cannot determine a value confidently, it prints an explicit warning before asking you to confirm or replace the suggestion.
 
 Setup leaves the repository root `.gitignore` unchanged during normal setup. If an existing root ignore pattern such as `.prs/` prevents `.prs/config.json` and `.prs/.gitignore` from being tracked, setup prints an actionable warning and leaves that repository policy for you to narrow intentionally.
 
@@ -116,6 +116,9 @@ Optional repository-specific defaults live in `.prs/config.json`. `prs setup` ca
 ```json
 {
   "ai": {
+    "codex": {
+      "preferSubagents": true
+    },
     "issue": {
       "useCodexSuperpowers": false
     },
@@ -162,6 +165,7 @@ Recommended first configuration: leave `ai.provider.type` unset so it defaults t
 
 Supported fields:
 
+- `ai.codex.preferSubagents`: repository default for managed `/prs` Codex skills. When `true` or omitted, the active repository config is treated as the user's standing request to delegate suitable independent exploration, implementation, review, or verification tasks to subagents when the subagent tool is available. Set it to `false` to opt the repository out. Approval gates, sandbox/network restrictions, final coordination, and final verification remain in the main Codex session. Default: `true`.
 - `ai.runtime.type`: interactive runtime used by `prs issue draft`, `prs issue refine <number>`, and local `prs issue <number>`. PR fix commands prepare artifacts for the active session and do not use this runtime setting. Supported values: `"codex"` and `"claude-code"`. Default: `"codex"`.
 - `ai.issue.useCodexSuperpowers`: repository default for Superpowers-backed issue draft, refine, and plan workflows. When `true`, `prs issue draft`, `prs issue refine <number>`, and `prs issue plan <number>` use Codex Superpowers-specific instructions if the launched or selected runtime is Codex and Superpowers is available in the current Codex installation. Final single issue drafts still use the normal `.prs/issues/` or refine-run draft paths, optional multi-issue draft sets use run-local draft files plus `issue-set.json`, and intermediate Superpowers spec and plan artifacts stay inside the current `.prs/runs/<timestamp>-issue-draft/`, `.prs/runs/<timestamp>-issue-refine-<number>/`, or `.prs/runs/<timestamp>-issue-plan-<number>/` directory. `prs setup` detects local Codex Superpowers availability and writes this preferred flag automatically. Default: `false`.
 - `ai.issueDraft.useCodexSuperpowers`: backward-compatible legacy input for repositories that already configured Superpowers-backed issue drafting. `ai.issue.useCodexSuperpowers` takes precedence when both settings are present.

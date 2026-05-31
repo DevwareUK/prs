@@ -1412,6 +1412,7 @@ async function loadCli(options: {
     const prReviewRender = await import("../../core/src/pr-review-render");
 
     return {
+    DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS: true,
     DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS,
     DEFAULT_REPOSITORY_BASE_BRANCH: "main",
     DEFAULT_REPOSITORY_BUILD_COMMAND: ["pnpm", "build"],
@@ -1436,6 +1437,7 @@ async function loadCli(options: {
     resolveRepositoryConfig: vi.fn((config?: {
       ai?: {
         runtime?: { type?: "codex" | "claude-code" };
+        codex?: { preferSubagents?: boolean };
         issue?: { useCodexSuperpowers?: boolean };
         issueDraft?: { useCodexSuperpowers?: boolean };
         provider?:
@@ -1448,6 +1450,9 @@ async function loadCli(options: {
       forge?: { type?: "github" | "none" };
     }) => ({
       ai: {
+        codex: {
+          preferSubagents: config?.ai?.codex?.preferSubagents ?? true,
+        },
         issue: {
           useCodexSuperpowers:
             config?.ai?.issue?.useCodexSuperpowers ??

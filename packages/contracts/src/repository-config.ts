@@ -34,6 +34,12 @@ export const RepositoryAiRuntimeConfig = z.discriminatedUnion("type", [
 
 export type RepositoryAiRuntimeConfigType = z.infer<typeof RepositoryAiRuntimeConfig>;
 
+export const RepositoryAiCodexConfig = z.object({
+  preferSubagents: z.boolean().optional(),
+});
+
+export type RepositoryAiCodexConfigType = z.infer<typeof RepositoryAiCodexConfig>;
+
 export const RepositoryAiIssueDraftConfig = z.object({
   useCodexSuperpowers: z.boolean().optional(),
 });
@@ -85,6 +91,7 @@ export const RepositoryAiProviderConfig = z.discriminatedUnion("type", [
 export type RepositoryAiProviderConfigType = z.infer<typeof RepositoryAiProviderConfig>;
 
 export const RepositoryAiConfig = z.object({
+  codex: RepositoryAiCodexConfig.optional(),
   issue: RepositoryAiIssueConfig.optional(),
   issueDraft: RepositoryAiIssueDraftConfig.optional(),
   runtime: RepositoryAiRuntimeConfig.optional(),
@@ -139,6 +146,9 @@ export type RepositoryConfigType = z.infer<typeof RepositoryConfig>;
 
 export const ResolvedRepositoryConfig = z.object({
   ai: z.object({
+    codex: z.object({
+      preferSubagents: z.boolean(),
+    }),
     issue: z.object({
       useCodexSuperpowers: z.boolean(),
     }),
