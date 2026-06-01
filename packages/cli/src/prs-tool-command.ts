@@ -7,6 +7,7 @@ export type PrsToolCommand =
       issueSetFilePath?: string;
       runDir?: string;
       planFilePath?: string;
+      mediaManifestFilePath?: string;
       labels: string[];
       forcePrsManaged: boolean;
       json: boolean;
@@ -36,7 +37,7 @@ export function renderPrsToolCommandHelp(): string {
     "  prs tool issue list [--actionable] --json",
     "  prs tool issue ready <issue-number> [--unattended|--auto|--jdi] --json",
     "  prs tool issue create (--draft-file <path>|--issue-set <path>) --json",
-    "                        [--run-dir <path>] [--plan-file <path>]",
+    "                        [--run-dir <path>] [--plan-file <path>] [--media-manifest <path>]",
     "                        [--label <name>] [--labels <a,b>]",
     "                        [--force-prs-managed]",
     "  prs tool pr list [--actionable] --json",
@@ -130,6 +131,7 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
       let issueSetFilePath: string | undefined;
       let runDir: string | undefined;
       let planFilePath: string | undefined;
+      let mediaManifestFilePath: string | undefined;
       const labels = new Set<string>();
       let forcePrsManaged = false;
       let json = false;
@@ -203,6 +205,20 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
           continue;
         }
 
+        if (rawArg === "--media-manifest") {
+          mediaManifestFilePath = optionArgs[index + 1];
+          if (!mediaManifestFilePath) {
+            throw new Error(`Missing value for --media-manifest. ${renderPrsToolCommandHelp()}`);
+          }
+          index += 1;
+          continue;
+        }
+
+        if (rawArg.startsWith("--media-manifest=")) {
+          mediaManifestFilePath = rawArg.slice("--media-manifest=".length);
+          continue;
+        }
+
         if (rawArg === "--label") {
           const label = optionArgs[index + 1]?.trim();
           if (!label) {
@@ -256,6 +272,7 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
         issueSetFilePath,
         runDir,
         planFilePath,
+        mediaManifestFilePath,
         labels: [...labels],
         forcePrsManaged,
         json: true,

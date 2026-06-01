@@ -52,6 +52,11 @@ import {
   type LaunchStageNoticeId,
 } from "./launch-stage";
 import {
+  appendMediaEvidenceSection,
+  loadMediaEvidenceManifest,
+  writeMediaEvidenceFile,
+} from "./media-evidence";
+import {
   CODEX_RETIRED_MESSAGE,
   parseCodexCommandArgs,
   type CodexCommandOptions,
@@ -172,6 +177,7 @@ type IssueDraftWorkspace = {
   runDir: string;
   draftFilePath: string;
   issueSetFilePath: string;
+  mediaEvidenceFilePath: string;
   promptFilePath: string;
   metadataFilePath: string;
   outputLogPath: string;
@@ -351,7 +357,7 @@ const TOP_LEVEL_HELP = [
   "  prs review tests [--top <count>]",
   "",
   "Advanced:",
-  "  prs issue draft --draft-file <path>",
+  "  prs issue draft --draft-file <path> [--media-manifest <path>]",
   "  prs issue refine <number>",
   "  prs issue plan <number> [--refresh]",
   "  prs issue <number> [--unattended|--auto|--jdi|--mode <interactive|unattended>]",
@@ -375,7 +381,7 @@ const TOP_LEVEL_HELP = [
   "  prs update skills",
   "  prs tool issue list [--actionable] --json",
   "  prs tool issue ready <issue-number> [--unattended|--auto|--jdi] --json",
-  "  prs tool issue create (--draft-file <path>|--issue-set <path>) --json",
+  "  prs tool issue create (--draft-file <path>|--issue-set <path>) --json [--media-manifest <path>]",
   "  prs tool pr list [--actionable] --json",
   "  prs tool pr ready <pr-number> [--unattended|--auto|--jdi] --json",
   "  prs tool pr review <pr-number> --json",
@@ -387,7 +393,7 @@ const TOP_LEVEL_HELP = [
   "  prs tool pr add-tests <pr-number> [--selection <value>] --json",
   "  prs test-backlog [--top <count>]",
   "  prs feature-backlog [repo-path]",
-  "  prs audit publish (--issue <number>|--pr <number>) --file <path> --section <name> [--local-run <path>]",
+  "  prs audit publish (--issue <number>|--pr <number>) --file <path> --section <name> [--local-run <path>] [--media-manifest <path>]",
   "  prs commit",
   "  prs diff",
   "",
@@ -1461,6 +1467,7 @@ function createIssueDraftWorkspace(repoRoot: string): IssueDraftWorkspace {
     runDir,
     draftFilePath: resolve(issueDir, `issue-draft-${timestamp}.md`),
     issueSetFilePath: resolve(runDir, "issue-set.json"),
+    mediaEvidenceFilePath: resolve(runDir, "media-evidence.json"),
     promptFilePath: resolve(runDir, "prompt.md"),
     metadataFilePath: resolve(runDir, "metadata.json"),
     outputLogPath: resolve(runDir, "output.log"),
@@ -1642,6 +1649,7 @@ function readCallerInputFile(repoRoot: string, inputPath: string, label: string)
 function buildCallerIssueDraftPrompt(input: {
   roughIdea: string;
   contextEntries: { source: string; content: string }[];
+  mediaEvidenceMarkdown?: string;
   draftContents?: string;
   issueSetFilePath?: string;
   superpowersArtifacts: { label: string; source: string; content: string }[];
@@ -1661,6 +1669,9 @@ function buildCallerIssueDraftPrompt(input: {
         ])
       : ["(not provided)"]),
     "",
+    ...(input.mediaEvidenceMarkdown
+      ? ["Caller-provided visual evidence:", input.mediaEvidenceMarkdown.trimEnd(), ""]
+      : []),
     ...(input.draftContents !== undefined
       ? ["Caller-produced issue draft:", input.draftContents.trimEnd()]
       : [
@@ -1747,14 +1758,22 @@ function writeCallerIssueDraftWorkspaceFiles(
   const draftContents = options.draftFilePath
     ? readCallerInputFile(repoRoot, options.draftFilePath, "Draft file").trim()
     : undefined;
+  const mediaEvidence = options.mediaManifestFilePath
+    ? loadMediaEvidenceManifest(repoRoot, options.mediaManifestFilePath)
+    : [];
+  const mediaEvidenceMarkdown = renderOptionalMediaEvidenceMarkdown(mediaEvidence);
 
   if (draftContents !== undefined) {
-    if (!draftContents) {
+    const draftWithMedia = appendMediaEvidenceSection(draftContents, mediaEvidence);
+    if (!draftWithMedia.trim()) {
       throw new Error(`Draft file is empty: ${options.draftFilePath}`);
     }
-    parseIssueDraftDocument(draftContents);
-    writeFileSync(workspace.draftFilePath, `${draftContents}\n`, "utf8");
+    parseIssueDraftDocument(draftWithMedia);
+    writeFileSync(workspace.draftFilePath, `${draftWithMedia.trim()}\n`, "utf8");
   } else if (options.issueSetFilePath) {
+    if (mediaEvidence.length > 0) {
+      throw new Error("Media manifests are currently supported for single issue drafts only.");
+    }
     ingestCallerIssueSet(repoRoot, options.issueSetFilePath, workspace);
   }
 
@@ -1801,11 +1820,17 @@ function writeCallerIssueDraftWorkspaceFiles(
   const prompt = buildCallerIssueDraftPrompt({
     roughIdea,
     contextEntries,
-    draftContents,
+    mediaEvidenceMarkdown,
+    draftContents: draftContents === undefined
+      ? undefined
+      : appendMediaEvidenceSection(draftContents, mediaEvidence),
     issueSetFilePath: options.issueSetFilePath,
     superpowersArtifacts,
   });
 
+  if (mediaEvidence.length > 0) {
+    writeMediaEvidenceFile(workspace.mediaEvidenceFilePath, mediaEvidence);
+  }
   if (superpowersSpec !== undefined) {
     writeFileSync(workspace.superpowersSpecFilePath, `${superpowersSpec.trim()}\n`, "utf8");
   }
@@ -1823,6 +1848,10 @@ function writeCallerIssueDraftWorkspaceFiles(
         featureIdea: roughIdea,
         draftFile: toRepoRelativePath(repoRoot, workspace.draftFilePath),
         issueSetFile: toRepoRelativePath(repoRoot, workspace.issueSetFilePath),
+        mediaEvidenceFile:
+          mediaEvidence.length === 0
+            ? undefined
+            : toRepoRelativePath(repoRoot, workspace.mediaEvidenceFilePath),
         promptFile: toRepoRelativePath(repoRoot, workspace.promptFilePath),
         outputLog: toRepoRelativePath(repoRoot, workspace.outputLogPath),
         runDir: toRepoRelativePath(repoRoot, workspace.runDir),
@@ -1834,6 +1863,7 @@ function writeCallerIssueDraftWorkspaceFiles(
           context: contextEntries,
           superpowersSpecFile: options.superpowersSpecFilePath,
           superpowersPlanFile: options.superpowersPlanFilePath,
+          mediaManifestFile: options.mediaManifestFilePath,
         },
         superpowers: {
           enabled: superpowersArtifacts.length > 0,
@@ -1883,6 +1913,13 @@ function writeCallerIssueDraftWorkspaceFiles(
     ].join("\n"),
     "utf8"
   );
+}
+
+function renderOptionalMediaEvidenceMarkdown(
+  evidence: ReturnType<typeof loadMediaEvidenceManifest>
+): string | undefined {
+  const rendered = appendMediaEvidenceSection("", evidence).trim();
+  return rendered || undefined;
 }
 
 function isPrsManagedIssue(issue: IssueDetails): boolean {
@@ -4128,11 +4165,17 @@ async function runAuditCommand(): Promise<void> {
   if (!content) {
     throw new Error(`Audit artifact file is empty: ${command.filePath}`);
   }
+  const mediaEvidence = command.mediaManifestFilePath
+    ? loadMediaEvidenceManifest(repoRoot, command.mediaManifestFilePath)
+    : [];
+  const contentWithMedia = appendMediaEvidenceSection(content, mediaEvidence, {
+    heading: "Visual Evidence",
+  });
 
   const result = await publishAuditArtifact(forge, {
     target: command.target,
     sectionName: command.sectionName,
-    content,
+    content: contentWithMedia,
     localRun: command.localRun,
   });
 
@@ -4328,7 +4371,12 @@ async function runToolCommand(): Promise<void> {
 
     if (toolCommand.draftFilePath) {
       const draftFilePath = resolve(repoRoot, toolCommand.draftFilePath);
-      const parsedDraft = parseIssueDraftDocument(readFileSync(draftFilePath, "utf8"));
+      const mediaEvidence = toolCommand.mediaManifestFilePath
+        ? loadMediaEvidenceManifest(repoRoot, toolCommand.mediaManifestFilePath)
+        : [];
+      const parsedDraft = parseIssueDraftDocument(
+        appendMediaEvidenceSection(readFileSync(draftFilePath, "utf8"), mediaEvidence)
+      );
       const body = toolCommand.forcePrsManaged
         ? ensurePrsManagedIssueBody(parsedDraft.body)
         : parsedDraft.body;
@@ -4370,6 +4418,9 @@ async function runToolCommand(): Promise<void> {
       runDir,
       issueSetFilePath,
     });
+    if (toolCommand.mediaManifestFilePath) {
+      throw new Error("Media manifests are currently supported for single issue draft creation only.");
+    }
     const issues = await createIssueDraftSetWithRecords({
       issueSet,
       forge,
