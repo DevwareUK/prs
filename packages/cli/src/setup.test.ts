@@ -190,6 +190,9 @@ describe("setup command", () => {
       JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
     ).toEqual({
       ai: {
+        codex: {
+          preferSubagents: true,
+        },
         issue: {
           useCodexSuperpowers: false,
         },
@@ -283,6 +286,7 @@ describe("setup command", () => {
     expect(messages.join("\n")).toContain(
       "Superpowers worktrees and agents handle execution isolation."
     );
+    expect(messages.join("\n")).toContain("Configured Codex subagent preference: enabled");
     expect(messages.join("\n")).toContain(
       "prs GitHub Actions are OpenAI-only today, and unattended issue runs remain Codex-specific."
     );
@@ -358,6 +362,52 @@ describe("setup command", () => {
     expect(messages.join("\n")).toContain(
       "Configured GitHub Actions: enabled PR review, test suggestions; disabled PR assistant"
     );
+  });
+
+  it("allows custom setup to disable the Codex subagent preference", async () => {
+    const repoRoot = createRepo("prs-setup-subagents-disabled-");
+    createCodexHome("prs-setup-codex-home-");
+    writeFileSync(
+      resolve(repoRoot, "package.json"),
+      JSON.stringify(
+        {
+          name: "fixture-node-repo",
+          scripts: {
+            build: "tsup",
+          },
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(resolve(repoRoot, "pnpm-lock.yaml"), "");
+
+    mockChildProcess(repoRoot, {
+      "rev-parse --show-toplevel": `${repoRoot}\n`,
+      "symbolic-ref refs/remotes/origin/HEAD": "refs/remotes/origin/main\n",
+      "remote get-url origin": "git@gitlab.com:acme/fixture-node-repo.git\n",
+    });
+
+    await runSetupCommand({
+      promptForLine: createPrompt([
+        "n",
+        "",
+        "",
+        "",
+        "",
+        "n",
+        "",
+        "",
+      ]),
+      repoRoot,
+    });
+
+    expect(
+      JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
+        .ai.codex
+    ).toEqual({
+      preferSubagents: false,
+    });
   });
 
   it("does not install managed GitHub Actions when all workflows are disabled during setup", async () => {
@@ -561,6 +611,9 @@ describe("setup command", () => {
       JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
     ).toEqual({
       ai: {
+        codex: {
+          preferSubagents: true,
+        },
         issue: {
           useCodexSuperpowers: false,
         },
@@ -763,6 +816,7 @@ describe("setup command", () => {
         "",
         "",
         "",
+        "",
         "y",
         "http://localhost:8888",
         "make status",
@@ -885,6 +939,7 @@ describe("setup command", () => {
         "github",
         "codex",
         "pnpm build",
+        "",
         "coverage/**, generated/**",
         "n",
         "y",
@@ -945,6 +1000,9 @@ describe("setup command", () => {
       JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
     ).toEqual({
       ai: {
+        codex: {
+          preferSubagents: true,
+        },
         issue: {
           useCodexSuperpowers: false,
         },
@@ -1003,6 +1061,9 @@ describe("setup command", () => {
       JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
     ).toEqual({
       ai: {
+        codex: {
+          preferSubagents: true,
+        },
         issue: {
           useCodexSuperpowers: false,
         },

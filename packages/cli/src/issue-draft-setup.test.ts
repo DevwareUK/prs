@@ -84,6 +84,9 @@ describe("Issue draft and setup workflows", () => {
       JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
     ).toEqual({
       ai: {
+        codex: {
+          preferSubagents: true,
+        },
         issue: {
           useCodexSuperpowers: false,
         },
@@ -162,7 +165,7 @@ describe("Issue draft and setup workflows", () => {
 
     const { run } = await loadCli({
       runtimeRepoRoot: repoRoot,
-      readlineAnswers: ["n", "develop", "none", "codex", "", "", "n", "y"],
+      readlineAnswers: ["n", "develop", "none", "codex", "", "", "", "n", "y"],
       execFileSyncImpl: (command, args) => {
         if (
           command === "git" &&
@@ -203,6 +206,9 @@ describe("Issue draft and setup workflows", () => {
       JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
     ).toEqual({
       ai: {
+        codex: {
+          preferSubagents: true,
+        },
         issue: {
           useCodexSuperpowers: false,
         },

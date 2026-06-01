@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS,
+  DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS,
   DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
   DEFAULT_REPOSITORY_AI_PROVIDER_TYPE,
   DEFAULT_REPOSITORY_AI_RUNTIME_TYPE,
@@ -55,6 +56,9 @@ describe("config helpers", () => {
       repoRoot,
       JSON.stringify({
         ai: {
+          codex: {
+            preferSubagents: false,
+          },
           issue: {
             useCodexSuperpowers: true,
           },
@@ -75,6 +79,9 @@ describe("config helpers", () => {
 
     expect(loadRepositoryConfig(repoRoot)).toEqual({
       ai: {
+        codex: {
+          preferSubagents: false,
+        },
         issue: {
           useCodexSuperpowers: true,
         },
@@ -98,6 +105,9 @@ describe("config helpers", () => {
 
     expect(loadResolvedRepositoryConfig(repoRoot)).toEqual({
       ai: {
+        codex: {
+          preferSubagents: DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS,
+        },
         issue: {
           useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
         },
@@ -130,6 +140,9 @@ describe("config helpers", () => {
       repoRoot,
       JSON.stringify({
         ai: {
+          codex: {
+            preferSubagents: false,
+          },
           issue: {
             useCodexSuperpowers: true,
           },
@@ -149,6 +162,9 @@ describe("config helpers", () => {
     );
 
     expect(loadResolvedRepositoryConfig(repoRoot).ai).toEqual({
+      codex: {
+        preferSubagents: false,
+      },
       issue: {
         useCodexSuperpowers: true,
       },

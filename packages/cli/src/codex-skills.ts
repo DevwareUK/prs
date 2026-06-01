@@ -46,6 +46,10 @@ const MANAGED_SKILL_MARKER_PATTERN =
 const SHARED_WORKFLOW_CONTRACT = [
   "## prs Workflow Contract",
   "",
+  "- Read `.prs/config.json` before starting prs workflow work.",
+  "- If `ai.codex.preferSubagents` is enabled, or omitted and therefore resolved to the default enabled value, treat the repository config as the user's standing request to delegate suitable independent tasks to subagents when the subagent tool is available.",
+  "- Use subagents for independent exploration, implementation, review, or verification tasks when they improve throughput or context isolation; keep coordination, user approval gates, final verification, and user-facing decisions in the main session.",
+  "- If `ai.codex.preferSubagents` is explicitly disabled, do not treat the repository as having standing subagent delegation consent.",
   "- Use Superpowers for brainstorming, planning, worktrees, agents, and verification.",
   "- Let Superpowers create and manage fresh git worktrees from an updated origin base branch.",
   "- Keep the user's current checkout separate from issue implementation work.",

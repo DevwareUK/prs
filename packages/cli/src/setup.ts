@@ -18,6 +18,7 @@ import {
 } from "@prs/contracts";
 import {
   DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS,
+  DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS,
   DEFAULT_REPOSITORY_AI_RUNTIME_TYPE,
   DEFAULT_REPOSITORY_BASE_BRANCH,
   DEFAULT_REPOSITORY_BUILD_COMMAND,
@@ -76,6 +77,8 @@ type RepositoryInspection = {
   suggestedBuildCommandSource: string;
   suggestedIssueUseCodexSuperpowers: boolean;
   suggestedIssueUseCodexSuperpowersSource: string;
+  suggestedCodexPreferSubagents: boolean;
+  suggestedCodexPreferSubagentsSource: string;
   suggestedLocalRuntime: RepositoryLocalRuntimeConfigType | undefined;
   suggestedLocalRuntimeSuggestions: LocalRuntimeSuggestion[];
   suggestedLocalRuntimeSource: string;
@@ -98,6 +101,7 @@ type SetupAnswers = {
   excludePaths: string[];
   forgeType: ForgeType;
   issueUseCodexSuperpowers: boolean;
+  codexPreferSubagents: boolean;
   localRuntime: RepositoryLocalRuntimeConfigType | undefined;
   runtimeType: RuntimeType;
   enabledGitHubWorkflowIds: GitHubWorkflowId[];
@@ -567,6 +571,25 @@ function detectIssueUseCodexSuperpowers(
         source: "Superpowers plugin not detected in local Codex installation",
         warnings: [],
       };
+}
+
+function detectCodexPreferSubagents(
+  existingConfig?: RepositoryConfigType
+): DetectionResult<boolean> {
+  const existingValue = existingConfig?.ai?.codex?.preferSubagents;
+  if (typeof existingValue === "boolean") {
+    return {
+      value: existingValue,
+      source: "existing .prs/config.json",
+      warnings: [],
+    };
+  }
+
+  return {
+    value: DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS,
+    source: "prs default",
+    warnings: [],
+  };
 }
 
 function getGitHubWorkflowPath(repoRoot: string, fileName: string): string {
@@ -1542,6 +1565,7 @@ function inspectRepository(
   const baseBranch = detectBaseBranch(repoRoot, existingConfig);
   const forgeType = detectForgeType(repoRoot, existingConfig);
   const issueUseCodexSuperpowers = detectIssueUseCodexSuperpowers(existingConfig);
+  const codexPreferSubagents = detectCodexPreferSubagents(existingConfig);
   const runtimeType = detectRuntimeType(existingConfig);
   const localRuntime = detectLocalRuntime(repoRoot, existingConfig);
   const localRuntimeSuggestions = detectLocalRuntimeSuggestions(repoRoot);
@@ -1583,6 +1607,8 @@ function inspectRepository(
     suggestedBuildCommandSource: buildCommand.source,
     suggestedIssueUseCodexSuperpowers: issueUseCodexSuperpowers.value,
     suggestedIssueUseCodexSuperpowersSource: issueUseCodexSuperpowers.source,
+    suggestedCodexPreferSubagents: codexPreferSubagents.value,
+    suggestedCodexPreferSubagentsSource: codexPreferSubagents.source,
     suggestedLocalRuntime: localRuntime.value,
     suggestedLocalRuntimeSuggestions: localRuntimeSuggestions,
     suggestedLocalRuntimeSource: localRuntime.source,
@@ -1964,6 +1990,9 @@ function buildRepositoryConfig(
 
   const aiConfig: NonNullable<RepositoryConfigType["ai"]> = {
     ...(existingConfig?.ai ?? {}),
+    codex: {
+      preferSubagents: answers.codexPreferSubagents,
+    },
     issue: {
       useCodexSuperpowers: answers.issueUseCodexSuperpowers,
     },
@@ -2096,6 +2125,11 @@ function logInspection(repoRoot: string, inspection: RepositoryInspection): void
     } (${inspection.suggestedIssueUseCodexSuperpowersSource})`
   );
   console.log(
+    `Suggested Codex subagent preference: ${
+      inspection.suggestedCodexPreferSubagents ? "enabled" : "disabled"
+    } (${inspection.suggestedCodexPreferSubagentsSource})`
+  );
+  console.log(
     `Suggested extra AI context exclusions: ${renderList(inspection.suggestedExcludePaths)}`
   );
   if (
@@ -2123,6 +2157,7 @@ function buildRecommendedAnswers(
     excludePaths: inspection.suggestedExcludePaths,
     forgeType: inspection.suggestedForgeType,
     issueUseCodexSuperpowers: inspection.suggestedIssueUseCodexSuperpowers,
+    codexPreferSubagents: inspection.suggestedCodexPreferSubagents,
     localRuntime: inspection.suggestedLocalRuntime,
     runtimeType: inspection.suggestedRuntimeType,
   };
@@ -2150,6 +2185,11 @@ async function collectCustomSetupAnswers(
     inspection.suggestedRuntimeType
   );
   const buildCommand = await promptCommand(promptForLine, inspection.suggestedBuildCommand);
+  const codexPreferSubagents = await promptYesNo(
+    promptForLine,
+    "Prefer Codex subagents for suitable prs workflow tasks",
+    inspection.suggestedCodexPreferSubagents
+  );
   const excludePaths = await promptExcludePaths(
     promptForLine,
     inspection.suggestedExcludePaths
@@ -2164,6 +2204,7 @@ async function collectCustomSetupAnswers(
     excludePaths,
     forgeType,
     issueUseCodexSuperpowers: inspection.suggestedIssueUseCodexSuperpowers,
+    codexPreferSubagents,
     runtimeType,
     localRuntime,
   };
@@ -2355,6 +2396,11 @@ export async function runSetupCommand(options: {
   console.log(
     `Configured Codex Superpowers-backed issue workflows: ${
       answers.issueUseCodexSuperpowers ? "enabled" : "disabled"
+    }`
+  );
+  console.log(
+    `Configured Codex subagent preference: ${
+      answers.codexPreferSubagents ? "enabled" : "disabled"
     }`
   );
   console.log(
