@@ -82,6 +82,25 @@ function formatBytes(bytes: number): string {
   return `${Math.round(bytes / (1024 * 1024))} MB`;
 }
 
+function encodePath(value: string): string {
+  return value.split("/").map(encodeURIComponent).join("/");
+}
+
+function rawGitHubUrl(input: {
+  owner: string;
+  repo: string;
+  refName: string;
+  path: string;
+}): string {
+  return [
+    "https://raw.githubusercontent.com",
+    encodeURIComponent(input.owner),
+    encodeURIComponent(input.repo),
+    encodePath(`refs/heads/${input.refName}`),
+    encodePath(input.path),
+  ].join("/");
+}
+
 function parseMediaEntry(repoRoot: string, entry: unknown, index: number): MediaEvidence {
   if (!isRecord(entry)) {
     throw new Error(`Media entry ${index + 1} must be an object.`);
@@ -204,6 +223,42 @@ export function writeMediaEvidenceFile(
   evidence: MediaEvidence[]
 ): void {
   writeFileSync(filePath, `${JSON.stringify({ media: evidence }, null, 2)}\n`, "utf8");
+}
+
+export function resolveRepositoryMediaEvidence(
+  evidence: MediaEvidence[],
+  options: {
+    owner: string;
+    repo: string;
+    refName: string;
+    trackedPaths: string[];
+  }
+): MediaEvidence[] {
+  const trackedPaths = new Set(options.trackedPaths);
+  return evidence.flatMap((item) => {
+    if (item.source.type !== "local") {
+      return [item];
+    }
+
+    if (!trackedPaths.has(item.source.value)) {
+      return [];
+    }
+
+    return [
+      {
+        ...item,
+        source: {
+          type: "url" as const,
+          value: rawGitHubUrl({
+            owner: options.owner,
+            repo: options.repo,
+            refName: options.refName,
+            path: item.source.value,
+          }),
+        },
+      },
+    ];
+  });
 }
 
 function renderMediaItem(item: MediaEvidence): string[] {

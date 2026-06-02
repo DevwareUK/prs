@@ -54,6 +54,7 @@ import {
 import {
   appendMediaEvidenceSection,
   loadMediaEvidenceManifest,
+  resolveRepositoryMediaEvidence,
   writeMediaEvidenceFile,
 } from "./media-evidence";
 import {
@@ -447,6 +448,86 @@ function getRepositoryConfig(repoRoot = getDefaultRepoRoot()) {
 
 function getRepositoryForge(repoRoot = getDefaultRepoRoot()): RepositoryForge {
   return createRepositoryForge(repoRoot, getRepositoryConfig(repoRoot));
+}
+
+function runGitOutput(repoRoot: string, args: string[], errorMessage: string): string {
+  try {
+    return execFileSync("git", ["-C", repoRoot, ...args], {
+      encoding: "utf8",
+      maxBuffer: 10 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+  } catch (error: unknown) {
+    const stderr =
+      typeof error === "object" &&
+      error !== null &&
+      "stderr" in error &&
+      typeof error.stderr === "string"
+        ? error.stderr.trim()
+        : undefined;
+    const detail = stderr ? ` ${stderr}` : "";
+    throw new Error(`${errorMessage}${detail}`);
+  }
+}
+
+function resolveGitHubOrigin(repoRoot: string): { owner: string; repo: string } {
+  const remoteUrl = runGitOutput(
+    repoRoot,
+    ["remote", "get-url", "origin"],
+    "Media rendering for tracked repository files requires a GitHub origin remote."
+  );
+  const match = remoteUrl.match(/github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/);
+  if (!match) {
+    throw new Error("Media rendering for tracked repository files requires a GitHub origin remote.");
+  }
+
+  return {
+    owner: match[1],
+    repo: match[2],
+  };
+}
+
+function resolveCurrentBranchName(repoRoot: string): string {
+  const branchName = runGitOutput(
+    repoRoot,
+    ["branch", "--show-current"],
+    "Media rendering for tracked repository files requires a checked out branch."
+  );
+  if (!branchName) {
+    throw new Error(
+      "Media rendering for tracked repository files requires a checked out branch, not a detached HEAD."
+    );
+  }
+
+  return branchName;
+}
+
+function isGitTrackedPath(repoRoot: string, path: string): boolean {
+  const result = spawnSync("git", ["-C", repoRoot, "ls-files", "--error-unmatch", "--", path], {
+    stdio: "ignore",
+  });
+  return !result.error && result.status === 0;
+}
+
+function loadMediaEvidenceForPublication(
+  repoRoot: string,
+  manifestPath: string | undefined
+): ReturnType<typeof loadMediaEvidenceManifest> {
+  const evidence = manifestPath ? loadMediaEvidenceManifest(repoRoot, manifestPath) : [];
+  const trackedPaths = evidence
+    .filter((item) => item.source.type === "local")
+    .map((item) => item.source.value)
+    .filter((path) => isGitTrackedPath(repoRoot, path));
+
+  if (trackedPaths.length === 0) {
+    return evidence.filter((item) => item.source.type !== "local");
+  }
+
+  return resolveRepositoryMediaEvidence(evidence, {
+    ...resolveGitHubOrigin(repoRoot),
+    refName: resolveCurrentBranchName(repoRoot),
+    trackedPaths,
+  });
 }
 
 function executeGitDiff(
@@ -1758,9 +1839,7 @@ function writeCallerIssueDraftWorkspaceFiles(
   const draftContents = options.draftFilePath
     ? readCallerInputFile(repoRoot, options.draftFilePath, "Draft file").trim()
     : undefined;
-  const mediaEvidence = options.mediaManifestFilePath
-    ? loadMediaEvidenceManifest(repoRoot, options.mediaManifestFilePath)
-    : [];
+  const mediaEvidence = loadMediaEvidenceForPublication(repoRoot, options.mediaManifestFilePath);
   const mediaEvidenceMarkdown = renderOptionalMediaEvidenceMarkdown(mediaEvidence);
 
   if (draftContents !== undefined) {
@@ -4165,9 +4244,7 @@ async function runAuditCommand(): Promise<void> {
   if (!content) {
     throw new Error(`Audit artifact file is empty: ${command.filePath}`);
   }
-  const mediaEvidence = command.mediaManifestFilePath
-    ? loadMediaEvidenceManifest(repoRoot, command.mediaManifestFilePath)
-    : [];
+  const mediaEvidence = loadMediaEvidenceForPublication(repoRoot, command.mediaManifestFilePath);
   const contentWithMedia = appendMediaEvidenceSection(content, mediaEvidence, {
     heading: "Visual Evidence",
   });
@@ -4371,9 +4448,10 @@ async function runToolCommand(): Promise<void> {
 
     if (toolCommand.draftFilePath) {
       const draftFilePath = resolve(repoRoot, toolCommand.draftFilePath);
-      const mediaEvidence = toolCommand.mediaManifestFilePath
-        ? loadMediaEvidenceManifest(repoRoot, toolCommand.mediaManifestFilePath)
-        : [];
+      const mediaEvidence = loadMediaEvidenceForPublication(
+        repoRoot,
+        toolCommand.mediaManifestFilePath
+      );
       const parsedDraft = parseIssueDraftDocument(
         appendMediaEvidenceSection(readFileSync(draftFilePath, "utf8"), mediaEvidence)
       );

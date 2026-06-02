@@ -6,6 +6,7 @@ import {
   appendMediaEvidenceSection,
   loadMediaEvidenceManifest,
   renderMediaEvidenceMarkdown,
+  resolveRepositoryMediaEvidence,
 } from "./media-evidence";
 
 describe("media evidence", () => {
@@ -103,5 +104,53 @@ describe("media evidence", () => {
 
     expect(appended.match(/## Visual References/g)).toHaveLength(1);
     expect(appended.match(/docs\/app-home\.png/g)).toHaveLength(1);
+  });
+
+  it("renders tracked repository image paths as raw GitHub URLs", () => {
+    const evidence = [
+      {
+        kind: "image" as const,
+        caption: "Dinner Bell home screen",
+        alt: "Dinner Bell mobile home",
+        mimeType: "image/png",
+        sizeBytes: 1_352_584,
+        source: { type: "local" as const, value: "docs/app-home.png" },
+      },
+    ];
+
+    const resolved = resolveRepositoryMediaEvidence(evidence, {
+      owner: "DevwareUK",
+      repo: "prs",
+      refName: "codex/issue-259-media",
+      trackedPaths: ["docs/app-home.png"],
+    });
+
+    const markdown = renderMediaEvidenceMarkdown(resolved);
+    expect(markdown).toContain(
+      "![Dinner Bell mobile home](https://raw.githubusercontent.com/DevwareUK/prs/refs/heads/codex/issue-259-media/docs/app-home.png)"
+    );
+    expect(markdown).not.toContain("not GitHub-visible");
+  });
+
+  it("omits untracked local media from GitHub-facing Markdown", () => {
+    const evidence = [
+      {
+        kind: "image" as const,
+        caption: "Untracked screenshot",
+        alt: "Untracked screenshot",
+        mimeType: "image/png",
+        sizeBytes: 100,
+        source: { type: "local" as const, value: "tmp/screenshot.png" },
+      },
+    ];
+
+    const resolved = resolveRepositoryMediaEvidence(evidence, {
+      owner: "DevwareUK",
+      repo: "prs",
+      refName: "main",
+      trackedPaths: [],
+    });
+
+    expect(renderMediaEvidenceMarkdown(resolved)).toBe("");
   });
 });
