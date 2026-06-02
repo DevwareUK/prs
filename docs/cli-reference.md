@@ -15,7 +15,7 @@ Primary offer commands:
 
 Advanced commands:
 
-- `prs issue draft --draft-file <path>`: ingest a skill-produced issue draft without launching another runtime
+- `prs issue draft --draft-file <path> [--media-manifest <path>]`: ingest a skill-produced issue draft without launching another runtime
 - `prs issue refine <number>`: refine an existing GitHub issue into an implementation-ready specification
 - `prs issue plan <number> [--refresh]`: maintain an issue-resolution plan comment as secondary execution support
 - `prs issue <number>`: run the full local issue-to-PR workflow
@@ -34,7 +34,7 @@ Supporting commands:
 - `prs setup --update-skills`: refresh only managed Codex `/prs` skills
 - `prs update skills`: refresh managed Codex `/prs` skills after upgrading the CLI
 - `prs tool issue list [--actionable] --json`: list open GitHub issues, optionally filtered to actionable-for-me issues; returned items include number, title, URL, ownership, labels, update time, linked-PR status, and PRS plan status; PRS plan status recognizes direct managed plan comments and audit comments containing `<!-- prs:issue-plan -->`
-- `prs tool issue create (--draft-file <path>|--issue-set <path>) --json`: deterministically create GitHub issues from approved local issue draft artifacts
+- `prs tool issue create (--draft-file <path>|--issue-set <path>) --json [--media-manifest <path>]`: deterministically create GitHub issues from approved local issue draft artifacts
 - `prs tool pr list [--actionable] --json`: list open GitHub pull requests, optionally filtered to actionable-for-me PRs; returned items include number, title, URL, ownership, branch, labels, update time, and action signals such as conflicts
 - `prs tool pr ready <pr-number> [--unattended|--auto|--jdi] --json`: fast local PR readiness for `/prs:pr`; checks out the actual PR head branch, fetches and merges the latest PR base branch, reports GitHub-hosted review signals in `prContext`, includes grouped PR comment summaries with source links when comments are available, reports actionable/handled/duplicate/resolved/outdated review-thread counts, and skips broad local verification
 - `prs tool pr review <pr-number> --json`: deterministic local Codex PR review preparation; checks out/syncs the PR head, writes review context plus prompt artifacts, and returns paths where the active Codex session should write the Markdown report plus structured inline review candidates
@@ -123,7 +123,7 @@ Usage:
 prs issue <number> [--unattended|--auto|--jdi|--mode <interactive|unattended>]
 prs issue <number> <number> [...number] [--unattended|--auto|--jdi]
 prs issue batch <number> <number> [...number] [--unattended|--auto|--jdi]
-prs issue draft --draft-file <path> [--rough-idea <text>|--rough-idea-file <path>] [--context <text>] [--context-file <path>] [--superpowers-spec-file <path>] [--superpowers-plan-file <path>]
+prs issue draft --draft-file <path> [--rough-idea <text>|--rough-idea-file <path>] [--context <text>] [--context-file <path>] [--superpowers-spec-file <path>] [--superpowers-plan-file <path>] [--media-manifest <path>]
 prs issue draft --issue-set-file <path> [--rough-idea <text>|--rough-idea-file <path>] [--context <text>] [--context-file <path>] [--superpowers-spec-file <path>] [--superpowers-plan-file <path>]
 prs issue draft --runtime
 prs issue refine <number>
@@ -173,6 +173,7 @@ Important behavior:
 - when `prs issue <number>` or unattended issue execution opens a pull request for a PRS-created linked issue from `prs issue refine <source-number>`, the generated PR body includes closing references for both the linked implementation issue and the original source issue
 - `ai.issue.useCodexSuperpowers` affects explicit `prs issue draft --runtime`, `prs issue refine <number>`, and `prs issue plan <number>` and is ignored unless the launched or selected runtime is Codex; legacy `ai.issueDraft.useCodexSuperpowers` is still accepted when the broader setting is absent
 - when `ai.issue.useCodexSuperpowers` is active, draft runs keep the final single draft at `.prs/issues/issue-draft-<timestamp>.md` or multi-issue drafts under `.prs/runs/<timestamp>-issue-draft/`, and record reserved Superpowers spec/plan artifact paths under the run directory
+- `--media-manifest <path>` can be used with `prs issue draft --draft-file`, `prs tool issue create --draft-file`, or `prs audit publish` to add a Visual References/Visual Evidence section. The manifest is a JSON array or `{ "media": [...] }`; items provide exactly one of `url` or `path`, optional `kind` (`image` or `video`), optional `caption`, and optional `alt`. Supported local files are limited to 25 MB for images and 100 MB for videos. URL images are embedded, URL videos are linked, and tracked repository image/video paths are rendered as raw GitHub URLs for the current branch. Local files that are not tracked in git are validated but omitted from GitHub-facing Markdown until a configured external storage backend exists.
 - when `ai.issue.useCodexSuperpowers` is active, refine runs keep the refined single draft or multi-issue draft set under `.prs/runs/<timestamp>-issue-refine-<number>/` and record reserved Superpowers spec/plan artifact paths in the same run directory
 - when `ai.issue.useCodexSuperpowers` is active, plan runs reserve `superpowers-spec.md` and `superpowers-plan.md` under `.prs/runs/<timestamp>-issue-plan-<number>/` and publish the non-empty plan artifact to the managed issue plan comment
 - if Superpowers-backed issue workflows are enabled but local Codex Superpowers is no longer available, explicit `prs issue draft --runtime`, `prs issue refine <number>`, and `prs issue plan <number>` print a fallback notice and continue with the standard prompt or structured provider-generated plan

@@ -49,6 +49,8 @@ describe("CLI command surface", () => {
         "Preserve caller context.",
         "--context-file",
         "context.md",
+        "--media-manifest",
+        ".prs/runs/create/media.json",
       ])
     ).toEqual({
       action: "draft",
@@ -61,6 +63,7 @@ describe("CLI command surface", () => {
       contextFilePaths: ["context.md"],
       superpowersSpecFilePath: undefined,
       superpowersPlanFilePath: undefined,
+      mediaManifestFilePath: ".prs/runs/create/media.json",
     });
     expect(parseIssueCommandArgs(["issue", "draft", "--runtime"])).toEqual({
       action: "draft",
@@ -1234,6 +1237,8 @@ describe("CLI command surface", () => {
         ".prs/runs/example/design.md",
         "--section",
         "Spec",
+        "--media-manifest",
+        ".prs/runs/example/media.json",
       ])
     ).toEqual({
       action: "publish",
@@ -1241,6 +1246,7 @@ describe("CLI command surface", () => {
       filePath: ".prs/runs/example/design.md",
       sectionName: "Spec",
       localRun: undefined,
+      mediaManifestFilePath: ".prs/runs/example/media.json",
     });
   });
 
@@ -1263,8 +1269,22 @@ describe("CLI command surface", () => {
   it("publishes audit publish artifacts to managed GitHub comments", async () => {
     const repoRoot = createTempRepoRoot();
     const artifactPath = resolve(repoRoot, ".prs", "runs", "example", "design.md");
+    const mediaManifestPath = resolve(repoRoot, ".prs", "runs", "example", "media.json");
     mkdirSync(dirname(artifactPath), { recursive: true });
     writeFileSync(artifactPath, "# Design\n\nShip the focused audit path.\n", "utf8");
+    writeFileSync(
+      mediaManifestPath,
+      JSON.stringify({
+        media: [
+          {
+            url: "https://example.com/after.png",
+            kind: "image",
+            caption: "After screenshot",
+          },
+        ],
+      }),
+      "utf8"
+    );
 
     const fetchMock = vi
       .fn()
@@ -1312,6 +1332,8 @@ describe("CLI command surface", () => {
       "Spec",
       "--local-run",
       ".prs/runs/example",
+      "--media-manifest",
+      mediaManifestPath,
     ];
 
     await run();
@@ -1345,6 +1367,12 @@ describe("CLI command surface", () => {
     expect(JSON.parse(String(fetchMock.mock.calls[3]?.[1]?.body))).toMatchObject({
       body: expect.stringContaining("## Spec"),
     });
+    expect(JSON.parse(String(fetchMock.mock.calls[3]?.[1]?.body)).body).toContain(
+      "## Visual Evidence"
+    );
+    expect(JSON.parse(String(fetchMock.mock.calls[3]?.[1]?.body)).body).toContain(
+      "![After screenshot](https://example.com/after.png)"
+    );
   });
 
   it("parses repo-level test-backlog flags for the CLI", async () => {

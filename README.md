@@ -116,7 +116,7 @@ Primary offer commands:
 
 Advanced commands:
 
-- `prs issue draft --draft-file <path>`
+- `prs issue draft --draft-file <path> [--media-manifest <path>]`
 - `prs issue refine <number>`
 - `prs issue plan <number> [--refresh]`
 - `prs issue <number>`
@@ -135,10 +135,10 @@ Supporting commands:
 - `prs setup`
 - `prs setup --update-skills`
 - `prs update skills`
-- `prs audit publish (--issue <number>|--pr <number>) --file <path> --section <name> [--local-run <path>]`
+- `prs audit publish (--issue <number>|--pr <number>) --file <path> --section <name> [--local-run <path>] [--media-manifest <path>]`
 - `prs tool issue list [--actionable] --json`
 - `prs tool issue ready <issue-number> [--unattended|--auto|--jdi] --json`
-- `prs tool issue create (--draft-file <path>|--issue-set <path>) --json`
+- `prs tool issue create (--draft-file <path>|--issue-set <path>) --json [--media-manifest <path>]`
 - `prs tool pr list [--actionable] --json`
 - `prs tool pr ready <pr-number> [--unattended|--auto|--jdi] --json`
 - `prs tool pr review <pr-number> --json`
@@ -153,6 +153,8 @@ The old `prs codex ...` nested launcher group has been retired. To start an agen
 `prs tool issue list [--actionable] --json` and `prs tool pr list [--actionable] --json` include a `url` field for every returned issue or pull request. Issue list PRS plan status recognizes the managed `<!-- prs:issue-plan -->` marker whether it appears in a direct managed comment or inside a `prs audit publish` comment. The interactive `/prs issue` and `/prs pr` entrypoints use those list tools and should show each returned item with its number, title, and GitHub URL before offering follow-up actions.
 
 `prs issue refine <number>` is the guided issue-refinement flow for rough or non-technical tickets. It uses the GitHub issue comments as the refinement conversation, asks every currently blocking high-value question needed to understand the user's intention and likely knock-on effects, and does not publish a partial specification or plan while important answers are still missing. The original issue body is preserved as the initial request. If brainstorming is not satisfied yet, prs posts the next clarification questions as a normal issue comment and stops so the async discussion can continue. Once refinement is settled, prs keeps the original issue as the single ticket and publishes the source-of-truth artifacts as managed comments on that same issue: `<!-- prs:issue-spec -->` for the settled specification and `<!-- prs:issue-plan -->` for the implementation plan. In interactive runs, prs previews the refined issue draft, generated specification, and generated implementation plan, then waits for approval before posting those managed comments to GitHub. The active Codex `/prs issue <number> refine` route follows the same approval rule when it handles refinement directly in the current session. It then adds a final confidence comment confirming the issue is ready for development. This refinement flow does not create linked issues; split work should be decided explicitly outside refinement.
+
+`prs issue draft --draft-file <path> --media-manifest <path>`, `prs tool issue create --draft-file <path> --media-manifest <path> --json`, and `prs audit publish ... --media-manifest <path>` attach visual evidence metadata to GitHub-facing Markdown. The manifest may be a JSON array or `{ "media": [...] }`; each item must provide exactly one of `url` or `path`, may set `kind` to `image` or `video`, and may include `caption` and `alt`. Supported local/URL extensions are `png`, `jpg`, `jpeg`, `gif`, `webp`, `mp4`, `mov`, and `webm`; local images are limited to 25 MB and local videos to 100 MB. URL images are embedded, URL videos are linked, and tracked repository image/video paths are rendered as raw GitHub URLs for the current branch. Local files that are not tracked in git are validated but omitted from GitHub-facing Markdown until a configured external storage backend exists.
 
 `prs tool issue ready <issue-number> [--unattended|--auto|--jdi] --json` reports the current managed issue-refinement artifact status without blocking implementation. It recognizes managed `<!-- prs:issue-spec -->` and `<!-- prs:issue-plan -->` markers whether they appear in direct managed comments or inside `prs audit publish` comments. If the specification or plan comment is missing, the JSON result is still `status: "ready"` and notes that missing managed refinement artifacts will be generated and published during issue preparation. When `prs issue <number>` or `prs issue prepare <number>` needs to create a missing managed plan before implementation, it also publishes a managed `<!-- prs:issue-spec -->` comment from the available issue context.
 

@@ -12,6 +12,7 @@ export type IssueDraftCommandOptions =
       contextFilePaths: string[];
       superpowersSpecFilePath?: string;
       superpowersPlanFilePath?: string;
+      mediaManifestFilePath?: string;
     }
   | {
       mode: "runtime";
@@ -57,7 +58,7 @@ const ISSUE_USAGE = [
   "  prs issue <number> [--unattended|--auto|--jdi|--mode <interactive|unattended>]",
   "  prs issue <number> <number> [...number] [--unattended|--auto|--jdi]",
   "  prs issue batch <number> <number> [...number] [--unattended|--auto|--jdi]",
-  "  prs issue draft --draft-file <path> [--rough-idea <text>|--rough-idea-file <path>] [--context <text>] [--context-file <path>] [--superpowers-spec-file <path>] [--superpowers-plan-file <path>]",
+  "  prs issue draft --draft-file <path> [--rough-idea <text>|--rough-idea-file <path>] [--context <text>] [--context-file <path>] [--superpowers-spec-file <path>] [--superpowers-plan-file <path>] [--media-manifest <path>]",
   "  prs issue draft --issue-set-file <path> [--rough-idea <text>|--rough-idea-file <path>] [--context <text>] [--context-file <path>] [--superpowers-spec-file <path>] [--superpowers-plan-file <path>]",
   "  prs issue draft --runtime",
   "  prs issue refine <number>",
@@ -237,6 +238,7 @@ function parseIssueDraftOptions(args: string[]): IssueDraftCommandOptions {
   let roughIdeaFilePath: string | undefined;
   let superpowersSpecFilePath: string | undefined;
   let superpowersPlanFilePath: string | undefined;
+  let mediaManifestFilePath: string | undefined;
   const contextValues: string[] = [];
   const contextFilePaths: string[] = [];
 
@@ -305,6 +307,17 @@ function parseIssueDraftOptions(args: string[]): IssueDraftCommandOptions {
       continue;
     }
 
+    if (rawArg === "--media-manifest") {
+      mediaManifestFilePath = takeRequiredOptionValue(args, index, rawArg);
+      index += 1;
+      continue;
+    }
+
+    if (rawArg.startsWith("--media-manifest=")) {
+      mediaManifestFilePath = rawArg.slice("--media-manifest=".length);
+      continue;
+    }
+
     throw new Error(`Unknown issue option "${rawArg}". ${ISSUE_USAGE}`);
   }
 
@@ -332,6 +345,7 @@ function parseIssueDraftOptions(args: string[]): IssueDraftCommandOptions {
     contextFilePaths,
     superpowersSpecFilePath,
     superpowersPlanFilePath,
+    mediaManifestFilePath,
   };
 }
 

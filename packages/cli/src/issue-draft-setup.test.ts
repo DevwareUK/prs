@@ -342,6 +342,75 @@ describe("Issue draft and setup workflows", () => {
     expect(spawnSync.mock.calls.some(([command]) => command === "codex")).toBe(false);
   });
 
+  it("adds media evidence from caller manifests to skill-produced issue drafts", async () => {
+    const beforeDrafts = listIssueDraftFiles();
+    const beforeRuns = listRunDirectories();
+    const inputDir = mkdtempSync(resolve(tmpdir(), "prs-skill-draft-media-"));
+    cleanupTargets.add(inputDir);
+    const draftInputPath = resolve(inputDir, "draft.md");
+    const manifestPath = resolve(inputDir, "media.json");
+    writeFileSync(
+      draftInputPath,
+      "# Attach screenshots to issue drafts\n\n## Summary\nPreserve visual references with the draft.\n",
+      "utf8"
+    );
+    writeFileSync(
+      manifestPath,
+      JSON.stringify({
+        media: [
+          {
+            url: "https://example.com/reference.png",
+            kind: "image",
+            caption: "Reference screenshot",
+          },
+        ],
+      }),
+      "utf8"
+    );
+
+    const { run } = await loadCli({
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") {
+          return { status: 1, error: new Error("gh is unavailable") };
+        }
+
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.argv = [
+      "node",
+      "prs",
+      "issue",
+      "draft",
+      "--draft-file",
+      draftInputPath,
+      "--media-manifest",
+      manifestPath,
+    ];
+    const stdout = captureStdout();
+    await run();
+
+    const createdDraft = listIssueDraftFiles().find((entry) => !beforeDrafts.includes(entry));
+    expect(createdDraft).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "issues", createdDraft as string));
+
+    const createdRunDir = listRunDirectories().find((entry) => !beforeRuns.includes(entry));
+    expect(createdRunDir).toBeDefined();
+    cleanupTargets.add(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string));
+
+    const draft = readFileSync(
+      resolve(REPO_ROOT, ".prs", "issues", createdDraft as string),
+      "utf8"
+    );
+    expect(draft).toContain("## Visual References");
+    expect(draft).toContain("![Reference screenshot](https://example.com/reference.png)");
+    expect(
+      existsSync(resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string, "media-evidence.json"))
+    ).toBe(true);
+    expect(stdout.output()).toContain("## Visual References");
+  });
+
   it("ingests a skill-produced issue set without launching a runtime", async () => {
     const beforeRuns = listRunDirectories();
     const inputDir = mkdtempSync(resolve(tmpdir(), "prs-skill-issue-set-"));
