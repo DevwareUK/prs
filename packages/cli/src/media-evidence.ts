@@ -252,5 +252,10 @@ export function appendMediaEvidenceSection(
     return content;
   }
 
+  const heading = options.heading ?? "Visual References";
+  if (content.includes(`## ${heading}`)) {
+    return content;
+  }
+
   return `${content.trimEnd()}\n\n${mediaMarkdown}\n`;
 }

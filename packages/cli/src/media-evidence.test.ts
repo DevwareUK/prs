@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  appendMediaEvidenceSection,
   loadMediaEvidenceManifest,
   renderMediaEvidenceMarkdown,
 } from "./media-evidence";
@@ -81,5 +82,26 @@ describe("media evidence", () => {
       "Media file does not exist: missing.png"
     );
   });
-});
 
+  it("does not append duplicate media evidence sections", () => {
+    const evidence = [
+      {
+        kind: "image" as const,
+        caption: "Reference dashboard hierarchy",
+        alt: "Reference dashboard hierarchy",
+        mimeType: "image/png",
+        sizeBytes: 1_352_584,
+        source: { type: "local" as const, value: "docs/app-home.png" },
+      },
+    ];
+    const content = appendMediaEvidenceSection(
+      "# Improve Dinner Bell home screen\n\n## Summary\nUse the visual reference.",
+      evidence
+    );
+
+    const appended = appendMediaEvidenceSection(content, evidence);
+
+    expect(appended.match(/## Visual References/g)).toHaveLength(1);
+    expect(appended.match(/docs\/app-home\.png/g)).toHaveLength(1);
+  });
+});
