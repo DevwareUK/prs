@@ -22,6 +22,66 @@ describe("repository config schema", () => {
     });
   });
 
+  it("accepts ordered PR local readiness commands", () => {
+    expect(
+      RepositoryConfig.parse({
+        prReadiness: {
+          commands: [
+            {
+              name: "Install dependencies",
+              command: ["pnpm", "install"],
+            },
+            {
+              name: "Run updates",
+              command: ["ddev", "drush", "updb", "-y"],
+            },
+          ],
+        },
+      })
+    ).toEqual({
+      prReadiness: {
+        commands: [
+          {
+            name: "Install dependencies",
+            command: ["pnpm", "install"],
+          },
+          {
+            name: "Run updates",
+            command: ["ddev", "drush", "updb", "-y"],
+          },
+        ],
+      },
+    });
+  });
+
+  it("rejects empty PR local readiness command names and segments", () => {
+    expect(() =>
+      RepositoryConfig.parse({
+        prReadiness: {
+          commands: [
+            {
+              name: "",
+              command: ["pnpm", "install"],
+            },
+          ],
+        },
+      })
+    ).toThrow();
+
+    expect(() =>
+      RepositoryConfig.parse({
+        prReadiness: {
+          commands: [
+            {
+              name: "Install dependencies",
+              command: ["pnpm", ""],
+            },
+          ],
+        },
+      })
+    ).toThrow();
+  });
+
   it("accepts an optional GitHub CLI path in forge config", () => {
     expect(
       RepositoryConfig.parse({

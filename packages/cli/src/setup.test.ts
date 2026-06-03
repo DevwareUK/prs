@@ -879,6 +879,52 @@ describe("setup command", () => {
     });
   });
 
+  it("preserves existing PR local readiness commands on setup rerun", async () => {
+    const repoRoot = createRepo("prs-setup-preserve-pr-readiness-");
+    createCodexHome("prs-setup-codex-home-");
+    mkdirSync(resolve(repoRoot, ".prs"), { recursive: true });
+    writeFileSync(
+      resolve(repoRoot, ".prs", "config.json"),
+      JSON.stringify(
+        {
+          prReadiness: {
+            commands: [
+              {
+                name: "Run database updates",
+                command: ["ddev", "drush", "updb", "-y"],
+              },
+            ],
+          },
+        },
+        null,
+        2
+      )
+    );
+
+    mockChildProcess(repoRoot, {
+      "rev-parse --show-toplevel": `${repoRoot}\n`,
+      "symbolic-ref refs/remotes/origin/HEAD": "refs/remotes/origin/main\n",
+      "remote get-url origin": "git@gitlab.com:acme/fixture-node-repo.git\n",
+    });
+
+    await runSetupCommand({
+      promptForLine: createPrompt(["", ""]),
+      repoRoot,
+    });
+
+    expect(
+      JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
+        .prReadiness
+    ).toEqual({
+      commands: [
+        {
+          name: "Run database updates",
+          command: ["ddev", "drush", "updb", "-y"],
+        },
+      ],
+    });
+  });
+
   it("rejects unexpected setup arguments", () => {
     expect(parseSetupCommandArgs(["setup"])).toEqual({ updateSkills: false });
     expect(parseSetupCommandArgs(["setup", "--update-skills"])).toEqual({

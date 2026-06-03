@@ -440,6 +440,7 @@ function parseMockRepositoryConfig(value?: unknown): Record<string, unknown> {
     baseBranch?: unknown;
     buildCommand?: unknown;
     forge?: { type?: unknown };
+    prReadiness?: { commands?: unknown };
   };
 
   if (config.ai?.runtime !== undefined) {
@@ -551,6 +552,29 @@ function parseMockRepositoryConfig(value?: unknown): Record<string, unknown> {
   if (config.forge?.type !== undefined) {
     if (config.forge.type !== "github" && config.forge.type !== "none") {
       throw new Error("forge.type must be github or none");
+    }
+  }
+
+  if (config.prReadiness?.commands !== undefined) {
+    if (
+      !Array.isArray(config.prReadiness.commands) ||
+      config.prReadiness.commands.some((entry) => {
+        if (typeof entry !== "object" || entry === null) {
+          return true;
+        }
+        const commandEntry = entry as { name?: unknown; command?: unknown };
+        return (
+          typeof commandEntry.name !== "string" ||
+          commandEntry.name.trim().length === 0 ||
+          !Array.isArray(commandEntry.command) ||
+          commandEntry.command.length === 0 ||
+          commandEntry.command.some(
+            (segment) => typeof segment !== "string" || segment.trim().length === 0
+          )
+        );
+      })
+    ) {
+      throw new Error("prReadiness.commands must contain named non-empty commands");
     }
   }
 

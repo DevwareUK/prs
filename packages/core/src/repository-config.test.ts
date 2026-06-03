@@ -90,6 +90,40 @@ describe("resolveRepositoryConfig", () => {
     });
   });
 
+  it("defaults and preserves PR local readiness commands", () => {
+    expect(resolveRepositoryConfig().prReadiness).toEqual({
+      commands: [],
+    });
+
+    expect(
+      resolveRepositoryConfig({
+        prReadiness: {
+          commands: [
+            {
+              name: "Install dependencies",
+              command: ["pnpm", "install"],
+            },
+            {
+              name: "Build frontend",
+              command: ["pnpm", "build"],
+            },
+          ],
+        },
+      }).prReadiness
+    ).toEqual({
+      commands: [
+        {
+          name: "Install dependencies",
+          command: ["pnpm", "install"],
+        },
+        {
+          name: "Build frontend",
+          command: ["pnpm", "build"],
+        },
+      ],
+    });
+  });
+
   it("defaults the missing ai selection while preserving the configured one", () => {
     expect(
       resolveRepositoryConfig({

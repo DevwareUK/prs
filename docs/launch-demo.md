@@ -36,7 +36,7 @@ For the first-offer flows, `.prs/` is part of the product story. It gives the op
 
 Relevant paths:
 
-- `.prs/config.json`: repository-level defaults such as `ai.provider.type`, `ai.runtime.type`, `baseBranch`, and `buildCommand`
+- `.prs/config.json`: repository-level defaults such as `ai.provider.type`, `ai.runtime.type`, `baseBranch`, `buildCommand`, and optional `prReadiness.commands`
 - `.prs/.gitignore`: setup-managed ignore rules for generated local prs state
 - `.prs/runs/`: timestamped workflow directories for local guided runs
 - `.prs/issues/`: issue snapshots, generated drafts, and unattended per-issue session state

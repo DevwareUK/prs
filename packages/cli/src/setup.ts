@@ -14,6 +14,7 @@ import {
   SETUP_SECTION_END,
   SETUP_SECTION_START,
   type RepositoryLocalRuntimeConfigType,
+  type RepositoryPrReadinessConfigType,
   type RepositoryConfigType,
 } from "@prs/contracts";
 import {
@@ -82,6 +83,8 @@ type RepositoryInspection = {
   suggestedLocalRuntime: RepositoryLocalRuntimeConfigType | undefined;
   suggestedLocalRuntimeSuggestions: LocalRuntimeSuggestion[];
   suggestedLocalRuntimeSource: string;
+  suggestedPrReadiness: RepositoryPrReadinessConfigType | undefined;
+  suggestedPrReadinessSource: string;
   suggestedForgeTypeSource: string;
   suggestedRuntimeType: RuntimeType;
   suggestedRuntimeTypeSource: string;
@@ -103,6 +106,7 @@ type SetupAnswers = {
   issueUseCodexSuperpowers: boolean;
   codexPreferSubagents: boolean;
   localRuntime: RepositoryLocalRuntimeConfigType | undefined;
+  prReadiness: RepositoryPrReadinessConfigType | undefined;
   runtimeType: RuntimeType;
   enabledGitHubWorkflowIds: GitHubWorkflowId[];
   updateAgents: boolean;
@@ -493,6 +497,24 @@ function detectLocalRuntime(
   return {
     value: undefined,
     source: "no local runtime configured",
+    warnings: [],
+  };
+}
+
+function detectPrReadiness(
+  existingConfig?: RepositoryConfigType
+): DetectionResult<RepositoryPrReadinessConfigType | undefined> {
+  if (existingConfig?.prReadiness) {
+    return {
+      value: existingConfig.prReadiness,
+      source: "existing .prs/config.json",
+      warnings: [],
+    };
+  }
+
+  return {
+    value: undefined,
+    source: "no PR local readiness commands configured",
     warnings: [],
   };
 }
@@ -1568,6 +1590,7 @@ function inspectRepository(
   const codexPreferSubagents = detectCodexPreferSubagents(existingConfig);
   const runtimeType = detectRuntimeType(existingConfig);
   const localRuntime = detectLocalRuntime(repoRoot, existingConfig);
+  const prReadiness = detectPrReadiness(existingConfig);
   const localRuntimeSuggestions = detectLocalRuntimeSuggestions(repoRoot);
   const actionableGitHubWorkflowIds = findActionableGitHubWorkflowIds(repoRoot);
   const suggestedEnabledGitHubWorkflowIds = detectEnabledGitHubWorkflowIds(
@@ -1596,6 +1619,7 @@ function inspectRepository(
     ...forgeType.warnings,
     ...runtimeType.warnings,
     ...localRuntime.warnings,
+    ...prReadiness.warnings,
   ];
 
   return {
@@ -1612,6 +1636,8 @@ function inspectRepository(
     suggestedLocalRuntime: localRuntime.value,
     suggestedLocalRuntimeSuggestions: localRuntimeSuggestions,
     suggestedLocalRuntimeSource: localRuntime.source,
+    suggestedPrReadiness: prReadiness.value,
+    suggestedPrReadinessSource: prReadiness.source,
     suggestedForgeTypeSource: forgeType.source,
     suggestedRuntimeType: runtimeType.value,
     suggestedRuntimeTypeSource: runtimeType.source,
@@ -1644,6 +1670,19 @@ function formatLocalRuntimeForDisplay(
   ].filter((part): part is string => part !== undefined);
 
   return parts.length > 0 ? parts.join("; ") : localRuntime.type;
+}
+
+function formatPrReadinessForDisplay(
+  prReadiness: RepositoryPrReadinessConfigType
+): string {
+  const commands = prReadiness.commands ?? [];
+  if (commands.length === 0) {
+    return "none";
+  }
+
+  return commands
+    .map((command) => `${command.name}: ${formatCommandForDisplay(command.command)}`)
+    .join("; ");
 }
 
 function parseCommandString(value: string): string[] {
@@ -2028,6 +2067,10 @@ function buildRepositoryConfig(
     config.localRuntime = answers.localRuntime;
   }
 
+  if (answers.prReadiness) {
+    config.prReadiness = answers.prReadiness;
+  }
+
   return config;
 }
 
@@ -2112,6 +2155,13 @@ function logInspection(repoRoot: string, inspection: RepositoryInspection): void
         : "none"
     } (${inspection.suggestedLocalRuntimeSource})`
   );
+  console.log(
+    `Suggested PR local readiness commands: ${
+      inspection.suggestedPrReadiness
+        ? formatPrReadinessForDisplay(inspection.suggestedPrReadiness)
+        : "none"
+    } (${inspection.suggestedPrReadinessSource})`
+  );
   for (const suggestion of inspection.suggestedLocalRuntimeSuggestions) {
     console.log(
       `Local app runtime suggestion: ${formatLocalRuntimeForDisplay(
@@ -2159,6 +2209,7 @@ function buildRecommendedAnswers(
     issueUseCodexSuperpowers: inspection.suggestedIssueUseCodexSuperpowers,
     codexPreferSubagents: inspection.suggestedCodexPreferSubagents,
     localRuntime: inspection.suggestedLocalRuntime,
+    prReadiness: inspection.suggestedPrReadiness,
     runtimeType: inspection.suggestedRuntimeType,
   };
 }
@@ -2207,6 +2258,7 @@ async function collectCustomSetupAnswers(
     codexPreferSubagents,
     runtimeType,
     localRuntime,
+    prReadiness: inspection.suggestedPrReadiness,
   };
 }
 
@@ -2406,6 +2458,11 @@ export async function runSetupCommand(options: {
   console.log(
     `Configured local app runtime readiness: ${
       answers.localRuntime ? formatLocalRuntimeForDisplay(answers.localRuntime) : "none"
+    }`
+  );
+  console.log(
+    `Configured PR local readiness commands: ${
+      answers.prReadiness ? formatPrReadinessForDisplay(answers.prReadiness) : "none"
     }`
   );
   console.log(`Configured forge integration: ${answers.forgeType}`);
