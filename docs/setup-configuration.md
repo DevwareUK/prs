@@ -47,7 +47,7 @@ prs setup
 
 Setup leaves the repository root `.gitignore` unchanged during normal setup. If an existing root ignore pattern such as `.prs/` prevents `.prs/config.json` and `.prs/.gitignore` from being tracked, setup prints an actionable warning and leaves that repository policy for you to narrow intentionally.
 
-Local runtime readiness is explicit project configuration. Existing `.prs/config.json` `localRuntime` values are preserved on reruns. New setup runs default to no local runtime; visible files such as `.ddev/config.yaml` or `.dsm/site.json` may be shown as suggestions, but setup only writes `localRuntime` after you confirm or enter the URL, status command, and start command.
+Local runtime readiness and PR local readiness are explicit project configuration. Existing `.prs/config.json` `localRuntime` and `prReadiness` values are preserved on reruns. New setup runs default to no local runtime and no PR readiness commands. Visible files such as `.ddev/config.yaml` or `.dsm/site.json` may be shown as runtime suggestions, but setup only writes `localRuntime` after you confirm or enter the URL, status command, and start command. Setup does not infer `prReadiness.commands`; add those commands deliberately when every PR checkout should run them before local visual testing.
 
 `prs setup` does not install or refresh global Codex `/prs` skills. After installing or upgrading the CLI, run `prs update skills` or `prs setup --update-skills` to install or refresh those managed skills without changing repository setup.
 
@@ -157,6 +157,26 @@ Optional repository-specific defaults live in `.prs/config.json`. `prs setup` ca
         "enabled": false
       }
     }
+  },
+  "prReadiness": {
+    "commands": [
+      {
+        "name": "Install dependencies",
+        "command": ["pnpm", "install"]
+      },
+      {
+        "name": "Run database updates",
+        "command": ["ddev", "drush", "updb", "-y"]
+      },
+      {
+        "name": "Import config",
+        "command": ["ddev", "drush", "cim", "-y"]
+      },
+      {
+        "name": "Build frontend",
+        "command": ["pnpm", "build"]
+      }
+    ]
   }
 }
 ```
@@ -180,6 +200,7 @@ Supported fields:
 - `forge.githubCliPath`: optional path to the authenticated `gh` executable that prs should use for local GitHub operations when environment tokens are not set. PRS resolves auth in this order: `GH_TOKEN`, `GITHUB_TOKEN`, `PRS_GH_PATH` or `PRS_GITHUB_CLI_PATH`, `forge.githubCliPath`, `gh` on PATH, then common local install paths such as `/opt/homebrew/bin/gh` and `/usr/local/bin/gh`. CI and headless environments can keep using `GH_TOKEN` or `GITHUB_TOKEN`; normal local Codex shells can rely on authenticated `gh` without adding project-specific token values to `.env`.
 - `githubActions.workflows.<action-id>.enabled`: setup-time enablement for managed GitHub Action workflows. Current action IDs are `"pr-review"`, `"pr-assistant"`, and `"test-suggestions"`. `prs setup` writes explicit values for GitHub repositories, uses existing config choices as rerun defaults, installs or updates enabled prs-managed workflows, removes disabled prs-managed workflow files, and leaves disabled unmanaged workflow files untouched.
 - `localRuntime`: optional explicit command-based local app readiness configuration used by PR readiness checks. `prs setup` preserves existing values, otherwise defaults to no local runtime. If setup shows repository-visible runtime suggestions, those suggestions are examples only until you confirm or edit them.
+- `prReadiness.commands`: optional ordered project-wide local checkout preparation commands run by `prs tool pr ready <pr-number> --json` after the PR head is checked out and synced with its base branch. These commands run in both attended and unattended `/prs pr` readiness because attended readiness is meant to make the checkout usable for local browsing and visual testing. Use this for non-destructive project update paths such as dependency install, database migrations, config import, cache rebuilds, and asset builds. PRS skips these commands when base sync is blocked by merge conflicts; a non-zero command exit blocks readiness and records the failed step output under `.prs/runs/`. This is separate from `buildCommand`, which remains the final verification command for issue and PR fix workflows, and from `localRuntime`, which only detects or starts the app runtime.
 
 Runtime and provider fallback behavior:
 

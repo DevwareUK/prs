@@ -75,6 +75,8 @@ When it is enabled and the selected runtime is Codex:
 - `prs issue refine <number>` can use Superpowers-specific instructions while keeping refined drafts and optional issue sets under `.prs/runs/<timestamp>-issue-refine-<number>/`.
 - `prs issue plan <number> [--refresh]` reserves `superpowers-spec.md` and `superpowers-plan.md` under `.prs/runs/<timestamp>-issue-plan-<number>/` and publishes a non-empty plan artifact to the managed `<!-- prs:issue-plan -->` issue comment.
 
+Issue plans should include an explicit `.prs/config.json` `prReadiness.commands` update when the work introduces required local checkout setup for future PR testing, such as migrations, config import, generated assets, dependency updates, or cache rebuilds.
+
 If Superpowers is unavailable or produces no plan artifact, `prs` prints a fallback notice and continues with the standard prompt or structured provider-generated plan.
 
 ## Local artifacts

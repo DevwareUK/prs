@@ -69,5 +69,8 @@ export function resolveRepositoryConfig(
     },
     githubActions: parsedConfig.githubActions ?? {},
     localRuntime: parsedConfig.localRuntime,
+    prReadiness: {
+      commands: parsedConfig.prReadiness?.commands ?? [],
+    },
   });
 }

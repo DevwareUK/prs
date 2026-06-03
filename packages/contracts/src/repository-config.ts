@@ -115,6 +115,19 @@ export type RepositoryLocalRuntimeConfigType = z.infer<
   typeof RepositoryLocalRuntimeConfig
 >;
 
+export const RepositoryPrReadinessCommand = z.object({
+  name: z.string().trim().min(1, "prReadiness command name must be non-empty"),
+  command: RepositoryConfigCommand,
+});
+
+export const RepositoryPrReadinessConfig = z.object({
+  commands: z.array(RepositoryPrReadinessCommand).optional(),
+});
+
+export type RepositoryPrReadinessConfigType = z.infer<
+  typeof RepositoryPrReadinessConfig
+>;
+
 export const RepositoryGitHubActionWorkflowConfig = z.object({
   enabled: z.boolean(),
 });
@@ -140,6 +153,7 @@ export const RepositoryConfig = z.object({
   forge: RepositoryForgeConfig.optional(),
   githubActions: RepositoryGitHubActionsConfig.optional(),
   localRuntime: RepositoryLocalRuntimeConfig.optional(),
+  prReadiness: RepositoryPrReadinessConfig.optional(),
 });
 
 export type RepositoryConfigType = z.infer<typeof RepositoryConfig>;
@@ -169,6 +183,9 @@ export const ResolvedRepositoryConfig = z.object({
   }),
   githubActions: RepositoryGitHubActionsConfig,
   localRuntime: RepositoryLocalRuntimeConfig.optional(),
+  prReadiness: z.object({
+    commands: z.array(RepositoryPrReadinessCommand),
+  }),
 });
 
 export type ResolvedRepositoryConfigType = z.infer<typeof ResolvedRepositoryConfig>;

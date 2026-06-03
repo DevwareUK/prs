@@ -97,7 +97,8 @@ describe("managed prs Codex skills", () => {
       "current repository checkout used by the user's normal local runtime"
     );
     expect(markdown).toContain("fetch and merge the latest PR base branch");
-    expect(markdown).toContain("summarize `prContext` signals from GitHub");
+    expect(markdown).toContain("run configured `prReadiness.commands`");
+    expect(markdown).toContain("summarize `localReadiness` and `prContext`");
     expect(markdown).toContain("actual PR head branch");
     expect(markdown).toContain("remove that clean worktree");
     expect(markdown).toContain("If that worktree has uncommitted changes");

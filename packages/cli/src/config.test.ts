@@ -131,6 +131,9 @@ describe("config helpers", () => {
       },
       githubActions: {},
       localRuntime: undefined,
+      prReadiness: {
+        commands: [],
+      },
     });
   });
 

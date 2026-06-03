@@ -1,7 +1,10 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-import type { RepositoryLocalRuntimeConfigType } from "@prs/contracts";
+import type {
+  RepositoryLocalRuntimeConfigType,
+  RepositoryPrReadinessConfigType,
+} from "@prs/contracts";
 import { TEST_SUGGESTIONS_COMMENT_MARKER } from "@prs/contracts";
 import { formatRunTimestamp, toRepoRelativePath } from "./run-artifacts";
 import type {
@@ -158,6 +161,34 @@ export type PrReadyPullRequestContext = {
   warnings: string[];
 };
 
+export type PrReadyLocalReadinessStepResult = {
+  name: string;
+  command: string[];
+  status: "passed" | "failed";
+  outputFilePath: string;
+  summary?: string;
+};
+
+export type PrReadyLocalReadiness =
+  | {
+      status: "not-configured";
+      message: string;
+      steps: [];
+    }
+  | {
+      status: "skipped";
+      message: string;
+      steps: [];
+    }
+  | {
+      status: "passed";
+      steps: PrReadyLocalReadinessStepResult[];
+    }
+  | {
+      status: "failed";
+      steps: PrReadyLocalReadinessStepResult[];
+    };
+
 export type PrReadyToolResult =
   | {
       status: "ready";
@@ -169,6 +200,7 @@ export type PrReadyToolResult =
       metadataFilePath: string;
       baseSync: PrReadyBaseSync;
       runtime: PrReadyRuntime;
+      localReadiness: PrReadyLocalReadiness;
       prContext: PrReadyPullRequestContext;
       nextAction: "browse-local-app";
     }
@@ -182,12 +214,13 @@ export type PrReadyToolResult =
       metadataFilePath: string;
       baseSync: PrReadyBaseSync;
       runtime: PrReadyRuntime;
+      localReadiness: PrReadyLocalReadiness;
       prContext: PrReadyPullRequestContext;
       nextAction: "start-runtime";
     }
   | {
       status: "blocked";
-      reason: "merge-conflicts" | "runtime-start-failed";
+      reason: "merge-conflicts" | "runtime-start-failed" | "local-readiness-failed";
       prNumber: number;
       title: string;
       url: string;
@@ -196,8 +229,12 @@ export type PrReadyToolResult =
       metadataFilePath: string;
       baseSync: PrReadyBaseSync;
       runtime: PrReadyRuntime;
+      localReadiness: PrReadyLocalReadiness;
       prContext: PrReadyPullRequestContext;
-      nextAction: "resolve-conflicts" | "start-runtime-manually";
+      nextAction:
+        | "resolve-conflicts"
+        | "start-runtime-manually"
+        | "inspect-local-readiness";
     };
 
 type PrReadyToolOptions = {
@@ -212,12 +249,22 @@ type PrReadyToolOptions = {
   forge: RepositoryForge;
   prNumber: number;
   repoRoot: string;
-  runCommand?: (command: string, args: string[]) => PrReadyRunCommandResult;
+  runCommand?: (
+    command: string,
+    args: string[],
+    cwd?: string
+  ) => PrReadyRunCommandResult;
   localRuntime?: RepositoryLocalRuntimeConfigType;
+  prReadiness?: RepositoryPrReadinessConfigType;
 };
 
-function defaultRunCommand(command: string, args: string[]): PrReadyRunCommandResult {
+function defaultRunCommand(
+  command: string,
+  args: string[],
+  cwd?: string
+): PrReadyRunCommandResult {
   const result = spawnSync(command, args, {
+    cwd,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -402,6 +449,115 @@ function startRuntime(
   return {
     ...runtime,
     status: "running",
+  };
+}
+
+function noConfiguredLocalReadiness(): PrReadyLocalReadiness {
+  return {
+    status: "not-configured",
+    message: "No PR local readiness commands are configured.",
+    steps: [],
+  };
+}
+
+function skippedLocalReadiness(message: string): PrReadyLocalReadiness {
+  return {
+    status: "skipped",
+    message,
+    steps: [],
+  };
+}
+
+function summarizeReadinessFailure(result: PrReadyRunCommandResult): string {
+  const detail = result.stderr.trim() || result.stdout.trim();
+  if (!detail) {
+    return "Command exited with a non-zero status.";
+  }
+
+  return detail.split(/\r?\n/)[0] ?? detail;
+}
+
+function writeReadinessStepOutput(input: {
+  repoRoot: string;
+  runDir: string;
+  index: number;
+  name: string;
+  command: string[];
+  result: PrReadyRunCommandResult;
+}): string {
+  const fileName = `local-readiness-${String(input.index + 1).padStart(2, "0")}.log`;
+  const outputFilePath = resolve(input.runDir, fileName);
+  writeFileSync(
+    outputFilePath,
+    [
+      `# ${input.name}`,
+      "",
+      `$ ${input.command.join(" ")}`,
+      "",
+      `exit_status=${input.result.status}`,
+      "",
+      "## stdout",
+      input.result.stdout.trimEnd(),
+      "",
+      "## stderr",
+      input.result.stderr.trimEnd(),
+      "",
+    ].join("\n"),
+    "utf8"
+  );
+
+  return toRepoRelativePath(input.repoRoot, outputFilePath);
+}
+
+function runLocalReadinessCommands(
+  runCommand: (
+    command: string,
+    args: string[],
+    cwd?: string
+  ) => PrReadyRunCommandResult,
+  repoRoot: string,
+  runDir: string,
+  prReadiness?: RepositoryPrReadinessConfigType
+): PrReadyLocalReadiness {
+  const commands = prReadiness?.commands ?? [];
+  if (commands.length === 0) {
+    return noConfiguredLocalReadiness();
+  }
+
+  const steps: PrReadyLocalReadinessStepResult[] = [];
+  for (let index = 0; index < commands.length; index += 1) {
+    const step = commands[index];
+    const [command, ...args] = step.command;
+    const result = runCommand(command, args, repoRoot);
+    const outputFilePath = writeReadinessStepOutput({
+      repoRoot,
+      runDir,
+      index,
+      name: step.name,
+      command: step.command,
+      result,
+    });
+
+    const stepResult: PrReadyLocalReadinessStepResult = {
+      name: step.name,
+      command: step.command,
+      status: result.status === 0 ? "passed" : "failed",
+      outputFilePath,
+      ...(result.status === 0 ? {} : { summary: summarizeReadinessFailure(result) }),
+    };
+    steps.push(stepResult);
+
+    if (stepResult.status === "failed") {
+      return {
+        status: "failed",
+        steps,
+      };
+    }
+  }
+
+  return {
+    status: "passed",
+    steps,
   };
 }
 
@@ -848,6 +1004,9 @@ export async function readyPullRequestTool(
     branchName
   );
   const prContext = await collectPullRequestContext(options.forge, pullRequest);
+  const skippedReadiness = skippedLocalReadiness(
+    "Local readiness commands were skipped because base sync is blocked."
+  );
 
   let result: PrReadyToolResult;
   if (baseSync.status === "blocked") {
@@ -863,8 +1022,39 @@ export async function readyPullRequestTool(
       baseSync,
       runtime:
         runtime.kind === "command" ? { ...runtime, status: "not-started" } : runtime,
+      localReadiness:
+        (options.prReadiness?.commands ?? []).length > 0
+          ? skippedReadiness
+          : noConfiguredLocalReadiness(),
       prContext,
       nextAction: "resolve-conflicts",
+    };
+    writeMetadata(options.repoRoot, metadataFilePath, result);
+    return result;
+  }
+
+  const localReadiness = runLocalReadinessCommands(
+    runCommand,
+    options.repoRoot,
+    runDir,
+    options.prReadiness
+  );
+  if (localReadiness.status === "failed") {
+    result = {
+      status: "blocked",
+      reason: "local-readiness-failed",
+      prNumber: pullRequest.number,
+      title: pullRequest.title,
+      url: pullRequest.url,
+      branchName,
+      runDir,
+      metadataFilePath,
+      baseSync,
+      runtime:
+        runtime.kind === "command" ? { ...runtime, status: "not-started" } : runtime,
+      localReadiness,
+      prContext,
+      nextAction: "inspect-local-readiness",
     };
     writeMetadata(options.repoRoot, metadataFilePath, result);
     return result;
@@ -884,6 +1074,7 @@ export async function readyPullRequestTool(
       metadataFilePath,
       baseSync,
       runtime: startedRuntime,
+      localReadiness,
       prContext,
       nextAction: "start-runtime-manually",
     };
@@ -902,6 +1093,7 @@ export async function readyPullRequestTool(
       metadataFilePath,
       baseSync,
       runtime: startedRuntime,
+      localReadiness,
       prContext,
       nextAction: "start-runtime",
     };
@@ -919,6 +1111,7 @@ export async function readyPullRequestTool(
     metadataFilePath,
     baseSync,
     runtime: startedRuntime,
+    localReadiness,
     prContext,
     nextAction: "browse-local-app",
   };

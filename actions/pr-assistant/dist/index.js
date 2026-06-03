@@ -16145,6 +16145,8 @@ var require_dist = __commonJS({
       RepositoryGitHubActionsConfig: () => RepositoryGitHubActionsConfig,
       RepositoryLocalRuntimeConfig: () => RepositoryLocalRuntimeConfig,
       RepositoryOpenAiProviderConfig: () => RepositoryOpenAiProviderConfig,
+      RepositoryPrReadinessCommand: () => RepositoryPrReadinessCommand,
+      RepositoryPrReadinessConfig: () => RepositoryPrReadinessConfig,
       ResolvedRepositoryConfig: () => ResolvedRepositoryConfig,
       ReviewSummaryInput: () => ReviewSummaryInput,
       ReviewSummaryOutput: () => ReviewSummaryOutput,
@@ -16547,6 +16549,13 @@ var require_dist = __commonJS({
       statusCommand: RepositoryConfigCommand.optional(),
       startCommand: RepositoryConfigCommand.optional()
     });
+    var RepositoryPrReadinessCommand = import_zod10.z.object({
+      name: import_zod10.z.string().trim().min(1, "prReadiness command name must be non-empty"),
+      command: RepositoryConfigCommand
+    });
+    var RepositoryPrReadinessConfig = import_zod10.z.object({
+      commands: import_zod10.z.array(RepositoryPrReadinessCommand).optional()
+    });
     var RepositoryGitHubActionWorkflowConfig = import_zod10.z.object({
       enabled: import_zod10.z.boolean()
     });
@@ -16563,7 +16572,8 @@ var require_dist = __commonJS({
       buildCommand: RepositoryConfigCommand.optional(),
       forge: RepositoryForgeConfig.optional(),
       githubActions: RepositoryGitHubActionsConfig.optional(),
-      localRuntime: RepositoryLocalRuntimeConfig.optional()
+      localRuntime: RepositoryLocalRuntimeConfig.optional(),
+      prReadiness: RepositoryPrReadinessConfig.optional()
     });
     var ResolvedRepositoryConfig = import_zod10.z.object({
       ai: import_zod10.z.object({
@@ -16589,7 +16599,10 @@ var require_dist = __commonJS({
         githubCliPath: import_zod10.z.string().trim().min(1).optional()
       }),
       githubActions: RepositoryGitHubActionsConfig,
-      localRuntime: RepositoryLocalRuntimeConfig.optional()
+      localRuntime: RepositoryLocalRuntimeConfig.optional(),
+      prReadiness: import_zod10.z.object({
+        commands: import_zod10.z.array(RepositoryPrReadinessCommand)
+      })
     });
     var import_zod11 = require_zod();
     var ReviewSummaryItem = import_zod11.z.string().trim().min(1);
@@ -17139,7 +17152,10 @@ ${formatValidationIssues(validationIssues)}`,
           ...parsedConfig.forge?.githubCliPath ? { githubCliPath: parsedConfig.forge.githubCliPath } : {}
         },
         githubActions: parsedConfig.githubActions ?? {},
-        localRuntime: parsedConfig.localRuntime
+        localRuntime: parsedConfig.localRuntime,
+        prReadiness: {
+          commands: parsedConfig.prReadiness?.commands ?? []
+        }
       });
     }
     var SKIP_DIRECTORIES = /* @__PURE__ */ new Set([
@@ -17727,6 +17743,7 @@ ${formatValidationIssues(validationIssues)}`,
         'Make "likelyFiles" a list of likely repository-relative paths or code areas to inspect; use the most plausible targets from the issue context rather than placeholders.',
         'Make "risks" explicit. If no major risk is evident, return a single item stating that no concrete delivery risks were identified from the current issue context.',
         'Make "testPlan" the validation steps a contributor should run or perform before considering the work complete.',
+        "If the issue introduces required local setup steps such as migrations, config import, generated assets, dependency updates, or cache rebuilds, include an implementation step to update `.prs/config.json` `prReadiness.commands` so future `/prs pr` runs prepare local checkouts correctly.",
         'Make "doneDefinition" the conditions that should be true when the issue is actually finished.',
         'Use "openQuestions" only when the issue leaves important decisions unresolved; otherwise return null.',
         "Do not wrap JSON in markdown fences.",

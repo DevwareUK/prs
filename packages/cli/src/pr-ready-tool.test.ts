@@ -65,6 +65,7 @@ function createCommandRecorder(options: {
   lockedHeadBranch?: boolean;
   mergeStatus?: number;
   ddevStatus?: number;
+  readinessStatus?: number;
 }) {
   const calls: Array<{ command: string; args: string[] }> = [];
   const runCommand = (command: string, args: string[]) => {
@@ -120,6 +121,16 @@ function createCommandRecorder(options: {
     }
     if (command.endsWith("ddev") && args[0] === "start") {
       return { status: options.ddevStatus ?? 0, stdout: "started\n", stderr: "" };
+    }
+    if (command === "pnpm" && args[0] === "install") {
+      return { status: options.readinessStatus ?? 0, stdout: "installed\n", stderr: "" };
+    }
+    if (command === "pnpm" && args[0] === "build") {
+      return {
+        status: options.readinessStatus ?? 0,
+        stdout: options.readinessStatus === 1 ? "" : "built\n",
+        stderr: options.readinessStatus === 1 ? "build failed\n" : "",
+      };
     }
 
     throw new Error(`Unexpected command: ${command} ${normalizedArgs.join(" ")}`);
@@ -180,6 +191,110 @@ describe("PR ready tool", () => {
     });
     expect(calls.some((call) => call.command === "git" && gitCallArgs(call)[0] === "merge")).toBe(true);
     expect(calls.some((call) => call.command === "ddev")).toBe(false);
+  });
+
+  it("runs configured local readiness commands before reporting attended PR readiness", async () => {
+    const repoRoot = createRepo();
+    const { calls, runCommand } = createCommandRecorder({ containsBase: true });
+
+    const result = await readyPullRequestTool({
+      unattended: false,
+      forge: createForge(),
+      prNumber: 115,
+      repoRoot,
+      runCommand,
+      ensureCleanWorkingTree: vi.fn(),
+      ensureVerificationCommandAvailable: vi.fn(),
+      buildCommand: ["pnpm", "build"],
+      prReadiness: {
+        commands: [
+          {
+            name: "Install dependencies",
+            command: ["pnpm", "install"],
+          },
+          {
+            name: "Build frontend",
+            command: ["pnpm", "build"],
+          },
+        ],
+      },
+    });
+
+    expect(result).toMatchObject({
+      status: "ready",
+      localReadiness: {
+        status: "passed",
+        steps: [
+          {
+            name: "Install dependencies",
+            command: ["pnpm", "install"],
+            status: "passed",
+          },
+          {
+            name: "Build frontend",
+            command: ["pnpm", "build"],
+            status: "passed",
+          },
+        ],
+      },
+    });
+    expect(calls.map((call) => [call.command, ...call.args])).toContainEqual([
+      "pnpm",
+      "install",
+    ]);
+    expect(calls.map((call) => [call.command, ...call.args])).toContainEqual([
+      "pnpm",
+      "build",
+    ]);
+    const metadata = JSON.parse(readFileSync(result.metadataFilePath, "utf8")) as typeof result;
+    expect(metadata.localReadiness).toEqual(result.localReadiness);
+  });
+
+  it("blocks PR readiness when a configured local readiness command fails", async () => {
+    const repoRoot = createRepo();
+    const { runCommand } = createCommandRecorder({
+      containsBase: true,
+      readinessStatus: 1,
+    });
+
+    const result = await readyPullRequestTool({
+      unattended: false,
+      forge: createForge(),
+      prNumber: 115,
+      repoRoot,
+      runCommand,
+      ensureCleanWorkingTree: vi.fn(),
+      ensureVerificationCommandAvailable: vi.fn(),
+      buildCommand: ["pnpm", "build"],
+      prReadiness: {
+        commands: [
+          {
+            name: "Build frontend",
+            command: ["pnpm", "build"],
+          },
+        ],
+      },
+    });
+
+    expect(result).toMatchObject({
+      status: "blocked",
+      reason: "local-readiness-failed",
+      nextAction: "inspect-local-readiness",
+      localReadiness: {
+        status: "failed",
+        steps: [
+          {
+            name: "Build frontend",
+            command: ["pnpm", "build"],
+            status: "failed",
+            summary: "build failed",
+          },
+        ],
+      },
+    });
+    expect(result.localReadiness.steps[0].outputFilePath).toContain(
+      ".prs/runs/"
+    );
   });
 
   it("syncs base and starts the configured local runtime when unattended is set", async () => {
@@ -392,6 +507,43 @@ describe("PR ready tool", () => {
       },
     });
     expect(calls.some((call) => call.command === "ddev")).toBe(false);
+  });
+
+  it("does not run local readiness commands when base sync is blocked", async () => {
+    const repoRoot = createRepo();
+    const { calls, runCommand } = createCommandRecorder({
+      containsBase: false,
+      mergeStatus: 1,
+    });
+
+    const result = await readyPullRequestTool({
+      unattended: false,
+      forge: createForge(),
+      prNumber: 115,
+      repoRoot,
+      runCommand,
+      ensureCleanWorkingTree: vi.fn(),
+      ensureVerificationCommandAvailable: vi.fn(),
+      buildCommand: ["pnpm", "build"],
+      prReadiness: {
+        commands: [
+          {
+            name: "Install dependencies",
+            command: ["pnpm", "install"],
+          },
+        ],
+      },
+    });
+
+    expect(result).toMatchObject({
+      status: "blocked",
+      reason: "merge-conflicts",
+      localReadiness: {
+        status: "skipped",
+        message: "Local readiness commands were skipped because base sync is blocked.",
+      },
+    });
+    expect(calls.some((call) => call.command === "pnpm")).toBe(false);
   });
 
   it("persists GitHub-hosted PR context in readiness metadata", async () => {
