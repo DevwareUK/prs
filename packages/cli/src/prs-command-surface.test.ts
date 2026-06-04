@@ -162,6 +162,28 @@ describe("prs command surface", () => {
       mode: "direct",
       prNumber: 456,
       action: "review",
+      unattended: false,
+    });
+    expect(parsePrsCommandSurfaceArgs(["pr", "456", "review", "--unattended"])).toEqual({
+      kind: "pr",
+      mode: "direct",
+      prNumber: 456,
+      action: "review",
+      unattended: true,
+    });
+    expect(parsePrsCommandSurfaceArgs(["pr", "456", "review", "--auto"])).toEqual({
+      kind: "pr",
+      mode: "direct",
+      prNumber: 456,
+      action: "review",
+      unattended: true,
+    });
+    expect(parsePrsCommandSurfaceArgs(["pr", "456", "review", "--jdi"])).toEqual({
+      kind: "pr",
+      mode: "direct",
+      prNumber: 456,
+      action: "review",
+      unattended: true,
     });
     expect(parsePrsCommandSurfaceArgs(["pr", "456", "address-comments"])).toEqual({
       kind: "pr",
@@ -229,6 +251,9 @@ describe("prs command surface", () => {
 
   it("rejects unsupported forms with command help", () => {
     expect(() => parsePrsCommandSurfaceArgs(["pr", "resolve-conflicts", "456"])).toThrow(
+      renderPrsCommandSurfaceHelp()
+    );
+    expect(() => parsePrsCommandSurfaceArgs(["pr", "456", "review", "--all"])).toThrow(
       renderPrsCommandSurfaceHelp()
     );
     expect(() => parsePrsCommandSurfaceArgs(["create", "story"])).toThrow(
@@ -435,11 +460,27 @@ describe("prs command surface routing", () => {
         mode: "direct",
         prNumber: 456,
         action: "review",
+        unattended: false,
       })
     ).toEqual({
       interaction: "direct",
       skillName: "prs",
       cliArgs: ["tool", "pr", "review", "456", "--json"],
+      target: { type: "pull-request", number: 456 },
+      toolOnly: true,
+    });
+    expect(
+      routePrsCommandSurfaceAction({
+        kind: "pr",
+        mode: "direct",
+        prNumber: 456,
+        action: "review",
+        unattended: true,
+      })
+    ).toEqual({
+      interaction: "direct",
+      skillName: "prs",
+      cliArgs: ["tool", "pr", "review", "456", "--unattended", "--json"],
       target: { type: "pull-request", number: 456 },
       toolOnly: true,
     });

@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { formatCommandForDisplay } from "../../config";
+import type { GitHubOutputMode } from "@prs/contracts";
 import type { PullRequestDetails, RepositoryForge } from "../../forge";
 import {
   resolveExistingIssueSessionStateFilePath,
@@ -45,6 +46,7 @@ type RunPrLocalReviewToolOptions = {
   prNumber: number;
   repoRoot: string;
   buildCommand: string[];
+  outputMode?: GitHubOutputMode;
   ensureVerificationCommandAvailable?(
     repoRoot: string,
     buildCommand: string[],
@@ -365,6 +367,7 @@ export async function preparePullRequestLocalReviewTool(
   }
 
   options.ensureCleanWorkingTree(options.repoRoot);
+  const outputMode = options.outputMode ?? "manual";
   (options.ensureVerificationCommandAvailable ?? ensureVerificationCommandAvailable)(
     options.repoRoot,
     options.buildCommand,
@@ -461,7 +464,8 @@ export async function preparePullRequestLocalReviewTool(
       options.repoRoot,
       workspace,
       contextInput,
-      options.buildCommand
+      options.buildCommand,
+      { outputMode }
     );
     writePullRequestLocalReviewMetadata(options.repoRoot, workspace, contextInput);
 
@@ -478,6 +482,7 @@ export async function preparePullRequestLocalReviewTool(
       checkout: checkoutTarget,
       baseSync,
       changedFiles,
+      outputMode,
       nextAction: "write-codex-pr-review-report",
     };
   } catch (error) {
@@ -511,7 +516,8 @@ export async function preparePullRequestLocalReviewTool(
       options.repoRoot,
       workspace,
       contextInput,
-      options.buildCommand
+      options.buildCommand,
+      { outputMode }
     );
     writePullRequestLocalReviewMetadata(options.repoRoot, workspace, contextInput);
 
@@ -528,6 +534,7 @@ export async function preparePullRequestLocalReviewTool(
       commentsFilePath: workspace.commentsFilePath,
       checkout: checkoutTarget,
       baseSync: error.baseSync,
+      outputMode,
       nextAction: "resolve-conflicts-in-current-codex-session",
     };
   }

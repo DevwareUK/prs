@@ -265,7 +265,8 @@ describe("preparePullRequestLocalReviewTool", () => {
         issueComments: { status: "available", items: expect.any(Array) },
         reviewComments: { status: "available", items: expect.any(Array) },
       }),
-      ["pnpm", "test"]
+      ["pnpm", "test"],
+      { outputMode: "manual" }
     );
     expect(writePullRequestLocalReviewMetadata).toHaveBeenCalledWith(
       repoRoot,
