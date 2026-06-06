@@ -121,6 +121,25 @@ describe("prs tool command parser", () => {
     expect(parsePrsToolCommandArgs(["pr", "review", "115", "--json"])).toEqual({
       kind: "pr-review",
       prNumber: 115,
+      unattended: false,
+      json: true,
+    });
+    expect(parsePrsToolCommandArgs(["pr", "review", "115", "--unattended", "--json"])).toEqual({
+      kind: "pr-review",
+      prNumber: 115,
+      unattended: true,
+      json: true,
+    });
+    expect(parsePrsToolCommandArgs(["pr", "review", "115", "--auto", "--json"])).toEqual({
+      kind: "pr-review",
+      prNumber: 115,
+      unattended: true,
+      json: true,
+    });
+    expect(parsePrsToolCommandArgs(["pr", "review", "115", "--jdi", "--json"])).toEqual({
+      kind: "pr-review",
+      prNumber: 115,
+      unattended: true,
       json: true,
     });
   });
@@ -142,6 +161,27 @@ describe("prs tool command parser", () => {
       prNumber: 115,
       reportFilePath: ".prs/runs/review/codex-pr-review.md",
       commentsFilePath: ".prs/runs/review/codex-pr-review-comments.json",
+      unattended: false,
+      json: true,
+    });
+    expect(
+      parsePrsToolCommandArgs([
+        "pr",
+        "publish-review",
+        "115",
+        "--report",
+        ".prs/runs/review/codex-pr-review.md",
+        "--comments",
+        ".prs/runs/review/codex-pr-review-comments.json",
+        "--unattended",
+        "--json",
+      ])
+    ).toEqual({
+      kind: "pr-publish-review",
+      prNumber: 115,
+      reportFilePath: ".prs/runs/review/codex-pr-review.md",
+      commentsFilePath: ".prs/runs/review/codex-pr-review-comments.json",
+      unattended: true,
       json: true,
     });
   });

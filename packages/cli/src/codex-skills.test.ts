@@ -117,8 +117,15 @@ describe("managed prs Codex skills", () => {
     );
     expect(markdown).toContain("write the final report to the returned `reportFilePath`");
     expect(markdown).toContain("write inline review candidates to the returned `commentsFilePath`");
+    expect(markdown).toContain("present a concise approval summary");
     expect(markdown).toContain(
-      "publish both with `prs tool pr publish-review <number> --report <reportFilePath> --comments <commentsFilePath> --json`"
+      "run `prs tool pr publish-review <number> --report <reportFilePath> --comments <commentsFilePath> --json` only after the user approves posting to GitHub"
+    );
+    expect(markdown).toContain(
+      "/prs pr <number> review --unattended` (aliases: `--auto`, `--jdi`): run `prs tool pr review <number> --unattended --json`"
+    );
+    expect(markdown).toContain(
+      "publish with `prs tool pr publish-review <number> --report <reportFilePath> --comments <commentsFilePath> --unattended --json`"
     );
     expect(markdown).toContain("read the returned `snapshotFilePath`");
     expect(markdown).toContain("does not generate `review-brief.md`");
@@ -189,8 +196,13 @@ describe("managed prs Codex skills", () => {
     expect(prMarkdown).toContain("prs tool pr review <number> --json");
     expect(prMarkdown).toContain("write the final report to the returned `reportFilePath`");
     expect(prMarkdown).toContain("write inline review candidates to the returned `commentsFilePath`");
+    expect(prMarkdown).toContain("present a concise approval summary");
     expect(prMarkdown).toContain(
-      "publish both with `prs tool pr publish-review <number> --report <reportFilePath> --comments <commentsFilePath> --json`"
+      "run `prs tool pr publish-review <number> --report <reportFilePath> --comments <commentsFilePath> --json` only after the user approves posting to GitHub"
+    );
+    expect(prMarkdown).toContain("/prs:pr <number> review --unattended");
+    expect(prMarkdown).toContain(
+      "publish with `prs tool pr publish-review <number> --report <reportFilePath> --comments <commentsFilePath> --unattended --json`"
     );
     expect(prMarkdown).toContain("/prs:pr <number> prepare-review");
     expect(prMarkdown).toContain("browse/functional test first");

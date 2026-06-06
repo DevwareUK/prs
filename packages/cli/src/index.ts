@@ -4537,6 +4537,7 @@ async function runToolCommand(): Promise<void> {
         prNumber: toolCommand.prNumber,
         repoRoot,
         buildCommand: repositoryConfig.buildCommand,
+        outputMode: toolCommand.unattended ? "unattended" : "manual",
         ensureVerificationCommandAvailable,
         preflightBaseBranch: preflightRemoteBranch,
         forge: getRepositoryForge(repoRoot),
@@ -4594,6 +4595,7 @@ async function runToolCommand(): Promise<void> {
       reportFilePath,
       commentsFilePath,
       forge: getRepositoryForge(repoRoot),
+      outputMode: toolCommand.unattended ? "unattended" : "manual",
     });
 
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

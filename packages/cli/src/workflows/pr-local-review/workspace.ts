@@ -1,5 +1,6 @@
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import type { GitHubOutputMode } from "@prs/contracts";
 import { formatCommandForDisplay } from "../../config";
 import type {
   PullRequestCheckSignal,
@@ -182,7 +183,8 @@ export function formatPullRequestLocalReviewContext(
 function buildPullRequestLocalReviewPrompt(
   repoRoot: string,
   workspace: PullRequestLocalReviewWorkspace,
-  input: PullRequestLocalReviewContextInput
+  input: PullRequestLocalReviewContextInput,
+  options: { outputMode: GitHubOutputMode }
 ): string {
   const contextFile = toRepoRelativePath(repoRoot, workspace.contextFilePath);
   const reportFile = toRepoRelativePath(repoRoot, workspace.reportFilePath);
@@ -198,6 +200,7 @@ function buildPullRequestLocalReviewPrompt(
     workspace.reportFilePath,
     "--comments",
     workspace.commentsFilePath,
+    ...(options.outputMode === "unattended" ? ["--unattended"] : []),
     "--json",
   ]);
   const legacyAuditCommand = formatCommandForDisplay([
@@ -212,6 +215,21 @@ function buildPullRequestLocalReviewPrompt(
     "Codex PR review",
   ]);
 
+  const publishInstructions =
+    options.outputMode === "unattended"
+      ? [
+          `After saving the report and comments JSON, publish them with \`${publishCommand}\`.`,
+          "This is unattended output and must keep visible automation framing.",
+          "When the report is saved and published, stop.",
+        ]
+      : [
+          "After saving the report and comments JSON, do not publish to GitHub yet.",
+          "Present a concise approval summary with the report path, comments path, inline candidate count, and exact publish command.",
+          `Only after approval, publish them with \`${publishCommand}\`.`,
+          `If the publish-review command is unavailable after approval, publish only the audit report with \`${legacyAuditCommand}\` and report that inline comments were not posted.`,
+          "If the user does not approve, keep the local artifacts and stop without posting to GitHub.",
+        ];
+
   return [
     "You are working in the current repository as a senior pull request reviewer.",
     "Prepare a consolidated local Codex PR review report for a human reviewer.",
@@ -224,7 +242,9 @@ function buildPullRequestLocalReviewPrompt(
     "Rules:",
     "- do not edit tracked repository files",
     "- do not commit, push, or resolve comments",
-    "- do not post directly to GitHub except through the publish command below",
+    options.outputMode === "unattended"
+      ? "- do not post directly to GitHub except through the unattended publish command below"
+      : "- do not post to GitHub until the user explicitly approves the publish command",
     "- ground every finding in the diff, files, metadata, comments, checks, or visible repository conventions",
     "- discard weak or speculative findings",
     "- reconcile duplicate concerns into one finding",
@@ -267,9 +287,7 @@ function buildPullRequestLocalReviewPrompt(
     "```",
     "",
     "Only include comments that can be anchored to changed right-side diff lines. Prefer an empty array over weak or non-line-linked comments.",
-    `After saving the report and comments JSON, publish them with \`${publishCommand}\`.`,
-    `If the publish-review command is unavailable, publish only the audit report with \`${legacyAuditCommand}\` and report that inline comments were not posted.`,
-    "When the report is saved and published, stop.",
+    ...publishInstructions,
   ].join("\n");
 }
 
@@ -321,12 +339,14 @@ export function writePullRequestLocalReviewWorkspaceFiles(
   repoRoot: string,
   workspace: PullRequestLocalReviewWorkspace,
   input: PullRequestLocalReviewContextInput,
-  buildCommand: string[]
+  buildCommand: string[],
+  options: { outputMode?: GitHubOutputMode } = {}
 ): void {
+  const outputMode = options.outputMode ?? "manual";
   writeFileSync(workspace.contextFilePath, formatPullRequestLocalReviewContext(input), "utf8");
   writeFileSync(
     workspace.promptFilePath,
-    `${buildPullRequestLocalReviewPrompt(repoRoot, workspace, input)}\n`,
+    `${buildPullRequestLocalReviewPrompt(repoRoot, workspace, input, { outputMode })}\n`,
     "utf8"
   );
   writeFileSync(

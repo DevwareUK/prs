@@ -13,12 +13,13 @@ export type PrsToolCommand =
       json: boolean;
     }
   | { kind: "pr-list"; actionable: boolean; json: boolean }
-  | { kind: "pr-review"; prNumber: number; json: boolean }
+  | { kind: "pr-review"; prNumber: number; unattended: boolean; json: boolean }
   | {
       kind: "pr-publish-review";
       prNumber: number;
       reportFilePath: string;
       commentsFilePath: string;
+      unattended: boolean;
       json: boolean;
     }
   | { kind: "pr-prepare-review"; prNumber: number; json: boolean }
@@ -41,8 +42,8 @@ export function renderPrsToolCommandHelp(): string {
     "                        [--label <name>] [--labels <a,b>]",
     "                        [--force-prs-managed]",
     "  prs tool pr list [--actionable] --json",
-    "  prs tool pr review <pr-number> --json",
-    "  prs tool pr publish-review <pr-number> --report <path> --comments <path> --json",
+    "  prs tool pr review <pr-number> [--unattended|--auto|--jdi] --json",
+    "  prs tool pr publish-review <pr-number> --report <path> --comments <path> [--unattended|--auto|--jdi] --json",
     "  prs tool pr prepare-review <pr-number> --json",
     "  prs tool pr push-reviewed <pr-number> --json",
     "  prs tool pr address-comments <pr-number> [--selection <value>] --json",
@@ -296,23 +297,50 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
   }
 
   if (command === "review" || command === "prepare-review") {
-    if (rest.length > 0) {
-      throw new Error(renderPrsToolCommandHelp());
-    }
     if (!third || third === "--json") {
       throw new Error(renderPrsToolCommandHelp());
     }
 
     const prNumber = parseToolNumber(third, "pr");
-    if (fourth !== "--json") {
-      throw new Error(renderPrsToolCommandHelp());
+    if (command === "prepare-review") {
+      if (fourth !== "--json" || rest.length > 0) {
+        throw new Error(renderPrsToolCommandHelp());
+      }
+
+      return {
+        kind: "pr-prepare-review",
+        prNumber,
+        json: true,
+      };
     }
 
-    return {
-      kind: command === "review" ? "pr-review" : "pr-prepare-review",
-      prNumber,
-      json: true,
-    };
+    if (fourth === "--json" && rest.length === 0) {
+      return {
+        kind: "pr-review",
+        prNumber,
+        unattended: false,
+        json: true,
+      };
+    }
+    if (isUnattendedAlias(fourth) && rest[0] === "--json" && rest.length === 1) {
+      return {
+        kind: "pr-review",
+        prNumber,
+        unattended: true,
+        json: true,
+      };
+    }
+
+    if (fourth === "--all") {
+      throw new Error(`Unknown tool option "--all". ${renderPrsToolCommandHelp()}`);
+    }
+    if (fourth && !isUnattendedAlias(fourth) && fourth !== "--json") {
+      throw new Error(`Unknown tool option "${fourth}". ${renderPrsToolCommandHelp()}`);
+    }
+    if (rest[0] && rest[0] !== "--json") {
+      throw new Error(`Unknown tool option "${rest[0]}". ${renderPrsToolCommandHelp()}`);
+    }
+    throw new Error(renderPrsToolCommandHelp());
   }
 
   if (command === "publish-review") {
@@ -327,12 +355,18 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
     let reportFilePath: string | undefined;
     let commentsFilePath: string | undefined;
     let json = false;
+    let unattended = false;
 
     for (let index = 0; index < optionArgs.length; index += 1) {
       const rawArg = optionArgs[index];
 
       if (rawArg === "--json") {
         json = true;
+        continue;
+      }
+
+      if (isUnattendedAlias(rawArg)) {
+        unattended = true;
         continue;
       }
 
@@ -382,6 +416,7 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
       prNumber,
       reportFilePath,
       commentsFilePath,
+      unattended,
       json: true,
     };
   }

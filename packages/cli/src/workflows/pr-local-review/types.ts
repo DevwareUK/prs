@@ -3,6 +3,7 @@ import type {
   PullRequestReviewComment,
   RepositoryComment,
 } from "../../forge";
+import type { GitHubOutputMode } from "@prs/contracts";
 import type {
   PullRequestPrepareReviewBaseSyncState,
   PullRequestPrepareReviewCheckoutTarget,
@@ -64,6 +65,7 @@ export type PullRequestLocalReviewToolResult =
       checkout: PullRequestPrepareReviewCheckoutTarget;
       baseSync: PullRequestPrepareReviewBaseSyncState;
       changedFiles: string[];
+      outputMode: GitHubOutputMode;
       nextAction: "write-codex-pr-review-report";
     }
   | {
@@ -79,5 +81,6 @@ export type PullRequestLocalReviewToolResult =
       commentsFilePath: string;
       checkout: PullRequestPrepareReviewCheckoutTarget;
       baseSync: PullRequestPrepareReviewBaseSyncState;
+      outputMode: GitHubOutputMode;
       nextAction: "resolve-conflicts-in-current-codex-session";
     };

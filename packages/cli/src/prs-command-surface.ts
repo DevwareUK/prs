@@ -177,7 +177,7 @@ export function parsePrsCommandSurfaceArgs(args: string[]): PrsCommandSurfaceAct
     if (!second) {
       return { kind: "pr", mode: "interactive" };
     }
-    if (rest.length > 0) {
+    if (rest.length > 1) {
       throw new Error(renderPrsCommandSurfaceHelp());
     }
     if (PR_ACTIONS.has(second)) {
@@ -196,6 +196,19 @@ export function parsePrsCommandSurfaceArgs(args: string[]): PrsCommandSurfaceAct
     }
 
     const action = normalizePrSurfaceAction(third);
+    if (rest[0] && (action !== "review" || !isUnattendedAlias(rest[0]))) {
+      throw new Error(renderPrsCommandSurfaceHelp());
+    }
+    if (action === "review") {
+      return {
+        kind: "pr",
+        mode: "direct",
+        prNumber,
+        action,
+        unattended: isUnattendedAlias(rest[0]),
+      };
+    }
+
     return {
       kind: "pr",
       mode: "direct",
@@ -349,7 +362,9 @@ export function routePrsCommandSurfaceAction(action: PrsCommandSurfaceAction): P
       return {
         interaction: "direct",
         skillName: "prs",
-        cliArgs: ["tool", "pr", "review", String(action.prNumber), "--json"],
+        cliArgs: action.unattended
+          ? ["tool", "pr", "review", String(action.prNumber), "--unattended", "--json"]
+          : ["tool", "pr", "review", String(action.prNumber), "--json"],
         target: { type: "pull-request", number: action.prNumber },
         toolOnly: true,
       };
