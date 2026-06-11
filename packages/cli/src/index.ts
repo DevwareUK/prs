@@ -386,7 +386,7 @@ const TOP_LEVEL_HELP = [
   "  prs update skills",
   "  prs tool issue list [--actionable] --json",
   "  prs tool issue ready <issue-number> [--unattended|--auto|--jdi] --json",
-  "  prs tool issue create (--draft-file <path>|--issue-set <path>) --json [--media-manifest <path>]",
+  "  prs tool issue create (--draft-file <path>|--issue-set <path>) --json [--spec-file <path>] [--plan-file <path>] [--media-manifest <path>]",
   "  prs tool pr list [--actionable] --json",
   "  prs tool pr ready <pr-number> [--unattended|--auto|--jdi] --json",
   "  prs tool pr review <pr-number> --json",
@@ -3831,6 +3831,44 @@ function createAuditPublicationHints(input: {
   ];
 }
 
+type ManagedCommentHint = {
+  issueNumber: number;
+  marker: typeof ISSUE_SPEC_COMMENT_MARKER | typeof ISSUE_PLAN_COMMENT_MARKER;
+  requiredFor: "issue-source-of-truth" | string;
+  status: "artifact-provided" | "missing";
+  file?: string;
+  nextAction: string;
+};
+
+function createManagedCommentHints(input: {
+  issueNumbers: number[];
+  specFilePath?: string;
+  planFilePath?: string;
+}): ManagedCommentHint[] {
+  return input.issueNumbers.flatMap((issueNumber) => [
+    {
+      issueNumber,
+      marker: ISSUE_SPEC_COMMENT_MARKER,
+      requiredFor: "issue-source-of-truth",
+      status: input.specFilePath ? "artifact-provided" : "missing",
+      ...(input.specFilePath ? { file: input.specFilePath } : {}),
+      nextAction: input.specFilePath
+        ? `Publish a managed issue spec comment containing \`${ISSUE_SPEC_COMMENT_MARKER}\` after creating the issue.`
+        : `Create or publish a managed issue spec comment containing \`${ISSUE_SPEC_COMMENT_MARKER}\`.`,
+    },
+    {
+      issueNumber,
+      marker: ISSUE_PLAN_COMMENT_MARKER,
+      requiredFor: `prs issue estimate ${issueNumber}`,
+      status: input.planFilePath ? "artifact-provided" : "missing",
+      ...(input.planFilePath ? { file: input.planFilePath } : {}),
+      nextAction: input.planFilePath
+        ? `Publish a managed issue plan comment containing \`${ISSUE_PLAN_COMMENT_MARKER}\` or run \`prs issue plan ${issueNumber}\` before estimating.`
+        : `Create or publish a managed issue plan comment containing \`${ISSUE_PLAN_COMMENT_MARKER}\`, or run \`prs issue plan ${issueNumber}\`, before estimating.`,
+    },
+  ]);
+}
+
 async function promptForLine(prompt: string): Promise<string> {
   const rl = createInterface({
     input: process.stdin,
@@ -4500,6 +4538,11 @@ async function runToolCommand(): Promise<void> {
               issueNumbers: [issue.number],
               planFilePath: toolCommand.planFilePath,
             }),
+            managedCommentHints: createManagedCommentHints({
+              issueNumbers: [issue.number],
+              specFilePath: toolCommand.specFilePath,
+              planFilePath: toolCommand.planFilePath,
+            }),
           },
           null,
           2
@@ -4540,6 +4583,11 @@ async function runToolCommand(): Promise<void> {
           createdIssues: issues,
           auditPublicationHints: createAuditPublicationHints({
             issueNumbers: issues.map((issue) => issue.number),
+            planFilePath: toolCommand.planFilePath,
+          }),
+          managedCommentHints: createManagedCommentHints({
+            issueNumbers: issues.map((issue) => issue.number),
+            specFilePath: toolCommand.specFilePath,
             planFilePath: toolCommand.planFilePath,
           }),
         },
