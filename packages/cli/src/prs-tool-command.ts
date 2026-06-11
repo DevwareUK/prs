@@ -7,6 +7,7 @@ export type PrsToolCommand =
       draftFilePath?: string;
       issueSetFilePath?: string;
       runDir?: string;
+      specFilePath?: string;
       planFilePath?: string;
       mediaManifestFilePath?: string;
       labels: string[];
@@ -40,7 +41,7 @@ export function renderPrsToolCommandHelp(): string {
     "  prs tool issue ready <issue-number> [--unattended|--auto|--jdi] --json",
     "  prs tool issue estimate <issue-number> --json",
     "  prs tool issue create (--draft-file <path>|--issue-set <path>) --json",
-    "                        [--run-dir <path>] [--plan-file <path>] [--media-manifest <path>]",
+    "                        [--run-dir <path>] [--spec-file <path>] [--plan-file <path>] [--media-manifest <path>]",
     "                        [--label <name>] [--labels <a,b>]",
     "                        [--force-prs-managed]",
     "  prs tool pr list [--actionable] --json",
@@ -148,6 +149,7 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
       let draftFilePath: string | undefined;
       let issueSetFilePath: string | undefined;
       let runDir: string | undefined;
+      let specFilePath: string | undefined;
       let planFilePath: string | undefined;
       let mediaManifestFilePath: string | undefined;
       const labels = new Set<string>();
@@ -206,6 +208,20 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
 
         if (rawArg.startsWith("--run-dir=")) {
           runDir = rawArg.slice("--run-dir=".length);
+          continue;
+        }
+
+        if (rawArg === "--spec-file") {
+          specFilePath = optionArgs[index + 1];
+          if (!specFilePath) {
+            throw new Error(`Missing value for --spec-file. ${renderPrsToolCommandHelp()}`);
+          }
+          index += 1;
+          continue;
+        }
+
+        if (rawArg.startsWith("--spec-file=")) {
+          specFilePath = rawArg.slice("--spec-file=".length);
           continue;
         }
 
@@ -289,6 +305,7 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
         draftFilePath,
         issueSetFilePath,
         runDir,
+        specFilePath,
         planFilePath,
         mediaManifestFilePath,
         labels: [...labels],

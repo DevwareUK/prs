@@ -179,6 +179,12 @@ describe("managed prs Codex skills", () => {
     expect(createMarkdown).toContain("Draft a GitHub issue from a rough idea");
     expect(createMarkdown).toContain("Draft GitHub Issue: <short topic>");
     expect(createMarkdown).toContain("ask the user to approve them before creating");
+    expect(createMarkdown).toContain(
+      "An issue is estimate-ready only after it has a managed `<!-- prs:issue-plan -->` comment"
+    );
+    expect(createMarkdown).toContain("`<!-- prs:issue-spec -->`");
+    expect(createMarkdown).toContain("`prs audit publish` comments are audit trail comments");
+    expect(createMarkdown).toContain("`prs issue estimate <number>`");
     expect(createMarkdown).toContain("offer the next `/prs issue` step for that issue");
     expect(createMarkdown).not.toContain("offer the `/prs issue <number>` step");
     expect(createMarkdown).not.toContain("offer to start `prs:start-issue-work`");
