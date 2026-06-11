@@ -122,6 +122,11 @@ export type IssueTokenUsageArtifact = {
     objective?: string;
     status?: string;
   };
+  model?: {
+    id?: string;
+    displayName?: string;
+    source?: "codex-session" | "configured-role" | "manual" | "unavailable";
+  };
   usage?: {
     inputTokens?: number;
     outputTokens?: number;
@@ -156,6 +161,16 @@ function formatDuration(seconds: number | undefined): string | undefined {
   return parts.join(" ");
 }
 
+function formatModelLines(
+  model: IssueTokenUsageArtifact["model"] | undefined
+): string[] {
+  const modelName = model?.displayName ?? model?.id;
+  return [
+    ...(modelName ? [`Model: ${modelName}`] : []),
+    ...(model?.source ? [`Model source: ${model.source}`] : []),
+  ];
+}
+
 export function writeIssueTokenUsageArtifact(
   filePath: string,
   artifact: IssueTokenUsageArtifact
@@ -171,6 +186,7 @@ export function formatIssueTokenUsageAuditSection(
       `Token usage was unavailable for issue #${artifact.issueNumber}.`,
       "",
       `Captured at: ${artifact.capturedAt}`,
+      ...formatModelLines(artifact.model),
       ...(artifact.notes?.length
         ? ["", "Notes:", ...artifact.notes.map((note) => `- ${note}`)]
         : []),
@@ -188,6 +204,7 @@ export function formatIssueTokenUsageAuditSection(
   const outputTokens = formatOptionalInteger(artifact.usage?.outputTokens);
   const elapsed = formatDuration(artifact.usage?.timeUsedSeconds);
 
+  lines.push(...formatModelLines(artifact.model));
   if (totalTokens) {
     lines.push(`Total tokens: ${totalTokens}`);
   }

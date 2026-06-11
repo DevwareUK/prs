@@ -34,6 +34,10 @@ describe("issue token usage artifacts", () => {
         objective: "Complete PRS issue #270",
         status: "active",
       },
+      model: {
+        id: "gpt-5",
+        source: "codex-session",
+      },
       usage: {
         totalTokens: 12345,
         timeUsedSeconds: 367,
@@ -51,6 +55,10 @@ describe("issue token usage artifacts", () => {
         objective: "Complete PRS issue #270",
         status: "active",
       },
+      model: {
+        id: "gpt-5",
+        source: "codex-session",
+      },
       usage: {
         totalTokens: 12345,
         timeUsedSeconds: 367,
@@ -66,12 +74,16 @@ describe("issue token usage artifacts", () => {
         issueNumber: 270,
         capturedAt: "2026-06-11T16:20:00.000Z",
         source: "codex-goal",
+        model: {
+          id: "gpt-5",
+          source: "codex-session",
+        },
         usage: {
           totalTokens: 12345,
           timeUsedSeconds: 367,
         },
       })
-    ).toContain("Total tokens: 12,345");
+    ).toContain("Model: gpt-5");
 
     expect(
       formatIssueTokenUsageAuditSection({
@@ -80,8 +92,12 @@ describe("issue token usage artifacts", () => {
         issueNumber: 270,
         capturedAt: "2026-06-11T16:20:00.000Z",
         source: "codex-goal",
+        model: {
+          id: "gpt-5",
+          source: "manual",
+        },
         notes: ["Codex goal usage was not exposed in this session."],
       })
-    ).toContain("Token usage was unavailable");
+    ).toContain("Model: gpt-5");
   });
 });

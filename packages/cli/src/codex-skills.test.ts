@@ -201,6 +201,7 @@ describe("managed prs Codex skills", () => {
     expect(issueMarkdown).toContain("create_goal");
     expect(issueMarkdown).toContain("Complete PRS issue #<number>");
     expect(issueMarkdown).toContain("codex-token-usage.json");
+    expect(issueMarkdown).toContain("model identifier and source");
     expect(issueMarkdown).toContain(
       "For interactive issue selection, use `prs tool issue list --actionable --json` as the source of truth and show each returned issue with its number, title, and GitHub URL."
     );
@@ -229,11 +230,13 @@ describe("managed prs Codex skills", () => {
     expect(finishWorkMarkdown).toContain("get_goal");
     expect(finishWorkMarkdown).toContain("token-usage");
     expect(finishWorkMarkdown).toContain("codex-token-usage.json");
+    expect(finishWorkMarkdown).toContain("active model identifier/source");
     expect(finishMarkdown).toContain("name: prs:finish");
     expect(finishMarkdown).toContain("safely cleaning up");
     expect(finishMarkdown).toContain("get_goal");
     expect(finishMarkdown).toContain("token-usage");
     expect(finishMarkdown).toContain("codex-token-usage.json");
+    expect(finishMarkdown).toContain("active model identifier/source");
     expect(finishMarkdown).toContain("offer the next `/prs pr` step for that pull request");
     expect(finishMarkdown).not.toContain("offer to prepare the pull request for review with `/prs pr <number> prepare-review`");
   });
