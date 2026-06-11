@@ -67,6 +67,8 @@ When the Codex skill alias `/prs issue <number> --unattended` is requested, trea
 
 For one issue, the built-in `prs issue <number> --unattended` path prepares a branch, launches Codex non-interactively, verifies, commits, pushes, and opens a pull request when it is run from an outer terminal or automation context. From inside an active Codex session, use `prs tool issue ready <number> --unattended --json` and continue the implementation in that session instead of launching the built-in unattended path. For multiple issues, `prs issue <number> <number> ...` and `prs issue batch ...` create one isolated worktree per issue from the configured updated `baseBranch`.
 
+When the active Codex app exposes goal tools, `/prs issue <number> --unattended`, `/prs issue <number> --auto`, and `/prs issue <number> --jdi` should create or reuse an issue-scoped goal such as `Complete PRS issue #<number>: <title>`. During `/prs finish`, capture the latest `get_goal` usage and available estimate-style model profile metadata into `codex-token-usage.json` in the issue run directory and include a concise `token-usage` section in the final PR audit comment. Model metadata should mirror `prs issue estimate` profile formatting, such as `standard (gpt-5.4-mini, medium thinking)` for the default implementer profile or `premium (gpt-5.5, high thinking)` for premium-profile work. This is actual tracked session usage when available; it is separate from `prs issue estimate <number>`, which remains a forecast from the managed plan.
+
 GitHub-visible output should match that mode split. Manual/guided output is treated as developer-approved and does not include automation framing. Unattended output can be posted directly, but managed issue comments, audit comments, local PR review comments, and test suggestion comments include a visible `prs automation note` after any hidden marker.
 
 ## Superpowers-backed issue planning
@@ -94,6 +96,8 @@ Typical paths:
 - `.prs/issues/`: issue snapshots, generated drafts, and per-issue session state
 - `.prs/batches/`: multi-issue run state
 - `.prs/worktrees/`: generated issue worktrees for parallel issue runs
+
+For Codex issue implementation runs, `codex-token-usage.json` may appear in the issue run directory. It records whether actual token usage was `tracked`, `partial`, or `unavailable`, available workflow role/profile/tier/model/thinking metadata, and the captured Codex goal usage fields exposed by the active Codex environment.
 
 For Codex-guided local fix workflows, the most useful files are usually `prompt.md`, `metadata.json`, `output.log`, and the preserved source snapshot such as `pr-review-comments.md` or `pr-test-suggestions.md`.
 
