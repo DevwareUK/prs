@@ -552,7 +552,7 @@ describe("Backlog and review commands", () => {
       await run();
 
       expect(analyzeFeatureBacklog).toHaveBeenCalledWith({
-        excludePaths: [...DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS],
+        excludePaths: [...DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS, "**/coverage/**"],
         repoRoot: process.cwd(),
         maxSuggestions: 5,
       });
@@ -596,7 +596,7 @@ describe("Backlog and review commands", () => {
       await run();
 
       expect(analyzeFeatureBacklog).toHaveBeenCalledWith({
-        excludePaths: [...DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS],
+        excludePaths: [...DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS, "**/coverage/**"],
         repoRoot: process.cwd(),
         maxSuggestions: 2,
       });
