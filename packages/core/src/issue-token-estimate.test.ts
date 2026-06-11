@@ -87,4 +87,84 @@ describe("issue implementation token estimates", () => {
     expect(estimate.drivers.join("\n")).toContain("4 implementation steps");
     expect(estimate.scanBudget.status).toBe("complete");
   });
+
+  it("marks plans without likely files or implementation steps as low confidence", () => {
+    const estimate = estimateIssueImplementationTokens({
+      planBody: [
+        "<!-- prs:issue-plan -->",
+        "# Implementation Plan",
+        "",
+        "## Summary",
+        "",
+        "Investigate whether this issue is actionable.",
+      ].join("\n"),
+      profiles: [
+        {
+          name: "standard",
+          model: "gpt-5.4-mini",
+          thinking: "medium",
+        },
+      ],
+    });
+
+    expect(estimate.confidence).toBe("low");
+    expect(estimate.profiles[0].confidence).toBe("low");
+    expect(estimate.drivers).toContain("No explicit implementation steps detected.");
+    expect(estimate.drivers).toContain("0 likely files detected.");
+    expect(estimate.warnings).toContain(
+      "Estimate confidence is low; refine or split the plan before relying on the range."
+    );
+  });
+
+  it("warns when likely files are missing or the repository scan budget is exhausted", () => {
+    const estimate = estimateIssueImplementationTokens({
+      planBody: [
+        "## Likely Files",
+        "",
+        "- `packages/cli/src/index.ts`",
+        "- `packages/cli/src/missing-a.ts`",
+        "- `packages/cli/src/missing-b.ts`",
+        "- `packages/cli/src/missing-c.ts`",
+        "- `packages/cli/src/missing-d.ts`",
+        "",
+        "## Steps",
+        "",
+        "1. Add bounded scanning.",
+      ].join("\n"),
+      profiles: [
+        {
+          name: "premium",
+          model: "gpt-5.5",
+          thinking: "high",
+        },
+      ],
+      context: {
+        likelyFiles: [
+          { path: "packages/cli/src/index.ts", exists: true, lineCount: 100 },
+          { path: "packages/cli/src/missing-a.ts", exists: false, lineCount: 0 },
+          { path: "packages/cli/src/missing-b.ts", exists: false, lineCount: 0 },
+          { path: "packages/cli/src/missing-c.ts", exists: false, lineCount: 0 },
+          { path: "packages/cli/src/missing-d.ts", exists: false, lineCount: 0 },
+        ],
+        scanBudget: {
+          filesConsidered: 20,
+          filesScanned: 1,
+          maxFiles: 12,
+          exhausted: true,
+        },
+      },
+    });
+
+    expect(estimate.confidence).toBe("low");
+    expect(estimate.scanBudget).toEqual({
+      status: "exhausted",
+      filesConsidered: 20,
+      filesScanned: 1,
+      maxFiles: 12,
+    });
+    expect(estimate.warnings).toContain("4 likely files were not found locally.");
+    expect(estimate.warnings).toContain(
+      "Repository context scan budget was exhausted; estimate confidence is reduced."
+    );
+  });
 });

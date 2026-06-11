@@ -92,6 +92,9 @@ describe("CLI command surface", () => {
       issueNumber: 42,
       mode: "local",
     });
+    expect(() =>
+      parseIssueCommandArgs(["issue", "estimate", "42", "--refresh"])
+    ).toThrow('Unknown issue option "--refresh"');
   });
 
   it("parses issue plan refresh aliases", async () => {
