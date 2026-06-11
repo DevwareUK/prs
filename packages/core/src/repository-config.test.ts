@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS,
   DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS,
+  DEFAULT_REPOSITORY_AI_COST_ESTIMATES,
   DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
   DEFAULT_REPOSITORY_AI_PROFILES,
   DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
@@ -30,6 +31,7 @@ describe("resolveRepositoryConfig", () => {
       issueDraft: {
         useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
       },
+      costEstimates: DEFAULT_REPOSITORY_AI_COST_ESTIMATES,
       profiles: DEFAULT_REPOSITORY_AI_PROFILES,
       roles: DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
       runtime: { type: DEFAULT_REPOSITORY_AI_RUNTIME_TYPE },
@@ -65,6 +67,7 @@ describe("resolveRepositoryConfig", () => {
       issueDraft: {
         useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
       },
+      costEstimates: DEFAULT_REPOSITORY_AI_COST_ESTIMATES,
       profiles: DEFAULT_REPOSITORY_AI_PROFILES,
       roles: DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
       runtime: {
@@ -149,6 +152,7 @@ describe("resolveRepositoryConfig", () => {
       issueDraft: {
         useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
       },
+      costEstimates: DEFAULT_REPOSITORY_AI_COST_ESTIMATES,
       profiles: DEFAULT_REPOSITORY_AI_PROFILES,
       roles: DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
       runtime: {
@@ -179,6 +183,7 @@ describe("resolveRepositoryConfig", () => {
       issueDraft: {
         useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
       },
+      costEstimates: DEFAULT_REPOSITORY_AI_COST_ESTIMATES,
       profiles: DEFAULT_REPOSITORY_AI_PROFILES,
       roles: DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
       runtime: {
@@ -250,6 +255,7 @@ describe("resolveRepositoryConfig", () => {
       issueDraft: {
         useCodexSuperpowers: false,
       },
+      costEstimates: DEFAULT_REPOSITORY_AI_COST_ESTIMATES,
       profiles: DEFAULT_REPOSITORY_AI_PROFILES,
       roles: DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
       runtime: {
@@ -285,5 +291,39 @@ describe("resolveRepositoryConfig", () => {
 
     expect(resolved.ai.profiles).toEqual(DEFAULT_REPOSITORY_AI_PROFILES);
     expect(resolved.ai.roles).toEqual(DEFAULT_REPOSITORY_AI_ROLE_PROFILES);
+  });
+
+  it("resolves default and overridden ai cost estimates", () => {
+    expect(resolveRepositoryConfig().ai.costEstimates).toEqual(
+      DEFAULT_REPOSITORY_AI_COST_ESTIMATES
+    );
+
+    expect(
+      resolveRepositoryConfig({
+        ai: {
+          costEstimates: {
+            inputTokenRatio: 0.7,
+            outputTokenRatio: 0.3,
+            modelRates: {
+              "gpt-5.4-mini": {
+                inputPerMillionTokens: 1,
+                outputPerMillionTokens: 5,
+              },
+            },
+          },
+        },
+      }).ai.costEstimates
+    ).toEqual({
+      ...DEFAULT_REPOSITORY_AI_COST_ESTIMATES,
+      inputTokenRatio: 0.7,
+      outputTokenRatio: 0.3,
+      modelRates: {
+        ...DEFAULT_REPOSITORY_AI_COST_ESTIMATES.modelRates,
+        "gpt-5.4-mini": {
+          inputPerMillionTokens: 1,
+          outputPerMillionTokens: 5,
+        },
+      },
+    });
   });
 });

@@ -267,6 +267,53 @@ describe("repository config schema", () => {
     });
   });
 
+  it("accepts ai cost estimate overrides", () => {
+    expect(
+      RepositoryConfig.parse({
+        ai: {
+          costEstimates: {
+            currency: "USD",
+            inputTokenRatio: 0.7,
+            outputTokenRatio: 0.3,
+            modelRates: {
+              "gpt-5.4-mini": {
+                inputPerMillionTokens: 1,
+                outputPerMillionTokens: 5,
+              },
+            },
+          },
+        },
+      })
+    ).toEqual({
+      ai: {
+        costEstimates: {
+          currency: "USD",
+          inputTokenRatio: 0.7,
+          outputTokenRatio: 0.3,
+          modelRates: {
+            "gpt-5.4-mini": {
+              inputPerMillionTokens: 1,
+              outputPerMillionTokens: 5,
+            },
+          },
+        },
+      },
+    });
+  });
+
+  it("requires ai cost estimate ratios to add up to 1", () => {
+    expect(() =>
+      RepositoryConfig.parse({
+        ai: {
+          costEstimates: {
+            inputTokenRatio: 0.8,
+            outputTokenRatio: 0.3,
+          },
+        },
+      })
+    ).toThrow();
+  });
+
   it("requires ai role profile references to exist", () => {
     expect(() =>
       RepositoryConfig.parse({

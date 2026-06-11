@@ -23,6 +23,7 @@ export type IssueEstimateInput = {
   planBody: string;
   profiles: IssueEstimateProfile[];
   implementerProfileName?: string;
+  costEstimates?: IssueEstimateCostSettings;
   context?: {
     likelyFiles?: IssueEstimateFileContext[];
     verificationCommands?: string[][];
@@ -40,8 +41,37 @@ export type IssueTokenRange = {
   high: number;
 };
 
+export type IssueCostRange = {
+  low: number;
+  high: number;
+};
+
+export type IssueEstimateModelTokenRates = {
+  inputPerMillionTokens: number;
+  outputPerMillionTokens: number;
+};
+
+export type IssueEstimateCostBasis = {
+  currency: "USD";
+  inputPerMillionTokens: number;
+  outputPerMillionTokens: number;
+  inputTokenRatio: number;
+  outputTokenRatio: number;
+  blendedRatePerMillionTokens: number;
+  source: string;
+};
+
+export type IssueEstimateCostSettings = {
+  currency: "USD";
+  inputTokenRatio: number;
+  outputTokenRatio: number;
+  modelRates: Record<string, IssueEstimateModelTokenRates>;
+};
+
 export type IssueProfileTokenEstimate = IssueEstimateProfile & {
   range: IssueTokenRange;
+  costBasis: IssueEstimateCostBasis;
+  costRange: IssueCostRange;
   confidence: "high" | "medium" | "low";
   notes: string[];
 };
@@ -49,6 +79,12 @@ export type IssueProfileTokenEstimate = IssueEstimateProfile & {
 export type IssueImplementationTokenEstimate = {
   status: "estimated";
   profiles: IssueProfileTokenEstimate[];
+  cost: {
+    currency: "USD";
+    inputTokenRatio: number;
+    outputTokenRatio: number;
+    explanation: string;
+  };
   drivers: string[];
   warnings: string[];
   recommendation: string;
@@ -60,6 +96,36 @@ export type IssueImplementationTokenEstimate = {
     maxFiles: number;
   };
 };
+
+export const DEFAULT_ISSUE_ESTIMATE_INPUT_TOKEN_RATIO = 0.8;
+export const DEFAULT_ISSUE_ESTIMATE_OUTPUT_TOKEN_RATIO = 0.2;
+
+export const DEFAULT_ISSUE_ESTIMATE_MODEL_RATES_USD_PER_MILLION = {
+  "gpt-5.5": {
+    inputPerMillionTokens: 5,
+    outputPerMillionTokens: 30,
+  },
+  "gpt-5.4": {
+    inputPerMillionTokens: 2.5,
+    outputPerMillionTokens: 15,
+  },
+  "gpt-5.4-mini": {
+    inputPerMillionTokens: 0.75,
+    outputPerMillionTokens: 4.5,
+  },
+} satisfies Record<string, IssueEstimateModelTokenRates>;
+
+export const DEFAULT_ISSUE_ESTIMATE_FALLBACK_MODEL_RATE_USD_PER_MILLION = {
+  inputPerMillionTokens: 5,
+  outputPerMillionTokens: 30,
+} satisfies IssueEstimateModelTokenRates;
+
+export const DEFAULT_ISSUE_ESTIMATE_COST_SETTINGS = {
+  currency: "USD",
+  inputTokenRatio: DEFAULT_ISSUE_ESTIMATE_INPUT_TOKEN_RATIO,
+  outputTokenRatio: DEFAULT_ISSUE_ESTIMATE_OUTPUT_TOKEN_RATIO,
+  modelRates: DEFAULT_ISSUE_ESTIMATE_MODEL_RATES_USD_PER_MILLION,
+} satisfies IssueEstimateCostSettings;
 
 const MANAGED_MARKER_PATTERN = /^<!--\s*prs:issue-plan\s*-->\s*$/i;
 const RISK_TERMS = [
@@ -155,6 +221,53 @@ function roundToThousand(value: number): number {
   return Math.max(1000, Math.round(value / 1000) * 1000);
 }
 
+function calculateBlendedRate(
+  rates: IssueEstimateModelTokenRates,
+  costSettings: IssueEstimateCostSettings
+): number {
+  return Number(
+    (
+      rates.inputPerMillionTokens * costSettings.inputTokenRatio +
+      rates.outputPerMillionTokens * costSettings.outputTokenRatio
+    ).toFixed(4)
+  );
+}
+
+function estimateCostRange(
+  range: IssueTokenRange,
+  blendedRatePerMillionTokens: number
+): IssueCostRange {
+  return {
+    low: Number(((range.low / 1_000_000) * blendedRatePerMillionTokens).toFixed(2)),
+    high: Number(((range.high / 1_000_000) * blendedRatePerMillionTokens).toFixed(2)),
+  };
+}
+
+function createCostBasis(
+  profile: IssueEstimateProfile,
+  costSettings: IssueEstimateCostSettings
+): IssueEstimateCostBasis {
+  const normalizedModel = profile.model.toLowerCase();
+  const rates =
+    costSettings.modelRates[profile.model] ??
+    costSettings.modelRates[normalizedModel] ??
+    DEFAULT_ISSUE_ESTIMATE_FALLBACK_MODEL_RATE_USD_PER_MILLION;
+  const source =
+    costSettings.modelRates[profile.model] || costSettings.modelRates[normalizedModel]
+      ? `model-rate:${profile.model}`
+      : "fallback-model-rate";
+
+  return {
+    currency: costSettings.currency,
+    inputPerMillionTokens: rates.inputPerMillionTokens,
+    outputPerMillionTokens: rates.outputPerMillionTokens,
+    inputTokenRatio: costSettings.inputTokenRatio,
+    outputTokenRatio: costSettings.outputTokenRatio,
+    blendedRatePerMillionTokens: calculateBlendedRate(rates, costSettings),
+    source,
+  };
+}
+
 function pluralize(count: number, singular: string, plural = `${singular}s`): string {
   return `${count} ${count === 1 ? singular : plural}`;
 }
@@ -235,12 +348,14 @@ export function estimateIssueImplementationTokens(
     riskTermCount * 1200 +
     Math.max(verificationCommandCount, 1) * 1800;
 
+  const costSettings = input.costEstimates ?? DEFAULT_ISSUE_ESTIMATE_COST_SETTINGS;
   const profiles = input.profiles.map((profile) => {
     const multiplier = profileMultiplier(profile);
     const range = {
       low: roundToThousand(baseTokens * multiplier * 0.75),
       high: roundToThousand(baseTokens * multiplier * (confidence === "low" ? 1.75 : 1.35)),
     };
+    const costBasis = createCostBasis(profile, costSettings);
     const notes = [
       profile.name === input.implementerProfileName
         ? "Configured implementer profile."
@@ -253,6 +368,8 @@ export function estimateIssueImplementationTokens(
     return {
       ...profile,
       range,
+      costBasis,
+      costRange: estimateCostRange(range, costBasis.blendedRatePerMillionTokens),
       confidence,
       notes,
     };
@@ -295,6 +412,13 @@ export function estimateIssueImplementationTokens(
   return {
     status: "estimated",
     profiles,
+    cost: {
+      currency: costSettings.currency,
+      inputTokenRatio: costSettings.inputTokenRatio,
+      outputTokenRatio: costSettings.outputTokenRatio,
+      explanation:
+        `Approximate planning cost = tokens / 1,000,000 * blended model rate. Blended model rate = input rate * ${costSettings.inputTokenRatio} + output rate * ${costSettings.outputTokenRatio}.`,
+    },
     drivers,
     warnings,
     recommendation,

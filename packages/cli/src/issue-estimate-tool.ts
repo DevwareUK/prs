@@ -165,6 +165,7 @@ function createEstimateResult(
     implementerProfileName:
       ((config.ai as { roles?: { implementer?: string } }).roles ??
         DEFAULT_ESTIMATE_ROLES).implementer,
+    costEstimates: config.ai.costEstimates,
     context: {
       likelyFiles: context.files,
       verificationCommands: createVerificationCommands(config),
@@ -204,6 +205,18 @@ function formatRange(range: { low: number; high: number }): string {
   return `${range.low.toLocaleString()}-${range.high.toLocaleString()} tokens`;
 }
 
+function formatCost(value: number): string {
+  return `$${value.toFixed(2)}`;
+}
+
+function formatCostRange(range: { low: number; high: number }): string {
+  return `${formatCost(range.low)}-${formatCost(range.high)}`;
+}
+
+function formatPercent(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}
+
 export function renderIssueEstimate(result: IssueEstimateToolResult): string {
   if (result.status === "blocked") {
     return [
@@ -224,8 +237,16 @@ export function renderIssueEstimate(result: IssueEstimateToolResult): string {
       (profile) =>
         `- ${profile.name} (${profile.model}, ${profile.thinking} thinking): ${formatRange(
           profile.range
-        )} [${profile.confidence}]`
+        )} (~${formatCostRange(profile.costRange)} at $${profile.costBasis.blendedRatePerMillionTokens.toFixed(
+          2
+        )}/1M blended) [${profile.confidence}]`
     ),
+    "",
+    `Cost basis: approximate ${result.cost.currency} planning cost uses an ${formatPercent(
+      result.cost.inputTokenRatio
+    )} input / ${formatPercent(result.cost.outputTokenRatio)} output token split.`,
+    "Per-model blended rates come from PRS defaults unless overridden in `.prs/config.json`.",
+    "Actual billing can vary with model pricing, input/output mix, cached tokens, retries, and future price changes.",
     "",
     "Recommendation:",
     result.recommendation,
