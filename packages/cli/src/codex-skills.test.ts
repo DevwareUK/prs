@@ -90,7 +90,7 @@ describe("managed prs Codex skills", () => {
       "/prs issue <number> estimate`: run `prs tool issue estimate <number> --json`"
     );
     expect(markdown).toContain(
-      "show the returned token ranges, rough USD cost ranges, cost-basis metadata, confidence, drivers, warnings, and recommendation"
+      "show the returned token ranges, rough USD cost ranges with their priced token range/formula, cost-basis metadata, confidence, drivers, warnings, and recommendation"
     );
     expect(markdown).toContain(
       "do not launch a runtime, edit files, commit, push, or publish GitHub comments"

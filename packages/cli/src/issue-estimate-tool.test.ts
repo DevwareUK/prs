@@ -129,6 +129,7 @@ describe("issue estimate tool", () => {
       expect(rendered).toContain(
         "Cost basis: approximate USD planning cost uses an 80% input / 20% output token split."
       );
+      expect(rendered).toContain("priced from token range");
       expect(rendered).toContain("blended");
       expect(rendered).toContain("Actual billing can vary");
       expect(rendered).toContain("Scan budget: exhausted (0/13 files scanned, max 12)");

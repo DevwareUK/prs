@@ -237,7 +237,7 @@ export function renderIssueEstimate(result: IssueEstimateToolResult): string {
       (profile) =>
         `- ${profile.name} (${profile.model}, ${profile.thinking} thinking): ${formatRange(
           profile.range
-        )} (~${formatCostRange(profile.costRange)} at $${profile.costBasis.blendedRatePerMillionTokens.toFixed(
+        )} (~${formatCostRange(profile.costRange)} priced from token range at $${profile.costBasis.blendedRatePerMillionTokens.toFixed(
           2
         )}/1M blended) [${profile.confidence}]`
     ),

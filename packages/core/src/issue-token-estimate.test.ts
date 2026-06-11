@@ -116,6 +116,10 @@ describe("issue implementation token estimates", () => {
       (estimate.profiles[0].range.high / 1_000_000) * 10,
       2
     );
+    expect(estimate.profiles[0].costRange).toMatchObject({
+      pricedTokenRange: estimate.profiles[0].range,
+      formula: "tokenRange / 1,000,000 * blendedRatePerMillionTokens",
+    });
   });
 
   it("uses caller-provided model rates and input/output ratios for cost estimates", () => {

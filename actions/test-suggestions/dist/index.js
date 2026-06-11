@@ -16872,6 +16872,7 @@ var require_dist2 = __commonJS({
       DEFAULT_REPOSITORY_BUILD_COMMAND: () => DEFAULT_REPOSITORY_BUILD_COMMAND,
       DEFAULT_REPOSITORY_FORGE_TYPE: () => DEFAULT_REPOSITORY_FORGE_TYPE,
       EMPTY_PR_IMPACT_PROFILE: () => EMPTY_PR_IMPACT_PROFILE,
+      ISSUE_ESTIMATE_COST_RANGE_FORMULA: () => ISSUE_ESTIMATE_COST_RANGE_FORMULA,
       PR_ASSISTANT_END_MARKER: () => import_contracts10.PR_ASSISTANT_END_MARKER,
       PR_ASSISTANT_START_MARKER: () => import_contracts10.PR_ASSISTANT_START_MARKER,
       PR_IMPACT_PROFILE_GUIDANCE_LINES: () => PR_IMPACT_PROFILE_GUIDANCE_LINES,
@@ -17230,6 +17231,7 @@ ${formatValidationIssues(validationIssues)}`,
       outputTokenRatio: DEFAULT_ISSUE_ESTIMATE_OUTPUT_TOKEN_RATIO,
       modelRates: DEFAULT_ISSUE_ESTIMATE_MODEL_RATES_USD_PER_MILLION
     };
+    var ISSUE_ESTIMATE_COST_RANGE_FORMULA = "tokenRange / 1,000,000 * blendedRatePerMillionTokens";
     var MANAGED_MARKER_PATTERN = /^<!--\s*prs:issue-plan\s*-->\s*$/i;
     var RISK_TERMS = [
       "auth",
@@ -17310,7 +17312,9 @@ ${formatValidationIssues(validationIssues)}`,
     function estimateCostRange(range2, blendedRatePerMillionTokens) {
       return {
         low: Number((range2.low / 1e6 * blendedRatePerMillionTokens).toFixed(2)),
-        high: Number((range2.high / 1e6 * blendedRatePerMillionTokens).toFixed(2))
+        high: Number((range2.high / 1e6 * blendedRatePerMillionTokens).toFixed(2)),
+        pricedTokenRange: range2,
+        formula: ISSUE_ESTIMATE_COST_RANGE_FORMULA
       };
     }
     function createCostBasis(profile, costSettings) {

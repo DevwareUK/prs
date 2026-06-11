@@ -44,6 +44,8 @@ export type IssueTokenRange = {
 export type IssueCostRange = {
   low: number;
   high: number;
+  pricedTokenRange: IssueTokenRange;
+  formula: string;
 };
 
 export type IssueEstimateModelTokenRates = {
@@ -126,6 +128,9 @@ export const DEFAULT_ISSUE_ESTIMATE_COST_SETTINGS = {
   outputTokenRatio: DEFAULT_ISSUE_ESTIMATE_OUTPUT_TOKEN_RATIO,
   modelRates: DEFAULT_ISSUE_ESTIMATE_MODEL_RATES_USD_PER_MILLION,
 } satisfies IssueEstimateCostSettings;
+
+export const ISSUE_ESTIMATE_COST_RANGE_FORMULA =
+  "tokenRange / 1,000,000 * blendedRatePerMillionTokens";
 
 const MANAGED_MARKER_PATTERN = /^<!--\s*prs:issue-plan\s*-->\s*$/i;
 const RISK_TERMS = [
@@ -240,6 +245,8 @@ function estimateCostRange(
   return {
     low: Number(((range.low / 1_000_000) * blendedRatePerMillionTokens).toFixed(2)),
     high: Number(((range.high / 1_000_000) * blendedRatePerMillionTokens).toFixed(2)),
+    pricedTokenRange: range,
+    formula: ISSUE_ESTIMATE_COST_RANGE_FORMULA,
   };
 }
 
