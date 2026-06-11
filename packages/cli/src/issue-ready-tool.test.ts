@@ -119,7 +119,7 @@ describe("issue ready tool", () => {
     );
   });
 
-  it("detects issue specifications nested inside audit comments", async () => {
+  it("ignores issue specifications nested inside audit comments", async () => {
     const repoRoot = mkdtempSync(join(tmpdir(), "prs-issue-ready-audit-spec-"));
     const forge = {
       type: "github" as const,
@@ -171,17 +171,14 @@ describe("issue ready tool", () => {
       status: "ready",
       issueNumber: 255,
       spec: {
-        status: "present",
-        url: "https://github.com/DevwareUK/prs/issues/255#issuecomment-1",
-        updatedAt: "2026-05-28T19:05:00Z",
+        status: "missing",
       },
     });
 
     const metadata = JSON.parse(readFileSync(join(repoRoot, result.metadataFilePath), "utf8"));
     expect(metadata).toMatchObject({
       spec: {
-        status: "present",
-        url: "https://github.com/DevwareUK/prs/issues/255#issuecomment-1",
+        status: "missing",
       },
     });
   });

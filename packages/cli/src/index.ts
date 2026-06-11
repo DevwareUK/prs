@@ -32,10 +32,10 @@ import type { ResolvedRepositoryConfigType, RepositoryAiWorkflowRole } from "@pr
 import {
   applyGitHubOutputFraming,
   type GitHubOutputMode,
-  includesManagedMarker,
   ISSUE_PLAN_COMMENT_MARKER,
   ISSUE_SPEC_COMMENT_MARKER,
   IssueDraftSet,
+  startsWithManagedMarker,
 } from "@prs/contracts";
 import dotenv from "dotenv";
 import {
@@ -47,7 +47,10 @@ import { inspectManagedCodexSkills } from "./codex-skills";
 import { buildDoneStateInstructions } from "./done-state";
 import { listIssuesTool } from "./issue-list-tool";
 import {
+  createIssueEstimateContext,
   estimateIssueTool,
+  publishIssueEstimateAudit,
+  publishIssueEstimateFile,
   renderIssueEstimate,
 } from "./issue-estimate-tool";
 import { readyIssueTool } from "./issue-ready-tool";
@@ -1078,7 +1081,7 @@ function findLatestIssueSpecComment(
   comments: RepositoryComment[]
 ): RepositoryComment | undefined {
   return comments
-    .filter((comment) => includesManagedMarker(comment.body, [ISSUE_SPEC_COMMENT_MARKER]))
+    .filter((comment) => startsWithManagedMarker(comment.body, [ISSUE_SPEC_COMMENT_MARKER]))
     .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0];
 }
 
@@ -1086,7 +1089,9 @@ function findLatestIssuePlanComment(
   comments: RepositoryComment[]
 ): IssuePlanComment | undefined {
   const comment = comments
-    .filter((candidate) => includesManagedMarker(candidate.body, [ISSUE_PLAN_COMMENT_MARKER]))
+    .filter((candidate) =>
+      startsWithManagedMarker(candidate.body, [ISSUE_PLAN_COMMENT_MARKER])
+    )
     .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0];
 
   if (!comment) {
@@ -3814,21 +3819,8 @@ async function createIssueDraftSetWithRecords(input: {
   return createdIssues;
 }
 
-function createAuditPublicationHints(input: {
-  issueNumbers: number[];
-  planFilePath?: string;
-}): Array<{ issueNumber: number; file: string; section: string }> {
-  if (!input.planFilePath || input.issueNumbers.length === 0) {
-    return [];
-  }
-
-  return [
-    {
-      issueNumber: input.issueNumbers[0],
-      file: input.planFilePath,
-      section: "plan",
-    },
-  ];
+function createAuditPublicationHints(): Array<{ issueNumber: number; file: string; section: string }> {
+  return [];
 }
 
 type ManagedCommentHint = {
@@ -4474,6 +4466,35 @@ async function runToolCommand(): Promise<void> {
     return;
   }
 
+  if (toolCommand.kind === "issue-estimate-context") {
+    const result = await createIssueEstimateContext({
+      issueNumber: toolCommand.issueNumber,
+      forge: getRepositoryForge(repoRoot),
+      repositoryConfig,
+    });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (toolCommand.kind === "issue-publish-estimate") {
+    const result = await publishIssueEstimateFile({
+      issueNumber: toolCommand.issueNumber,
+      estimateFilePath: resolve(repoRoot, toolCommand.estimateFilePath),
+      forge: getRepositoryForge(repoRoot),
+    });
+    process.stdout.write(
+      `${JSON.stringify(
+        {
+          status: result.status,
+          ...(result.status === "skipped" ? { reason: result.reason } : { url: result.url }),
+        },
+        null,
+        2
+      )}\n`
+    );
+    return;
+  }
+
   if (toolCommand.kind === "issue-create") {
     const forge = getRepositoryForge(repoRoot);
 
@@ -4534,10 +4555,7 @@ async function runToolCommand(): Promise<void> {
             mode: "single",
             issues: [issue],
             createdIssues: [issue],
-            auditPublicationHints: createAuditPublicationHints({
-              issueNumbers: [issue.number],
-              planFilePath: toolCommand.planFilePath,
-            }),
+            auditPublicationHints: createAuditPublicationHints(),
             managedCommentHints: createManagedCommentHints({
               issueNumbers: [issue.number],
               specFilePath: toolCommand.specFilePath,
@@ -4581,10 +4599,7 @@ async function runToolCommand(): Promise<void> {
           mode: "multiple",
           issues,
           createdIssues: issues,
-          auditPublicationHints: createAuditPublicationHints({
-            issueNumbers: issues.map((issue) => issue.number),
-            planFilePath: toolCommand.planFilePath,
-          }),
+          auditPublicationHints: createAuditPublicationHints(),
           managedCommentHints: createManagedCommentHints({
             issueNumbers: issues.map((issue) => issue.number),
             specFilePath: toolCommand.specFilePath,
@@ -7329,13 +7344,19 @@ async function runIssueCommand(): Promise<void> {
 
   if (issueCommand.action === "estimate") {
     const repositoryConfig = getRepositoryConfig(repoRoot);
+    const forge = getRepositoryForge(repoRoot);
     const result = await estimateIssueTool({
       issueNumber: issueCommand.issueNumber,
       repoRoot,
-      forge: getRepositoryForge(repoRoot),
+      forge,
       repositoryConfig,
     });
-    process.stdout.write(`${renderIssueEstimate(result)}\n`);
+    const publication = await publishIssueEstimateAudit(forge, result);
+    const auditMessage =
+      publication.status === "skipped"
+        ? `Audit comment skipped: ${publication.reason}`
+        : `Audit comment ${publication.status}: ${publication.url}`;
+    process.stdout.write(`${renderIssueEstimate(result)}\n\n${auditMessage}\n`);
     return;
   }
 

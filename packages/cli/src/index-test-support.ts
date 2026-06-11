@@ -1499,6 +1499,7 @@ async function loadCli(options: {
   }));
 
   vi.doMock("@prs/core", async () => {
+    const issueTokenEstimate = await import("../../core/src/issue-token-estimate");
     const prAssistantBody = await import("../../core/src/pr-assistant-body");
     const prReviewRender = await import("../../core/src/pr-review-render");
 
@@ -1526,6 +1527,9 @@ async function loadCli(options: {
     analyzeFeatureBacklog,
     analyzeTestBacklog,
     buildPRAssistantSection: prAssistantBody.buildPRAssistantSection,
+    estimateIssueImplementationTokens: issueTokenEstimate.estimateIssueImplementationTokens,
+    extractIssueImplementationPlanFiles:
+      issueTokenEstimate.extractIssueImplementationPlanFiles,
     filterRepositoryPaths,
     formatPRReviewMarkdown: prReviewRender.formatPRReviewMarkdown,
     generateCommitMessage,
@@ -1660,6 +1664,12 @@ async function loadCli(options: {
     },
     includesManagedMarker: (body: string, markers: string[]) =>
       markers.some((marker) => body.includes(marker)),
+    startsWithManagedMarker: (body: string, markers: string[]) => {
+      const firstContentLine = body
+        .split(/\r?\n/)
+        .find((line) => line.trim().length > 0);
+      return markers.some((marker) => firstContentLine?.trim() === marker);
+    },
     ISSUE_PLAN_COMMENT_MARKER: "<!-- prs:issue-plan -->",
     ISSUE_SPEC_COMMENT_MARKER: "<!-- prs:issue-spec -->",
     TEST_SUGGESTIONS_COMMENT_MARKER: "<!-- prs:test-suggestions -->",

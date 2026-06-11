@@ -1447,6 +1447,7 @@ describe("CLI command surface", () => {
     await run();
 
     const output = JSON.parse(stdout.output()) as {
+      auditPublicationHints: Array<unknown>;
       managedCommentHints: Array<{
         issueNumber: number;
         marker: string;
@@ -1456,6 +1457,7 @@ describe("CLI command surface", () => {
         nextAction: string;
       }>;
     };
+    expect(output.auditPublicationHints).toEqual([]);
     expect(output.managedCommentHints).toEqual([
       {
         issueNumber: 269,
