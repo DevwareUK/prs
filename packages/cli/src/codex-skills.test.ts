@@ -198,6 +198,11 @@ describe("managed prs Codex skills", () => {
     expect(issueMarkdown).toContain("keep the artifacts local and stop without posting them");
     expect(issueMarkdown).toContain("never create linked issues from this refinement flow");
     expect(issueMarkdown).toContain("/prs:issue <number> --unattended");
+    expect(issueMarkdown).toContain("create_goal");
+    expect(issueMarkdown).toContain("Complete PRS issue #<number>");
+    expect(issueMarkdown).toContain("codex-token-usage.json");
+    expect(issueMarkdown).toContain("profile/tier name");
+    expect(issueMarkdown).toContain("<profile> (<model>, <thinking> thinking)");
     expect(issueMarkdown).toContain(
       "For interactive issue selection, use `prs tool issue list --actionable --json` as the source of truth and show each returned issue with its number, title, and GitHub URL."
     );
@@ -222,8 +227,19 @@ describe("managed prs Codex skills", () => {
     expect(prMarkdown).toContain("browse/functional test first");
     expect(auditMarkdown).toContain("name: prs:audit");
     expect(auditMarkdown).toContain("prs audit publish");
+    const finishWorkMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[3]);
+    expect(finishWorkMarkdown).toContain("get_goal");
+    expect(finishWorkMarkdown).toContain("token-usage");
+    expect(finishWorkMarkdown).toContain("codex-token-usage.json");
+    expect(finishWorkMarkdown).toContain("standard (gpt-5.4-mini, medium thinking)");
+    expect(finishWorkMarkdown).toContain("premium (gpt-5.5, high thinking)");
     expect(finishMarkdown).toContain("name: prs:finish");
     expect(finishMarkdown).toContain("safely cleaning up");
+    expect(finishMarkdown).toContain("get_goal");
+    expect(finishMarkdown).toContain("token-usage");
+    expect(finishMarkdown).toContain("codex-token-usage.json");
+    expect(finishMarkdown).toContain("standard (gpt-5.4-mini, medium thinking)");
+    expect(finishMarkdown).toContain("premium (gpt-5.5, high thinking)");
     expect(finishMarkdown).toContain("offer the next `/prs pr` step for that pull request");
     expect(finishMarkdown).not.toContain("offer to prepare the pull request for review with `/prs pr <number> prepare-review`");
   });
