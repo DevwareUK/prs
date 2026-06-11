@@ -26,6 +26,7 @@ export type ProviderEnvironment = {
 
 type CreateProviderFromConfigOptions = {
   credentialProvider?: AwsCredentialIdentityProvider;
+  modelOverride?: string;
 };
 
 export function readProviderEnvironment(
@@ -81,6 +82,8 @@ export async function createProviderFromConfig(
   environment: ProviderEnvironment = readProviderEnvironment(),
   options: CreateProviderFromConfigOptions = {}
 ): Promise<AIProvider> {
+  const requestedModel = options.modelOverride?.trim();
+
   if (config.type === "openai") {
     if (!environment.openaiApiKey) {
       throw new Error(
@@ -90,12 +93,12 @@ export async function createProviderFromConfig(
 
     return new OpenAIProvider({
       apiKey: environment.openaiApiKey,
-      model: config.model ?? environment.openaiModel,
+      model: requestedModel ?? config.model ?? environment.openaiModel,
       baseUrl: config.baseUrl ?? environment.openaiBaseUrl,
     });
   }
 
-  const model = config.model?.trim();
+  const model = requestedModel ?? config.model?.trim();
   if (!model) {
     throw new Error(
       "Bedrock Claude provider requires an explicit model in `.prs/config.json` under `ai.provider.model`."

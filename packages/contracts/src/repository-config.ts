@@ -34,6 +34,53 @@ export const RepositoryAiRuntimeConfig = z.discriminatedUnion("type", [
 
 export type RepositoryAiRuntimeConfigType = z.infer<typeof RepositoryAiRuntimeConfig>;
 
+export const DEFAULT_REPOSITORY_AI_MODEL_ROLES = [
+  "planner",
+  "implementer",
+  "reviewer",
+  "tester",
+] as const;
+
+export type RepositoryAiWorkflowRole = (typeof DEFAULT_REPOSITORY_AI_MODEL_ROLES)[number];
+
+export const RepositoryAiThinkingLevel = z.enum([
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+]);
+
+export type RepositoryAiThinkingLevelType = z.infer<
+  typeof RepositoryAiThinkingLevel
+>;
+
+export const RepositoryAiProfileConfig = z.object({
+  model: z.string().trim().min(1, "ai profile model must be non-empty"),
+  thinking: RepositoryAiThinkingLevel,
+});
+
+export type RepositoryAiProfileConfigType = z.infer<typeof RepositoryAiProfileConfig>;
+
+export const RepositoryAiProfilesConfig = z.record(
+  z.string().trim().min(1, "ai profile names must be non-empty"),
+  RepositoryAiProfileConfig
+);
+
+export type RepositoryAiProfilesConfigType = z.infer<typeof RepositoryAiProfilesConfig>;
+
+export const RepositoryAiRoleProfileConfig = z.object({
+  planner: z.string().trim().min(1, "planner profile must be non-empty").optional(),
+  implementer: z.string().trim().min(1, "implementer profile must be non-empty").optional(),
+  reviewer: z.string().trim().min(1, "reviewer profile must be non-empty").optional(),
+  tester: z.string().trim().min(1, "tester profile must be non-empty").optional(),
+});
+
+export type RepositoryAiRoleProfileConfigType = z.infer<
+  typeof RepositoryAiRoleProfileConfig
+>;
+
 export const RepositoryAiCodexConfig = z.object({
   preferSubagents: z.boolean().optional(),
 });
@@ -90,13 +137,32 @@ export const RepositoryAiProviderConfig = z.discriminatedUnion("type", [
 
 export type RepositoryAiProviderConfigType = z.infer<typeof RepositoryAiProviderConfig>;
 
-export const RepositoryAiConfig = z.object({
-  codex: RepositoryAiCodexConfig.optional(),
-  issue: RepositoryAiIssueConfig.optional(),
-  issueDraft: RepositoryAiIssueDraftConfig.optional(),
-  runtime: RepositoryAiRuntimeConfig.optional(),
-  provider: RepositoryAiProviderConfig.optional(),
-});
+export const RepositoryAiConfig = z
+  .object({
+    codex: RepositoryAiCodexConfig.optional(),
+    issue: RepositoryAiIssueConfig.optional(),
+    issueDraft: RepositoryAiIssueDraftConfig.optional(),
+    profiles: RepositoryAiProfilesConfig.optional(),
+    roles: RepositoryAiRoleProfileConfig.optional(),
+    runtime: RepositoryAiRuntimeConfig.optional(),
+    provider: RepositoryAiProviderConfig.optional(),
+  })
+  .strict()
+  .superRefine((config, context) => {
+    const profiles = config.profiles ?? {};
+    const roles = config.roles ?? {};
+
+    for (const role of DEFAULT_REPOSITORY_AI_MODEL_ROLES) {
+      const profileName = roles[role];
+      if (profileName !== undefined && profiles[profileName] === undefined) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["roles", role],
+          message: `ai.roles.${role} must reference an existing ai.profiles entry`,
+        });
+      }
+    }
+  });
 
 export type RepositoryAiConfigType = z.infer<typeof RepositoryAiConfig>;
 
@@ -169,6 +235,8 @@ export const ResolvedRepositoryConfig = z.object({
     issueDraft: z.object({
       useCodexSuperpowers: z.boolean(),
     }),
+    profiles: RepositoryAiProfilesConfig,
+    roles: RepositoryAiRoleProfileConfig,
     runtime: RepositoryAiRuntimeConfig,
     provider: RepositoryAiProviderConfig,
   }),

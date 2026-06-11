@@ -66,6 +66,43 @@ describe("createProviderFromConfig", () => {
     );
   });
 
+  it("allows OpenAI model override through options", async () => {
+    const provider = await createProviderFromConfig(
+      {
+        type: "openai",
+        model: "gpt-4.1-mini",
+      },
+      {
+        openaiApiKey: "test-key",
+      },
+      {
+        modelOverride: "gpt-5",
+      }
+    );
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        choices: [
+          {
+            message: {
+              content: "ready",
+            },
+          },
+        ],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(provider.generateText({ prompt: "Hello" })).resolves.toBe("ready");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.openai.com/v1/chat/completions",
+      expect.objectContaining({
+        body: expect.stringContaining('"model":"gpt-5"'),
+      })
+    );
+  });
+
   it("fails OpenAI creation clearly when the API key is missing", async () => {
     await expect(
       createProviderFromConfig(

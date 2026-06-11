@@ -16079,6 +16079,7 @@ var require_dist = __commonJS({
       CommitMessageOutput: () => CommitMessageOutput,
       CurrentTestingSetup: () => CurrentTestingSetup,
       DEFAULT_PR_IMPACT_PROFILE: () => DEFAULT_PR_IMPACT_PROFILE2,
+      DEFAULT_REPOSITORY_AI_MODEL_ROLES: () => DEFAULT_REPOSITORY_AI_MODEL_ROLES,
       DiffSummaryInput: () => DiffSummaryInput,
       DiffSummaryOutput: () => DiffSummaryOutput,
       FeatureBacklogCategory: () => FeatureBacklogCategory,
@@ -16131,10 +16132,14 @@ var require_dist = __commonJS({
       RepositoryAiContextConfig: () => RepositoryAiContextConfig,
       RepositoryAiIssueConfig: () => RepositoryAiIssueConfig,
       RepositoryAiIssueDraftConfig: () => RepositoryAiIssueDraftConfig,
+      RepositoryAiProfileConfig: () => RepositoryAiProfileConfig,
+      RepositoryAiProfilesConfig: () => RepositoryAiProfilesConfig,
       RepositoryAiProviderConfig: () => RepositoryAiProviderConfig,
       RepositoryAiProviderType: () => RepositoryAiProviderType,
+      RepositoryAiRoleProfileConfig: () => RepositoryAiRoleProfileConfig,
       RepositoryAiRuntimeConfig: () => RepositoryAiRuntimeConfig,
       RepositoryAiRuntimeType: () => RepositoryAiRuntimeType,
+      RepositoryAiThinkingLevel: () => RepositoryAiThinkingLevel,
       RepositoryBedrockClaudeProviderConfig: () => RepositoryBedrockClaudeProviderConfig,
       RepositoryConfig: () => RepositoryConfig,
       RepositoryConfigCommand: () => RepositoryConfigCommand,
@@ -16511,6 +16516,34 @@ var require_dist = __commonJS({
         type: import_zod10.z.literal("claude-code")
       })
     ]);
+    var DEFAULT_REPOSITORY_AI_MODEL_ROLES = [
+      "planner",
+      "implementer",
+      "reviewer",
+      "tester"
+    ];
+    var RepositoryAiThinkingLevel = import_zod10.z.enum([
+      "none",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh"
+    ]);
+    var RepositoryAiProfileConfig = import_zod10.z.object({
+      model: import_zod10.z.string().trim().min(1, "ai profile model must be non-empty"),
+      thinking: RepositoryAiThinkingLevel
+    });
+    var RepositoryAiProfilesConfig = import_zod10.z.record(
+      import_zod10.z.string().trim().min(1, "ai profile names must be non-empty"),
+      RepositoryAiProfileConfig
+    );
+    var RepositoryAiRoleProfileConfig = import_zod10.z.object({
+      planner: import_zod10.z.string().trim().min(1, "planner profile must be non-empty").optional(),
+      implementer: import_zod10.z.string().trim().min(1, "implementer profile must be non-empty").optional(),
+      reviewer: import_zod10.z.string().trim().min(1, "reviewer profile must be non-empty").optional(),
+      tester: import_zod10.z.string().trim().min(1, "tester profile must be non-empty").optional()
+    });
     var RepositoryAiCodexConfig = import_zod10.z.object({
       preferSubagents: import_zod10.z.boolean().optional()
     });
@@ -16539,8 +16572,23 @@ var require_dist = __commonJS({
       codex: RepositoryAiCodexConfig.optional(),
       issue: RepositoryAiIssueConfig.optional(),
       issueDraft: RepositoryAiIssueDraftConfig.optional(),
+      profiles: RepositoryAiProfilesConfig.optional(),
+      roles: RepositoryAiRoleProfileConfig.optional(),
       runtime: RepositoryAiRuntimeConfig.optional(),
       provider: RepositoryAiProviderConfig.optional()
+    }).strict().superRefine((config, context) => {
+      const profiles = config.profiles ?? {};
+      const roles = config.roles ?? {};
+      for (const role of DEFAULT_REPOSITORY_AI_MODEL_ROLES) {
+        const profileName = roles[role];
+        if (profileName !== void 0 && profiles[profileName] === void 0) {
+          context.addIssue({
+            code: import_zod10.z.ZodIssueCode.custom,
+            path: ["roles", role],
+            message: `ai.roles.${role} must reference an existing ai.profiles entry`
+          });
+        }
+      }
     });
     var RepositoryConfigCommand = import_zod10.z.array(import_zod10.z.string().trim().min(1, "command segments must be non-empty")).min(1, "command must contain at least one segment");
     var RepositoryLocalRuntimeConfig = import_zod10.z.object({
@@ -16586,6 +16634,8 @@ var require_dist = __commonJS({
         issueDraft: import_zod10.z.object({
           useCodexSuperpowers: import_zod10.z.boolean()
         }),
+        profiles: RepositoryAiProfilesConfig,
+        roles: RepositoryAiRoleProfileConfig,
         runtime: RepositoryAiRuntimeConfig,
         provider: RepositoryAiProviderConfig
       }),
@@ -16765,7 +16815,9 @@ var require_dist2 = __commonJS({
       DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS: () => DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS,
       DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS: () => DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS,
       DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS: () => DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
+      DEFAULT_REPOSITORY_AI_PROFILES: () => DEFAULT_REPOSITORY_AI_PROFILES,
       DEFAULT_REPOSITORY_AI_PROVIDER_TYPE: () => DEFAULT_REPOSITORY_AI_PROVIDER_TYPE,
+      DEFAULT_REPOSITORY_AI_ROLE_PROFILES: () => DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
       DEFAULT_REPOSITORY_AI_RUNTIME_TYPE: () => DEFAULT_REPOSITORY_AI_RUNTIME_TYPE,
       DEFAULT_REPOSITORY_BASE_BRANCH: () => DEFAULT_REPOSITORY_BASE_BRANCH,
       DEFAULT_REPOSITORY_BUILD_COMMAND: () => DEFAULT_REPOSITORY_BUILD_COMMAND,
@@ -17108,6 +17160,22 @@ ${formatValidationIssues(validationIssues)}`,
     var DEFAULT_REPOSITORY_AI_PROVIDER_TYPE = "openai";
     var DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS = true;
     var DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS = false;
+    var DEFAULT_REPOSITORY_AI_PROFILES = {
+      premium: {
+        model: "gpt-5.5",
+        thinking: "high"
+      },
+      standard: {
+        model: "gpt-5.4-mini",
+        thinking: "medium"
+      }
+    };
+    var DEFAULT_REPOSITORY_AI_ROLE_PROFILES = {
+      planner: "premium",
+      implementer: "standard",
+      reviewer: "premium",
+      tester: "standard"
+    };
     var DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS = [
       "**/node_modules/**",
       "**/vendor/**",
@@ -17120,6 +17188,14 @@ ${formatValidationIssues(validationIssues)}`,
     }
     function resolveRepositoryConfig(config) {
       const parsedConfig = import_contracts32.RepositoryConfig.parse(config ?? {});
+      const profiles = {
+        ...DEFAULT_REPOSITORY_AI_PROFILES,
+        ...parsedConfig.ai?.profiles ?? {}
+      };
+      const roles = {
+        ...DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
+        ...parsedConfig.ai?.roles ?? {}
+      };
       const useCodexSuperpowers = parsedConfig.ai?.issue?.useCodexSuperpowers ?? parsedConfig.ai?.issueDraft?.useCodexSuperpowers ?? DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS;
       return import_contracts32.ResolvedRepositoryConfig.parse({
         ai: {
@@ -17132,6 +17208,8 @@ ${formatValidationIssues(validationIssues)}`,
           issueDraft: {
             useCodexSuperpowers
           },
+          profiles,
+          roles,
           runtime: parsedConfig.ai?.runtime ?? {
             type: DEFAULT_REPOSITORY_AI_RUNTIME_TYPE
           },
@@ -46427,6 +46505,7 @@ var require_dist3 = __commonJS({
       return credentialProvider;
     }
     async function createProviderFromConfig(config, environment = readProviderEnvironment(), options = {}) {
+      const requestedModel = options.modelOverride?.trim();
       if (config.type === "openai") {
         if (!environment.openaiApiKey) {
           throw new Error(
@@ -46435,11 +46514,11 @@ var require_dist3 = __commonJS({
         }
         return new OpenAIProvider2({
           apiKey: environment.openaiApiKey,
-          model: config.model ?? environment.openaiModel,
+          model: requestedModel ?? config.model ?? environment.openaiModel,
           baseUrl: config.baseUrl ?? environment.openaiBaseUrl
         });
       }
-      const model = config.model?.trim();
+      const model = requestedModel ?? config.model?.trim();
       if (!model) {
         throw new Error(
           "Bedrock Claude provider requires an explicit model in `.prs/config.json` under `ai.provider.model`."

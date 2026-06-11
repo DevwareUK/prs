@@ -6,6 +6,8 @@ import {
   DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS,
   DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS,
   DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
+  DEFAULT_REPOSITORY_AI_PROFILES,
+  DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
   DEFAULT_REPOSITORY_AI_PROVIDER_TYPE,
   DEFAULT_REPOSITORY_AI_RUNTIME_TYPE,
 } from "../../core/src/repository-config";
@@ -114,6 +116,8 @@ describe("config helpers", () => {
         issueDraft: {
           useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
         },
+        profiles: DEFAULT_REPOSITORY_AI_PROFILES,
+        roles: DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
         runtime: {
           type: DEFAULT_REPOSITORY_AI_RUNTIME_TYPE,
         },
@@ -168,16 +172,18 @@ describe("config helpers", () => {
       codex: {
         preferSubagents: false,
       },
-      issue: {
-        useCodexSuperpowers: true,
-      },
-      issueDraft: {
-        useCodexSuperpowers: true,
-      },
-      runtime: {
-        type: "claude-code",
-      },
-      provider: {
+        issue: {
+          useCodexSuperpowers: true,
+        },
+        issueDraft: {
+          useCodexSuperpowers: true,
+        },
+        profiles: DEFAULT_REPOSITORY_AI_PROFILES,
+        roles: DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
+        runtime: {
+          type: "claude-code",
+        },
+        provider: {
         type: "openai",
         model: "gpt-5-mini",
         baseUrl: "https://example.test/v1",

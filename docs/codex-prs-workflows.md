@@ -10,6 +10,8 @@ Codex is the default interactive runtime when `ai.runtime.type` is unset.
 
 Managed `/prs` Codex skills also read `ai.codex.preferSubagents` from the active repository `.prs/config.json`. The setting defaults to `true`; when it is enabled or omitted, that repository config is treated as the user's standing request to delegate suitable independent tasks to subagents when the subagent tool is available. Setting it to `false` opts the repository out. Subagents are for independent exploration, implementation, review, or verification work; approval gates, sandbox/network restrictions, final coordination, and final verification stay in the main Codex session.
 
+Managed `/prs` skills also resolve `ai.roles` through `ai.profiles` for the active workflow role before delegating or launching separate Codex work. Roles are `planner`, `implementer`, `reviewer`, and `tester`; default setup routes planner/reviewer to the `premium` profile and implementer/tester to the `standard` profile. The already-open Codex app conversation keeps the model and thinking level selected in that app window; if a configured role profile cannot be applied to delegated or separate work, the skill should report that blocker instead of silently continuing with the app window model.
+
 Runtime-specific behavior:
 
 - `prs pr resolve-conflicts <pr-number>` always requires `codex` on `PATH` for guided merge-conflict resolution, even though Codex only opens when the base merge conflicts.

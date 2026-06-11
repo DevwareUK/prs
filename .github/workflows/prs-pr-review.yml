@@ -218,8 +218,136 @@ jobs:
               return value.charAt(0).toUpperCase() + value.slice(1);
             }
 
+            function normalizeFindingValue(value) {
+              return String(value || "")
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, "-")
+                .replace(/-+/g, "-")
+                .replace(/^-+|-+$/g, "")
+                .slice(0, 80);
+            }
+
+            function buildFindingKey(comment) {
+              return [
+                normalizeFindingValue(comment.path),
+                String(comment.line),
+                normalizeFindingValue(comment.category),
+                normalizeFindingValue(comment.body),
+                normalizeFindingValue(comment.whyThisMatters),
+              ]
+                .filter(Boolean)
+                .join(":");
+            }
+
+            function parsePrsInlineMetadata(body) {
+              const match = String(body || "").match(/<!--\s*prs:pr-review-inline\s+({[\s\S]*?})\s*-->/);
+              if (!match?.[1]) {
+                return undefined;
+              }
+
+              try {
+                const parsed = JSON.parse(match[1]);
+                return parsed?.source === "prs:pr-review" && typeof parsed.findingKey === "string"
+                  ? parsed
+                  : undefined;
+              } catch {
+                return undefined;
+              }
+            }
+
+            async function collectExistingPrsInlineReviewState() {
+              const existingFindingKeys = new Set();
+              const query = `
+                query($owner: String!, $repo: String!, $number: Int!) {
+                  repository(owner: $owner, name: $repo) {
+                    pullRequest(number: $number) {
+                      reviewThreads(first: 100) {
+                        nodes {
+                          id
+                          isResolved
+                          isOutdated
+                          comments(first: 50) {
+                            nodes {
+                              body
+                              author { login }
+                              commit { oid }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+              const resolveMutation = `
+                mutation($threadId: ID!) {
+                  resolveReviewThread(input: { threadId: $threadId }) {
+                    thread { isResolved }
+                  }
+                }
+              `;
+
+              let data;
+              try {
+                data = await github.graphql(query, {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  number: context.payload.pull_request.number,
+                });
+              } catch (error) {
+                core.warning(`Could not fetch existing PRS inline review threads: ${error.message}`);
+                return existingFindingKeys;
+              }
+
+              const threads = data?.repository?.pullRequest?.reviewThreads?.nodes || [];
+              for (const thread of threads) {
+                const threadComments = thread.comments?.nodes || [];
+                const metadataIndex = threadComments.findIndex((comment) =>
+                  Boolean(parsePrsInlineMetadata(comment.body))
+                );
+                const metadata =
+                  metadataIndex >= 0
+                    ? parsePrsInlineMetadata(threadComments[metadataIndex].body)
+                    : undefined;
+                if (!metadata?.findingKey || thread.isResolved) {
+                  continue;
+                }
+                const hasLaterHumanReply = threadComments
+                  .slice(metadataIndex + 1)
+                  .some((comment) => comment.author?.login !== "github-actions[bot]");
+
+                if (metadata.headSha && metadata.headSha !== process.env.HEAD_SHA) {
+                  if (hasLaterHumanReply) {
+                    existingFindingKeys.add(metadata.findingKey);
+                    continue;
+                  }
+                  try {
+                    await github.graphql(resolveMutation, { threadId: thread.id });
+                  } catch (error) {
+                    core.warning(`Could not resolve stale PRS review thread ${thread.id}: ${error.message}`);
+                  }
+                  continue;
+                }
+
+                if (!thread.isOutdated) {
+                  existingFindingKeys.add(metadata.findingKey);
+                }
+              }
+
+              return existingFindingKeys;
+            }
+
             function formatCommentBody(comment) {
               const automationNote = "prs automation note: this GitHub-visible output was generated and posted by prs unattended automation.";
+              const findingKey = buildFindingKey(comment);
+              const metadata = JSON.stringify({
+                source: "prs:pr-review",
+                headSha: process.env.HEAD_SHA,
+                findingKey,
+                path: comment.path,
+                line: comment.line,
+                category: comment.category,
+              });
               const lines = [
                 automationNote,
                 "",
@@ -234,10 +362,12 @@ jobs:
                 lines.push("", `Suggested fix: ${comment.suggestedFix}`);
               }
 
+              lines.push("", `<!-- prs:pr-review-inline ${metadata} -->`);
+
               return lines.join("\n");
             }
 
-            function buildInlineComments(comments, diff) {
+            function buildInlineComments(comments, diff, existingFindingKeys) {
               const changedLinesByPath = collectChangedLines(diff);
               const dedupe = new Set();
               const result = [];
@@ -252,13 +382,13 @@ jobs:
                   continue;
                 }
 
-                const body = formatCommentBody(rawComment);
-                const key = `${rawComment.path}:${rawComment.line}:${body}`;
-                if (dedupe.has(key)) {
+                const key = buildFindingKey(rawComment);
+                if (dedupe.has(key) || existingFindingKeys.has(key)) {
                   continue;
                 }
 
                 dedupe.add(key);
+                const body = formatCommentBody(rawComment);
                 result.push({
                   path: rawComment.path,
                   line: rawComment.line,
@@ -272,7 +402,9 @@ jobs:
 
             const diff =
               process.env.DIFF_FILE ? readFileSync(process.env.DIFF_FILE, "utf8") : "";
-            const comments = buildInlineComments(parsedComments, diff);
+            // Fetch existing PRS inline review threads before posting new comments.
+            const existingFindingKeys = await collectExistingPrsInlineReviewState();
+            const comments = buildInlineComments(parsedComments, diff, existingFindingKeys);
 
             if (comments.length === 0) {
               return;
@@ -287,3 +419,4 @@ jobs:
               body: "AI PR pre-review signal generated high-confidence inline comments on changed lines.",
               comments,
             });
+

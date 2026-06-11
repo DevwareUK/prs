@@ -73,7 +73,7 @@ cd /path/to/your-repo
 prs setup
 ```
 
-For GitHub repositories, `prs setup` asks which managed GitHub Action workflows to enable. Enabled managed workflows are installed or updated under `.github/workflows/prs-*.yml`; disabled prs-managed workflow files are removed so they do not keep running. Setup also writes `ai.codex.preferSubagents`, which defaults to `true`; managed `/prs` Codex skills treat that enabled repository setting as standing consent to delegate suitable independent tasks to subagents when the tool is available, while still keeping approvals and final verification in the main session.
+For GitHub repositories, `prs setup` asks which managed GitHub Action workflows to enable. Enabled managed workflows are installed or updated under `.github/workflows/prs-*.yml`; disabled prs-managed workflow files are removed so they do not keep running. Setup also writes `ai.codex.preferSubagents`, which defaults to `true`; managed `/prs` Codex skills treat that enabled repository setting as standing consent to delegate suitable independent tasks to subagents when the tool is available, while still keeping approvals and final verification in the main session. Setup writes PRS-managed AI profiles too: `premium` uses `gpt-5.5` with `high` thinking, `standard` uses `gpt-5.4-mini` with `medium` thinking, and `ai.roles` routes planner/reviewer to `premium` and implementer/tester to `standard`.
 
 Install or refresh the global managed Codex `/prs` skills after installing or upgrading the CLI:
 

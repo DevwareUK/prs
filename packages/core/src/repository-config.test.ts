@@ -3,6 +3,8 @@ import {
   DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS,
   DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS,
   DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
+  DEFAULT_REPOSITORY_AI_PROFILES,
+  DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
   DEFAULT_REPOSITORY_AI_PROVIDER_TYPE,
   DEFAULT_REPOSITORY_AI_RUNTIME_TYPE,
   resolveRepositoryConfig,
@@ -28,6 +30,8 @@ describe("resolveRepositoryConfig", () => {
       issueDraft: {
         useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
       },
+      profiles: DEFAULT_REPOSITORY_AI_PROFILES,
+      roles: DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
       runtime: { type: DEFAULT_REPOSITORY_AI_RUNTIME_TYPE },
       provider: { type: DEFAULT_REPOSITORY_AI_PROVIDER_TYPE },
     });
@@ -61,6 +65,8 @@ describe("resolveRepositoryConfig", () => {
       issueDraft: {
         useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
       },
+      profiles: DEFAULT_REPOSITORY_AI_PROFILES,
+      roles: DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
       runtime: {
         type: "claude-code",
       },
@@ -143,6 +149,8 @@ describe("resolveRepositoryConfig", () => {
       issueDraft: {
         useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
       },
+      profiles: DEFAULT_REPOSITORY_AI_PROFILES,
+      roles: DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
       runtime: {
         type: "claude-code",
       },
@@ -171,6 +179,8 @@ describe("resolveRepositoryConfig", () => {
       issueDraft: {
         useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
       },
+      profiles: DEFAULT_REPOSITORY_AI_PROFILES,
+      roles: DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
       runtime: {
         type: DEFAULT_REPOSITORY_AI_RUNTIME_TYPE,
       },
@@ -229,9 +239,51 @@ describe("resolveRepositoryConfig", () => {
             useCodexSuperpowers: true,
           },
         },
-      }).ai.issue
+      }).ai
     ).toEqual({
-      useCodexSuperpowers: false,
+      codex: {
+        preferSubagents: DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS,
+      },
+      issue: {
+        useCodexSuperpowers: false,
+      },
+      issueDraft: {
+        useCodexSuperpowers: false,
+      },
+      profiles: DEFAULT_REPOSITORY_AI_PROFILES,
+      roles: DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
+      runtime: {
+        type: DEFAULT_REPOSITORY_AI_RUNTIME_TYPE,
+      },
+      provider: {
+        type: DEFAULT_REPOSITORY_AI_PROVIDER_TYPE,
+      },
     });
+  });
+
+  it("resolves role models and thinking through ai profiles", () => {
+    const resolved = resolveRepositoryConfig({
+      ai: {
+        profiles: {
+          premium: {
+            model: "gpt-5.5",
+            thinking: "high",
+          },
+          standard: {
+            model: "gpt-5.4-mini",
+            thinking: "medium",
+          },
+        },
+        roles: {
+          planner: "premium",
+          implementer: "standard",
+          reviewer: "premium",
+          tester: "standard",
+        },
+      },
+    });
+
+    expect(resolved.ai.profiles).toEqual(DEFAULT_REPOSITORY_AI_PROFILES);
+    expect(resolved.ai.roles).toEqual(DEFAULT_REPOSITORY_AI_ROLE_PROFILES);
   });
 });
