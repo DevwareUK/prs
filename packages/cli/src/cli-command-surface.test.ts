@@ -1389,6 +1389,95 @@ describe("CLI command surface", () => {
     );
   });
 
+  it("returns managed comment hints for tool-created issues", async () => {
+    const repoRoot = createTempRepoRoot();
+    const draftPath = resolve(repoRoot, ".prs", "issues", "draft.md");
+    const specPath = resolve(repoRoot, ".prs", "runs", "create", "spec.md");
+    const planPath = resolve(repoRoot, ".prs", "runs", "create", "plan.md");
+    mkdirSync(dirname(draftPath), { recursive: true });
+    mkdirSync(dirname(specPath), { recursive: true });
+    writeFileSync(
+      draftPath,
+      "# Clarify create output\n\n## Summary\n\nMake hints explicit.\n",
+      "utf8"
+    );
+    writeFileSync(specPath, "# Spec\n\nUse managed spec comments.\n", "utf8");
+    writeFileSync(planPath, "# Plan\n\nUse managed plan comments.\n", "utf8");
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createFetchResponse([]))
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          number: 269,
+          title: "Clarify create output",
+          html_url: "https://github.com/DevwareUK/prs/issues/269",
+        })
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.GH_TOKEN = "";
+    process.env.GITHUB_TOKEN = "test-token";
+
+    const { run } = await loadCli({
+      runtimeRepoRoot: repoRoot,
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "remote" && args[1] === "get-url") {
+          return "git@github.com:DevwareUK/prs.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+    const stdout = captureStdout();
+    process.argv = [
+      "node",
+      "prs",
+      "tool",
+      "issue",
+      "create",
+      "--draft-file",
+      draftPath,
+      "--spec-file",
+      specPath,
+      "--plan-file",
+      planPath,
+      "--json",
+    ];
+
+    await run();
+
+    const output = JSON.parse(stdout.output()) as {
+      managedCommentHints: Array<{
+        issueNumber: number;
+        marker: string;
+        requiredFor: string;
+        status: string;
+        file?: string;
+        nextAction: string;
+      }>;
+    };
+    expect(output.managedCommentHints).toEqual([
+      {
+        issueNumber: 269,
+        marker: "<!-- prs:issue-spec -->",
+        requiredFor: "issue-source-of-truth",
+        status: "artifact-provided",
+        file: specPath,
+        nextAction:
+          "Publish a managed issue spec comment containing `<!-- prs:issue-spec -->` after creating the issue.",
+      },
+      {
+        issueNumber: 269,
+        marker: "<!-- prs:issue-plan -->",
+        requiredFor: "prs issue estimate 269",
+        status: "artifact-provided",
+        file: planPath,
+        nextAction:
+          "Publish a managed issue plan comment containing `<!-- prs:issue-plan -->` or run `prs issue plan 269` before estimating.",
+      },
+    ]);
+  });
+
   it("parses repo-level test-backlog flags for the CLI", async () => {
     process.env.PRS_DISABLE_AUTO_RUN = "1";
     const { parseTestBacklogCommandArgs } = await import("./index");

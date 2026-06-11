@@ -69,12 +69,15 @@ describe("issue estimate tool", () => {
       status: "blocked",
       issueNumber: 268,
       message:
-        "Issue implementation token estimates require a managed issue plan comment. Run `prs issue plan <number>` first.",
+        "Issue implementation token estimates require an issue comment containing `<!-- prs:issue-plan -->`. For estimate-ready issues, keep the companion source-of-truth specification in `<!-- prs:issue-spec -->`; the estimator reads the managed plan marker. Publish the managed plan comment or run `prs issue plan <number>` first.",
       nextAction: "create-issue-plan",
     });
     expect(renderIssueEstimate(result)).toContain(
       "Issue #268 implementation estimate is blocked."
     );
+    expect(renderIssueEstimate(result)).toContain("<!-- prs:issue-plan -->");
+    expect(renderIssueEstimate(result)).toContain("<!-- prs:issue-spec -->");
+    expect(renderIssueEstimate(result)).toContain("prs issue plan <number>");
   });
 
   it("renders missing-file warnings and exhausted scan budgets for human output", async () => {

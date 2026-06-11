@@ -110,6 +110,135 @@ export function getIssuePlanRunDir(
   );
 }
 
+export type IssueTokenUsageArtifact = {
+  version: 1;
+  status: "tracked" | "partial" | "unavailable";
+  issueNumber: number;
+  capturedAt: string;
+  source: "codex-goal";
+  runDir?: string;
+  goal?: {
+    threadId?: string;
+    objective?: string;
+    status?: string;
+  };
+  model?: {
+    profile?: string;
+    role?: string;
+    model?: string;
+    id?: string;
+    displayName?: string;
+    thinking?: "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | string;
+    source?: "codex-session" | "configured-role" | "manual" | "unavailable";
+  };
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+    timeUsedSeconds?: number;
+  };
+  notes?: string[];
+};
+
+export function getIssueTokenUsageArtifactFilePath(runDir: string): string {
+  return resolve(runDir, "codex-token-usage.json");
+}
+
+function formatOptionalInteger(value: number | undefined): string | undefined {
+  return value === undefined ? undefined : value.toLocaleString();
+}
+
+function formatDuration(seconds: number | undefined): string | undefined {
+  if (seconds === undefined) {
+    return undefined;
+  }
+
+  const wholeSeconds = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(wholeSeconds / 3600);
+  const minutes = Math.floor((wholeSeconds % 3600) / 60);
+  const remainingSeconds = wholeSeconds % 60;
+  const parts = [
+    ...(hours > 0 ? [`${hours}h`] : []),
+    ...(minutes > 0 ? [`${minutes}m`] : []),
+    `${remainingSeconds}s`,
+  ];
+  return parts.join(" ");
+}
+
+function formatModelLines(
+  model: IssueTokenUsageArtifact["model"] | undefined
+): string[] {
+  const modelName = model?.displayName ?? model?.model ?? model?.id;
+  const profileName = model?.profile;
+  const modelProfile =
+    profileName && modelName && model?.thinking
+      ? `Model/profile: ${profileName} (${modelName}, ${model.thinking} thinking)`
+      : profileName && modelName
+        ? `Model/profile: ${profileName} (${modelName})`
+        : undefined;
+  return [
+    ...(modelProfile ? [modelProfile] : modelName ? [`Model: ${modelName}`] : []),
+    ...(model?.role ? [`Workflow role: ${model.role}`] : []),
+    ...(model?.source ? [`Model source: ${model.source}`] : []),
+  ];
+}
+
+export function writeIssueTokenUsageArtifact(
+  filePath: string,
+  artifact: IssueTokenUsageArtifact
+): void {
+  writeFileSync(filePath, `${JSON.stringify(artifact, null, 2)}\n`, "utf8");
+}
+
+export function formatIssueTokenUsageAuditSection(
+  artifact: IssueTokenUsageArtifact
+): string {
+  if (artifact.status === "unavailable") {
+    return [
+      `Token usage was unavailable for issue #${artifact.issueNumber}.`,
+      "",
+      `Captured at: ${artifact.capturedAt}`,
+      ...formatModelLines(artifact.model),
+      ...(artifact.notes?.length
+        ? ["", "Notes:", ...artifact.notes.map((note) => `- ${note}`)]
+        : []),
+    ].join("\n");
+  }
+
+  const lines = [
+    `Codex token usage for issue #${artifact.issueNumber}.`,
+    "",
+    `Status: ${artifact.status}`,
+    `Captured at: ${artifact.capturedAt}`,
+  ];
+  const totalTokens = formatOptionalInteger(artifact.usage?.totalTokens);
+  const inputTokens = formatOptionalInteger(artifact.usage?.inputTokens);
+  const outputTokens = formatOptionalInteger(artifact.usage?.outputTokens);
+  const elapsed = formatDuration(artifact.usage?.timeUsedSeconds);
+
+  lines.push(...formatModelLines(artifact.model));
+  if (totalTokens) {
+    lines.push(`Total tokens: ${totalTokens}`);
+  }
+  if (inputTokens) {
+    lines.push(`Input tokens: ${inputTokens}`);
+  }
+  if (outputTokens) {
+    lines.push(`Output tokens: ${outputTokens}`);
+  }
+  if (elapsed) {
+    lines.push(`Elapsed time: ${elapsed}`);
+  }
+  if (artifact.goal?.objective) {
+    lines.push(`Goal: ${artifact.goal.objective}`);
+  }
+  if (artifact.notes?.length) {
+    lines.push("", "Notes:", ...artifact.notes.map((note) => `- ${note}`));
+  }
+
+  return lines.join("\n");
+}
+
 export type IssuePlanWorkspace = {
   runDir: string;
   promptFilePath: string;
