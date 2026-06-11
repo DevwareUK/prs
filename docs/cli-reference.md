@@ -18,6 +18,7 @@ Advanced commands:
 - `prs issue draft --draft-file <path> [--media-manifest <path>]`: ingest a skill-produced issue draft without launching another runtime
 - `prs issue refine <number>`: refine an existing GitHub issue into an implementation-ready specification
 - `prs issue plan <number> [--refresh]`: maintain an issue-resolution plan comment as secondary execution support
+- `prs issue estimate <number>`: estimate the implementation token budget for executing an issue plan
 - `prs issue <number>`: run the full local issue-to-PR workflow
 - `prs issue prepare <number>` and `prs issue finalize <number>`: split issue setup from local completion
 
@@ -34,6 +35,7 @@ Supporting commands:
 - `prs setup --update-skills`: refresh only managed Codex `/prs` skills
 - `prs update skills`: refresh managed Codex `/prs` skills after upgrading the CLI
 - `prs tool issue list [--actionable] --json`: list open GitHub issues, optionally filtered to actionable-for-me issues; returned items include number, title, URL, ownership, labels, update time, linked-PR status, and PRS plan status; PRS plan status recognizes direct managed plan comments and audit comments containing `<!-- prs:issue-plan -->`
+- `prs tool issue estimate <issue-number> --json`: return a structured implementation token estimate for the issue's managed plan comment
 - `prs tool issue create (--draft-file <path>|--issue-set <path>) --json [--media-manifest <path>]`: deterministically create GitHub issues from approved local issue draft artifacts
 - `prs tool pr list [--actionable] --json`: list open GitHub pull requests, optionally filtered to actionable-for-me PRs; returned items include number, title, URL, ownership, branch, labels, update time, and action signals such as conflicts
 - `prs tool pr ready <pr-number> [--unattended|--auto|--jdi] --json`: local PR readiness for `/prs:pr`; checks out the actual PR head branch, fetches and merges the latest PR base branch, runs configured `prReadiness.commands`, reports local step results in `localReadiness`, reports GitHub-hosted review signals in `prContext`, includes grouped PR comment summaries with source links when comments are available, reports actionable/handled/duplicate/resolved/outdated review-thread counts, and skips broad local verification beyond explicit readiness commands
@@ -128,6 +130,7 @@ prs issue draft --issue-set-file <path> [--rough-idea <text>|--rough-idea-file <
 prs issue draft --runtime
 prs issue refine <number>
 prs issue plan <number> [--refresh]
+prs issue estimate <number>
 prs issue prepare <number> [--mode <local|github-action>]
 prs issue finalize <number>
 ```
@@ -145,6 +148,7 @@ Available subcommands:
 | `prs issue draft --runtime` | Explicit legacy interactive issue drafting flow. Prompts for a rough idea, creates `.prs/` draft-run artifacts, prints that a separate AI session is being opened with only prompt-file context, launches the configured runtime, and then follows the same preview/create flow after the runtime writes a draft or issue set. Prefer `/prs create` plus `--draft-file` or `--issue-set-file` when operating from an existing Codex thread. |
 | `prs issue refine <number>` | Interactive existing-issue refinement flow. Fetches the current issue body plus comments, resumes the saved runtime session when that session is still tracked locally, otherwise asks whether to specify changes to the original requirements, defaults to no, only asks for change text when you answer yes, and starts a fresh refinement run, writes resumable state to `.prs/issues/<number>/refine-session.json` plus run artifacts to `.prs/runs/<timestamp>-issue-refine-<number>/`. The runtime may write one refined Markdown draft or a multi-issue set in `.prs/runs/<timestamp>-issue-refine-<number>/issue-set.json`. Single drafts keep the existing behavior: update a PRS-managed source issue or create one linked PRS-managed issue from a non-managed source. Multi-issue refinements are validated and reviewed as a set, then created as PRS-managed linked issues with sibling links and `Source issue: #<number>` entries; the source issue body is not overwritten. If GitHub authentication is unavailable, the refined draft or set is kept on disk instead of being applied. |
 | `prs issue plan <number> [--refresh]` | Secondary issue-execution support. By default it creates the managed implementation plan comment once and safely reuses the latest edited managed comment on later runs. Pass `--refresh` or `--update` to regenerate and update the managed comment when the issue context has changed. When `ai.issue.useCodexSuperpowers` is active, the selected runtime is Codex, and local Codex Superpowers is available, the command launches a plan-only Codex run and publishes the resulting `.prs/runs/<timestamp>-issue-plan-<number>/superpowers-plan.md` as the managed `<!-- prs:issue-plan -->` comment. If Superpowers is disabled, unavailable, or produces no plan artifact, `prs` falls back to the structured provider-generated plan. |
+| `prs issue estimate <number>` | Reads the issue's managed `<!-- prs:issue-plan -->` comment, scans bounded repository context from concrete likely files plus configured verification commands, compares configured AI profiles including the implementer profile, and prints estimated implementation token ranges, confidence, drivers, warnings, and a recommendation. It does not launch a runtime, call a text provider, modify files, or post to GitHub. If no managed plan exists, it asks you to run `prs issue plan <number>` first. |
 | `prs issue prepare <number>` | Preflights the configured forge, verification command, and `baseBranch`, creates a missing managed issue plan comment before writing the runtime snapshot, checks the plan's `### Likely files` against files changed by open pull requests, prompts in interactive terminals when overlap remains, prepares the issue branch from the selected base, and then prints machine-readable JSON describing the run. |
 | `prs issue prepare <number> --mode github-action` | Same preparation flow, including missing-plan creation, but writes prompt instructions tailored for non-interactive GitHub Actions runs. |
 | `prs issue finalize <number>` | Generates a deterministic local proposed commit message from the current repository diff, including included untracked files, lets you preview, edit, or skip it, and creates the commit only after confirmation. It never uses the configured text provider, so it does not require `OPENAI_API_KEY` just to finalize Codex-produced changes. It does not push or open a pull request. |
@@ -153,6 +157,7 @@ Important behavior:
 
 - `prs issue draft --draft-file <path>`, `prs issue draft --issue-set-file <path>`, `prs issue draft --runtime`, `prs issue plan <number> [--refresh]`, `prs issue prepare <number>`, `prs issue finalize <number>`, and full `prs issue <number>` runs print an advanced workflow notice before execution
 - `prs issue <number> <number> ...` and `prs issue batch ...` print a beta workflow notice before execution
+- `prs issue estimate <number>` is read-only and bounded; it estimates implementation effort from the managed plan rather than drafting/refinement effort
 - `prs issue` requires a clean working tree before it starts
 - `prs issue <number>` and `prs issue prepare <number>` fail before checkout if the configured verification command cannot run from the repository root
 - `prs issue <number>` and `prs issue prepare <number>` fail before checkout if the configured base branch is missing locally, missing on `origin`, or cannot be fast-forwarded cleanly
@@ -186,6 +191,7 @@ Important behavior:
 - declining the apply step, or running without usable GitHub authentication, keeps the refined draft on disk and records the refine session as completed without applying it remotely
 - after an approved Superpowers-backed draft or refinement, a non-empty `superpowers-plan.md` creates or updates the managed `<!-- prs:issue-plan -->` issue plan comment; missing or empty plan artifacts are logged and do not block issue creation or refinement
 - `prs issue plan <number> [--refresh]` requires issue access through the configured forge; creating or refreshing a managed plan comment also requires the configured provider plus GitHub authentication
+- `prs tool issue estimate <issue-number> --json` returns the same estimate as structured JSON for active Codex sessions and automation
 - `prs issue finalize <number>` requires local file changes and always uses deterministic local commit text
 - local full issue runs require an available interactive runtime CLI on `PATH`
 - local full issue runs never use the configured provider for commit or PR text during finalization

@@ -45,6 +45,11 @@ export type IssueCommandOptions =
       mode: "local";
       refresh: boolean;
     }
+  | {
+      action: "estimate";
+      issueNumber: number;
+      mode: "local";
+    }
   | ({
       action: "draft";
     } & IssueDraftCommandOptions)
@@ -63,6 +68,7 @@ const ISSUE_USAGE = [
   "  prs issue draft --runtime",
   "  prs issue refine <number>",
   "  prs issue plan <number> [--refresh]",
+  "  prs issue estimate <number>",
   "  prs issue prepare <number> [--mode <local|github-action>]",
   "  prs issue finalize <number>",
 ].join("\n");
@@ -410,6 +416,19 @@ export function parseIssueCommandArgs(args: string[]): IssueCommandOptions {
       issueNumber: parseIssueNumber(issueArgs[1]),
       mode: "local",
       refresh: parsedOptions.refresh,
+    };
+  }
+
+  if (subcommand === "estimate") {
+    const optionArgs = issueArgs.slice(2);
+    if (optionArgs.length > 0) {
+      throw new Error(`Unknown issue option "${optionArgs[0]}". ${ISSUE_USAGE}`);
+    }
+
+    return {
+      action: "estimate",
+      issueNumber: parseIssueNumber(issueArgs[1]),
+      mode: "local",
     };
   }
 

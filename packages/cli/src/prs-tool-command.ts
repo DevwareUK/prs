@@ -1,6 +1,7 @@
 export type PrsToolCommand =
   | { kind: "issue-list"; actionable: boolean; json: boolean }
   | { kind: "issue-ready"; issueNumber: number; unattended: boolean; json: boolean }
+  | { kind: "issue-estimate"; issueNumber: number; json: boolean }
   | {
       kind: "issue-create";
       draftFilePath?: string;
@@ -37,6 +38,7 @@ export function renderPrsToolCommandHelp(): string {
     "Usage:",
     "  prs tool issue list [--actionable] --json",
     "  prs tool issue ready <issue-number> [--unattended|--auto|--jdi] --json",
+    "  prs tool issue estimate <issue-number> --json",
     "  prs tool issue create (--draft-file <path>|--issue-set <path>) --json",
     "                        [--run-dir <path>] [--plan-file <path>] [--media-manifest <path>]",
     "                        [--label <name>] [--labels <a,b>]",
@@ -117,6 +119,21 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
       }
       if (isUnattendedAlias(fourth) && rest[0] === "--json" && rest.length === 1) {
         return { kind: "issue-ready", issueNumber, unattended: true, json: true };
+      }
+      if (fourth === "--all") {
+        throw new Error(`Unknown tool option "--all". ${renderPrsToolCommandHelp()}`);
+      }
+      throw new Error(renderPrsToolCommandHelp());
+    }
+
+    if (command === "estimate") {
+      if (!third || third === "--json" || third === "--all") {
+        throw new Error(renderPrsToolCommandHelp());
+      }
+
+      const issueNumber = parseToolNumber(third, "issue");
+      if (fourth === "--json" && rest.length === 0) {
+        return { kind: "issue-estimate", issueNumber, json: true };
       }
       if (fourth === "--all") {
         throw new Error(`Unknown tool option "--all". ${renderPrsToolCommandHelp()}`);

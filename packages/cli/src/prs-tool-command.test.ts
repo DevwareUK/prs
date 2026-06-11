@@ -37,6 +37,14 @@ describe("prs tool command parser", () => {
     });
   });
 
+  it("parses issue estimate JSON command", () => {
+    expect(parsePrsToolCommandArgs(["issue", "estimate", "151", "--json"])).toEqual({
+      kind: "issue-estimate",
+      issueNumber: 151,
+      json: true,
+    });
+  });
+
   it("rejects removed --all issue readiness shorthand", () => {
     expect(() =>
       parsePrsToolCommandArgs(["issue", "ready", "151", "--all", "--json"])

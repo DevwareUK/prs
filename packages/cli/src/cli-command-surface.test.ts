@@ -83,6 +83,17 @@ describe("CLI command surface", () => {
     });
   });
 
+  it("parses issue estimate as a dedicated issue subcommand", async () => {
+    process.env.PRS_DISABLE_AUTO_RUN = "1";
+    const { parseIssueCommandArgs } = await loadCli();
+
+    expect(parseIssueCommandArgs(["issue", "estimate", "42"])).toEqual({
+      action: "estimate",
+      issueNumber: 42,
+      mode: "local",
+    });
+  });
+
   it("parses issue plan refresh aliases", async () => {
     process.env.PRS_DISABLE_AUTO_RUN = "1";
     const { parseIssueCommandArgs } = await loadCli();
