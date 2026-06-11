@@ -87,6 +87,15 @@ describe("managed prs Codex skills", () => {
       "/prs issue <number> --unattended` (aliases: `--auto`, `--jdi`): run `prs tool issue ready <number> --unattended --json`"
     );
     expect(markdown).toContain(
+      "/prs issue <number> estimate`: run `prs tool issue estimate <number> --json`"
+    );
+    expect(markdown).toContain(
+      "show the returned token ranges, confidence, drivers, warnings, and recommendation"
+    );
+    expect(markdown).toContain(
+      "do not launch a runtime, edit files, commit, push, or publish GitHub comments"
+    );
+    expect(markdown).toContain(
       "Continue into Superpowers worktree creation and issue implementation"
     );
     expect(markdown).toContain(
