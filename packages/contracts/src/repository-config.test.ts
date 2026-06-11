@@ -47,7 +47,7 @@ describe("repository config schema", () => {
           },
           {
             name: "Run updates",
-            command: ["ddev", "drush", "updb", "-y"],
+            "command": ["ddev", "drush", "updb", "-y"],
           },
         ],
       },
@@ -199,6 +199,92 @@ describe("repository config schema", () => {
     ).toThrow();
   });
 
+  it("rejects legacy ai.models role overrides", () => {
+    expect(() =>
+      RepositoryConfig.parse({
+        ai: {
+          models: {
+            planner: "gpt-5-plan",
+          },
+        },
+      })
+    ).toThrow();
+  });
+
+  it("rejects legacy ai.thinking role overrides", () => {
+    expect(() =>
+      RepositoryConfig.parse({
+        ai: {
+          thinking: {
+            planner: "high",
+          },
+        },
+      })
+    ).toThrow();
+  });
+
+  it("accepts ai profiles and role profile routing", () => {
+    expect(
+      RepositoryConfig.parse({
+        ai: {
+          profiles: {
+            premium: {
+              model: "gpt-5.5",
+              thinking: "high",
+            },
+            standard: {
+              model: "gpt-5.4-mini",
+              thinking: "medium",
+            },
+          },
+          roles: {
+            planner: "premium",
+            implementer: "standard",
+            reviewer: "premium",
+            tester: "standard",
+          },
+        },
+      })
+    ).toEqual({
+      ai: {
+        profiles: {
+          premium: {
+            model: "gpt-5.5",
+            thinking: "high",
+          },
+          standard: {
+            model: "gpt-5.4-mini",
+            thinking: "medium",
+          },
+        },
+        roles: {
+          planner: "premium",
+          implementer: "standard",
+          reviewer: "premium",
+          tester: "standard",
+        },
+      },
+    });
+  });
+
+  it("requires ai role profile references to exist", () => {
+    expect(() =>
+      RepositoryConfig.parse({
+        ai: {
+          profiles: {
+            standard: {
+              model: "gpt-5.4-mini",
+              thinking: "medium",
+            },
+          },
+          roles: {
+            planner: "premium",
+          },
+        },
+      })
+    ).toThrow();
+  });
+
   it("accepts managed GitHub Action workflow enablement config", () => {
     expect(
       RepositoryConfig.parse({
@@ -262,6 +348,18 @@ describe("repository config schema", () => {
           codex: {
             preferSubagents: true,
           },
+          profiles: {
+            standard: {
+              model: "gpt-5.4-mini",
+              thinking: "medium",
+            },
+          },
+          roles: {
+            planner: "standard",
+            implementer: "standard",
+            reviewer: "standard",
+            tester: "standard",
+          },
           issueDraft: {
             useCodexSuperpowers: false,
           },
@@ -291,6 +389,18 @@ describe("repository config schema", () => {
           issue: {
             useCodexSuperpowers: false,
           },
+          profiles: {
+            standard: {
+              model: "gpt-5.4-mini",
+              thinking: "medium",
+            },
+          },
+          roles: {
+            planner: "standard",
+            implementer: "standard",
+            reviewer: "standard",
+            tester: "standard",
+          },
           issueDraft: {
             useCodexSuperpowers: false,
           },
@@ -310,6 +420,94 @@ describe("repository config schema", () => {
           type: "github",
         },
         githubActions: {},
+      })
+    ).toThrow();
+  });
+
+  it("requires resolved ai profile models to be strings", () => {
+    expect(() =>
+      ResolvedRepositoryConfig.parse({
+        ai: {
+          codex: {
+            preferSubagents: true,
+          },
+          issue: {
+            useCodexSuperpowers: false,
+          },
+          issueDraft: {
+            useCodexSuperpowers: false,
+          },
+          profiles: {
+            standard: {
+              model: 123,
+              thinking: "medium",
+            },
+          },
+          roles: {
+            planner: "standard",
+            implementer: "standard",
+            reviewer: "standard",
+            tester: "standard",
+          },
+          runtime: {
+            type: "codex",
+          },
+          provider: {
+            type: "openai",
+          },
+        },
+        aiContext: {
+          excludePaths: [],
+        },
+        baseBranch: "main",
+        buildCommand: ["pnpm", "build"],
+        forge: {
+          type: "github",
+        },
+      })
+    ).toThrow();
+  });
+
+  it("requires resolved ai profile thinking values to be supported levels", () => {
+    expect(() =>
+      ResolvedRepositoryConfig.parse({
+        ai: {
+          codex: {
+            preferSubagents: true,
+          },
+          issue: {
+            useCodexSuperpowers: false,
+          },
+          issueDraft: {
+            useCodexSuperpowers: false,
+          },
+          profiles: {
+            standard: {
+              model: "gpt-5.4-mini",
+              thinking: "deep",
+            },
+          },
+          roles: {
+            planner: "standard",
+            implementer: "standard",
+            reviewer: "standard",
+            tester: "standard",
+          },
+          runtime: {
+            type: "codex",
+          },
+          provider: {
+            type: "openai",
+          },
+        },
+        aiContext: {
+          excludePaths: [],
+        },
+        baseBranch: "main",
+        buildCommand: ["pnpm", "build"],
+        forge: {
+          type: "github",
+        },
       })
     ).toThrow();
   });

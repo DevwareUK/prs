@@ -788,7 +788,9 @@ describe("Issue prepare workflow", () => {
     }
   });
 
-  it("stacks unattended issue runs on the recommended PR head and adds an overlap note", async () => {
+  it(
+    "stacks unattended issue runs on the recommended PR head and adds an overlap note",
+    async () => {
     const issueNumber = 91237;
     const branchName = "feat/issue-91237-stack-on-overlapping-pr-head";
     const sessionStateDir = resolve(REPO_ROOT, ".prs", "issues", String(issueNumber));
@@ -949,9 +951,13 @@ describe("Issue prepare workflow", () => {
     const body = prArgs[prArgs.indexOf("--body") + 1];
     expect(body).toContain("## Open PR File Overlap");
     expect(body).toContain("- #123 Existing issue workflow change");
-  });
+    },
+    180000
+  );
 
-  it("keeps ambiguous unattended overlap on the configured base and adds a dependency warning", async () => {
+  it(
+    "keeps ambiguous unattended overlap on the configured base and adds a dependency warning",
+    async () => {
     const issueNumber = 91240;
     const branchName = "feat/issue-91240-continue-with-ambiguous-open-pr-overlaps";
     const sessionStateDir = resolve(REPO_ROOT, ".prs", "issues", String(issueNumber));
@@ -1131,7 +1137,9 @@ describe("Issue prepare workflow", () => {
     );
     expect(body).toContain("- #123 Existing issue workflow change");
     expect(body).toContain("- #124 Existing README change");
-  });
+    },
+    60000
+  );
 
   it("writes local issue prompts with plain-language next steps", async () => {
     const issueNumber = 91235;

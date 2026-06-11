@@ -28,7 +28,7 @@ import {
   type AIProvider,
   readProviderEnvironment,
 } from "@prs/providers";
-import type { ResolvedRepositoryConfigType } from "@prs/contracts";
+import type { ResolvedRepositoryConfigType, RepositoryAiWorkflowRole } from "@prs/contracts";
 import {
   applyGitHubOutputFraming,
   type GitHubOutputMode,
@@ -4140,7 +4140,8 @@ function formatDiffSummary(
 }
 
 async function createProvider(
-  repoRoot = getDefaultRepoRoot()
+  repoRoot = getDefaultRepoRoot(),
+  workflowRole: RepositoryAiWorkflowRole = "implementer"
 ): Promise<{
   provider: AIProvider;
   providerType: ResolvedRepositoryConfigType["ai"]["provider"]["type"];
@@ -4152,10 +4153,17 @@ async function createProvider(
     type: "openai" as const,
   };
   const environment = readProviderEnvironment();
+  const workflowProfileName = repositoryConfig.ai.roles[workflowRole];
+  const workflowModel =
+    workflowProfileName !== undefined
+      ? repositoryConfig.ai.profiles[workflowProfileName]?.model
+      : undefined;
 
   try {
     return {
-      provider: await createProviderFromConfig(configuredProvider, environment),
+      provider: await createProviderFromConfig(configuredProvider, environment, {
+        modelOverride: workflowModel,
+      }),
       providerType: configuredProvider.type,
     };
   } catch (error: unknown) {
@@ -4197,7 +4205,7 @@ async function runReviewCommand(args = getCliArgs()): Promise<void> {
 
   const options = parseReviewCommandArgs(args);
   const diff = readReviewDiff(options.base, options.head);
-  const { provider } = await createProvider();
+  const { provider } = await createProvider(undefined, "reviewer");
   const issue =
     options.issueNumber !== undefined
       ? await getRepositoryForge().fetchIssueDetails(options.issueNumber)
@@ -4589,7 +4597,8 @@ async function runToolCommand(): Promise<void> {
         verifyBuild,
         commitGeneratedChanges,
         readDiff: readIssueWorkflowDiff,
-        createProvider: async (providerRepoRoot) => createProvider(providerRepoRoot),
+        createProvider: async (providerRepoRoot) =>
+          createProvider(providerRepoRoot, "reviewer"),
       });
     } finally {
       console.log = originalConsoleLog;
@@ -6161,10 +6170,15 @@ async function createStructuredIssuePlanComment(options: {
   issue: IssueDetails;
   existingPlanComment?: IssuePlanComment;
   mode: IssuePlanResolutionMode;
+  workflowRole?: RepositoryAiWorkflowRole;
   comments?: RepositoryComment[];
   specAlreadyEnsured?: boolean;
   outputMode?: GitHubOutputMode;
 }): Promise<IssuePlanComment> {
+  const workflowRole =
+    options.workflowRole ??
+    (options.mode === "execution-preflight" ? "implementer" : "planner");
+
   if (
     options.mode === "execution-preflight" &&
     !options.existingPlanComment &&
@@ -6180,7 +6194,7 @@ async function createStructuredIssuePlanComment(options: {
     });
   }
 
-  const { provider } = await createProvider(options.repoRoot);
+  const { provider } = await createProvider(options.repoRoot, workflowRole);
   const plan = await generateIssueResolutionPlan(provider, {
     issueNumber: options.issueNumber,
     issueTitle: options.issue.title,
@@ -7544,7 +7558,7 @@ export async function run(): Promise<void> {
 
   if (command === "commit") {
     const diff = readStagedDiff();
-    const { provider } = await createProvider();
+    const { provider } = await createProvider(undefined, "implementer");
     const result = await generateCommitMessage(provider, diff);
     process.stdout.write(formatCommitMessage(result.title, result.body));
     return;
@@ -7605,7 +7619,7 @@ export async function run(): Promise<void> {
   }
 
   const diff = readHeadDiff();
-  const { provider } = await createProvider();
+  const { provider } = await createProvider(undefined, "implementer");
   const result = await generateDiffSummary(provider, { diff });
   process.stdout.write(formatDiffSummary(result));
 }

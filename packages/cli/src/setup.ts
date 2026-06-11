@@ -20,6 +20,8 @@ import {
 import {
   DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS,
   DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS,
+  DEFAULT_REPOSITORY_AI_PROFILES,
+  DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
   DEFAULT_REPOSITORY_AI_RUNTIME_TYPE,
   DEFAULT_REPOSITORY_BASE_BRANCH,
   DEFAULT_REPOSITORY_BUILD_COMMAND,
@@ -2035,6 +2037,8 @@ function buildRepositoryConfig(
     issue: {
       useCodexSuperpowers: answers.issueUseCodexSuperpowers,
     },
+    profiles: existingConfig?.ai?.profiles ?? DEFAULT_REPOSITORY_AI_PROFILES,
+    roles: existingConfig?.ai?.roles ?? DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
     runtime: {
       type: answers.runtimeType,
     },

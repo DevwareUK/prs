@@ -51,6 +51,11 @@ describe("managed prs Codex skills", () => {
     expect(markdown).toContain("Use Superpowers for brainstorming, planning, worktrees, agents, and verification.");
     expect(markdown).toContain("Publish specs, plans, decisions, and completion notes to GitHub through `prs audit publish`.");
     expect(markdown).toContain("Never commit generated Superpowers specs or plans to `docs/superpowers`.");
+    expect(markdown).toContain("ai.roles");
+    expect(markdown).toContain("ai.profiles");
+    expect(markdown).toContain("planner, implementer, reviewer, and tester");
+    expect(markdown).toContain("planner role for `prs:create`");
+    expect(markdown).toContain("report the blocker instead of silently using the current Codex app window model");
   });
 
   it("renders the unified prs command router skill", () => {

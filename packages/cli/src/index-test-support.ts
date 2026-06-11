@@ -429,6 +429,15 @@ function parseMockRepositoryConfig(value?: unknown): Record<string, unknown> {
       runtime?: { type?: unknown };
       issue?: { useCodexSuperpowers?: unknown };
       issueDraft?: { useCodexSuperpowers?: unknown };
+      models?: unknown;
+      thinking?: unknown;
+      profiles?: Record<string, { model?: unknown; thinking?: unknown }>;
+      roles?: {
+        planner?: unknown;
+        implementer?: unknown;
+        reviewer?: unknown;
+        tester?: unknown;
+      };
       provider?: {
         type?: unknown;
         model?: unknown;
@@ -517,6 +526,64 @@ function parseMockRepositoryConfig(value?: unknown): Record<string, unknown> {
         typeof config.ai.issue.useCodexSuperpowers !== "boolean")
     ) {
       throw new Error("ai.issue.useCodexSuperpowers must be a boolean");
+    }
+  }
+
+  if (config.ai?.models !== undefined) {
+    throw new Error("ai.models is no longer supported; use ai.profiles and ai.roles");
+  }
+
+  if (config.ai?.thinking !== undefined) {
+    throw new Error("ai.thinking is no longer supported; use ai.profiles and ai.roles");
+  }
+
+  const supportedThinkingLevels = new Set([
+    "none",
+    "minimal",
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+  ]);
+
+  if (config.ai?.profiles !== undefined) {
+    if (typeof config.ai.profiles !== "object" || config.ai.profiles === null) {
+      throw new Error("ai.profiles must be an object");
+    }
+
+    for (const [profileName, profile] of Object.entries(config.ai.profiles)) {
+      if (profileName.trim().length === 0) {
+        throw new Error("ai profile names must be non-empty");
+      }
+
+      if (
+        typeof profile !== "object" ||
+        profile === null ||
+        typeof profile.model !== "string" ||
+        profile.model.trim().length === 0 ||
+        typeof profile.thinking !== "string" ||
+        !supportedThinkingLevels.has(profile.thinking)
+      ) {
+        throw new Error("ai.profiles entries must include model and supported thinking");
+      }
+    }
+  }
+
+  if (config.ai?.roles !== undefined) {
+    if (typeof config.ai.roles !== "object" || config.ai.roles === null) {
+      throw new Error("ai.roles must be an object");
+    }
+
+    const roleEntries = ["planner", "implementer", "reviewer", "tester"] as const;
+    for (const role of roleEntries) {
+      if (
+        config.ai.roles[role] !== undefined &&
+        (typeof config.ai.roles[role] !== "string" ||
+          config.ai.roles[role].trim().length === 0 ||
+          config.ai.profiles?.[config.ai.roles[role]] === undefined)
+      ) {
+        throw new Error("ai.roles values must reference ai.profiles entries");
+      }
     }
   }
 
@@ -1438,6 +1505,22 @@ async function loadCli(options: {
     return {
     DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS: true,
     DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS,
+    DEFAULT_REPOSITORY_AI_PROFILES: {
+      premium: {
+        model: "gpt-5.5",
+        thinking: "high",
+      },
+      standard: {
+        model: "gpt-5.4-mini",
+        thinking: "medium",
+      },
+    },
+    DEFAULT_REPOSITORY_AI_ROLE_PROFILES: {
+      planner: "premium",
+      implementer: "standard",
+      reviewer: "premium",
+      tester: "standard",
+    },
     DEFAULT_REPOSITORY_BASE_BRANCH: "main",
     DEFAULT_REPOSITORY_BUILD_COMMAND: ["pnpm", "build"],
     analyzeFeatureBacklog,
@@ -1464,6 +1547,13 @@ async function loadCli(options: {
         codex?: { preferSubagents?: boolean };
         issue?: { useCodexSuperpowers?: boolean };
         issueDraft?: { useCodexSuperpowers?: boolean };
+        profiles?: Record<string, { model: string; thinking: string }>;
+        roles?: {
+          planner?: string;
+          implementer?: string;
+          reviewer?: string;
+          tester?: string;
+        };
         provider?:
           | { type?: "openai"; model?: string; baseUrl?: string }
           | { type?: "bedrock-claude"; model?: string; region?: string };
@@ -1476,6 +1566,24 @@ async function loadCli(options: {
       ai: {
         codex: {
           preferSubagents: config?.ai?.codex?.preferSubagents ?? true,
+        },
+        profiles: {
+          premium: {
+            model: "gpt-5.5",
+            thinking: "high",
+          },
+          standard: {
+            model: "gpt-5.4-mini",
+            thinking: "medium",
+          },
+          ...(config?.ai?.profiles ?? {}),
+        },
+        roles: {
+          planner: "premium",
+          implementer: "standard",
+          reviewer: "premium",
+          tester: "standard",
+          ...(config?.ai?.roles ?? {}),
         },
         issue: {
           useCodexSuperpowers:
@@ -1555,6 +1663,27 @@ async function loadCli(options: {
     ISSUE_PLAN_COMMENT_MARKER: "<!-- prs:issue-plan -->",
     ISSUE_SPEC_COMMENT_MARKER: "<!-- prs:issue-spec -->",
     TEST_SUGGESTIONS_COMMENT_MARKER: "<!-- prs:test-suggestions -->",
+    DEFAULT_REPOSITORY_AI_MODEL_ROLES: [
+      "planner",
+      "implementer",
+      "reviewer",
+      "tester",
+    ] as const,
+    RepositoryAiThinkingLevel: {
+      parse: (value: unknown) => {
+        if (
+          value !== "none" &&
+          value !== "minimal" &&
+          value !== "low" &&
+          value !== "medium" &&
+          value !== "high" &&
+          value !== "xhigh"
+        ) {
+          throw new Error("Unsupported thinking level");
+        }
+        return value;
+      },
+    },
     IssueDraftSet: {
       parse: (value: unknown) => {
         const manifest = value as {
@@ -1689,48 +1818,59 @@ async function loadCli(options: {
     },
   }));
   vi.doMock("@prs/providers", () => ({
-    createProviderFromConfig: vi.fn(async (config: { type: string }, environment: {
-      openaiApiKey?: string;
-      openaiModel?: string;
-      openaiBaseUrl?: string;
-      awsRegion?: string;
-      awsDefaultRegion?: string;
-    }) => {
-      if (config.type === "openai") {
-        if (!environment.openaiApiKey) {
+    createProviderFromConfig: vi.fn(
+      async (
+        config: { type: string; model?: string },
+        environment: {
+          openaiApiKey?: string;
+          openaiModel?: string;
+          openaiBaseUrl?: string;
+          awsRegion?: string;
+          awsDefaultRegion?: string;
+        },
+        options: { modelOverride?: string } = {}
+      ) => {
+        const requestedModel = options.modelOverride?.trim();
+        const resolvedModel = requestedModel ?? config.model;
+        if (config.type === "openai") {
+          if (!environment.openaiApiKey) {
+            throw new Error(
+              "OpenAI provider requires OPENAI_API_KEY. Set it in your environment or in a .env file."
+            );
+          }
+
+          return {
+            providerType: "openai",
+            model: resolvedModel ?? environment.openaiModel,
+          };
+        }
+
+        const region = environment.awsRegion ?? environment.awsDefaultRegion;
+        if (!resolvedModel?.trim()) {
           throw new Error(
-            "OpenAI provider requires OPENAI_API_KEY. Set it in your environment or in a .env file."
+            "Bedrock Claude provider requires an explicit model in `.prs/config.json` under `ai.provider.model`."
+          );
+        }
+
+        if (!region && !(config as { region?: string }).region) {
+          throw new Error(
+            "Bedrock Claude provider requires a region. Set `ai.provider.region`, `AWS_REGION`, or `AWS_DEFAULT_REGION`."
+          );
+        }
+
+        if (!process.env.AWS_ACCESS_KEY_ID && !process.env.AWS_PROFILE) {
+          throw new Error(
+            "Bedrock Claude provider could not resolve AWS credentials using the standard AWS provider chain. credentials missing"
           );
         }
 
         return {
-          providerType: "openai",
+          providerType: "bedrock-claude",
+          model: resolvedModel ?? undefined,
+          region,
         };
       }
-
-      const region = environment.awsRegion ?? environment.awsDefaultRegion;
-      if (!("model" in config) || typeof config.model !== "string" || !config.model.trim()) {
-        throw new Error(
-          "Bedrock Claude provider requires an explicit model in `.prs/config.json` under `ai.provider.model`."
-        );
-      }
-
-      if (!region && !("region" in config && typeof config.region === "string")) {
-        throw new Error(
-          "Bedrock Claude provider requires a region. Set `ai.provider.region`, `AWS_REGION`, or `AWS_DEFAULT_REGION`."
-        );
-      }
-
-      if (!process.env.AWS_ACCESS_KEY_ID && !process.env.AWS_PROFILE) {
-        throw new Error(
-          "Bedrock Claude provider could not resolve AWS credentials using the standard AWS provider chain. credentials missing"
-        );
-      }
-
-      return {
-        providerType: "bedrock-claude",
-      };
-    }),
+    ),
     readProviderEnvironment: vi.fn(() => ({
       openaiApiKey: process.env.OPENAI_API_KEY?.trim() || undefined,
       openaiModel: process.env.OPENAI_MODEL?.trim() || undefined,

@@ -17,6 +17,23 @@ import {
   loadCli,
 } from "./index-test-support";
 
+const DEFAULT_SETUP_PROFILES = {
+  premium: {
+    model: "gpt-5.5",
+    thinking: "high",
+  },
+  standard: {
+    model: "gpt-5.4-mini",
+    thinking: "medium",
+  },
+};
+const DEFAULT_SETUP_ROLES = {
+  planner: "premium",
+  implementer: "standard",
+  reviewer: "premium",
+  tester: "standard",
+};
+
 describe("Issue draft and setup workflows", () => {
   it("runs setup with repo-aware defaults without creating AGENTS guidance by default", async () => {
     const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-setup-node-"));
@@ -90,6 +107,8 @@ describe("Issue draft and setup workflows", () => {
         issue: {
           useCodexSuperpowers: false,
         },
+        profiles: DEFAULT_SETUP_PROFILES,
+        roles: DEFAULT_SETUP_ROLES,
         runtime: {
           type: "codex",
         },
@@ -212,6 +231,8 @@ describe("Issue draft and setup workflows", () => {
         issue: {
           useCodexSuperpowers: false,
         },
+        profiles: DEFAULT_SETUP_PROFILES,
+        roles: DEFAULT_SETUP_ROLES,
         runtime: {
           type: "codex",
         },

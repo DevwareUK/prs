@@ -22,6 +22,22 @@ import { parseSetupCommandArgs, runSetupCommand } from "./setup";
 const cleanupTargets = new Set<string>();
 const execFileSyncMock = vi.mocked(execFileSync);
 const spawnSyncMock = vi.mocked(spawnSync);
+const DEFAULT_SETUP_PROFILES = {
+  premium: {
+    model: "gpt-5.5",
+    thinking: "high",
+  },
+  standard: {
+    model: "gpt-5.4-mini",
+    thinking: "medium",
+  },
+};
+const DEFAULT_SETUP_ROLES = {
+  planner: "premium",
+  implementer: "standard",
+  reviewer: "premium",
+  tester: "standard",
+};
 
 function createRepo(prefix: string): string {
   const repoRoot = mkdtempSync(resolve(tmpdir(), prefix));
@@ -196,6 +212,8 @@ describe("setup command", () => {
         issue: {
           useCodexSuperpowers: false,
         },
+        profiles: DEFAULT_SETUP_PROFILES,
+        roles: DEFAULT_SETUP_ROLES,
         runtime: {
           type: "codex",
         },
@@ -617,6 +635,8 @@ describe("setup command", () => {
         issue: {
           useCodexSuperpowers: false,
         },
+        profiles: DEFAULT_SETUP_PROFILES,
+        roles: DEFAULT_SETUP_ROLES,
         runtime: {
           type: "codex",
         },
@@ -1052,6 +1072,8 @@ describe("setup command", () => {
         issue: {
           useCodexSuperpowers: false,
         },
+        profiles: DEFAULT_SETUP_PROFILES,
+        roles: DEFAULT_SETUP_ROLES,
         runtime: {
           type: "codex",
         },
@@ -1113,10 +1135,12 @@ describe("setup command", () => {
         issue: {
           useCodexSuperpowers: false,
         },
+        profiles: DEFAULT_SETUP_PROFILES,
         provider: {
           model: "gpt-5-mini",
           type: "openai",
         },
+        roles: DEFAULT_SETUP_ROLES,
         runtime: {
           type: "claude-code",
         },
