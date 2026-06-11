@@ -16782,6 +16782,8 @@ var require_dist2 = __commonJS({
       buildGitHubPRReviewComments: () => buildGitHubPRReviewComments,
       buildPRAssistantSection: () => buildPRAssistantSection2,
       createRepositoryPathMatcher: () => createRepositoryPathMatcher,
+      estimateIssueImplementationTokens: () => estimateIssueImplementationTokens,
+      extractIssueImplementationPlanFiles: () => extractIssueImplementationPlanFiles,
       filterRepositoryPaths: () => filterRepositoryPaths,
       formatPRImpactProfileMarkdown: () => formatPRImpactProfileMarkdown2,
       formatPRReviewInlineCommentBody: () => formatPRReviewInlineCommentBody,
@@ -17782,6 +17784,182 @@ ${formatValidationIssues(validationIssues)}`,
         normalizeParsedJson: (value) => normalizeNullableFields(value, ["openQuestions"])
       });
       return normalizeIssueResolutionPlanOutput(modelOutput);
+    }
+    var MANAGED_MARKER_PATTERN = /^<!--\s*prs:issue-plan\s*-->\s*$/i;
+    var RISK_TERMS = [
+      "auth",
+      "cache",
+      "command",
+      "concurrency",
+      "contract",
+      "generated",
+      "migration",
+      "network",
+      "runtime",
+      "schema",
+      "workflow"
+    ];
+    function normalizePlanPath(value) {
+      const trimmed = value.trim().replace(/^`|`$/g, "").replace(/^\.\//, "");
+      if (!trimmed || trimmed.includes("\n")) {
+        return void 0;
+      }
+      if (!/[/\\]/.test(trimmed) && !/\.[a-z0-9]+$/i.test(trimmed)) {
+        return void 0;
+      }
+      return trimmed.replace(/\\/g, "/");
+    }
+    function stripManagedMarker(planBody) {
+      return planBody.split(/\r?\n/).filter((line) => !MANAGED_MARKER_PATTERN.test(line.trim())).join("\n").trim();
+    }
+    function extractIssueImplementationPlanFiles(planBody) {
+      const lines = stripManagedMarker(planBody).split(/\r?\n/);
+      const start = lines.findIndex(
+        (line) => /^#{2,3}\s+Likely files\s*$/i.test(line.trim())
+      );
+      if (start === -1) {
+        return [];
+      }
+      const files = [];
+      for (const line of lines.slice(start + 1)) {
+        if (/^#{2,3}\s+/.test(line.trim())) {
+          break;
+        }
+        const match = line.match(/^\s*[-*]\s+(.+?)\s*$/);
+        if (!match) {
+          continue;
+        }
+        const path = normalizePlanPath(match[1] ?? "");
+        if (path) {
+          files.push(path);
+        }
+      }
+      return [...new Set(files)];
+    }
+    function countImplementationSteps(planBody) {
+      const lines = stripManagedMarker(planBody).split(/\r?\n/);
+      const numberedSteps = lines.filter((line) => /^\s*\d+\.\s+\S/.test(line)).length;
+      if (numberedSteps > 0) {
+        return numberedSteps;
+      }
+      const stepsStart = lines.findIndex(
+        (line) => /^#{2,3}\s+(Steps|Implementation steps|Plan)\s*$/i.test(line.trim())
+      );
+      if (stepsStart === -1) {
+        return 0;
+      }
+      return lines.slice(stepsStart + 1).filter((line) => /^\s*[-*]\s+\S/.test(line)).length;
+    }
+    function countRiskTerms(planBody) {
+      const normalized = planBody.toLowerCase();
+      return RISK_TERMS.filter((term) => normalized.includes(term)).length;
+    }
+    function roundToThousand(value) {
+      return Math.max(1e3, Math.round(value / 1e3) * 1e3);
+    }
+    function pluralize(count, singular, plural = `${singular}s`) {
+      return `${count} ${count === 1 ? singular : plural}`;
+    }
+    function profileMultiplier(profile) {
+      const model = profile.model.toLowerCase();
+      let multiplier = 1;
+      if (model.includes("mini")) {
+        multiplier += 0.35;
+      }
+      if (model.includes("spark")) {
+        multiplier += 0.45;
+      }
+      if (profile.thinking === "none" || profile.thinking === "minimal") {
+        multiplier -= 0.08;
+      }
+      if (profile.thinking === "high" || profile.thinking === "xhigh") {
+        multiplier += 0.08;
+      }
+      return Math.max(0.8, multiplier);
+    }
+    function confidenceFor(input) {
+      if (input.scanExhausted || input.stepCount === 0 || input.likelyFiles.length === 0 || input.missingFiles > 3) {
+        return "low";
+      }
+      if (input.riskTermCount > 4 || input.missingFiles > 0) {
+        return "medium";
+      }
+      return "high";
+    }
+    function estimateIssueImplementationTokens(input) {
+      const planBody = stripManagedMarker(input.planBody);
+      const likelyFilesFromPlan = extractIssueImplementationPlanFiles(input.planBody);
+      const fileContext = input.context?.likelyFiles ?? [];
+      const likelyFiles = fileContext.length > 0 ? fileContext.map((file) => file.path) : likelyFilesFromPlan;
+      const stepCount = countImplementationSteps(planBody);
+      const riskTermCount = countRiskTerms(planBody);
+      const missingFiles = fileContext.filter((file) => !file.exists).length;
+      const largeFiles = fileContext.filter((file) => file.lineCount > 1e3).length;
+      const verificationCommandCount = input.context?.verificationCommands?.length ?? 0;
+      const scanBudget = input.context?.scanBudget ?? {
+        filesConsidered: likelyFiles.length,
+        filesScanned: fileContext.filter((file) => file.exists).length,
+        maxFiles: Math.max(likelyFiles.length, fileContext.length),
+        exhausted: false
+      };
+      const confidence = confidenceFor({
+        likelyFiles,
+        missingFiles,
+        stepCount,
+        riskTermCount,
+        scanExhausted: scanBudget.exhausted
+      });
+      const planTokens = Math.ceil(planBody.length / 4);
+      const baseTokens = planTokens + Math.max(stepCount, 1) * 2500 + Math.max(likelyFiles.length, 1) * 900 + largeFiles * 2500 + missingFiles * 700 + riskTermCount * 1200 + Math.max(verificationCommandCount, 1) * 1800;
+      const profiles = input.profiles.map((profile) => {
+        const multiplier = profileMultiplier(profile);
+        const range2 = {
+          low: roundToThousand(baseTokens * multiplier * 0.75),
+          high: roundToThousand(baseTokens * multiplier * (confidence === "low" ? 1.75 : 1.35))
+        };
+        const notes = [
+          profile.name === input.implementerProfileName ? "Configured implementer profile." : "Comparison profile.",
+          profile.model.toLowerCase().includes("mini") ? "Mini-class models may spend more turns on implementation/debug loops." : "Premium-class model estimate assumes fewer implementation/debug loops."
+        ];
+        return {
+          ...profile,
+          range: range2,
+          confidence,
+          notes
+        };
+      });
+      const implementerProfile = profiles.find(
+        (profile) => profile.name === input.implementerProfileName
+      );
+      const recommendation = implementerProfile ? `Start with ${implementerProfile.name} (${implementerProfile.model}) unless the estimate drivers point to high-risk runtime, workflow, or command-surface work.` : "Use the configured implementer profile unless the estimate drivers point to high-risk runtime, workflow, or command-surface work.";
+      const drivers = [
+        `${stepCount || "No explicit"} implementation steps detected.`,
+        `${likelyFiles.length} likely files detected.`,
+        `${verificationCommandCount || 1} verification command group${(verificationCommandCount || 1) === 1 ? "" : "s"} considered.`,
+        ...largeFiles > 0 ? [`${pluralize(largeFiles, "large likely file")}.`] : [],
+        ...riskTermCount > 0 ? [`${pluralize(riskTermCount, "risk signal")} in the plan.`] : []
+      ];
+      const warnings = [
+        ...missingFiles > 0 ? [
+          `${pluralize(missingFiles, "likely file")} ${missingFiles === 1 ? "was" : "were"} not found locally.`
+        ] : [],
+        ...scanBudget.exhausted ? ["Repository context scan budget was exhausted; estimate confidence is reduced."] : [],
+        ...confidence === "low" ? ["Estimate confidence is low; refine or split the plan before relying on the range."] : []
+      ];
+      return {
+        status: "estimated",
+        profiles,
+        drivers,
+        warnings,
+        recommendation,
+        confidence,
+        scanBudget: {
+          status: scanBudget.exhausted ? "exhausted" : "complete",
+          filesConsidered: scanBudget.filesConsidered,
+          filesScanned: scanBudget.filesScanned,
+          maxFiles: scanBudget.maxFiles
+        }
+      };
     }
     var import_contracts8 = require_dist();
     var import_zod = require_zod();

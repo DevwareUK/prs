@@ -119,6 +119,7 @@ Advanced commands:
 - `prs issue draft --draft-file <path> [--media-manifest <path>]`
 - `prs issue refine <number>`
 - `prs issue plan <number> [--refresh]`
+- `prs issue estimate <number>`
 - `prs issue <number>`
 - `prs issue prepare <number>`
 - `prs issue finalize <number>`
@@ -138,6 +139,7 @@ Supporting commands:
 - `prs audit publish (--issue <number>|--pr <number>) --file <path> --section <name> [--local-run <path>] [--media-manifest <path>]`
 - `prs tool issue list [--actionable] --json`
 - `prs tool issue ready <issue-number> [--unattended|--auto|--jdi] --json`
+- `prs tool issue estimate <issue-number> --json`
 - `prs tool issue create (--draft-file <path>|--issue-set <path>) --json [--media-manifest <path>]`
 - `prs tool pr list [--actionable] --json`
 - `prs tool pr ready <pr-number> [--unattended|--auto|--jdi] --json`
@@ -157,6 +159,8 @@ The old `prs codex ...` nested launcher group has been retired. To start an agen
 `prs issue draft --draft-file <path> --media-manifest <path>`, `prs tool issue create --draft-file <path> --media-manifest <path> --json`, and `prs audit publish ... --media-manifest <path>` attach visual evidence metadata to GitHub-facing Markdown. The manifest may be a JSON array or `{ "media": [...] }`; each item must provide exactly one of `url` or `path`, may set `kind` to `image` or `video`, and may include `caption` and `alt`. Supported local/URL extensions are `png`, `jpg`, `jpeg`, `gif`, `webp`, `mp4`, `mov`, and `webm`; local images are limited to 25 MB and local videos to 100 MB. URL images are embedded, URL videos are linked, and tracked repository image/video paths are rendered as raw GitHub URLs for the current branch. Local files that are not tracked in git are validated but omitted from GitHub-facing Markdown until a configured external storage backend exists.
 
 `prs tool issue ready <issue-number> [--unattended|--auto|--jdi] --json` reports the current managed issue-refinement artifact status without blocking implementation. It recognizes managed `<!-- prs:issue-spec -->` and `<!-- prs:issue-plan -->` markers whether they appear in direct managed comments or inside `prs audit publish` comments. If the specification or plan comment is missing, the JSON result is still `status: "ready"` and notes that missing managed refinement artifacts will be generated and published during issue preparation. When `prs issue <number>` or `prs issue prepare <number>` needs to create a missing managed plan before implementation, it also publishes a managed `<!-- prs:issue-spec -->` comment from the available issue context.
+
+`prs issue estimate <issue-number>` estimates the implementation token budget for working through the issue's managed `<!-- prs:issue-plan -->` comment. It reads the plan, scans bounded repository context such as likely files and configured verification commands, compares the configured AI profiles, and prints token ranges, confidence, drivers, warnings, and a recommendation. `prs tool issue estimate <issue-number> --json` returns the same estimate as structured JSON for Codex skills and automation. The estimate is a forecast, not exact usage accounting, and stops with lower confidence instead of expanding beyond its bounded scan.
 
 Codex-first issue completion never uses the configured text provider for finalization. `prs issue finalize <number>`, local `prs issue <number>`, and unattended `prs issue <number> --jdi` let Codex do the repository work, then use deterministic local commit and PR text for the CLI-owned final step.
 

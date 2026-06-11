@@ -46,6 +46,10 @@ import { publishAuditArtifact } from "./audit-artifacts";
 import { inspectManagedCodexSkills } from "./codex-skills";
 import { buildDoneStateInstructions } from "./done-state";
 import { listIssuesTool } from "./issue-list-tool";
+import {
+  estimateIssueTool,
+  renderIssueEstimate,
+} from "./issue-estimate-tool";
 import { readyIssueTool } from "./issue-ready-tool";
 import {
   formatLaunchStageNotice,
@@ -894,6 +898,8 @@ function resolveLaunchStageNoticeId(args: string[]): LaunchStageNoticeId | undef
         return "issue-draft";
       case "finalize":
         return "issue-finalize";
+      case "estimate":
+        return undefined;
       case "plan":
         return "issue-plan";
       case "prepare":
@@ -4411,6 +4417,17 @@ async function runToolCommand(): Promise<void> {
     return;
   }
 
+  if (toolCommand.kind === "issue-estimate") {
+    const result = await estimateIssueTool({
+      issueNumber: toolCommand.issueNumber,
+      repoRoot,
+      forge: getRepositoryForge(repoRoot),
+      repositoryConfig,
+    });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
   if (toolCommand.kind === "issue-create") {
     const forge = getRepositoryForge(repoRoot);
 
@@ -7245,6 +7262,18 @@ async function runIssueCommand(): Promise<void> {
     await runIssuePlanCommand(issueCommand.issueNumber, {
       refresh: issueCommand.refresh,
     });
+    return;
+  }
+
+  if (issueCommand.action === "estimate") {
+    const repositoryConfig = getRepositoryConfig(repoRoot);
+    const result = await estimateIssueTool({
+      issueNumber: issueCommand.issueNumber,
+      repoRoot,
+      forge: getRepositoryForge(repoRoot),
+      repositoryConfig,
+    });
+    process.stdout.write(`${renderIssueEstimate(result)}\n`);
     return;
   }
 
