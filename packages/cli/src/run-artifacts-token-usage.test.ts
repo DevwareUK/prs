@@ -35,8 +35,11 @@ describe("issue token usage artifacts", () => {
         status: "active",
       },
       model: {
-        id: "gpt-5",
-        source: "codex-session",
+        profile: "standard",
+        role: "implementer",
+        model: "gpt-5.4-mini",
+        thinking: "medium",
+        source: "configured-role",
       },
       usage: {
         totalTokens: 12345,
@@ -56,8 +59,11 @@ describe("issue token usage artifacts", () => {
         status: "active",
       },
       model: {
-        id: "gpt-5",
-        source: "codex-session",
+        profile: "standard",
+        role: "implementer",
+        model: "gpt-5.4-mini",
+        thinking: "medium",
+        source: "configured-role",
       },
       usage: {
         totalTokens: 12345,
@@ -75,15 +81,18 @@ describe("issue token usage artifacts", () => {
         capturedAt: "2026-06-11T16:20:00.000Z",
         source: "codex-goal",
         model: {
-          id: "gpt-5",
-          source: "codex-session",
+          profile: "standard",
+          role: "implementer",
+          model: "gpt-5.4-mini",
+          thinking: "medium",
+          source: "configured-role",
         },
         usage: {
           totalTokens: 12345,
           timeUsedSeconds: 367,
         },
       })
-    ).toContain("Model: gpt-5");
+    ).toContain("Model/profile: standard (gpt-5.4-mini, medium thinking)");
 
     expect(
       formatIssueTokenUsageAuditSection({
@@ -93,11 +102,14 @@ describe("issue token usage artifacts", () => {
         capturedAt: "2026-06-11T16:20:00.000Z",
         source: "codex-goal",
         model: {
-          id: "gpt-5",
-          source: "manual",
+          profile: "premium",
+          role: "planner",
+          model: "gpt-5.5",
+          thinking: "high",
+          source: "configured-role",
         },
         notes: ["Codex goal usage was not exposed in this session."],
       })
-    ).toContain("Model: gpt-5");
+    ).toContain("Model/profile: premium (gpt-5.5, high thinking)");
   });
 });

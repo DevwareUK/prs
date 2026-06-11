@@ -123,8 +123,12 @@ export type IssueTokenUsageArtifact = {
     status?: string;
   };
   model?: {
+    profile?: string;
+    role?: string;
+    model?: string;
     id?: string;
     displayName?: string;
+    thinking?: "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | string;
     source?: "codex-session" | "configured-role" | "manual" | "unavailable";
   };
   usage?: {
@@ -164,9 +168,17 @@ function formatDuration(seconds: number | undefined): string | undefined {
 function formatModelLines(
   model: IssueTokenUsageArtifact["model"] | undefined
 ): string[] {
-  const modelName = model?.displayName ?? model?.id;
+  const modelName = model?.displayName ?? model?.model ?? model?.id;
+  const profileName = model?.profile;
+  const modelProfile =
+    profileName && modelName && model?.thinking
+      ? `Model/profile: ${profileName} (${modelName}, ${model.thinking} thinking)`
+      : profileName && modelName
+        ? `Model/profile: ${profileName} (${modelName})`
+        : undefined;
   return [
-    ...(modelName ? [`Model: ${modelName}`] : []),
+    ...(modelProfile ? [modelProfile] : modelName ? [`Model: ${modelName}`] : []),
+    ...(model?.role ? [`Workflow role: ${model.role}`] : []),
     ...(model?.source ? [`Model source: ${model.source}`] : []),
   ];
 }
