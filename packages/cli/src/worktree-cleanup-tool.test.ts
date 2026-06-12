@@ -171,7 +171,6 @@ describe("worktree cleanup tool", () => {
   it("applies cleanup only to safe candidates", () => {
     const {
       repoRoot,
-      manualWorktreePath,
       prsBranchWorktreePath,
       prsDetachedWorktreePath,
       prsDirtyWorktreePath,
