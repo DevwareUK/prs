@@ -311,6 +311,19 @@ describe("prs tool command parser", () => {
     });
   });
 
+  it("parses worktree cleanup JSON command", () => {
+    expect(parsePrsToolCommandArgs(["worktrees", "cleanup", "--json"])).toEqual({
+      kind: "worktrees-cleanup",
+      apply: false,
+      json: true,
+    });
+    expect(parsePrsToolCommandArgs(["worktrees", "cleanup", "--apply", "--json"])).toEqual({
+      kind: "worktrees-cleanup",
+      apply: true,
+      json: true,
+    });
+  });
+
   it("rejects removed --all PR readiness shorthand", () => {
     expect(() =>
       parsePrsToolCommandArgs(["pr", "ready", "115", "--all", "--json"])
@@ -339,6 +352,9 @@ describe("prs tool command parser", () => {
     );
     expect(() => parsePrsToolCommandArgs(["issue", "list"])).toThrow(
       renderPrsToolCommandHelp()
+    );
+    expect(() => parsePrsToolCommandArgs(["worktrees", "cleanup"])).toThrow(
+      "prs tool worktrees cleanup requires --json."
     );
     expect(() =>
       parsePrsToolCommandArgs(["issue", "create", "--draft-file", "draft.md"])

@@ -119,6 +119,16 @@ function renderPrReadyToolCommand(unattended = false): string {
   return `prs ${cliArgs.replace("123", "<number>")}`;
 }
 
+function renderCleanupWorktreesToolCommand(): string {
+  const route = routePrsCommandSurfaceAction(parsePrsCommandSurfaceArgs(["cleanup", "worktrees"]));
+  const cliArgs = route.cliArgs?.join(" ");
+  if (!route.toolOnly || !cliArgs) {
+    throw new Error("Expected /prs cleanup worktrees to route to a prs tool command.");
+  }
+
+  return `prs ${cliArgs}`;
+}
+
 function renderReviewCommand(action: "diff" | "tests" | "features"): string {
   const route = routePrsCommandSurfaceAction(parsePrsCommandSurfaceArgs(["review", action]));
   const cliArgs = route.cliArgs?.join(" ");
@@ -271,6 +281,7 @@ export const PRS_CODEX_SKILLS: ManagedCodexSkill[] = [
       `- \`/prs review diff\`: run \`${renderReviewCommand("diff")}\`; review the current diff or supplied \`--base\`/\`--head\` comparison.`,
       "- `/prs issue`: run `prs tool issue list --actionable --json`, show each returned actionable for me issue number, title, and GitHub URL, and then offer contextual issue actions. One selection prepares issue context; multiple selections start parallel issue work through Superpowers agents and worktrees.",
       "- `/prs pr`: run `prs tool pr list --actionable --json`, show each returned pull request number, title, and GitHub URL, and then offer contextual PR actions.",
+      "- `/prs cleanup worktrees`: run `prs tool worktrees cleanup --json`, report safe removal candidates and blocked worktrees, and ask before applying cleanup unless the user explicitly requested removal.",
       "",
       "### Direct forms",
       "",
@@ -285,6 +296,7 @@ export const PRS_CODEX_SKILLS: ManagedCodexSkill[] = [
       `- \`/prs pr <number> review\`: run \`${renderPrReviewToolCommand()}\`, read the returned \`promptFilePath\` and \`contextFilePath\`, inspect the prepared checkout in this active Codex session, write the final report to the returned \`reportFilePath\`, write inline review candidates to the returned \`commentsFilePath\`, present a concise approval summary, and run \`${renderPrPublishReviewToolCommand()}\` only after the user approves posting to GitHub. Do not edit code, commit, push, resolve comments, or post directly to GitHub outside the approved publish tool.`,
       `- \`/prs pr <number> review --unattended\` (aliases: \`--auto\`, \`--jdi\`): run \`${renderPrReviewToolCommand(true)}\`, write the report and inline review candidates, then publish with \`${renderPrPublishReviewToolCommand(true)}\`. This unattended GitHub-visible output must keep visible automation framing.`,
       `- \`/prs pr <number> prepare-review\`: run \`${renderPrPrepareReviewToolCommand()}\`, keep the prepared branch checked out in the current repository, read the returned \`snapshotFilePath\` when useful, then continue review in this Codex session. The deterministic tool does not generate \`review-brief.md\`; do not look for one unless a separate command created it.`,
+      `- \`/prs cleanup worktrees\`: run \`${renderCleanupWorktreesToolCommand()}\`, summarize the removable and blocked worktrees, and only run \`prs tool worktrees cleanup --apply --json\` after the user explicitly requests cleanup or approves the dry-run report.`,
       "- `/prs pr <number> resolve-conflicts`: run `prs pr resolve-conflicts <number>`.",
       "- `/prs pr <number> address-comments`: run `prs tool pr address-comments <number> --json`, read the returned `promptFilePath` and `snapshotFilePath`, then continue the selected review-comment fixes in this Codex session. After fixes are complete, verify, commit reviewed changes, and run `prs tool pr push-reviewed <number> --json`. Do not run a command that launches nested Codex.",
       "- `/prs pr <number> fix-tests`: run `prs tool pr fix-tests <number> --json`, read the returned `promptFilePath` and `snapshotFilePath`, then continue the failing-test fix in this Codex session. After fixes are complete, verify, commit reviewed changes, and run `prs tool pr push-reviewed <number> --json`. Do not run a command that launches nested Codex.",
@@ -359,6 +371,23 @@ export const PRS_CODEX_SKILLS: ManagedCodexSkill[] = [
     ].join("\n"),
   },
   {
+    folderName: "prs-cleanup-worktrees",
+    name: "prs:cleanup-worktrees",
+    description:
+      "Use when cleaning prs-managed git worktrees safely.",
+    body: [
+      SHARED_WORKFLOW_CONTRACT,
+      "",
+      "## Cleanup Worktrees",
+      "",
+      "Use this alias exactly like `/prs cleanup worktrees`.",
+      `Run \`${renderCleanupWorktreesToolCommand()}\` first and summarize the removable and blocked worktrees.`,
+      "Do not remove dirty worktrees, non-PRS worktrees, the current checkout, or detached HEADs that are not reachable from a ref.",
+      "Only run `prs tool worktrees cleanup --apply --json` after the user explicitly requests cleanup or approves the dry-run report.",
+      "do not fall back to manual git worktree remove or filesystem deletion.",
+    ].join("\n"),
+  },
+  {
     folderName: "prs-parallel-batch",
     name: "prs:parallel-batch",
     description:
@@ -386,6 +415,7 @@ export const PRS_CODEX_SKILLS: ManagedCodexSkill[] = [
       "Use this alias exactly like `/prs create` or `/prs create issue`.",
       "If the user has not provided the rough idea yet, ask for it in one concise sentence.",
       "When the idea is present, use a descriptive working title such as `Draft GitHub Issue: <short topic>` in Codex status/summary text.",
+      "When a create run starts in an active Codex app session and goal tools are available, call `create_goal` with an objective like `Draft GitHub Issue: <short topic>` before drafting. If a goal already exists, keep using it and record that fact in the run notes.",
       "Create draft artifacts with the configured prs issue-draft flow.",
       "During drafting, ask all currently blocking high-value questions needed to reach a settled specification, including the user's why and likely knock-on effects in nearby code or workflows.",
       "Keep the created issue body to concise summary/context. The approved specification and implementation plan should be published as managed issue comments after the GitHub issue exists.",
@@ -433,6 +463,7 @@ export const PRS_CODEX_SKILLS: ManagedCodexSkill[] = [
       "For `/prs:issue <number> refine`, do not run `prs issue refine <number>` and do not launch a nested Codex/runtime. Handle refinement directly in this Codex session: fetch the GitHub issue body and comments, use Superpowers brainstorming through GitHub issue comments against that thread, inspect nearby repository behavior for knock-on effects, and preserve the original issue body.",
       "If brainstorming is not satisfied, post one normal GitHub issue comment containing all currently blocking high-value questions with the `<!-- prs:issue-refinement-questions -->` marker, then stop. Do not write or publish a partial spec or plan while important questions remain open.",
       "Only once refinement is settled, present the proposed managed `<!-- prs:issue-spec -->` and `<!-- prs:issue-plan -->` comment bodies for approval before publishing or updating them on the same issue. If the user does not approve, keep the artifacts local and stop without posting them. After approval and publication, add the final `<!-- prs:issue-refinement-complete -->` confidence comment, and never create linked issues from this refinement flow.",
+      "When a refinement run starts in an active Codex app session and goal tools are available, call `create_goal` with an objective like `Refine PRS issue #<number>: <title>` before refining. If a goal already exists, keep using it and record that fact in the run notes.",
       "For `/prs:issue <number> refine`, record planner token usage under the issue-refine run directory as `codex-token-usage.json` and update the source issue's token-usage ledger when refinement posts questions, publishes managed spec/plan comments, or posts the final confidence comment.",
       `For \`/prs:issue <number>\`, run \`${renderIssueReadyToolCommand()}\` and stop with the next sensible action unless \`--unattended\`, \`--auto\`, or \`--jdi\` is present.`,
       `For \`/prs:issue <number> --unattended\` (aliases: \`--auto\`, \`--jdi\`), run \`${renderIssueReadyToolCommand(true)}\`, then continue into Superpowers worktree creation and issue implementation from the updated base branch.`,

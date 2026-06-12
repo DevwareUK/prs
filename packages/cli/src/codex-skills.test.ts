@@ -33,6 +33,7 @@ describe("managed prs Codex skills", () => {
       "prs:start-issue-work",
       "prs:publish-audit",
       "prs:finish-work",
+      "prs:cleanup-worktrees",
       "prs:parallel-batch",
       "prs:create",
       "prs:review",
@@ -159,6 +160,9 @@ describe("managed prs Codex skills", () => {
     expect(markdown).toContain("Do not assume the GitHub CLI (`gh`) is installed");
     expect(markdown).toContain("node packages/cli/dist/index.js <args>");
     expect(markdown).toContain("do not call that an actionable-for-me list");
+    expect(markdown).toContain("/prs cleanup worktrees");
+    expect(markdown).toContain("prs tool worktrees cleanup --json");
+    expect(markdown).toContain("prs tool worktrees cleanup --apply --json");
     expect(markdown).toContain("Existing managed skills are backing behaviors");
     expect(markdown).toContain("Read `.prs/config.json` before starting prs workflow work.");
     expect(markdown).toContain("ai.codex.preferSubagents");
@@ -168,13 +172,20 @@ describe("managed prs Codex skills", () => {
   });
 
   it("renders top-level alias skills for the shorter /prs colon commands", () => {
-    const createMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[5]);
-    const reviewMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[6]);
-    const issueMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[7]);
-    const prMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[8]);
-    const auditMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[9]);
-    const finishMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[10]);
+    const cleanupMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[4]);
+    const createMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[6]);
+    const reviewMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[7]);
+    const issueMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[8]);
+    const prMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[9]);
+    const auditMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[10]);
+    const finishMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[11]);
 
+    expect(cleanupMarkdown).toContain("name: prs:cleanup-worktrees");
+    expect(cleanupMarkdown).toContain("/prs cleanup worktrees");
+    expect(cleanupMarkdown).toContain("prs tool worktrees cleanup --json");
+    expect(cleanupMarkdown).toContain("prs tool worktrees cleanup --apply --json");
+    expect(cleanupMarkdown).toContain("Do not remove dirty worktrees");
+    expect(cleanupMarkdown).toContain("do not fall back to manual git worktree remove");
     expect(createMarkdown).toContain("name: prs:create");
     expect(createMarkdown).toContain("Draft a GitHub issue from a rough idea");
     expect(createMarkdown).toContain("Draft GitHub Issue: <short topic>");
@@ -187,6 +198,7 @@ describe("managed prs Codex skills", () => {
     expect(createMarkdown).toContain("prs tool issue create --draft-file <draft> --spec-file <spec> --plan-file <plan> --run-dir <run-dir> --json");
     expect(createMarkdown).toContain("trust its `managedComments` result");
     expect(createMarkdown).toContain("Record planner token usage for the create run");
+    expect(createMarkdown).toContain("call `create_goal` with an objective like `Draft GitHub Issue: <short topic>`");
     expect(createMarkdown).toContain("update the issue-lifetime token-usage ledger");
     expect(createMarkdown).toContain("prefer the actual active Codex session model");
     expect(createMarkdown).toContain("Do not run `prs issue plan`, `prs issue prepare`, or manual audit publication just to publish an already-approved plan artifact");
@@ -211,6 +223,7 @@ describe("managed prs Codex skills", () => {
     expect(issueMarkdown).toContain("keep the artifacts local and stop without posting them");
     expect(issueMarkdown).toContain("never create linked issues from this refinement flow");
     expect(issueMarkdown).toContain("For `/prs:issue <number> refine`, record planner token usage");
+    expect(issueMarkdown).toContain("call `create_goal` with an objective like `Refine PRS issue #<number>: <title>`");
     expect(issueMarkdown).toContain("update the source issue's token-usage ledger");
     expect(issueMarkdown).toContain("/prs:issue <number> --unattended");
     expect(issueMarkdown).toContain("create_goal");
@@ -368,7 +381,7 @@ describe("managed prs Codex skills", () => {
       ],
     });
 
-    expect(result.installed).toBe(11);
+    expect(result.installed).toBe(12);
     expect(result.updated).toBe(0);
     expect(result.unchanged).toBe(0);
     expect(result.skipped).toEqual([]);
@@ -395,7 +408,7 @@ describe("managed prs Codex skills", () => {
 
     const result = installManagedCodexSkills({ CODEX_HOME: codexHome }, "/Users/tester");
 
-    expect(result.installed).toBe(11);
+    expect(result.installed).toBe(12);
     expect(result.skillFiles.some((file) => file.endsWith("/prs/SKILL.md"))).toBe(true);
   });
 
@@ -408,7 +421,7 @@ describe("managed prs Codex skills", () => {
 
     expect(result.installed).toBe(0);
     expect(result.updated).toBe(0);
-    expect(result.unchanged).toBe(11);
+    expect(result.unchanged).toBe(12);
     expect(result.skipped).toEqual([]);
   });
 
@@ -435,7 +448,7 @@ describe("managed prs Codex skills", () => {
 
     const result = installManagedCodexSkills({ CODEX_HOME: codexHome }, "/Users/tester");
 
-    expect(result.installed).toBe(10);
+    expect(result.installed).toBe(11);
     expect(result.updated).toBe(1);
     expect(readFileSync(resolve(skillDir, "SKILL.md"), "utf8")).toContain(
       '<!-- prs:managed-skill name="prs"'
@@ -452,7 +465,7 @@ describe("managed prs Codex skills", () => {
 
     const result = installManagedCodexSkills({ CODEX_HOME: codexHome }, "/Users/tester");
 
-    expect(result.installed).toBe(10);
+    expect(result.installed).toBe(11);
     expect(result.updated).toBe(0);
     expect(result.skipped).toEqual([
       {
