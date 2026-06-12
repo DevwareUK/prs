@@ -40,7 +40,8 @@ export type PrsToolCommand =
       json: boolean;
     }
   | { kind: "pr-ready"; prNumber: number; unattended: boolean; json: boolean }
-  | { kind: "branches-cleanup"; apply: boolean; json: boolean };
+  | { kind: "branches-cleanup"; apply: boolean; json: boolean }
+  | { kind: "worktrees-cleanup"; apply: boolean; json: boolean };
 
 export function renderPrsToolCommandHelp(): string {
   return [
@@ -64,6 +65,7 @@ export function renderPrsToolCommandHelp(): string {
     "  prs tool pr add-tests <pr-number> [--selection <value>] --json",
     "  prs tool pr ready <pr-number> [--unattended|--auto|--jdi] --json",
     "  prs tool branches cleanup [--apply] --json",
+    "  prs tool worktrees cleanup [--apply] --json",
     "",
     "Compatibility aliases:",
     "  prs tool pr fix-comments <pr-number> [--selection <value>] --json      (use address-comments)",
@@ -102,7 +104,10 @@ function isUnattendedAlias(rawArg: string | undefined): boolean {
 export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
   const [scope, command, third, fourth, ...rest] = args;
 
-  if (!command || (scope !== "issue" && scope !== "pr" && scope !== "branches")) {
+  if (
+    !command ||
+    (scope !== "issue" && scope !== "pr" && scope !== "branches" && scope !== "worktrees")
+  ) {
     throw new Error(renderPrsToolCommandHelp());
   }
 
@@ -654,6 +659,34 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
       throw new Error(`Unknown tool option "--all". ${renderPrsToolCommandHelp()}`);
     }
     throw new Error(renderPrsToolCommandHelp());
+  }
+
+  if (scope === "worktrees" && command === "cleanup") {
+    const optionArgs = [third, fourth, ...rest].filter(
+      (arg): arg is string => arg !== undefined
+    );
+    let apply = false;
+    let json = false;
+
+    for (const rawArg of optionArgs) {
+      if (rawArg === "--apply") {
+        apply = true;
+        continue;
+      }
+
+      if (rawArg === "--json") {
+        json = true;
+        continue;
+      }
+
+      throw new Error(`Unknown tool option "${rawArg}". ${renderPrsToolCommandHelp()}`);
+    }
+
+    if (!json) {
+      throw new Error(`prs tool worktrees cleanup requires --json. ${renderPrsToolCommandHelp()}`);
+    }
+
+    return { kind: "worktrees-cleanup", apply, json: true };
   }
 
   throw new Error(renderPrsToolCommandHelp());

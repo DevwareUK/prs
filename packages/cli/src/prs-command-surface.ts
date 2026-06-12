@@ -19,7 +19,7 @@ export type PrsPrAction =
 export type PrsCommandSurfaceAction =
   | { kind: "root"; mode: "interactive" }
   | { kind: "create"; target: "issue" }
-  | { kind: "cleanup"; mode: "direct"; target: "branches" }
+  | { kind: "cleanup"; mode: "direct"; target: "branches" | "worktrees" }
   | { kind: "review"; mode: "interactive" }
   | {
       kind: "review";
@@ -47,6 +47,7 @@ export type PrsCommandRoute = {
     | "prs:review"
     | "prs:start-issue-work"
     | "prs:cleanup-branches"
+    | "prs:cleanup-worktrees"
     | "prs:parallel-batch"
     | "prs:publish-audit"
     | "prs:finish-work";
@@ -94,6 +95,7 @@ export function renderPrsCommandSurfaceHelp(): string {
     "  /prs",
     "  /prs create [issue]",
     "  /prs cleanup branches",
+    "  /prs cleanup worktrees",
     "  /prs review",
     "  /prs review diff [--base <git-ref>] [--head <git-ref>] [--format <markdown|json>]",
     "  /prs review tests [--format <markdown|json>] [--top <count>] [--create-issues]",
@@ -124,15 +126,15 @@ export function parsePrsCommandSurfaceArgs(args: string[]): PrsCommandSurfaceAct
         throw new Error(renderPrsCommandSurfaceHelp());
       }
 
-    return { kind: "create", target: "issue" };
+      return { kind: "create", target: "issue" };
     }
 
     throw new Error(renderPrsCommandSurfaceHelp());
   }
 
   if (first === "cleanup") {
-    if (second === "branches" && !third && rest.length === 0) {
-      return { kind: "cleanup", mode: "direct", target: "branches" };
+    if ((second === "branches" || second === "worktrees") && !third && rest.length === 0) {
+      return { kind: "cleanup", mode: "direct", target: second };
     }
 
     throw new Error(renderPrsCommandSurfaceHelp());
@@ -254,10 +256,12 @@ export function routePrsCommandSurfaceAction(action: PrsCommandSurfaceAction): P
   }
 
   if (action.kind === "cleanup") {
+    const cleanupTarget = action.target;
     return {
       interaction: "direct",
-      skillName: "prs:cleanup-branches",
-      cliArgs: ["tool", "branches", "cleanup", "--json"],
+      skillName:
+        cleanupTarget === "branches" ? "prs:cleanup-branches" : "prs:cleanup-worktrees",
+      cliArgs: ["tool", cleanupTarget, "cleanup", "--json"],
       toolOnly: true,
     };
   }

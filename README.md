@@ -129,6 +129,7 @@ Beta commands:
 - `prs issue <number> <number> ...`
 - `prs issue batch <number> <number> [...number]`
 - `prs pr resolve-conflicts <pr-number>`
+- `/prs cleanup worktrees`
 - `prs feature-backlog`
 
 Supporting commands:
@@ -151,8 +152,11 @@ Supporting commands:
 - `prs tool pr prepare-review <pr-number> --json`
 - `prs tool pr push-reviewed <pr-number> --json`
 - `prs tool branches cleanup [--apply] --json`
+- `prs tool worktrees cleanup [--apply] --json`
 - `prs commit`
 - `prs diff`
+
+`/prs cleanup worktrees` routes to the managed `prs:cleanup-worktrees` skill and uses `prs tool worktrees cleanup --json` for the dry-run report. Apply mode is intentionally explicit because the command can remove PRS-managed worktrees only when they are clean and proven safe to remove.
 
 The old `prs codex ...` nested launcher group has been retired. To start an agentic `/prs` workflow from a shell, run Codex directly in the repository, for example `codex -C <repo> "/prs issue <number> refine"` or `codex exec -C <repo> "/prs pr <number> review"`. Inside an active Codex session, use the deterministic `prs tool ... --json` commands for handoff data. Legacy runtime-launching commands that would start a child Codex process are blocked when Codex session markers are present; for unattended issue work, use `prs tool issue ready <issue-number> --unattended --json` and continue in the active session.
 
@@ -166,7 +170,7 @@ The old `prs codex ...` nested launcher group has been retired. To start an agen
 
 For `/prs create` and `prs issue draft`, the GitHub issue body is concise summary/context. An estimate-ready issue needs marker-based managed issue comments after creation: `<!-- prs:issue-spec -->` for the source-of-truth specification and `<!-- prs:issue-plan -->` for the implementation plan consumed by `prs issue estimate <number>`. `prs audit publish` comments are audit trail comments; they do not replace confirming the managed issue spec/plan comments. When approved Superpowers spec and plan artifacts are supplied, the guided create flow publishes those managed comments automatically. `prs tool issue create --json` accepts `--spec-file` and `--plan-file`; when those artifacts exist and are non-empty, the tool publishes the managed comments, attempts a non-blocking deterministic estimate publication after the managed plan is visible, returns that status in `estimatePublicationHints`, and returns the marker comments in `managedComments`. If either marker comment still needs attention, the result includes `managedCommentHints` describing what remains before the issue is estimate-ready.
 
-Managed issue workflows track available token usage in one issue-lifetime `token-usage` ledger. `/prs create`, `/prs issue <number> refine`, `/prs issue <number> estimate`, and `/prs issue <number>` implementation/finalization runs keep per-run `codex-token-usage.json` evidence under `.prs/runs` and update the issue audit table after each GitHub-visible phase. The ledger table is a concise overview with phase, role, model provenance, status, total tokens, rough estimated cost, elapsed time, and capture time; raw per-run details stay in the local artifact. The estimated-cost column uses configured model rates and blend ratios when a row has model and total-token data. `prs tool issue create --json` returns `auditPublicationHints` for the issue token-usage ledger when that artifact exists under the supplied `--run-dir`. Model names prefer actual Codex session metadata when available; configured role/profile models are shown only as fallback provenance.
+Managed issue workflows track available token usage in one issue-lifetime `token-usage` ledger. `/prs create`, `/prs issue <number> refine`, `/prs issue <number> estimate`, and `/prs issue <number>` implementation/finalization runs keep per-run `codex-token-usage.json` evidence under `.prs/runs` and update the issue audit table after each GitHub-visible phase. In active Codex app sessions, `/prs create` and `/prs issue <number> refine` create or reuse a planner-scoped Codex goal before drafting/refining so `get_goal` can populate that evidence when usage is exposed. The ledger table is a concise overview with phase, role, model provenance, status, total tokens, rough estimated cost, elapsed time, and capture time; raw per-run details stay in the local artifact. The estimated-cost column uses configured model rates and blend ratios when a row has model and total-token data. `prs tool issue create --json` returns `auditPublicationHints` for the issue token-usage ledger when that artifact exists under the supplied `--run-dir`. Model names prefer actual Codex session metadata when available; configured role/profile models are shown only as fallback provenance.
 
 `prs tool issue ready <issue-number> [--unattended|--auto|--jdi] --json` reports the current managed issue-refinement artifact status without blocking implementation. It recognizes direct managed `<!-- prs:issue-spec -->` and `<!-- prs:issue-plan -->` comments; audit trail comments are ignored for source-of-truth readiness. If the specification or plan comment is missing, the JSON result is still `status: "ready"` and notes that missing managed refinement artifacts will be generated and published during issue preparation. When `prs issue <number>` or `prs issue prepare <number>` needs to create a missing managed plan before implementation, it also publishes a managed `<!-- prs:issue-spec -->` comment from the available issue context.
 
