@@ -214,6 +214,9 @@ describe("managed prs Codex skills", () => {
     expect(issueMarkdown).toContain("profile/tier name");
     expect(issueMarkdown).toContain("<profile> (<model>, <thinking> thinking)");
     expect(issueMarkdown).toContain(
+      "Treat Codex goals as telemetry sources, not as the lifecycle authority for audit publication."
+    );
+    expect(issueMarkdown).toContain(
       "For interactive issue selection, use `prs tool issue list --actionable --json` as the source of truth and show each returned issue with its number, title, and GitHub URL."
     );
     expect(prMarkdown).toContain("name: prs:pr");
@@ -247,6 +250,9 @@ describe("managed prs Codex skills", () => {
     );
     expect(finishWorkMarkdown).toContain("standard (gpt-5.4-mini, medium thinking)");
     expect(finishWorkMarkdown).toContain("premium (gpt-5.5, high thinking)");
+    expect(finishWorkMarkdown).toContain(
+      "Publish the final issue audit before marking any Codex goal complete or reporting the managed skill run complete."
+    );
     expect(finishMarkdown).toContain("name: prs:finish");
     expect(finishMarkdown).toContain("safely cleaning up");
     expect(finishMarkdown).toContain("get_goal");
@@ -258,6 +264,9 @@ describe("managed prs Codex skills", () => {
     );
     expect(finishMarkdown).toContain("standard (gpt-5.4-mini, medium thinking)");
     expect(finishMarkdown).toContain("premium (gpt-5.5, high thinking)");
+    expect(finishMarkdown).toContain(
+      "Publish the final issue audit before marking any Codex goal complete or reporting the managed skill run complete."
+    );
     expect(finishMarkdown).toContain("offer the next `/prs pr` step for that pull request");
     expect(finishMarkdown).not.toContain("offer to prepare the pull request for review with `/prs pr <number> prepare-review`");
   });

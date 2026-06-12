@@ -137,6 +137,14 @@ export type IssueTokenUsageArtifact = {
     totalTokens?: number;
     timeUsedSeconds?: number;
   };
+  capturePhase?: "start" | "checkpoint" | "pre-audit-publish" | "post-audit-publish";
+  auditPublication?: {
+    status: "not-published" | "publishing" | "published" | "publish-failed";
+    target?: "issue" | "pr";
+    section?: string;
+    publishedAt?: string;
+    error?: string;
+  };
   notes?: string[];
 };
 
@@ -183,6 +191,28 @@ function formatModelLines(
   ];
 }
 
+function formatCapturePhase(
+  phase: IssueTokenUsageArtifact["capturePhase"]
+): string | undefined {
+  return phase ? `Capture phase: ${phase}` : undefined;
+}
+
+function formatAuditPublication(
+  publication: IssueTokenUsageArtifact["auditPublication"] | undefined
+): string[] {
+  if (!publication) {
+    return [];
+  }
+
+  const target = publication.target ? ` ${publication.target}` : "";
+  const section = publication.section ? ` ${publication.section}` : "";
+  return [
+    `Audit publication: ${publication.status}${target}${section}`,
+    ...(publication.publishedAt ? [`Audit published at: ${publication.publishedAt}`] : []),
+    ...(publication.error ? [`Audit publication error: ${publication.error}`] : []),
+  ];
+}
+
 export function writeIssueTokenUsageArtifact(
   filePath: string,
   artifact: IssueTokenUsageArtifact
@@ -199,6 +229,10 @@ export function formatIssueTokenUsageAuditSection(
       "",
       `Captured at: ${artifact.capturedAt}`,
       ...formatModelLines(artifact.model),
+      ...(formatCapturePhase(artifact.capturePhase)
+        ? [formatCapturePhase(artifact.capturePhase) as string]
+        : []),
+      ...formatAuditPublication(artifact.auditPublication),
       ...(artifact.notes?.length
         ? ["", "Notes:", ...artifact.notes.map((note) => `- ${note}`)]
         : []),
@@ -217,6 +251,11 @@ export function formatIssueTokenUsageAuditSection(
   const elapsed = formatDuration(artifact.usage?.timeUsedSeconds);
 
   lines.push(...formatModelLines(artifact.model));
+  const capturePhase = formatCapturePhase(artifact.capturePhase);
+  if (capturePhase) {
+    lines.push(capturePhase);
+  }
+  lines.push(...formatAuditPublication(artifact.auditPublication));
   if (totalTokens) {
     lines.push(`Total tokens: ${totalTokens}`);
   }
