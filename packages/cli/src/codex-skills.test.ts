@@ -187,7 +187,8 @@ describe("managed prs Codex skills", () => {
     expect(createMarkdown).toContain("prs tool issue create --draft-file <draft> --spec-file <spec> --plan-file <plan> --run-dir <run-dir> --json");
     expect(createMarkdown).toContain("trust its `managedComments` result");
     expect(createMarkdown).toContain("Record planner token usage for the create run");
-    expect(createMarkdown).toContain("publish a token-usage audit section to each created issue");
+    expect(createMarkdown).toContain("update the issue-lifetime token-usage ledger");
+    expect(createMarkdown).toContain("prefer the actual active Codex session model");
     expect(createMarkdown).toContain("Do not run `prs issue plan`, `prs issue prepare`, or manual audit publication just to publish an already-approved plan artifact");
     expect(createMarkdown).toContain("If the create result includes `managedCommentHints`");
     expect(createMarkdown).toContain("`prs issue estimate <number>`");
@@ -210,7 +211,7 @@ describe("managed prs Codex skills", () => {
     expect(issueMarkdown).toContain("keep the artifacts local and stop without posting them");
     expect(issueMarkdown).toContain("never create linked issues from this refinement flow");
     expect(issueMarkdown).toContain("For `/prs:issue <number> refine`, record planner token usage");
-    expect(issueMarkdown).toContain("publish the token-usage audit section to the source issue");
+    expect(issueMarkdown).toContain("update the source issue's token-usage ledger");
     expect(issueMarkdown).toContain("/prs:issue <number> --unattended");
     expect(issueMarkdown).toContain("create_goal");
     expect(issueMarkdown).toContain("Complete PRS issue #<number>");
@@ -248,7 +249,8 @@ describe("managed prs Codex skills", () => {
     expect(finishWorkMarkdown).toContain("get_goal");
     expect(finishWorkMarkdown).toContain("token-usage");
     expect(finishWorkMarkdown).toContain("codex-token-usage.json");
-    expect(finishWorkMarkdown).toContain("original issue completion audit artifact");
+    expect(finishWorkMarkdown).toContain("update the original issue's `token-usage` ledger");
+    expect(finishWorkMarkdown).toContain("Prefer the actual active Codex session model");
     expect(finishWorkMarkdown).toContain(
       "prs audit publish --issue <number> --file <path> --section <name>"
     );
@@ -262,7 +264,8 @@ describe("managed prs Codex skills", () => {
     expect(finishMarkdown).toContain("get_goal");
     expect(finishMarkdown).toContain("token-usage");
     expect(finishMarkdown).toContain("codex-token-usage.json");
-    expect(finishMarkdown).toContain("original issue completion audit artifact");
+    expect(finishMarkdown).toContain("update the original issue's `token-usage` ledger");
+    expect(finishMarkdown).toContain("Prefer the actual active Codex session model");
     expect(finishMarkdown).toContain(
       "prs audit publish --issue <number> --file <path> --section <name>"
     );

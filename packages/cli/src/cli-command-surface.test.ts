@@ -1503,6 +1503,7 @@ describe("CLI command surface", () => {
         issueNumber: number;
         file: string;
         section: string;
+        mode: string;
       }>;
       managedComments: Array<{
         issueNumber: number;
@@ -1526,6 +1527,7 @@ describe("CLI command surface", () => {
         issueNumber: 269,
         file: tokenUsagePath,
         section: "token-usage",
+        mode: "issue-token-usage-ledger",
       },
     ]);
     expect(output.managedComments).toEqual([

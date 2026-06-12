@@ -144,6 +144,10 @@ export type IssueTokenUsageArtifact = {
     displayName?: string;
     thinking?: "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | string;
     source?: "codex-session" | "configured-role" | "manual" | "unavailable";
+    configuredProfile?: string;
+    configuredRole?: string;
+    configuredModel?: string;
+    configuredThinking?: string;
   };
   usage?: {
     inputTokens?: number;
@@ -241,6 +245,145 @@ function formatAuditPublication(
     ...(publication.publishedAt ? [`Audit published at: ${publication.publishedAt}`] : []),
     ...(publication.error ? [`Audit publication error: ${publication.error}`] : []),
   ];
+}
+
+export type IssueTokenUsageLedgerRow = {
+  phase: string;
+  role?: string;
+  model?: string;
+  modelSource?: "actual" | "configured-fallback" | "manual" | "unavailable" | string;
+  configuredProfile?: string;
+  configuredRole?: string;
+  configuredModel?: string;
+  configuredThinking?: string;
+  status: IssueTokenUsageArtifact["status"];
+  totalTokens?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  elapsedSeconds?: number;
+  capturedAt: string;
+  runDir?: string;
+  notes?: string[];
+};
+
+export type IssueTokenUsageLedger = {
+  issueNumber: number;
+  rows: IssueTokenUsageLedgerRow[];
+};
+
+function formatLedgerCell(value: string | undefined): string {
+  return (value ?? "").replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
+}
+
+function formatLedgerInteger(value: number | undefined): string {
+  return formatOptionalInteger(value) ?? "";
+}
+
+function formatLedgerNotes(row: IssueTokenUsageLedgerRow): string {
+  return row.notes?.length ? row.notes.join("; ") : "";
+}
+
+function resolveLedgerModelSource(
+  model: IssueTokenUsageArtifact["model"] | undefined
+): IssueTokenUsageLedgerRow["modelSource"] {
+  if (!model) {
+    return "unavailable";
+  }
+
+  if (model.source === "codex-session") {
+    return "actual";
+  }
+
+  if (model.source === "configured-role") {
+    return "configured-fallback";
+  }
+
+  return model.source ?? "unavailable";
+}
+
+export function issueTokenUsageArtifactToLedgerRow(
+  artifact: IssueTokenUsageArtifact
+): IssueTokenUsageLedgerRow {
+  const modelName =
+    artifact.model?.displayName ?? artifact.model?.model ?? artifact.model?.id;
+  return {
+    phase: artifact.workflow?.name ?? "issue-implementation",
+    role: artifact.workflow?.role ?? artifact.model?.role,
+    ...(modelName ? { model: modelName } : {}),
+    modelSource: resolveLedgerModelSource(artifact.model),
+    ...(artifact.model?.configuredProfile
+      ? { configuredProfile: artifact.model.configuredProfile }
+      : {}),
+    ...(artifact.model?.configuredRole
+      ? { configuredRole: artifact.model.configuredRole }
+      : {}),
+    ...(artifact.model?.configuredModel
+      ? { configuredModel: artifact.model.configuredModel }
+      : {}),
+    ...(artifact.model?.configuredThinking
+      ? { configuredThinking: artifact.model.configuredThinking }
+      : {}),
+    status: artifact.status,
+    ...(artifact.usage?.totalTokens === undefined
+      ? {}
+      : { totalTokens: artifact.usage.totalTokens }),
+    ...(artifact.usage?.inputTokens === undefined
+      ? {}
+      : { inputTokens: artifact.usage.inputTokens }),
+    ...(artifact.usage?.outputTokens === undefined
+      ? {}
+      : { outputTokens: artifact.usage.outputTokens }),
+    ...(artifact.usage?.timeUsedSeconds === undefined
+      ? {}
+      : { elapsedSeconds: artifact.usage.timeUsedSeconds }),
+    capturedAt: artifact.capturedAt,
+    ...(artifact.workflow?.runDir ?? artifact.runDir
+      ? { runDir: artifact.workflow?.runDir ?? artifact.runDir }
+      : {}),
+    notes: [
+      ...formatAuditPublication(artifact.auditPublication),
+      ...(artifact.notes ?? []),
+    ],
+  };
+}
+
+export function formatIssueTokenUsageLedgerAuditSection(
+  ledger: IssueTokenUsageLedger
+): string {
+  const lines = [
+    `Codex token usage ledger for issue #${ledger.issueNumber}.`,
+    "",
+    "| Phase | Role | Model | Model source | Status | Total tokens | Input | Output | Elapsed | Captured | Run | Notes |",
+    "| --- | --- | --- | --- | --- | ---: | ---: | ---: | --- | --- | --- | --- |",
+  ];
+
+  for (const row of ledger.rows) {
+    lines.push(
+      [
+        "",
+        formatLedgerCell(row.phase),
+        formatLedgerCell(row.role),
+        formatLedgerCell(row.model),
+        formatLedgerCell(row.modelSource),
+        formatLedgerCell(row.status),
+        formatLedgerInteger(row.totalTokens),
+        formatLedgerInteger(row.inputTokens),
+        formatLedgerInteger(row.outputTokens),
+        formatDuration(row.elapsedSeconds) ?? "",
+        formatLedgerCell(row.capturedAt),
+        formatLedgerCell(row.runDir),
+        formatLedgerCell(formatLedgerNotes(row)),
+        "",
+      ].join(" | ")
+    );
+  }
+
+  lines.push(
+    "",
+    "This ledger reports available Codex run telemetry, not exact billing."
+  );
+
+  return lines.join("\n");
 }
 
 export function writeIssueTokenUsageArtifact(

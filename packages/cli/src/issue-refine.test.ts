@@ -403,6 +403,7 @@ describe("Issue refine workflow", () => {
     ) as {
       tokenUsage?: {
         artifactFile?: string;
+        mode?: string;
         workflow?: { name?: string; role?: string; sourceIssueNumber?: number };
         auditPublication?: {
           target?: string;
@@ -414,6 +415,7 @@ describe("Issue refine workflow", () => {
     };
     expect(metadata.tokenUsage).toMatchObject({
       artifactFile: `.prs/runs/${createdRunDir}/codex-token-usage.json`,
+      mode: "issue-token-usage-ledger",
       workflow: {
         name: "issue-refine",
         role: "planner",
@@ -1263,6 +1265,7 @@ describe("Issue refine workflow", () => {
     ) as {
       tokenUsage?: {
         artifactFile?: string;
+        mode?: string;
         workflow?: { name?: string; role?: string; sourceIssueNumber?: number };
         auditPublication?: {
           target?: string;
@@ -1274,6 +1277,7 @@ describe("Issue refine workflow", () => {
     };
     expect(metadata.tokenUsage).toMatchObject({
       artifactFile: `.prs/runs/${createdRunDir}/codex-token-usage.json`,
+      mode: "issue-token-usage-ledger",
       workflow: {
         name: "issue-refine",
         role: "planner",
