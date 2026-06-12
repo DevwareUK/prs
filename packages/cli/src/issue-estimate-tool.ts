@@ -228,7 +228,7 @@ function collectLikelyFileContext(
 function createVerificationCommands(config: ResolvedRepositoryConfigType): string[][] {
   return [
     config.buildCommand,
-    ...config.prReadiness.commands.map((command) => command.command),
+    ...((config.prReadiness?.commands ?? []).map((command) => command.command)),
   ];
 }
 
@@ -351,7 +351,7 @@ export async function createIssueEstimateContext(
 }
 
 function formatRange(range: { low: number; high: number }): string {
-  return `${range.low.toLocaleString()}-${range.high.toLocaleString()} tokens`;
+  return `${range.low.toLocaleString()}-${range.high.toLocaleString()}`;
 }
 
 function formatCost(value: number): string {
@@ -362,8 +362,8 @@ function formatCostRange(range: { low: number; high: number }): string {
   return `${formatCost(range.low)}-${formatCost(range.high)}`;
 }
 
-function formatPercent(value: number): string {
-  return `${Math.round(value * 100)}%`;
+function formatEstimateTableCell(value: string | undefined): string {
+  return (value ?? "").replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
 }
 
 type IssueEstimateDisplayProfile =
@@ -376,19 +376,20 @@ function hasCostEstimateFields(
   return "costRange" in profile && "costBasis" in profile;
 }
 
-function formatProfileEstimate(profile: IssueEstimateDisplayProfile): string {
-  const base = `- ${profile.name} (${profile.model}, ${
-    profile.thinking
-  } thinking): ${formatRange(profile.range)}`;
-  if (!hasCostEstimateFields(profile)) {
-    return `${base} [${profile.confidence}]`;
-  }
-
-  return `${base} (~${formatCostRange(
-    profile.costRange
-  )} priced from token range at $${profile.costBasis.blendedRatePerMillionTokens.toFixed(
-    2
-  )}/1M blended) [${profile.confidence}]`;
+function formatProfileEstimateRow(profile: IssueEstimateDisplayProfile): string {
+  return [
+    "",
+    formatEstimateTableCell(profile.name),
+    formatEstimateTableCell(profile.role),
+    formatEstimateTableCell(profile.model),
+    "configured",
+    formatEstimateTableCell(profile.confidence),
+    formatRange(profile.range),
+    hasCostEstimateFields(profile) ? formatCostRange(profile.costRange) : "",
+    "",
+    "",
+    "",
+  ].join(" | ");
 }
 
 export function renderIssueEstimate(
@@ -402,31 +403,17 @@ export function renderIssueEstimate(
     ].join("\n");
   }
 
-  const inspectedTargets = Math.min(
-    result.scanBudget?.filesConsidered ?? 0,
-    result.scanBudget?.maxFiles ?? 0
-  );
-
   return [
     `Implementation token estimate for issue #${result.issueNumber}`,
     "",
     `Plan source: ${result.planSource.url}`,
     `Confidence: ${result.confidence}`,
     "",
-    "Model/profile estimates:",
-    ...result.profiles.map(formatProfileEstimate),
-    ...("cost" in result
-      ? [
-          "",
-          `Cost basis: approximate ${
-            result.cost.currency
-          } planning cost uses an ${formatPercent(
-            result.cost.inputTokenRatio
-          )} input / ${formatPercent(result.cost.outputTokenRatio)} output token split.`,
-          "Per-model blended rates come from PRS defaults unless overridden in `.prs/config.json`.",
-          "Actual billing can vary with model pricing, input/output mix, cached tokens, retries, and future price changes.",
-        ]
-      : []),
+    "| Phase | Role | Model | Model source | Status | Total tokens | Estimated cost | Elapsed | Captured |",
+    "| --- | --- | --- | --- | --- | ---: | ---: | --- | --- |",
+    ...result.profiles.map(formatProfileEstimateRow),
+    "",
+    "Costs are rough planning estimates, not exact billing.",
     "",
     "Recommendation:",
     result.recommendation,
@@ -438,12 +425,6 @@ export function renderIssueEstimate(
       : []),
     ...(result.assumptions && result.assumptions.length > 0
       ? ["", "Assumptions:", ...result.assumptions.map((assumption) => `- ${assumption}`)]
-      : []),
-    ...(result.scanBudget
-      ? [
-          "",
-          `Repository context: ${result.scanBudget.status} (${result.scanBudget.filesConsidered} targets detected, ${inspectedTargets} inspected, ${result.scanBudget.filesScanned} existing files scanned, max ${result.scanBudget.maxFiles})`,
-        ]
       : []),
   ].join("\n");
 }
@@ -553,6 +534,30 @@ export async function publishIssueEstimateAudit(
     status: publication.status,
     url: publication.comment.url,
   };
+}
+
+export async function publishAutomaticIssueEstimate(input: {
+  issueNumber: number;
+  repoRoot: string;
+  forge: IssueEstimateAuditForge & Pick<RepositoryForge, "fetchIssuePlanComment">;
+  repositoryConfig: ResolvedRepositoryConfigType;
+}): Promise<IssueEstimateAuditPublication> {
+  try {
+    const estimate = await estimateIssueTool(input);
+    if (estimate.status === "blocked") {
+      return {
+        status: "skipped",
+        reason: estimate.message,
+      };
+    }
+
+    return await publishIssueEstimateAudit(input.forge, estimate);
+  } catch (error) {
+    return {
+      status: "skipped",
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 export async function publishIssueEstimateFile(input: {

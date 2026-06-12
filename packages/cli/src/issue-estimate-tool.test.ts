@@ -6,6 +6,7 @@ import { resolveRepositoryConfig } from "@prs/core";
 import {
   createIssueEstimateContext,
   estimateIssueTool,
+  publishAutomaticIssueEstimate,
   publishIssueEstimateAudit,
   publishIssueEstimateFile,
   renderIssueEstimate,
@@ -233,17 +234,55 @@ describe("issue estimate tool", () => {
 
       expect(result.scanBudget.status).toBe("exhausted");
       expect(result.warnings).toContain("12 repository targets were not found locally.");
-      expect(rendered).toContain("~$");
       expect(rendered).toContain(
-        "Cost basis: approximate USD planning cost uses an 80% input / 20% output token split."
+        "| Phase | Role | Model | Model source | Status | Total tokens | Estimated cost | Elapsed | Captured |"
       );
-      expect(rendered).toContain("priced from token range");
-      expect(rendered).toContain("blended");
-      expect(rendered).toContain("Actual billing can vary");
       expect(rendered).toContain(
-        "Repository context: exhausted (13 targets detected, 12 inspected, 0 existing files scanned, max 12)"
+        "| standard | implementer, tester | gpt-5.4-mini | configured |"
       );
+      expect(rendered).toContain("$");
+      expect(rendered).toContain("Costs are rough planning estimates, not exact billing.");
+      expect(rendered).not.toContain("Model/profile estimates:");
+      expect(rendered).not.toContain("Per-model blended rates come from PRS defaults");
+      expect(rendered).not.toContain("priced from token range");
+      expect(rendered).not.toContain("Repository context:");
     }
+  });
+
+  it("renders Codex-authored estimate artifacts with the shared table layout", () => {
+    const rendered = renderIssueEstimate({
+      status: "estimated",
+      issueNumber: 267,
+      planSource: {
+        type: "managed-comment",
+        url: "https://github.com/DevwareUK/prs/issues/267#issuecomment-10",
+        updatedAt: "2026-06-11T08:47:44Z",
+      },
+      confidence: "medium",
+      profiles: [
+        {
+          name: "standard",
+          role: "implementer, tester",
+          model: "gpt-5.4-mini",
+          thinking: "medium",
+          range: { low: 30000, high: 54000 },
+          confidence: "medium",
+          notes: ["Codex-authored plan estimate."],
+        },
+      ],
+      recommendation: "Start with standard.",
+      drivers: ["Plan has explicit implementation tasks."],
+      warnings: [],
+      assumptions: ["No repository scan was used."],
+    });
+
+    expect(rendered).toContain(
+      "| Phase | Role | Model | Model source | Status | Total tokens | Estimated cost | Elapsed | Captured |"
+    );
+    expect(rendered).toContain(
+      "| standard | implementer, tester | gpt-5.4-mini | configured | medium | 30,000-54,000 |  |  |  |"
+    );
+    expect(rendered).not.toContain("Model/profile estimates:");
   });
 
   it("publishes successful estimates to an issue audit section", async () => {
@@ -300,5 +339,73 @@ describe("issue estimate tool", () => {
     expect(body).toContain(
       "Plan source: https://github.com/DevwareUK/prs/issues/267#issuecomment-3"
     );
+  });
+
+  it("publishes automatic deterministic estimates without throwing", async () => {
+    const createdComment = {
+      id: 4101,
+      body: "<!-- prs:audit -->\n# Issue #267 audit\n",
+      url: "https://github.com/DevwareUK/prs/issues/267#issuecomment-4101",
+      createdAt: "2026-06-11T09:00:00Z",
+      updatedAt: "2026-06-11T09:00:00Z",
+      author: "prs-bot",
+      isBot: true,
+    };
+    const forge = {
+      fetchIssuePlanComment: vi.fn().mockResolvedValue({
+        id: 3,
+        url: "https://github.com/DevwareUK/prs/issues/267#issuecomment-3",
+        updatedAt: "2026-06-11T08:47:44Z",
+        body: [
+          "<!-- prs:issue-plan -->",
+          "## Likely files",
+          "",
+          "- `README.md`",
+          "",
+          "## Steps",
+          "",
+          "1. Update docs.",
+        ].join("\n"),
+      }),
+      isAuthenticated: vi.fn(() => true),
+      fetchAuditComment: vi.fn().mockResolvedValue(undefined),
+      createAuditComment: vi.fn().mockResolvedValue(createdComment),
+      updateIssueComment: vi.fn(),
+    };
+
+    const result = await publishAutomaticIssueEstimate({
+      issueNumber: 267,
+      repoRoot: mkdtempSync(resolve(tmpdir(), "prs-issue-estimate-")),
+      forge,
+      repositoryConfig: resolveRepositoryConfig(),
+    });
+
+    expect(result).toEqual({
+      status: "created",
+      url: createdComment.url,
+    });
+  });
+
+  it("skips automatic deterministic estimates when no managed plan exists", async () => {
+    const forge = {
+      fetchIssuePlanComment: vi.fn().mockResolvedValue(undefined),
+      isAuthenticated: vi.fn(() => true),
+      fetchAuditComment: vi.fn(),
+      createAuditComment: vi.fn(),
+      updateIssueComment: vi.fn(),
+    };
+
+    const result = await publishAutomaticIssueEstimate({
+      issueNumber: 268,
+      repoRoot: mkdtempSync(resolve(tmpdir(), "prs-issue-estimate-")),
+      forge,
+      repositoryConfig: resolveRepositoryConfig(),
+    });
+
+    expect(result.status).toBe("skipped");
+    if (result.status === "skipped") {
+      expect(result.reason).toContain("<!-- prs:issue-plan -->");
+    }
+    expect(forge.createAuditComment).not.toHaveBeenCalled();
   });
 });

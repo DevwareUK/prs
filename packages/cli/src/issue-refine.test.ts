@@ -482,6 +482,14 @@ describe("Issue refine workflow", () => {
         }
       | undefined;
     createMockCodexSuperpowersHome();
+    const postedComments: Array<{
+      id: number;
+      body: string;
+      html_url: string;
+      created_at: string;
+      updated_at: string;
+      user: { login: string; type: string };
+    }> = [];
     const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
       const url = String(input);
 
@@ -502,18 +510,23 @@ describe("Issue refine workflow", () => {
       }
 
       if (url.includes(`/issues/${issueNumber}/comments?`)) {
-        return createFetchResponse([]);
+        return createFetchResponse(postedComments);
       }
 
       if (url.endsWith(`/issues/${issueNumber}/comments`) && init?.method === "POST") {
         const body = JSON.parse(String(init.body)) as { body: string };
-        return createFetchResponse({
-          id: 9155,
+        const id = 9155 + postedComments.length;
+        const comment = {
+          id,
           body: body.body,
           html_url:
-            `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-9155`,
+            `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-${id}`,
+          created_at: "2026-04-26T09:35:00Z",
           updated_at: "2026-04-26T09:35:00Z",
-        });
+          user: { login: "prs-bot", type: "Bot" },
+        };
+        postedComments.push(comment);
+        return createFetchResponse(comment);
       }
 
       throw new Error(`Unexpected fetch call: ${url}`);
@@ -601,6 +614,10 @@ describe("Issue refine workflow", () => {
 
     const expectedSpecFile = `.prs/runs/${createdRunDir}/superpowers-spec.md`;
     const expectedPlanFile = `.prs/runs/${createdRunDir}/superpowers-plan.md`;
+    const finalOutputLog = readFileSync(
+      resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string, "output.log"),
+      "utf8"
+    );
 
     expect(runtimePrompt).toContain("use `superpowers:brainstorming` first");
     expect(runtimePrompt).toContain("only use `superpowers:writing-plans`");
@@ -617,6 +634,7 @@ describe("Issue refine workflow", () => {
     });
     expect(outputLog).toContain(`Superpowers spec file: ${expectedSpecFile}`);
     expect(outputLog).toContain(`Superpowers plan file: ${expectedPlanFile}`);
+    expect(finalOutputLog).toContain("Automatic estimate created:");
 
     const commentBodies = fetchMock.mock.calls
       .filter(
@@ -633,6 +651,7 @@ describe("Issue refine workflow", () => {
     expect(commentBodies).toContain(
       "<!-- prs:issue-plan -->\n## Refine Plan\n\n- Apply the refined work.\n"
     );
+    expect(commentBodies.some((body) => body.includes("## Estimate"))).toBe(true);
     expect(commentBodies).toContain(
       "<!-- prs:issue-refinement-complete -->\nRefinement is complete. The settled specification and implementation plan have been attached to this issue in managed comments, so development can start from those artifacts.\n"
     );

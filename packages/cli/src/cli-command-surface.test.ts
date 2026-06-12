@@ -1436,34 +1436,58 @@ describe("CLI command surface", () => {
       "utf8"
     );
 
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(createFetchResponse([]))
-      .mockResolvedValueOnce(
-        createFetchResponse({
+    const postedComments: Array<{
+      id: number;
+      body: string;
+      html_url: string;
+      created_at: string;
+      updated_at: string;
+      user: { login: string; type: string };
+    }> = [];
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url.endsWith("/issues?state=open&per_page=100")) {
+        return createFetchResponse([]);
+      }
+
+      if (url.endsWith("/issues") && init?.method === "POST") {
+        return createFetchResponse({
           number: 269,
           title: "Clarify create output",
           html_url: "https://github.com/DevwareUK/prs/issues/269",
-        })
-      )
-      .mockResolvedValueOnce(createFetchResponse([]))
-      .mockResolvedValueOnce(
-        createFetchResponse({
-          id: 9269,
-          body: "<!-- prs:issue-spec -->\n# Spec\n\nUse managed spec comments.\n",
-          html_url: "https://github.com/DevwareUK/prs/issues/269#issuecomment-9269",
+        });
+      }
+
+      if (url.endsWith("/issues/269")) {
+        return createFetchResponse({
+          number: 269,
+          title: "Clarify create output",
+          html_url: "https://github.com/DevwareUK/prs/issues/269",
+        });
+      }
+
+      if (url.endsWith("/issues/269/comments?per_page=100")) {
+        return createFetchResponse(postedComments);
+      }
+
+      if (url.endsWith("/issues/269/comments") && init?.method === "POST") {
+        const body = JSON.parse(String(init.body)) as { body: string };
+        const id = 9269 + postedComments.length;
+        const comment = {
+          id,
+          body: body.body,
+          html_url: `https://github.com/DevwareUK/prs/issues/269#issuecomment-${id}`,
+          created_at: "2026-06-12T15:00:00Z",
           updated_at: "2026-06-12T15:00:00Z",
-        })
-      )
-      .mockResolvedValueOnce(createFetchResponse([]))
-      .mockResolvedValueOnce(
-        createFetchResponse({
-          id: 9270,
-          body: "<!-- prs:issue-plan -->\n# Plan\n\nUse managed plan comments.\n",
-          html_url: "https://github.com/DevwareUK/prs/issues/269#issuecomment-9270",
-          updated_at: "2026-06-12T15:01:00Z",
-        })
-      );
+          user: { login: "prs-bot", type: "Bot" },
+        };
+        postedComments.push(comment);
+        return createFetchResponse(comment);
+      }
+
+      throw new Error(`Unexpected fetch call: ${url}`);
+    });
     vi.stubGlobal("fetch", fetchMock);
     process.env.GH_TOKEN = "";
     process.env.GITHUB_TOKEN = "test-token";
@@ -1521,6 +1545,12 @@ describe("CLI command surface", () => {
         file?: string;
         nextAction: string;
       }>;
+      estimatePublicationHints: Array<{
+        issueNumber: number;
+        status: string;
+        url?: string;
+        reason?: string;
+      }>;
     };
     expect(output.auditPublicationHints).toEqual([
       {
@@ -1549,6 +1579,13 @@ describe("CLI command surface", () => {
       },
     ]);
     expect(output.managedCommentHints).toEqual([]);
+    expect(output.estimatePublicationHints).toEqual([
+      {
+        issueNumber: 269,
+        status: "created",
+        url: "https://github.com/DevwareUK/prs/issues/269#issuecomment-9271",
+      },
+    ]);
   });
 
   it("parses repo-level test-backlog flags for the CLI", async () => {
