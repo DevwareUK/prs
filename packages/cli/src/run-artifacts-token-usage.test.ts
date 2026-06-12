@@ -72,6 +72,40 @@ describe("issue token usage artifacts", () => {
     });
   });
 
+  it("writes lifecycle state for partially tracked goal usage", () => {
+    const runDir = mkdtempSync(resolve(tmpdir(), "prs-token-usage-"));
+    cleanupTargets.add(runDir);
+    const artifactPath = getIssueTokenUsageArtifactFilePath(runDir);
+
+    writeIssueTokenUsageArtifact(artifactPath, {
+      version: 1,
+      status: "partial",
+      issueNumber: 270,
+      capturedAt: "2026-06-11T16:20:00.000Z",
+      source: "codex-goal",
+      capturePhase: "pre-audit-publish",
+      auditPublication: {
+        status: "not-published",
+        target: "issue",
+        section: "token-usage",
+      },
+      goal: {
+        objective: "Complete PRS issue #270",
+        status: "complete",
+      },
+      notes: ["Codex goal was already complete before the final audit was published."],
+    });
+
+    expect(JSON.parse(readFileSync(artifactPath, "utf8"))).toMatchObject({
+      capturePhase: "pre-audit-publish",
+      auditPublication: {
+        status: "not-published",
+        target: "issue",
+        section: "token-usage",
+      },
+    });
+  });
+
   it("renders concise audit markdown for tracked and unavailable token usage", () => {
     expect(
       formatIssueTokenUsageAuditSection({
@@ -111,5 +145,23 @@ describe("issue token usage artifacts", () => {
         notes: ["Codex goal usage was not exposed in this session."],
       })
     ).toContain("Model/profile: premium (gpt-5.5, high thinking)");
+
+    expect(
+      formatIssueTokenUsageAuditSection({
+        version: 1,
+        status: "partial",
+        issueNumber: 270,
+        capturedAt: "2026-06-11T16:20:00.000Z",
+        source: "codex-goal",
+        capturePhase: "pre-audit-publish",
+        auditPublication: {
+          status: "publish-failed",
+          target: "issue",
+          section: "token-usage",
+          error: "GitHub authentication is required.",
+        },
+        notes: ["Codex goal was already complete before the final audit was published."],
+      })
+    ).toContain("Audit publication: publish-failed issue token-usage");
   });
 });
