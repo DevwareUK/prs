@@ -10,22 +10,13 @@ import {
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import {
-  analyzeFeatureBacklog,
-  analyzeTestBacklog,
   buildPRAssistantSection,
   filterRepositoryPaths,
-  formatPRReviewMarkdown as formatCorePRReviewMarkdown,
   generateCommitMessage,
   generateDiffSummary,
-  generatePRReview,
   generateIssueResolutionPlan,
   mergePRAssistantSection,
 } from "@prs/core";
-import {
-  createProviderFromConfig,
-  type AIProvider,
-  readProviderEnvironment,
-} from "@prs/providers";
 import type { ResolvedRepositoryConfigType, RepositoryAiWorkflowRole } from "@prs/contracts";
 import {
   applyGitHubOutputFraming,
@@ -35,25 +26,15 @@ import {
   IssueDraftSet,
   startsWithManagedMarker,
 } from "@prs/contracts";
-import dotenv from "dotenv";
-import {
-  formatCommandForDisplay,
-  loadResolvedRepositoryConfig,
-} from "./config";
-import { publishAuditArtifact } from "./audit-artifacts";
-import { cleanupMergedBranchesTool } from "./branch-cleanup-tool";
+import { formatCommandForDisplay } from "./config";
 import { inspectManagedCodexSkills } from "./codex-skills";
 import { buildDoneStateInstructions } from "./done-state";
-import { listIssuesTool } from "./issue-list-tool";
 import {
-  createIssueEstimateContext,
   estimateIssueTool,
   publishAutomaticIssueEstimate,
   publishIssueEstimateAudit,
-  publishIssueEstimateFile,
   renderIssueEstimate,
 } from "./issue-estimate-tool";
-import { readyIssueTool } from "./issue-ready-tool";
 import {
   formatLaunchStageNotice,
   type LaunchStageNoticeId,
@@ -73,29 +54,13 @@ import {
   parsePrCommandArgs as parsePrCommandArgsImpl,
   type PrCommandOptions,
 } from "./commands/pr";
-import { parseAuditCommandArgs } from "./commands/audit";
-import {
-  parseFeatureBacklogCommandArgs,
-  parseTestBacklogCommandArgs,
-  type FeatureBacklogCommandOptions,
-  type TestBacklogCommandOptions,
-} from "./commands/backlog";
 import {
   parseIssueCommandArgs,
   parseIssueNumber,
   type IssueDraftCommandOptions,
 } from "./commands/issue";
+import { REVIEW_USAGE } from "./commands/review";
 import {
-  parseReviewCommandArgs,
-  REVIEW_USAGE,
-} from "./commands/review";
-import { listPullRequestsTool } from "./pr-list-tool";
-import { readyPullRequestTool } from "./pr-ready-tool";
-import { parsePrsToolCommandArgs } from "./prs-tool-command";
-import { cleanupWorktreesTool } from "./worktree-cleanup-tool";
-import {
-  createRepositoryForge,
-  type AuditTarget,
   type CreatedIssueRecord,
   type IssueDetails,
   type IssuePlanComment,
@@ -113,7 +78,6 @@ import {
 import {
   finalizeRuntimeChanges,
 } from "./runtime-change-review";
-import { resolveRuntimeRepoRoot } from "./repo-root";
 import {
   findTrackedRuntimeSessionById,
   getInteractiveRuntimeByType,
@@ -125,15 +89,11 @@ import {
 import {
   createIssuePlanWorkspace,
   createIssueRefineWorkspace,
-  formatIssueTokenUsageLedgerAuditSection,
   formatRunTimestamp,
   getIssueBatchRunDir,
   getIssueBatchStateDir,
   getIssueBatchStateFilePath,
   getIssueTokenUsageArtifactFilePath,
-  issueTokenUsageArtifactToLedgerRow,
-  type IssueTokenUsageArtifact,
-  type IssueTokenUsageLedgerRow,
   type IssuePlanWorkspace,
   type IssueRefineSessionState,
   type IssueRefineWorkspace,
@@ -159,15 +119,19 @@ import {
   preflightIssueBaseBranch,
   preflightRemoteBranch,
 } from "./workflow-preflights";
-import { runPrFixCommentsCommand } from "./workflows/pr-fix-comments/run";
-import { runPrFixFailingTestsCommand } from "./workflows/pr-fix-failing-tests/run";
 import type { VerificationFailure } from "./workflows/pr-fix-failing-tests/types";
-import { preparePullRequestReviewTool } from "./workflows/pr-prepare-review/run";
-import { preparePullRequestLocalReviewTool } from "./workflows/pr-local-review/run";
-import { publishPullRequestLocalReview } from "./workflows/pr-local-review/publish";
-import { runPrResolveConflictsCommand } from "./workflows/pr-resolve-conflicts/run";
-import { runPrFixTestsCommand } from "./workflows/pr-fix-tests/run";
-import { pushReviewedPullRequestUpdates } from "./workflows/pull-request-reviewed-updates";
+import {
+  createProvider,
+  getCliArgs,
+  getDefaultRepoRoot,
+  getRepositoryConfig,
+  getRepositoryForge,
+} from "./cli-context";
+import { runAuditCommand } from "./commands/audit-runner";
+import { runFeatureBacklogCommand, runTestBacklogCommand } from "./commands/backlog-runner";
+import { runPrCommand } from "./commands/pr-runner";
+import { runReviewCommand } from "./commands/review-runner";
+import { runToolCommand } from "./commands/tool-runner";
 
 export { parseSetupCommandArgs };
 export { parseAuditCommandArgs } from "./commands/audit";
@@ -418,14 +382,6 @@ const TOP_LEVEL_HELP = [
 
 const UPDATE_USAGE = ["Usage:", "  prs update skills"].join("\n");
 
-function getCliArgs(): string[] {
-  return process.argv.slice(2).filter((arg) => arg !== "--");
-}
-
-function getDefaultRepoRoot(): string {
-  return resolveRuntimeRepoRoot();
-}
-
 function warnIfManagedCodexSkillsAreStale(command: string): void {
   if (command === "setup" || command === "update") {
     return;
@@ -451,18 +407,6 @@ function warnIfManagedCodexSkillsAreStale(command: string): void {
   } catch {
     // Skill freshness should never block the requested command.
   }
-}
-
-function loadRepoEnv(repoRoot: string): void {
-  dotenv.config({ path: resolve(repoRoot, ".env"), quiet: true });
-}
-
-function getRepositoryConfig(repoRoot = getDefaultRepoRoot()) {
-  return loadResolvedRepositoryConfig(repoRoot);
-}
-
-function getRepositoryForge(repoRoot = getDefaultRepoRoot()): RepositoryForge {
-  return createRepositoryForge(repoRoot, getRepositoryConfig(repoRoot));
 }
 
 function runGitOutput(repoRoot: string, args: string[], errorMessage: string): string {
@@ -524,7 +468,7 @@ function isGitTrackedPath(repoRoot: string, path: string): boolean {
   return !result.error && result.status === 0;
 }
 
-function loadMediaEvidenceForPublication(
+export function loadMediaEvidenceForPublication(
   repoRoot: string,
   manifestPath: string | undefined
 ): ReturnType<typeof loadMediaEvidenceManifest> {
@@ -719,7 +663,7 @@ function readUntrackedFileDiffs(repoRoot: string, paths: string[]): string {
     .join("\n");
 }
 
-function readIssueWorkflowDiff(repoRoot: string): string {
+export function readIssueWorkflowDiff(repoRoot: string): string {
   const excludePaths = getRepositoryConfig(repoRoot).aiContext.excludePaths;
   const trackedDiff = readGitDiff(
     ["diff", "HEAD"],
@@ -846,7 +790,7 @@ function runInteractiveCommand(
   }
 }
 
-function hasChanges(repoRoot: string): boolean {
+export function hasChanges(repoRoot: string): boolean {
   return runCommand(
     "git",
     ["-C", repoRoot, "status", "--porcelain"],
@@ -854,7 +798,7 @@ function hasChanges(repoRoot: string): boolean {
   ).length > 0;
 }
 
-function ensureCleanWorkingTree(repoRoot: string): void {
+export function ensureCleanWorkingTree(repoRoot: string): void {
   if (hasChanges(repoRoot)) {
     throw new Error(
       "Working tree is not clean. Commit or stash existing changes before running prs issue workflows."
@@ -2430,7 +2374,7 @@ function buildIssueRefineMissingWorkspaceWarning(issueNumber: number): string {
   return `Saved issue-refine workspace artifacts for issue #${issueNumber} are missing. Starting a fresh refinement session.`;
 }
 
-function ensurePrsManagedIssueBody(body: string): string {
+export function ensurePrsManagedIssueBody(body: string): string {
   const trimmed = body.trim();
   if (trimmed.startsWith(PRS_MANAGED_ISSUE_MARKER)) {
     return trimmed;
@@ -3339,7 +3283,7 @@ function runTrackedCommand(
   }
 }
 
-function verifyBuild(repoRoot: string, buildCommand: string[], outputLogPath: string): void {
+export function verifyBuild(repoRoot: string, buildCommand: string[], outputLogPath: string): void {
   ensureVerificationCommandAvailable(repoRoot, buildCommand, "prs");
 
   runTrackedCommand(
@@ -3351,7 +3295,7 @@ function verifyBuild(repoRoot: string, buildCommand: string[], outputLogPath: st
   );
 }
 
-function captureVerificationFailure(
+export function captureVerificationFailure(
   repoRoot: string,
   buildCommand: string[]
 ): VerificationFailure | undefined {
@@ -3385,7 +3329,7 @@ function captureVerificationFailure(
   };
 }
 
-function commitGeneratedChanges(
+export function commitGeneratedChanges(
   repoRoot: string,
   commitMessage: ReviewedGeneratedText
 ): void {
@@ -3460,7 +3404,7 @@ function formatMarkdownList(items: string[]): string {
   return items.map((item) => `- ${item}`).join("\n");
 }
 
-function parseIssueDraftDocument(content: string): { title: string; body: string } {
+export function parseIssueDraftDocument(content: string): { title: string; body: string } {
   const lines = content.split(/\r?\n/);
   const titleLineIndex = lines.findIndex((line) => line.trim().length > 0);
 
@@ -3562,7 +3506,7 @@ function isPathWithinDirectory(parentDir: string, candidatePath: string): boolea
   );
 }
 
-function loadIssueDraftSet(input: {
+export function loadIssueDraftSet(input: {
   repoRoot: string;
   runDir: string;
   issueSetFilePath: string;
@@ -3812,7 +3756,7 @@ async function createLinkedIssueDraftSet(input: {
   return createdIssues;
 }
 
-async function createIssueDraftSetWithRecords(input: {
+export async function createIssueDraftSetWithRecords(input: {
   issueSet: ParsedIssueDraftSet;
   forge: RepositoryForge;
   labels: string[];
@@ -3873,7 +3817,7 @@ async function createIssueDraftSetWithRecords(input: {
   return createdIssues;
 }
 
-function createAuditPublicationHints(input: {
+export function createAuditPublicationHints(input: {
   issues: CreatedIssueRecord[];
   runDir?: string;
 }): Array<{ issueNumber: number; file: string; section: string; mode: string }> {
@@ -3958,7 +3902,7 @@ function resolveOptionalRepoPath(
   return filePath ? resolve(repoRoot, filePath) : undefined;
 }
 
-async function publishManagedCommentsFromArtifacts(input: {
+export async function publishManagedCommentsFromArtifacts(input: {
   repoRoot: string;
   forge: RepositoryForge;
   issues: CreatedIssueRecord[];
@@ -4029,7 +3973,7 @@ async function publishManagedCommentsFromArtifacts(input: {
   };
 }
 
-async function publishAutomaticEstimateHints(input: {
+export async function publishAutomaticEstimateHints(input: {
   repoRoot: string;
   forge: RepositoryForge;
   repositoryConfig: ResolvedRepositoryConfigType;
@@ -4067,7 +4011,7 @@ async function publishAutomaticEstimateHints(input: {
   return hints;
 }
 
-async function promptForLine(prompt: string): Promise<string> {
+export async function promptForLine(prompt: string): Promise<string> {
   const rl = createInterface({
     input: process.stdin,
     output: process.stderr,
@@ -4107,7 +4051,7 @@ async function promptForYesNoDefaultNo(prompt: string): Promise<boolean> {
   }
 }
 
-async function promptForYesNoDefaultYes(prompt: string): Promise<boolean> {
+export async function promptForYesNoDefaultYes(prompt: string): Promise<boolean> {
   while (true) {
     const answer = (await promptForLine(prompt)).trim().toLowerCase();
 
@@ -4346,10 +4290,6 @@ async function generateIssuePullRequest(
   };
 }
 
-function toTitleCase(value: string): string {
-  return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
 function formatDiffSummary(
   summary: Awaited<ReturnType<typeof generateDiffSummary>>
 ): string {
@@ -4375,1307 +4315,11 @@ function formatDiffSummary(
   return sections.join("\n");
 }
 
-async function createProvider(
-  repoRoot = getDefaultRepoRoot(),
-  workflowRole: RepositoryAiWorkflowRole = "implementer"
-): Promise<{
-  provider: AIProvider;
-  providerType: ResolvedRepositoryConfigType["ai"]["provider"]["type"];
-}> {
-  loadRepoEnv(repoRoot);
-  const repositoryConfig = getRepositoryConfig(repoRoot);
-  const configuredProvider = repositoryConfig.ai.provider;
-  const defaultProvider = {
-    type: "openai" as const,
-  };
-  const environment = readProviderEnvironment();
-  const workflowProfileName = repositoryConfig.ai.roles[workflowRole];
-  const workflowModel =
-    workflowProfileName !== undefined
-      ? repositoryConfig.ai.profiles[workflowProfileName]?.model
-      : undefined;
-
-  try {
-    return {
-      provider: await createProviderFromConfig(configuredProvider, environment, {
-        modelOverride: workflowModel,
-      }),
-      providerType: configuredProvider.type,
-    };
-  } catch (error: unknown) {
-    const configuredMessage = error instanceof Error ? error.message : String(error);
-
-    if (configuredProvider.type === defaultProvider.type) {
-      throw new Error(configuredMessage);
-    }
-
-    try {
-      const provider = await createProviderFromConfig(defaultProvider, environment);
-      console.log(
-        `Configured provider "${configuredProvider.type}" is unavailable. ${configuredMessage} Falling back to the default provider "${defaultProvider.type}".`
-      );
-      return {
-        provider,
-        providerType: defaultProvider.type,
-      };
-    } catch (defaultError: unknown) {
-      const defaultMessage =
-        defaultError instanceof Error ? defaultError.message : String(defaultError);
-      throw new Error(
-        `Configured provider "${configuredProvider.type}" is unavailable. ${configuredMessage} The default provider "${defaultProvider.type}" is also unavailable. ${defaultMessage}`
-      );
-    }
-  }
-}
-
-async function runReviewCommand(args = getCliArgs()): Promise<void> {
-  if (args[1] === "tests") {
-    await runTestBacklogCommand(args);
-    return;
-  }
-
-  if (args[1] === "features") {
-    await runFeatureBacklogCommand(args);
-    return;
-  }
-
-  const options = parseReviewCommandArgs(args);
-  const diff = readReviewDiff(options.base, options.head);
-  const { provider } = await createProvider(undefined, "reviewer");
-  const issue =
-    options.issueNumber !== undefined
-      ? await getRepositoryForge().fetchIssueDetails(options.issueNumber)
-      : undefined;
-  const result = await generatePRReview(provider, {
-    diff,
-    issueNumber: options.issueNumber,
-    issueTitle: issue?.title,
-    issueBody: issue?.body,
-    issueUrl: issue?.url,
-  });
-  const output = {
-    ...result,
-    issue: issue
-      ? {
-          number: options.issueNumber,
-          title: issue.title,
-          url: issue.url,
-        }
-      : undefined,
-  };
-
-  if (options.format === "json") {
-    process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
-    return;
-  }
-
-  process.stdout.write(
-    `${formatCorePRReviewMarkdown(result, {
-      number: options.issueNumber,
-      title: issue?.title,
-      url: issue?.url,
-    })}\n`
-  );
-}
-
-async function runAuditCommand(): Promise<void> {
-  const repoRoot = getDefaultRepoRoot();
-  const command = parseAuditCommandArgs(getCliArgs());
-  const artifactPath = isAbsolute(command.filePath)
-    ? command.filePath
-    : resolve(repoRoot, command.filePath);
-
-  if (!existsSync(artifactPath)) {
-    throw new Error(`Audit artifact file does not exist: ${command.filePath}`);
-  }
-
-  const forge = getRepositoryForge(repoRoot);
-  const content = readFileSync(artifactPath, "utf8").trim();
-  if (!content) {
-    throw new Error(`Audit artifact file is empty: ${command.filePath}`);
-  }
-  const auditContent = renderAuditContentForPublication({
-    content,
-    sectionName: command.sectionName,
-    target: command.target,
-  });
-  const mediaEvidence = loadMediaEvidenceForPublication(repoRoot, command.mediaManifestFilePath);
-  const contentWithMedia = appendMediaEvidenceSection(auditContent, mediaEvidence, {
-    heading: "Visual Evidence",
-  });
-
-  const result = await publishAuditArtifact(forge, {
-    target: command.target,
-    sectionName: command.sectionName,
-    content: contentWithMedia,
-    localRun: command.localRun,
-  });
-
-  console.log(`Audit artifact ${result.status}: ${result.comment.url}`);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function readStringField(
-  record: Record<string, unknown>,
-  field: string
-): string | undefined {
-  const value = record[field];
-  return typeof value === "string" && value.trim().length > 0
-    ? value
-    : undefined;
-}
-
-function readNumberField(
-  record: Record<string, unknown>,
-  field: string
-): number | undefined {
-  const value = record[field];
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-
-function isIssueTokenUsageArtifact(value: unknown): value is IssueTokenUsageArtifact {
-  if (!isRecord(value)) {
-    return false;
-  }
-
-  return (
-    value.version === 1 &&
-    (value.status === "tracked" ||
-      value.status === "partial" ||
-      value.status === "unavailable") &&
-    typeof value.issueNumber === "number" &&
-    typeof value.capturedAt === "string" &&
-    value.source === "codex-goal"
-  );
-}
-
-function normalizeTokenUsageStatus(
-  value: string | undefined
-): IssueTokenUsageArtifact["status"] {
-  if (value === "tracked" || value === "partial" || value === "unavailable") {
-    return value;
-  }
-
-  return "partial";
-}
-
-function normalizePlannerTokenUsageRow(
-  value: unknown
-): IssueTokenUsageLedgerRow | undefined {
-  if (!isRecord(value)) {
-    return undefined;
-  }
-
-  const phase = readStringField(value, "phase");
-  const role = readStringField(value, "role");
-  const profile = isRecord(value.profile) ? value.profile : undefined;
-  const usage = isRecord(value.usage) ? value.usage : undefined;
-  const capture = isRecord(value.capture) ? value.capture : undefined;
-  const capturedAt = capture ? readStringField(capture, "capturedAt") : undefined;
-
-  if (!phase || !capturedAt) {
-    return undefined;
-  }
-
-  const profileSource = profile ? readStringField(profile, "source") : undefined;
-  const modelSource = profileSource?.toLowerCase().includes("fallback")
-    ? "configured-fallback"
-    : profileSource;
-  const notes = [
-    ...(isRecord(value.actualModel) && readStringField(value.actualModel, "notes")
-      ? [readStringField(value.actualModel, "notes") as string]
-      : []),
-    ...(usage && readStringField(usage, "notes")
-      ? [readStringField(usage, "notes") as string]
-      : []),
-  ];
-
-  return {
-    phase,
-    ...(role ? { role } : {}),
-    ...(profile && readStringField(profile, "model")
-      ? { model: readStringField(profile, "model") }
-      : {}),
-    ...(modelSource ? { modelSource } : {}),
-    ...(profile && readStringField(profile, "name")
-      ? { configuredProfile: readStringField(profile, "name") }
-      : {}),
-    ...(role ? { configuredRole: role } : {}),
-    ...(profile && readStringField(profile, "model")
-      ? { configuredModel: readStringField(profile, "model") }
-      : {}),
-    ...(profile && readStringField(profile, "thinking")
-      ? { configuredThinking: readStringField(profile, "thinking") }
-      : {}),
-    status: normalizeTokenUsageStatus(usage ? readStringField(usage, "status") : undefined),
-    ...(usage && readNumberField(usage, "totalTokens") !== undefined
-      ? { totalTokens: readNumberField(usage, "totalTokens") }
-      : {}),
-    ...(usage && readNumberField(usage, "inputTokens") !== undefined
-      ? { inputTokens: readNumberField(usage, "inputTokens") }
-      : {}),
-    ...(usage && readNumberField(usage, "outputTokens") !== undefined
-      ? { outputTokens: readNumberField(usage, "outputTokens") }
-      : {}),
-    ...(usage && readNumberField(usage, "timeUsedSeconds") !== undefined
-      ? { elapsedSeconds: readNumberField(usage, "timeUsedSeconds") }
-      : {}),
-    capturedAt,
-    ...(capture && readStringField(capture, "runDir")
-      ? { runDir: readStringField(capture, "runDir") }
-      : {}),
-    ...(notes.length > 0 ? { notes } : {}),
-  };
-}
-
-function renderAuditContentForPublication(input: {
-  content: string;
-  sectionName: string;
-  target: AuditTarget;
-}): string {
-  if (
-    input.target.type !== "issue" ||
-    input.sectionName.trim().toLowerCase() !== "token-usage"
-  ) {
-    return input.content;
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(input.content);
-  } catch {
-    return input.content;
-  }
-
-  const row = isIssueTokenUsageArtifact(parsed)
-    ? issueTokenUsageArtifactToLedgerRow(parsed)
-    : normalizePlannerTokenUsageRow(parsed);
-  if (!row) {
-    return input.content;
-  }
-
-  return formatIssueTokenUsageLedgerAuditSection({
-    issueNumber: input.target.number,
-    rows: [row],
-  });
-}
-
 async function runUpdateCommand(): Promise<void> {
   const command = parseUpdateCommandArgs(getCliArgs());
   if (command.action === "skills") {
     logManagedCodexSkillsRefreshResult(refreshManagedCodexSkills());
   }
-}
-
-async function runPrCommand(): Promise<void> {
-  const repoRoot = getDefaultRepoRoot();
-  const prCommand = parsePrCommandArgs(getCliArgs());
-  const repositoryConfig = getRepositoryConfig(repoRoot);
-
-  if (prCommand.action === "resolve-conflicts") {
-    await runPrResolveConflictsCodexLauncher(prCommand.prNumber, repoRoot, repositoryConfig);
-    return;
-  }
-
-  if (prCommand.action === "address-comments") {
-    const result = await runPrFixCommentsCommand({
-      mode: "prepare",
-      prNumber: prCommand.prNumber,
-      repoRoot,
-      buildCommand: repositoryConfig.buildCommand,
-      ensureVerificationCommandAvailable,
-      runtime: {
-        resolve: () => ({
-          displayName: "Codex",
-          launch: () => {
-            throw new Error("prs pr address-comments must not launch Codex.");
-          },
-        }),
-      },
-      forge: getRepositoryForge(repoRoot),
-      ensureCleanWorkingTree,
-      promptForLine,
-      verifyBuild,
-      hasChanges,
-      commitGeneratedChanges,
-    });
-    if (result) {
-      console.log(JSON.stringify(result, null, 2));
-    }
-    return;
-  }
-
-  if (prCommand.action === "fix-tests") {
-    const result = await runPrFixFailingTestsCommand({
-      mode: "prepare",
-      prNumber: prCommand.prNumber,
-      repoRoot,
-      buildCommand: repositoryConfig.buildCommand,
-      ensureVerificationCommandAvailable,
-      runtime: {
-        resolve: () => ({
-          displayName: "Codex",
-          launch: () => {
-            throw new Error("prs pr fix-tests must not launch Codex.");
-          },
-        }),
-      },
-      forge: getRepositoryForge(repoRoot),
-      ensureCleanWorkingTree,
-      captureVerificationFailure,
-      promptForLine,
-      verifyBuild,
-      hasChanges,
-      commitGeneratedChanges,
-    });
-    if (result) {
-      console.log(JSON.stringify(result, null, 2));
-    }
-    return;
-  }
-
-  const result = await runPrFixTestsCommand({
-    mode: "prepare",
-    prNumber: prCommand.prNumber,
-    repoRoot,
-    buildCommand: repositoryConfig.buildCommand,
-    ensureVerificationCommandAvailable,
-    runtime: {
-      resolve: () => ({
-        displayName: "Codex",
-        launch: () => {
-          throw new Error("prs pr add-tests must not launch Codex.");
-        },
-      }),
-    },
-    forge: getRepositoryForge(repoRoot),
-    ensureCleanWorkingTree,
-    promptForLine,
-    verifyBuild,
-    hasChanges,
-    commitGeneratedChanges,
-  });
-  if (result) {
-    console.log(JSON.stringify(result, null, 2));
-  }
-}
-
-async function runPrResolveConflictsCodexLauncher(
-  prNumber: number,
-  repoRoot: string,
-  repositoryConfig: ReturnType<typeof getRepositoryConfig>
-): Promise<void> {
-  await runPrResolveConflictsCommand({
-    prNumber,
-    repoRoot,
-    buildCommand: repositoryConfig.buildCommand,
-    ensureVerificationCommandAvailable,
-    preflightBaseBranch: preflightRemoteBranch,
-    forge: getRepositoryForge(repoRoot),
-    ensureCleanWorkingTree,
-    verifyBuild,
-  });
-}
-
-async function runToolCommand(): Promise<void> {
-  const repoRoot = getDefaultRepoRoot();
-  loadRepoEnv(repoRoot);
-  const toolCommand = parsePrsToolCommandArgs(getCliArgs().slice(1));
-  const repositoryConfig = getRepositoryConfig(repoRoot);
-
-  if (toolCommand.kind === "pr-list") {
-    const result = await listPullRequestsTool({
-      actionable: toolCommand.actionable,
-      repoRoot,
-    });
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-    return;
-  }
-
-  if (toolCommand.kind === "issue-list") {
-    const result = await listIssuesTool({
-      actionable: toolCommand.actionable,
-      repoRoot,
-    });
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-    return;
-  }
-
-  if (toolCommand.kind === "issue-ready") {
-    const result = await readyIssueTool({
-      unattended: toolCommand.unattended,
-      issueNumber: toolCommand.issueNumber,
-      repoRoot,
-      forge: getRepositoryForge(repoRoot),
-    });
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-    return;
-  }
-
-  if (toolCommand.kind === "issue-estimate") {
-    const result = await estimateIssueTool({
-      issueNumber: toolCommand.issueNumber,
-      repoRoot,
-      forge: getRepositoryForge(repoRoot),
-      repositoryConfig,
-    });
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-    return;
-  }
-
-  if (toolCommand.kind === "issue-estimate-context") {
-    const result = await createIssueEstimateContext({
-      issueNumber: toolCommand.issueNumber,
-      forge: getRepositoryForge(repoRoot),
-      repositoryConfig,
-    });
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-    return;
-  }
-
-  if (toolCommand.kind === "issue-publish-estimate") {
-    const result = await publishIssueEstimateFile({
-      issueNumber: toolCommand.issueNumber,
-      estimateFilePath: resolve(repoRoot, toolCommand.estimateFilePath),
-      forge: getRepositoryForge(repoRoot),
-    });
-    process.stdout.write(
-      `${JSON.stringify(
-        {
-          status: result.status,
-          ...(result.status === "skipped" ? { reason: result.reason } : { url: result.url }),
-        },
-        null,
-        2
-      )}\n`
-    );
-    return;
-  }
-
-  if (toolCommand.kind === "issue-create") {
-    const forge = getRepositoryForge(repoRoot);
-
-    if (forge.type === "none") {
-      process.stdout.write(
-        `${JSON.stringify(
-          {
-            status: "blocked",
-            message:
-              "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue creation.",
-            nextAction: "configure-forge",
-          },
-          null,
-          2
-        )}\n`
-      );
-      return;
-    }
-
-    if (!forge.isAuthenticated()) {
-      process.stdout.write(
-        `${JSON.stringify(
-          {
-            status: "blocked",
-            message:
-              "GitHub issue creation requires GH_TOKEN or GITHUB_TOKEN in the repository environment, or an authenticated gh session.",
-            nextAction: "configure-github-auth",
-          },
-          null,
-          2
-        )}\n`
-      );
-      return;
-    }
-
-    if (toolCommand.draftFilePath) {
-      const draftFilePath = resolve(repoRoot, toolCommand.draftFilePath);
-      const runDir = toolCommand.runDir
-        ? resolve(repoRoot, toolCommand.runDir)
-        : dirname(draftFilePath);
-      const mediaEvidence = loadMediaEvidenceForPublication(
-        repoRoot,
-        toolCommand.mediaManifestFilePath
-      );
-      const parsedDraft = parseIssueDraftDocument(
-        appendMediaEvidenceSection(readFileSync(draftFilePath, "utf8"), mediaEvidence)
-      );
-      const body = toolCommand.forcePrsManaged
-        ? ensurePrsManagedIssueBody(parsedDraft.body)
-        : parsedDraft.body;
-      const issue = await forge.createOrReuseIssue(
-        parsedDraft.title,
-        body,
-        toolCommand.labels
-      );
-      const managedCommentResult = await publishManagedCommentsFromArtifacts({
-        repoRoot,
-        forge,
-        issues: [issue],
-        specFilePath: toolCommand.specFilePath,
-        planFilePath: toolCommand.planFilePath,
-      });
-      const estimatePublicationHints = await publishAutomaticEstimateHints({
-        repoRoot,
-        forge,
-        repositoryConfig,
-        issues: [issue],
-        managedComments: managedCommentResult.managedComments,
-      });
-
-      process.stdout.write(
-        `${JSON.stringify(
-          {
-            status: "ok",
-            mode: "single",
-            issues: [issue],
-            createdIssues: [issue],
-            auditPublicationHints: createAuditPublicationHints({
-              issues: [issue],
-              runDir,
-            }),
-            estimatePublicationHints,
-            ...managedCommentResult,
-          },
-          null,
-          2
-        )}\n`
-      );
-      return;
-    }
-
-    if (!toolCommand.issueSetFilePath) {
-      throw new Error("Provide exactly one of --draft-file or --issue-set.");
-    }
-
-    const issueSetFilePath = resolve(repoRoot, toolCommand.issueSetFilePath);
-    const runDir = toolCommand.runDir
-      ? resolve(repoRoot, toolCommand.runDir)
-      : dirname(issueSetFilePath);
-    const issueSet = loadIssueDraftSet({
-      repoRoot,
-      runDir,
-      issueSetFilePath,
-    });
-    if (toolCommand.mediaManifestFilePath) {
-      throw new Error("Media manifests are currently supported for single issue draft creation only.");
-    }
-    const issues = await createIssueDraftSetWithRecords({
-      issueSet,
-      forge,
-      labels: toolCommand.labels,
-      forcePrsManaged: toolCommand.forcePrsManaged,
-    });
-    const managedCommentResult = await publishManagedCommentsFromArtifacts({
-      repoRoot,
-      forge,
-      issues,
-      specFilePath: toolCommand.specFilePath,
-      planFilePath: toolCommand.planFilePath,
-    });
-    const estimatePublicationHints = await publishAutomaticEstimateHints({
-      repoRoot,
-      forge,
-      repositoryConfig,
-      issues,
-      managedComments: managedCommentResult.managedComments,
-    });
-
-    process.stdout.write(
-      `${JSON.stringify(
-        {
-          status: "ok",
-          mode: "multiple",
-          issues,
-          createdIssues: issues,
-          auditPublicationHints: createAuditPublicationHints({
-            issues,
-            runDir,
-          }),
-          estimatePublicationHints,
-          ...managedCommentResult,
-        },
-        null,
-        2
-      )}\n`
-    );
-    return;
-  }
-
-  if (toolCommand.kind === "branches-cleanup") {
-    const result = cleanupMergedBranchesTool({
-      repoRoot,
-      apply: toolCommand.apply,
-    });
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-    return;
-  }
-
-  if (toolCommand.kind === "pr-review") {
-    const originalConsoleLog = console.log;
-    console.log = (...values: unknown[]) => {
-      process.stderr.write(`${values.map((value) => String(value)).join(" ")}\n`);
-    };
-
-    let result: Awaited<ReturnType<typeof preparePullRequestLocalReviewTool>>;
-    try {
-      result = await preparePullRequestLocalReviewTool({
-        prNumber: toolCommand.prNumber,
-        repoRoot,
-        buildCommand: repositoryConfig.buildCommand,
-        outputMode: toolCommand.unattended ? "unattended" : "manual",
-        ensureVerificationCommandAvailable,
-        preflightBaseBranch: preflightRemoteBranch,
-        forge: getRepositoryForge(repoRoot),
-        ensureCleanWorkingTree,
-      });
-    } finally {
-      console.log = originalConsoleLog;
-    }
-
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-    return;
-  }
-
-  if (toolCommand.kind === "pr-prepare-review") {
-    const originalConsoleLog = console.log;
-    console.log = (...values: unknown[]) => {
-      process.stderr.write(`${values.map((value) => String(value)).join(" ")}\n`);
-    };
-
-    let result: Awaited<ReturnType<typeof preparePullRequestReviewTool>>;
-    try {
-      result = await preparePullRequestReviewTool({
-        prNumber: toolCommand.prNumber,
-        repoRoot,
-        buildCommand: repositoryConfig.buildCommand,
-        ensureVerificationCommandAvailable,
-        preflightBaseBranch: preflightRemoteBranch,
-        forge: getRepositoryForge(repoRoot),
-        ensureCleanWorkingTree,
-        promptForLine,
-        hasChanges,
-        verifyBuild,
-        commitGeneratedChanges,
-        readDiff: readIssueWorkflowDiff,
-        createProvider: async (providerRepoRoot) =>
-          createProvider(providerRepoRoot, "reviewer"),
-      });
-    } finally {
-      console.log = originalConsoleLog;
-    }
-
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-    return;
-  }
-
-  if (toolCommand.kind === "pr-publish-review") {
-    const reportFilePath = isAbsolute(toolCommand.reportFilePath)
-      ? toolCommand.reportFilePath
-      : resolve(repoRoot, toolCommand.reportFilePath);
-    const commentsFilePath = isAbsolute(toolCommand.commentsFilePath)
-      ? toolCommand.commentsFilePath
-      : resolve(repoRoot, toolCommand.commentsFilePath);
-    const result = await publishPullRequestLocalReview({
-      repoRoot,
-      prNumber: toolCommand.prNumber,
-      reportFilePath,
-      commentsFilePath,
-      forge: getRepositoryForge(repoRoot),
-      outputMode: toolCommand.unattended ? "unattended" : "manual",
-    });
-
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-    return;
-  }
-
-  if (toolCommand.kind === "pr-push-reviewed") {
-    const originalConsoleLog = console.log;
-    console.log = (...values: unknown[]) => {
-      process.stderr.write(`${values.map((value) => String(value)).join(" ")}\n`);
-    };
-
-    try {
-      ensureCleanWorkingTree(repoRoot);
-      const forge = getRepositoryForge(repoRoot);
-      const pullRequest = await forge.fetchPullRequestDetails(toolCommand.prNumber);
-      const runDir = resolve(
-        repoRoot,
-        ".prs",
-        "runs",
-        `${formatRunTimestamp()}-pr-${pullRequest.number}-push-reviewed`
-      );
-      mkdirSync(runDir, { recursive: true });
-      const outputLogPath = resolve(runDir, "output.log");
-      const createdAt = new Date().toISOString();
-      writeFileSync(
-        outputLogPath,
-        [
-          "# prs tool pr push-reviewed run log",
-          "",
-          `Created: ${createdAt}`,
-          `Pull request: #${pullRequest.number} ${pullRequest.title}`,
-          `Head branch: ${pullRequest.headRefName}`,
-          "",
-        ].join("\n"),
-        "utf8"
-      );
-      const pushResult = pushReviewedPullRequestUpdates(
-        repoRoot,
-        outputLogPath,
-        pullRequest.headRefName
-      );
-
-      process.stdout.write(
-        `${JSON.stringify(
-          {
-            status: pushResult.status,
-            prNumber: pullRequest.number,
-            headRefName: pullRequest.headRefName,
-            remoteRef: pushResult.remoteRef,
-            runDir: toRepoRelativePath(repoRoot, runDir),
-            outputLogPath: toRepoRelativePath(repoRoot, outputLogPath),
-          },
-          null,
-          2
-        )}\n`
-      );
-    } finally {
-      console.log = originalConsoleLog;
-    }
-    return;
-  }
-
-  if (
-    toolCommand.kind === "pr-address-comments" ||
-    toolCommand.kind === "pr-fix-tests" ||
-    toolCommand.kind === "pr-add-tests"
-  ) {
-    const originalConsoleLog = console.log;
-    console.log = (...values: unknown[]) => {
-      process.stderr.write(`${values.map((value) => String(value)).join(" ")}\n`);
-    };
-
-    const runtime = {
-      resolve: () => ({
-        displayName: "Codex",
-        launch: () => {
-          throw new Error("prs tool pr fix preparation must not launch Codex.");
-        },
-      }),
-    };
-    let result:
-      | Awaited<ReturnType<typeof runPrFixCommentsCommand>>
-      | Awaited<ReturnType<typeof runPrFixFailingTestsCommand>>
-      | Awaited<ReturnType<typeof runPrFixTestsCommand>>;
-    try {
-      if (toolCommand.kind === "pr-address-comments") {
-        result = await runPrFixCommentsCommand({
-          mode: "prepare",
-          selection: toolCommand.selection,
-          prNumber: toolCommand.prNumber,
-          repoRoot,
-          buildCommand: repositoryConfig.buildCommand,
-          ensureVerificationCommandAvailable,
-          runtime,
-          forge: getRepositoryForge(repoRoot),
-          ensureCleanWorkingTree,
-          promptForLine,
-          verifyBuild,
-          hasChanges,
-          commitGeneratedChanges,
-        });
-      } else if (toolCommand.kind === "pr-fix-tests") {
-        result = await runPrFixFailingTestsCommand({
-          mode: "prepare",
-          prNumber: toolCommand.prNumber,
-          repoRoot,
-          buildCommand: repositoryConfig.buildCommand,
-          ensureVerificationCommandAvailable,
-          runtime,
-          forge: getRepositoryForge(repoRoot),
-          ensureCleanWorkingTree,
-          captureVerificationFailure,
-          promptForLine,
-          verifyBuild,
-          hasChanges,
-          commitGeneratedChanges,
-        });
-      } else {
-        result = await runPrFixTestsCommand({
-          mode: "prepare",
-          selection: toolCommand.selection,
-          prNumber: toolCommand.prNumber,
-          repoRoot,
-          buildCommand: repositoryConfig.buildCommand,
-          ensureVerificationCommandAvailable,
-          runtime,
-          forge: getRepositoryForge(repoRoot),
-          ensureCleanWorkingTree,
-          promptForLine,
-          verifyBuild,
-          hasChanges,
-          commitGeneratedChanges,
-        });
-      }
-    } finally {
-      console.log = originalConsoleLog;
-    }
-
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-    return;
-  }
-
-  if (toolCommand.kind === "pr-ready") {
-    const originalConsoleLog = console.log;
-    console.log = (...values: unknown[]) => {
-      process.stderr.write(`${values.map((value) => String(value)).join(" ")}\n`);
-    };
-
-    let result: Awaited<ReturnType<typeof readyPullRequestTool>>;
-    try {
-      result = await readyPullRequestTool({
-        unattended: toolCommand.unattended,
-        prNumber: toolCommand.prNumber,
-        repoRoot,
-        buildCommand: repositoryConfig.buildCommand,
-        localRuntime: repositoryConfig.localRuntime,
-        prReadiness: repositoryConfig.prReadiness,
-        ensureVerificationCommandAvailable,
-        forge: getRepositoryForge(repoRoot),
-        ensureCleanWorkingTree,
-      });
-    } finally {
-      console.log = originalConsoleLog;
-    }
-
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-    return;
-  }
-
-  if (toolCommand.kind === "worktrees-cleanup") {
-    const result = cleanupWorktreesTool({
-      repoRoot,
-      apply: toolCommand.apply,
-    });
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-    return;
-  }
-
-  throw new Error("This prs tool command is not implemented yet.");
-}
-
-function formatTestBacklogMarkdown(
-  result: Awaited<ReturnType<typeof analyzeTestBacklog>>,
-  createdIssues: CreatedIssueRecord[]
-): string {
-  const lines: string[] = [
-    "# AI Test Backlog",
-    "",
-    "## Summary",
-    result.summary,
-    "",
-    "## Current testing setup",
-    `- Status: ${toTitleCase(result.currentTestingSetup.status)}`,
-    `- Test files detected: ${result.currentTestingSetup.testFileCount}`,
-    `- Frameworks: ${
-      result.currentTestingSetup.frameworks.length > 0
-        ? result.currentTestingSetup.frameworks.join(", ")
-        : "None detected"
-    }`,
-    `- CI integration: ${toTitleCase(result.currentTestingSetup.ciIntegration.status)}`,
-  ];
-
-  if (result.currentTestingSetup.evidence.length > 0) {
-    lines.push(
-      `- Evidence: ${result.currentTestingSetup.evidence.slice(0, 5).join("; ")}`
-    );
-  }
-
-  if (result.currentTestingSetup.frameworkRecommendation) {
-    lines.push(
-      `- Recommended framework: ${result.currentTestingSetup.frameworkRecommendation.recommended}`
-    );
-    lines.push(
-      `- Recommendation rationale: ${result.currentTestingSetup.frameworkRecommendation.rationale}`
-    );
-  }
-
-  if (result.currentTestingSetup.ciIntegration.workflows.length > 0) {
-    lines.push(
-      `- CI workflows: ${result.currentTestingSetup.ciIntegration.workflows.join(", ")}`
-    );
-  }
-
-  if (result.currentTestingSetup.ciIntegration.evidence.length > 0) {
-    lines.push(
-      `- CI evidence: ${result.currentTestingSetup.ciIntegration.evidence.slice(0, 5).join("; ")}`
-    );
-  }
-
-  if (result.currentTestingSetup.notes.length > 0) {
-    lines.push("");
-    lines.push("## Notes");
-    lines.push(...result.currentTestingSetup.notes.map((note) => `- ${note}`));
-  }
-
-  if (result.currentTestingSetup.ciIntegration.notes.length > 0) {
-    lines.push("");
-    lines.push("## CI notes");
-    lines.push(
-      ...result.currentTestingSetup.ciIntegration.notes.map((note) => `- ${note}`)
-    );
-  }
-
-  lines.push("", "## Prioritized findings", "");
-  if (result.findings.length === 0) {
-    lines.push("No prioritized testing backlog findings were detected for this repository.");
-    lines.push("");
-  } else {
-    for (const finding of result.findings) {
-      lines.push(`### ${finding.title}`);
-      lines.push(`- Priority: ${toTitleCase(finding.priority)}`);
-      lines.push(`- Suggested test types: ${finding.suggestedTestTypes.join(", ")}`);
-      lines.push(`- Rationale: ${finding.rationale}`);
-      if (finding.existingCoverage) {
-        lines.push(`- Existing coverage signal: ${finding.existingCoverage}`);
-      }
-      lines.push(
-        `- Related paths: ${finding.relatedPaths.map((path) => `\`${path}\``).join(", ")}`
-      );
-      lines.push(`- Draft issue title: ${finding.issueTitle}`);
-      lines.push("");
-    }
-  }
-
-  lines.push(...formatCreatedIssueResultLines(createdIssues));
-
-  while (lines[lines.length - 1] === "") {
-    lines.pop();
-  }
-
-  return lines.join("\n");
-}
-
-function formatFeatureBacklogMarkdown(
-  result: Awaited<ReturnType<typeof analyzeFeatureBacklog>>,
-  createdIssues: CreatedIssueRecord[]
-): string {
-  const lines: string[] = [
-    "# AI Feature Backlog",
-    "",
-    "## Summary",
-    result.summary,
-    "",
-    "## Repository signals",
-    `- CLI surface: ${toTitleCase(String(result.repositorySignals.hasCli))}`,
-    `- GitHub Actions: ${toTitleCase(String(result.repositorySignals.hasGitHubActions))}`,
-    `- Existing tests: ${toTitleCase(String(result.repositorySignals.hasTests))}`,
-    `- Issue templates: ${toTitleCase(String(result.repositorySignals.hasIssueTemplates))}`,
-    `- Release automation: ${toTitleCase(String(result.repositorySignals.hasReleaseAutomation))}`,
-    `- Examples/templates: ${toTitleCase(String(result.repositorySignals.hasExamples))}`,
-    `- Package manifests: ${result.repositorySignals.packageCount}`,
-    `- Workflows: ${result.repositorySignals.workflowCount}`,
-    `- Provider adapters: ${result.repositorySignals.providerCount}`,
-  ];
-
-  if (result.repositorySignals.evidence.length > 0) {
-    lines.push(
-      `- Evidence: ${result.repositorySignals.evidence.slice(0, 5).join("; ")}`
-    );
-  }
-
-  if (result.repositorySignals.notes.length > 0) {
-    lines.push("", "## Notes");
-    lines.push(...result.repositorySignals.notes.map((note) => `- ${note}`));
-  }
-
-  lines.push("", "## Prioritized suggestions", "");
-  for (const suggestion of result.suggestions) {
-    lines.push(`### ${suggestion.title}`);
-    lines.push(`- Priority: ${toTitleCase(suggestion.priority)}`);
-    lines.push(`- Category: ${toTitleCase(suggestion.category)}`);
-    lines.push(`- Rationale: ${suggestion.rationale}`);
-    lines.push(`- Evidence: ${suggestion.evidence.join("; ")}`);
-    lines.push(
-      `- Related paths: ${suggestion.relatedPaths.map((path) => `\`${path}\``).join(", ")}`
-    );
-    lines.push(`- Draft issue title: ${suggestion.issueTitle}`);
-    lines.push("");
-  }
-
-  if (createdIssues.length > 0) {
-    lines.push("## Issue results");
-    lines.push(
-      ...createdIssues.map(
-        (issue) =>
-          `- ${issue.status === "created" ? "Created" : "Reused"} #${issue.number}: ${issue.title} (${issue.url})`
-      )
-    );
-    lines.push("");
-  }
-
-  while (lines[lines.length - 1] === "") {
-    lines.pop();
-  }
-
-  return lines.join("\n");
-}
-
-function parseNumberedSelection(
-  response: string,
-  maxIndex: number,
-  itemType = "item"
-): number[] {
-  const normalized = response.trim().toLowerCase();
-  if (!normalized || normalized === "none" || normalized === "n") {
-    return [];
-  }
-
-  if (normalized === "all") {
-    return Array.from({ length: maxIndex }, (_, index) => index);
-  }
-
-  const selected = new Set<number>();
-  for (const part of response.split(",")) {
-    const trimmed = part.trim();
-    if (!/^\d+$/.test(trimmed)) {
-      throw new Error(
-        `Invalid selection "${trimmed}". Use comma-separated ${itemType} numbers, "all", or "none".`
-      );
-    }
-
-    const parsed = Number.parseInt(trimmed, 10);
-    if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > maxIndex) {
-      throw new Error(
-        `Invalid selection "${trimmed}". Choose ${itemType} values between 1 and ${maxIndex}.`
-      );
-    }
-
-    selected.add(parsed - 1);
-  }
-
-  return [...selected].sort((left, right) => left - right);
-}
-
-function formatCreatedIssueResultLines(createdIssues: CreatedIssueRecord[]): string[] {
-  if (createdIssues.length === 0) {
-    return [];
-  }
-
-  return [
-    "## Issue results",
-    ...createdIssues.map(
-      (issue) =>
-        `- ${issue.status === "created" ? "Created" : "Reused"} #${issue.number}: ${issue.title} (${issue.url})`
-    ),
-    "",
-  ];
-}
-
-function parseTestBacklogIssueSelection(response: string, maxIndex: number): number[] {
-  const normalized = response.trim().toLowerCase();
-  if (!normalized || normalized === "all") {
-    return Array.from({ length: maxIndex }, (_, index) => index);
-  }
-
-  return parseNumberedSelection(response, maxIndex, "finding");
-}
-
-function appendAdditionalDescription(body: string, additionalDescription: string): string {
-  const trimmed = additionalDescription.trim();
-  if (!trimmed) {
-    return body;
-  }
-
-  return `${body}\n\n## Maintainer notes\n${trimmed}\n`;
-}
-
-async function maybeCreateTestBacklogIssues(
-  options: TestBacklogCommandOptions,
-  analysis: Awaited<ReturnType<typeof analyzeTestBacklog>>,
-  selectedIndexes = analysis.findings
-    .slice(0, options.maxIssues)
-    .map((_, index) => index)
-): Promise<CreatedIssueRecord[]> {
-  if (!options.createIssues) {
-    return [];
-  }
-
-  const forge = getRepositoryForge(options.repoRoot);
-  const createdIssues: CreatedIssueRecord[] = [];
-
-  for (const findingIndex of selectedIndexes) {
-    const finding = analysis.findings[findingIndex];
-    if (!finding) {
-      continue;
-    }
-
-    createdIssues.push(
-      await forge.createOrReuseIssue(
-        finding.issueTitle,
-        finding.issueBody,
-        options.labels
-      )
-    );
-  }
-
-  return createdIssues;
-}
-
-async function maybePromptForTestBacklogIssueCreation(
-  options: TestBacklogCommandOptions,
-  analysis: Awaited<ReturnType<typeof analyzeTestBacklog>>
-): Promise<CreatedIssueRecord[]> {
-  if (
-    options.createIssues ||
-    options.format !== "markdown" ||
-    analysis.findings.length === 0 ||
-    !process.stdin.isTTY
-  ) {
-    return [];
-  }
-
-  const shouldCreateIssues = await promptForYesNoDefaultYes(
-    "Do you want to create GitHub issues now? (Y/n): "
-  );
-  if (!shouldCreateIssues) {
-    return [];
-  }
-
-  const candidateFindings = analysis.findings.slice(0, options.maxIssues);
-  const issueNumbers = candidateFindings
-    .map((_, index) => String(index + 1))
-    .join(",");
-  const rawSelection = await promptForLine(
-    `Which issues would you like to create? (ALL/${issueNumbers}): `
-  );
-  const selectedIndexes = parseTestBacklogIssueSelection(
-    rawSelection,
-    candidateFindings.length
-  );
-
-  return maybeCreateTestBacklogIssues(
-    {
-      ...options,
-      createIssues: true,
-    },
-    analysis,
-    selectedIndexes
-  );
-}
-
-async function maybeCreateFeatureBacklogIssues(
-  options: FeatureBacklogCommandOptions,
-  analysis: Awaited<ReturnType<typeof analyzeFeatureBacklog>>
-): Promise<CreatedIssueRecord[]> {
-  if (!options.createIssues) {
-    return [];
-  }
-
-  const forge = getRepositoryForge(options.repoRoot);
-  const createdIssues: CreatedIssueRecord[] = [];
-  const selectionPrompt = analysis.suggestions
-    .map((suggestion, index) => `${index + 1}:${suggestion.issueTitle}`)
-    .join(", ");
-  const rawSelection = await promptForLine(
-    `Create issues for which suggestions? [all|none|${selectionPrompt}]: `
-  );
-  const selectedIndexes = parseNumberedSelection(
-    rawSelection,
-    analysis.suggestions.length,
-    "suggestion"
-  ).slice(0, options.maxIssues);
-
-  if (selectedIndexes.length === 0) {
-    return [];
-  }
-
-  for (const suggestionIndex of selectedIndexes) {
-    const suggestion = analysis.suggestions[suggestionIndex];
-    const titleInput = await promptForLine(
-      `Issue title [${suggestion.issueTitle}]: `
-    );
-    const issueTitle = titleInput.trim() || suggestion.issueTitle;
-    const extraDescription = await promptForLine(
-      "Additional description (optional): "
-    );
-    const labelsInput = await promptForLine(
-      `Labels [${options.labels.join(",")}]: `
-    );
-    const labels = labelsInput.trim()
-      ? labelsInput
-          .split(",")
-          .map((label) => label.trim())
-          .filter(Boolean)
-      : options.labels;
-
-    createdIssues.push(
-      await forge.createOrReuseIssue(
-        issueTitle,
-        appendAdditionalDescription(suggestion.issueBody, extraDescription),
-        labels
-      )
-    );
-  }
-
-  return createdIssues;
-}
-
-async function runTestBacklogCommand(args = getCliArgs()): Promise<void> {
-  const options = parseTestBacklogCommandArgs(args);
-  const repositoryConfig = getRepositoryConfig(options.repoRoot);
-  const analysis = await analyzeTestBacklog({
-    excludePaths: repositoryConfig.aiContext.excludePaths,
-    repoRoot: options.repoRoot,
-    maxFindings: options.top,
-  });
-  const createdIssues = await maybeCreateTestBacklogIssues(options, analysis);
-  const output = {
-    ...analysis,
-    createdIssues,
-  };
-
-  if (options.format === "json") {
-    process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
-    return;
-  }
-
-  process.stdout.write(`${formatTestBacklogMarkdown(analysis, createdIssues)}\n`);
-
-  const interactivelyCreatedIssues = await maybePromptForTestBacklogIssueCreation(
-    options,
-    analysis
-  );
-  if (interactivelyCreatedIssues.length > 0) {
-    process.stdout.write(
-      `\n${formatCreatedIssueResultLines(interactivelyCreatedIssues).join("\n")}`
-    );
-  }
-}
-
-async function runFeatureBacklogCommand(args = getCliArgs()): Promise<void> {
-  const options = parseFeatureBacklogCommandArgs(args);
-  const repositoryConfig = getRepositoryConfig(options.repoRoot);
-  const analysis = await analyzeFeatureBacklog({
-    excludePaths: repositoryConfig.aiContext.excludePaths,
-    repoRoot: options.repoRoot,
-    maxSuggestions: options.top,
-  });
-  const createdIssues = await maybeCreateFeatureBacklogIssues(options, analysis);
-  const output = {
-    ...analysis,
-    createdIssues,
-  };
-
-  if (options.format === "json") {
-    process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
-    return;
-  }
-
-  process.stdout.write(`${formatFeatureBacklogMarkdown(analysis, createdIssues)}\n`);
 }
 
 async function runIssueDraftCommand(

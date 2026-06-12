@@ -38,6 +38,34 @@ describe("CLI command surface", () => {
     expect(entrypoint).not.toContain("async function runFeatureBacklogCommand");
   });
 
+  it("keeps shared CLI runtime code split across focused command modules", () => {
+    const runtime = readFileSync(
+      resolve(process.cwd(), "packages/cli/src/cli-runtime.ts"),
+      "utf8"
+    );
+    const runtimeLines = runtime.split(/\r?\n/);
+
+    expect(runtimeLines.length).toBeLessThanOrEqual(6900);
+    expect(existsSync(resolve(process.cwd(), "packages/cli/src/cli-context.ts"))).toBe(
+      true
+    );
+    expect(
+      existsSync(resolve(process.cwd(), "packages/cli/src/commands/review-runner.ts"))
+    ).toBe(true);
+    expect(
+      existsSync(resolve(process.cwd(), "packages/cli/src/commands/audit-runner.ts"))
+    ).toBe(true);
+    expect(
+      existsSync(resolve(process.cwd(), "packages/cli/src/commands/backlog-runner.ts"))
+    ).toBe(true);
+    expect(
+      existsSync(resolve(process.cwd(), "packages/cli/src/commands/pr-runner.ts"))
+    ).toBe(true);
+    expect(
+      existsSync(resolve(process.cwd(), "packages/cli/src/commands/tool-runner.ts"))
+    ).toBe(true);
+  });
+
   it("documents no-number /prs issue and /prs pr URL display", () => {
     const docs = [
       readFileSync(resolve(process.cwd(), "README.md"), "utf8"),
