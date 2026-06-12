@@ -4,7 +4,9 @@ import { resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   formatIssueTokenUsageAuditSection,
+  formatIssueTokenUsageLedgerAuditSection,
   getIssueTokenUsageArtifactFilePath,
+  issueTokenUsageArtifactToLedgerRow,
   writeIssueTokenUsageArtifact,
 } from "./run-artifacts";
 
@@ -232,5 +234,157 @@ describe("issue token usage artifacts", () => {
         },
       })
     ).toContain("Workflow: issue-refine-complete");
+  });
+
+  it("renders a single issue-lifetime token usage ledger table", () => {
+    const markdown = formatIssueTokenUsageLedgerAuditSection({
+      issueNumber: 287,
+      rows: [
+        {
+          phase: "issue-create",
+          role: "planner",
+          model: "gpt-5.5",
+          modelSource: "actual",
+          status: "tracked",
+          totalTokens: 12000,
+          inputTokens: 9000,
+          outputTokens: 3000,
+          elapsedSeconds: 420,
+          capturedAt: "2026-06-12T18:00:00.000Z",
+          runDir: ".prs/runs/20260612T180000000Z-issue-draft",
+        },
+        {
+          phase: "issue-implementation",
+          role: "implementer",
+          model: "gpt-5.4-mini",
+          modelSource: "actual",
+          status: "partial",
+          totalTokens: 50000,
+          capturedAt: "2026-06-12T20:00:00.000Z",
+          runDir: ".prs/runs/20260612T200000000Z-issue-287",
+          notes: ["Output token count was unavailable."],
+        },
+      ],
+    });
+
+    expect(markdown).toContain("Codex token usage ledger for issue #287.");
+    expect(markdown).toContain(
+      "| Phase | Role | Model | Model source | Status | Total tokens | Elapsed | Captured |"
+    );
+    expect(markdown).toContain(
+      "| issue-create | planner | gpt-5.5 | actual | tracked | 12,000 | 7m 0s | 2026-06-12T18:00:00.000Z |"
+    );
+    expect(markdown).toContain(
+      "| issue-implementation | implementer | gpt-5.4-mini | actual | partial | 50,000 |  | 2026-06-12T20:00:00.000Z |"
+    );
+    expect(markdown).not.toContain("Input");
+    expect(markdown).not.toContain("Output");
+    expect(markdown).not.toContain("Run");
+    expect(markdown).not.toContain("Notes");
+    expect(markdown).not.toContain(".prs/runs/20260612T180000000Z-issue-draft");
+    expect(markdown).not.toContain("Output token count was unavailable.");
+    expect(markdown).toContain(
+      "This ledger reports available Codex run telemetry, not exact billing."
+    );
+  });
+
+  it("prefers the actual active model over configured fallback metadata", () => {
+    const markdown = formatIssueTokenUsageLedgerAuditSection({
+      issueNumber: 287,
+      rows: [
+        {
+          phase: "issue-create",
+          role: "planner",
+          model: "gpt-5.5",
+          modelSource: "actual",
+          configuredModel: "gpt-5.4-mini",
+          configuredProfile: "standard",
+          status: "tracked",
+          totalTokens: 12000,
+          capturedAt: "2026-06-12T18:00:00.000Z",
+        },
+      ],
+    });
+
+    expect(markdown).toContain("| issue-create | planner | gpt-5.5 | actual |");
+    expect(markdown).not.toContain("gpt-5.4-mini");
+  });
+
+  it("converts token usage artifacts into ledger rows", () => {
+    expect(
+      issueTokenUsageArtifactToLedgerRow({
+        version: 1,
+        status: "tracked",
+        issueNumber: 287,
+        capturedAt: "2026-06-12T18:00:00.000Z",
+        source: "codex-goal",
+        workflow: {
+          name: "issue-create",
+          role: "planner",
+          runDir: ".prs/runs/20260612T180000000Z-issue-draft",
+        },
+        model: {
+          profile: "premium",
+          role: "planner",
+          model: "gpt-5.5",
+          thinking: "high",
+          source: "codex-session",
+          configuredModel: "gpt-5.4-mini",
+        },
+        usage: {
+          inputTokens: 9000,
+          outputTokens: 3000,
+          totalTokens: 12000,
+          timeUsedSeconds: 420,
+        },
+        auditPublication: {
+          status: "published",
+          target: "issue",
+          section: "token-usage",
+        },
+      })
+    ).toEqual({
+      phase: "issue-create",
+      role: "planner",
+      model: "gpt-5.5",
+      modelSource: "actual",
+      configuredModel: "gpt-5.4-mini",
+      status: "tracked",
+      totalTokens: 12000,
+      inputTokens: 9000,
+      outputTokens: 3000,
+      elapsedSeconds: 420,
+      capturedAt: "2026-06-12T18:00:00.000Z",
+      runDir: ".prs/runs/20260612T180000000Z-issue-draft",
+      notes: ["Audit publication: published issue token-usage"],
+    });
+  });
+
+  it("treats operator-provided active model metadata as actual provenance", () => {
+    expect(
+      issueTokenUsageArtifactToLedgerRow({
+        version: 1,
+        status: "tracked",
+        issueNumber: 287,
+        capturedAt: "2026-06-12T18:00:00.000Z",
+        source: "codex-goal",
+        workflow: {
+          name: "issue-implementation",
+          role: "implementer",
+        },
+        model: {
+          profile: "premium",
+          role: "implementer",
+          model: "gpt-5.5",
+          thinking: "high",
+          source: "operator-provided",
+          configuredModel: "gpt-5.4-mini",
+        },
+      })
+    ).toMatchObject({
+      model: "gpt-5.5",
+      modelSource: "actual",
+      configuredModel: "gpt-5.4-mini",
+    });
   });
 });

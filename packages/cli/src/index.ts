@@ -2154,6 +2154,7 @@ function buildIssueRefineTokenUsageMetadata(
       repoRoot,
       getIssueTokenUsageArtifactFilePath(workspace.runDir)
     ),
+    mode: "issue-token-usage-ledger",
     workflow: {
       name: "issue-refine",
       role: "planner",
@@ -3853,7 +3854,7 @@ async function createIssueDraftSetWithRecords(input: {
 function createAuditPublicationHints(input: {
   issues: CreatedIssueRecord[];
   runDir?: string;
-}): Array<{ issueNumber: number; file: string; section: string }> {
+}): Array<{ issueNumber: number; file: string; section: string; mode: string }> {
   if (!input.runDir) {
     return [];
   }
@@ -3867,6 +3868,7 @@ function createAuditPublicationHints(input: {
     issueNumber: issue.number,
     file: tokenUsageArtifactFilePath,
     section: "token-usage",
+    mode: "issue-token-usage-ledger",
   }));
 }
 
