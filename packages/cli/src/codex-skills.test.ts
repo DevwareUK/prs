@@ -33,6 +33,7 @@ describe("managed prs Codex skills", () => {
       "prs:start-issue-work",
       "prs:publish-audit",
       "prs:finish-work",
+      "prs:cleanup-branches",
       "prs:cleanup-worktrees",
       "prs:parallel-batch",
       "prs:create",
@@ -160,6 +161,9 @@ describe("managed prs Codex skills", () => {
     expect(markdown).toContain("Do not assume the GitHub CLI (`gh`) is installed");
     expect(markdown).toContain("node packages/cli/dist/index.js <args>");
     expect(markdown).toContain("do not call that an actionable-for-me list");
+    expect(markdown).toContain("/prs cleanup branches");
+    expect(markdown).toContain("prs tool branches cleanup --json");
+    expect(markdown).toContain("prs tool branches cleanup --apply --json");
     expect(markdown).toContain("/prs cleanup worktrees");
     expect(markdown).toContain("prs tool worktrees cleanup --json");
     expect(markdown).toContain("prs tool worktrees cleanup --apply --json");
@@ -172,20 +176,43 @@ describe("managed prs Codex skills", () => {
   });
 
   it("renders top-level alias skills for the shorter /prs colon commands", () => {
-    const cleanupMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[4]);
-    const createMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[6]);
-    const reviewMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[7]);
-    const issueMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[8]);
-    const prMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[9]);
-    const auditMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[10]);
-    const finishMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[11]);
+    const branchCleanupMarkdown = renderCodexSkillMarkdown(
+      PRS_CODEX_SKILLS.find((skill) => skill.name === "prs:cleanup-branches")!
+    );
+    const worktreeCleanupMarkdown = renderCodexSkillMarkdown(
+      PRS_CODEX_SKILLS.find((skill) => skill.name === "prs:cleanup-worktrees")!
+    );
+    const createMarkdown = renderCodexSkillMarkdown(
+      PRS_CODEX_SKILLS.find((skill) => skill.name === "prs:create")!
+    );
+    const reviewMarkdown = renderCodexSkillMarkdown(
+      PRS_CODEX_SKILLS.find((skill) => skill.name === "prs:review")!
+    );
+    const issueMarkdown = renderCodexSkillMarkdown(
+      PRS_CODEX_SKILLS.find((skill) => skill.name === "prs:issue")!
+    );
+    const prMarkdown = renderCodexSkillMarkdown(
+      PRS_CODEX_SKILLS.find((skill) => skill.name === "prs:pr")!
+    );
+    const auditMarkdown = renderCodexSkillMarkdown(
+      PRS_CODEX_SKILLS.find((skill) => skill.name === "prs:audit")!
+    );
+    const finishMarkdown = renderCodexSkillMarkdown(
+      PRS_CODEX_SKILLS.find((skill) => skill.name === "prs:finish")!
+    );
 
-    expect(cleanupMarkdown).toContain("name: prs:cleanup-worktrees");
-    expect(cleanupMarkdown).toContain("/prs cleanup worktrees");
-    expect(cleanupMarkdown).toContain("prs tool worktrees cleanup --json");
-    expect(cleanupMarkdown).toContain("prs tool worktrees cleanup --apply --json");
-    expect(cleanupMarkdown).toContain("Do not remove dirty worktrees");
-    expect(cleanupMarkdown).toContain("do not fall back to manual git worktree remove");
+    expect(branchCleanupMarkdown).toContain("name: prs:cleanup-branches");
+    expect(branchCleanupMarkdown).toContain("/prs cleanup branches");
+    expect(branchCleanupMarkdown).toContain("prs tool branches cleanup --json");
+    expect(branchCleanupMarkdown).toContain("prs tool branches cleanup --apply --json");
+    expect(branchCleanupMarkdown).toContain("Do not force-delete branches");
+    expect(branchCleanupMarkdown).toContain("Do not fall back to manual git branch deletion");
+    expect(worktreeCleanupMarkdown).toContain("name: prs:cleanup-worktrees");
+    expect(worktreeCleanupMarkdown).toContain("/prs cleanup worktrees");
+    expect(worktreeCleanupMarkdown).toContain("prs tool worktrees cleanup --json");
+    expect(worktreeCleanupMarkdown).toContain("prs tool worktrees cleanup --apply --json");
+    expect(worktreeCleanupMarkdown).toContain("Do not remove dirty worktrees");
+    expect(worktreeCleanupMarkdown).toContain("do not fall back to manual git worktree remove");
     expect(createMarkdown).toContain("name: prs:create");
     expect(createMarkdown).toContain("Draft a GitHub issue from a rough idea");
     expect(createMarkdown).toContain("Draft GitHub Issue: <short topic>");
@@ -381,7 +408,7 @@ describe("managed prs Codex skills", () => {
       ],
     });
 
-    expect(result.installed).toBe(12);
+    expect(result.installed).toBe(13);
     expect(result.updated).toBe(0);
     expect(result.unchanged).toBe(0);
     expect(result.skipped).toEqual([]);
@@ -408,7 +435,7 @@ describe("managed prs Codex skills", () => {
 
     const result = installManagedCodexSkills({ CODEX_HOME: codexHome }, "/Users/tester");
 
-    expect(result.installed).toBe(12);
+    expect(result.installed).toBe(13);
     expect(result.skillFiles.some((file) => file.endsWith("/prs/SKILL.md"))).toBe(true);
   });
 
@@ -421,7 +448,7 @@ describe("managed prs Codex skills", () => {
 
     expect(result.installed).toBe(0);
     expect(result.updated).toBe(0);
-    expect(result.unchanged).toBe(12);
+    expect(result.unchanged).toBe(13);
     expect(result.skipped).toEqual([]);
   });
 
@@ -448,7 +475,7 @@ describe("managed prs Codex skills", () => {
 
     const result = installManagedCodexSkills({ CODEX_HOME: codexHome }, "/Users/tester");
 
-    expect(result.installed).toBe(11);
+    expect(result.installed).toBe(12);
     expect(result.updated).toBe(1);
     expect(readFileSync(resolve(skillDir, "SKILL.md"), "utf8")).toContain(
       '<!-- prs:managed-skill name="prs"'
@@ -465,7 +492,7 @@ describe("managed prs Codex skills", () => {
 
     const result = installManagedCodexSkills({ CODEX_HOME: codexHome }, "/Users/tester");
 
-    expect(result.installed).toBe(11);
+    expect(result.installed).toBe(12);
     expect(result.updated).toBe(0);
     expect(result.skipped).toEqual([
       {

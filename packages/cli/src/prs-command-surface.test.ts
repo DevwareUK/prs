@@ -109,6 +109,14 @@ describe("prs command surface", () => {
     });
   });
 
+  it("parses branch cleanup route", () => {
+    expect(parsePrsCommandSurfaceArgs(["cleanup", "branches"])).toEqual({
+      kind: "cleanup",
+      mode: "direct",
+      target: "branches",
+    });
+  });
+
   it("parses worktree cleanup route", () => {
     expect(parsePrsCommandSurfaceArgs(["cleanup", "worktrees"])).toEqual({
       kind: "cleanup",
@@ -409,6 +417,21 @@ describe("prs command surface routing", () => {
       skillName: "prs:finish-work",
       cliArgs: undefined,
       target: { type: "issue", number: 123 },
+    });
+  });
+
+  it("routes branch cleanup to the dedicated cleanup skill", () => {
+    expect(
+      routePrsCommandSurfaceAction({
+        kind: "cleanup",
+        mode: "direct",
+        target: "branches",
+      })
+    ).toEqual({
+      interaction: "direct",
+      skillName: "prs:cleanup-branches",
+      cliArgs: ["tool", "branches", "cleanup", "--json"],
+      toolOnly: true,
     });
   });
 

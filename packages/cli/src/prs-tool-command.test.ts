@@ -311,6 +311,19 @@ describe("prs tool command parser", () => {
     });
   });
 
+  it("parses local branch cleanup JSON command", () => {
+    expect(parsePrsToolCommandArgs(["branches", "cleanup", "--json"])).toEqual({
+      kind: "branches-cleanup",
+      apply: false,
+      json: true,
+    });
+    expect(parsePrsToolCommandArgs(["branches", "cleanup", "--apply", "--json"])).toEqual({
+      kind: "branches-cleanup",
+      apply: true,
+      json: true,
+    });
+  });
+
   it("parses worktree cleanup JSON command", () => {
     expect(parsePrsToolCommandArgs(["worktrees", "cleanup", "--json"])).toEqual({
       kind: "worktrees-cleanup",
@@ -352,6 +365,9 @@ describe("prs tool command parser", () => {
     );
     expect(() => parsePrsToolCommandArgs(["issue", "list"])).toThrow(
       renderPrsToolCommandHelp()
+    );
+    expect(() => parsePrsToolCommandArgs(["branches", "cleanup"])).toThrow(
+      "prs tool branches cleanup requires --json."
     );
     expect(() => parsePrsToolCommandArgs(["worktrees", "cleanup"])).toThrow(
       "prs tool worktrees cleanup requires --json."

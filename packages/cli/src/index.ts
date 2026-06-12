@@ -43,6 +43,7 @@ import {
   loadResolvedRepositoryConfig,
 } from "./config";
 import { publishAuditArtifact } from "./audit-artifacts";
+import { cleanupMergedBranchesTool } from "./branch-cleanup-tool";
 import { inspectManagedCodexSkills } from "./codex-skills";
 import { buildDoneStateInstructions } from "./done-state";
 import { listIssuesTool } from "./issue-list-tool";
@@ -5002,6 +5003,15 @@ async function runToolCommand(): Promise<void> {
         2
       )}\n`
     );
+    return;
+  }
+
+  if (toolCommand.kind === "branches-cleanup") {
+    const result = cleanupMergedBranchesTool({
+      repoRoot,
+      apply: toolCommand.apply,
+    });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return;
   }
 

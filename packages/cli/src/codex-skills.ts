@@ -119,6 +119,16 @@ function renderPrReadyToolCommand(unattended = false): string {
   return `prs ${cliArgs.replace("123", "<number>")}`;
 }
 
+function renderCleanupBranchesToolCommand(): string {
+  const route = routePrsCommandSurfaceAction(parsePrsCommandSurfaceArgs(["cleanup", "branches"]));
+  const cliArgs = route.cliArgs?.join(" ");
+  if (!route.toolOnly || !cliArgs) {
+    throw new Error("Expected /prs cleanup branches to route to a prs tool command.");
+  }
+
+  return `prs ${cliArgs}`;
+}
+
 function renderCleanupWorktreesToolCommand(): string {
   const route = routePrsCommandSurfaceAction(parsePrsCommandSurfaceArgs(["cleanup", "worktrees"]));
   const cliArgs = route.cliArgs?.join(" ");
@@ -281,6 +291,7 @@ export const PRS_CODEX_SKILLS: ManagedCodexSkill[] = [
       `- \`/prs review diff\`: run \`${renderReviewCommand("diff")}\`; review the current diff or supplied \`--base\`/\`--head\` comparison.`,
       "- `/prs issue`: run `prs tool issue list --actionable --json`, show each returned actionable for me issue number, title, and GitHub URL, and then offer contextual issue actions. One selection prepares issue context; multiple selections start parallel issue work through Superpowers agents and worktrees.",
       "- `/prs pr`: run `prs tool pr list --actionable --json`, show each returned pull request number, title, and GitHub URL, and then offer contextual PR actions.",
+      "- `/prs cleanup branches`: run `prs tool branches cleanup --json`, report local branches already merged into the configured base branch plus protected/skipped branches, and ask before applying cleanup unless the user explicitly requested removal.",
       "- `/prs cleanup worktrees`: run `prs tool worktrees cleanup --json`, report safe removal candidates and blocked worktrees, and ask before applying cleanup unless the user explicitly requested removal.",
       "",
       "### Direct forms",
@@ -301,12 +312,15 @@ export const PRS_CODEX_SKILLS: ManagedCodexSkill[] = [
       "- `/prs pr <number> address-comments`: run `prs tool pr address-comments <number> --json`, read the returned `promptFilePath` and `snapshotFilePath`, then continue the selected review-comment fixes in this Codex session. After fixes are complete, verify, commit reviewed changes, and run `prs tool pr push-reviewed <number> --json`. Do not run a command that launches nested Codex.",
       "- `/prs pr <number> fix-tests`: run `prs tool pr fix-tests <number> --json`, read the returned `promptFilePath` and `snapshotFilePath`, then continue the failing-test fix in this Codex session. After fixes are complete, verify, commit reviewed changes, and run `prs tool pr push-reviewed <number> --json`. Do not run a command that launches nested Codex.",
       "- `/prs pr <number> add-tests`: run `prs tool pr add-tests <number> --json`, read the returned `promptFilePath` and `snapshotFilePath`, then continue the selected AI test-suggestion work in this Codex session. After fixes are complete, verify, commit reviewed changes, and run `prs tool pr push-reviewed <number> --json`. Do not run a command that launches nested Codex.",
+      `- \`/prs cleanup branches\`: run \`${renderCleanupBranchesToolCommand()}\`, summarize removable and skipped local branches, and only run \`prs tool branches cleanup --apply --json\` after the user explicitly requests cleanup or approves the dry-run report. Do not force-delete branches, delete remote branches, prune stale upstream state, or fall back to manual git branch deletion.`,
       "- `/prs audit publish`: publish specs, plans, decisions, verification notes, or completion summaries.",
       "- `/prs finish`: verify, commit, push, open or update a PR, publish final audit, clean up only when safe, and then offer the next `/prs pr` step for that pull request.",
       "",
       "Existing managed skills are backing behaviors:",
       "- `prs:start-issue-work` backs `/prs create issue` and `/prs issue <number> plan`; `/prs issue <number> refine` is handled directly in the active Codex session.",
       "- `prs:review` backs `/prs review`, `/prs review tests`, `/prs review features`, and `/prs review diff`.",
+      "- `prs:cleanup-branches` backs `/prs cleanup branches`.",
+      "- `prs:cleanup-worktrees` backs `/prs cleanup worktrees`.",
       "- `prs:parallel-batch` backs multi-select `/prs issue`.",
       "- `prs:publish-audit` backs `/prs audit publish`.",
       "- `prs:finish-work` backs `/prs finish`.",
@@ -368,6 +382,24 @@ export const PRS_CODEX_SKILLS: ManagedCodexSkill[] = [
       "7. Publish the final issue audit before marking any Codex goal complete or reporting the managed skill run complete.",
       "8. Clean up the issue worktree after the pull request exists only when no uncommitted or unpushed work would be lost.",
       "9. Once the issue is complete and a PR exists, offer the next `/prs pr` step for that pull request.",
+    ].join("\n"),
+  },
+  {
+    folderName: "prs-cleanup-branches",
+    name: "prs:cleanup-branches",
+    description:
+      "Use when cleaning local git branches that are already merged into the configured base branch.",
+    body: [
+      SHARED_WORKFLOW_CONTRACT,
+      "",
+      "## Cleanup Branches",
+      "",
+      "Use this alias exactly like `/prs cleanup branches`.",
+      `Run \`${renderCleanupBranchesToolCommand()}\` first and summarize removable and skipped local branches.`,
+      "Only consider local branches that are already merged into the configured base branch.",
+      "Do not force-delete branches, delete remote branches, clean stale upstream branches, prune remotes, or remove branches checked out by any worktree.",
+      "Only run `prs tool branches cleanup --apply --json` after the user explicitly requests cleanup or approves the dry-run report.",
+      "Do not fall back to manual git branch deletion.",
     ].join("\n"),
   },
   {
