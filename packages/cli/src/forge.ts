@@ -117,6 +117,7 @@ export interface CreatePullRequestInput {
   baseBranch: string;
   title: string;
   body: string;
+  bodyFilePath?: string;
   outputLogPath: string;
 }
 

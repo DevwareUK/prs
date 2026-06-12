@@ -1582,18 +1582,20 @@ class GitHubRepositoryForge implements RepositoryForge {
       input.outputLogPath,
       this.repoRoot
     );
+    const prArgs = [
+      "pr",
+      "create",
+      "--title",
+      input.title,
+      ...(input.bodyFilePath
+        ? ["--body-file", input.bodyFilePath]
+        : ["--body", input.body]),
+      "--base",
+      input.baseBranch,
+    ];
     const stdout = runTrackedCommand(
       resolveGhCommand(this.repoRoot) ?? "gh",
-      [
-        "pr",
-        "create",
-        "--title",
-        input.title,
-        "--body",
-        input.body,
-        "--base",
-        input.baseBranch,
-      ],
+      prArgs,
       "Failed to create a pull request.",
       input.outputLogPath,
       this.repoRoot
