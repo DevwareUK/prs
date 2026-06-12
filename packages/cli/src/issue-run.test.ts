@@ -2718,11 +2718,11 @@ describe("Full issue run workflow", () => {
         "Use repository config in issue runs"
       );
       expect(prArgs[prArgs.indexOf("--base") + 1]).toBe("develop");
-      expect(prArgs[prArgs.indexOf("--body") + 1]).toContain(
-        `Implements #${issueNumber}: Use repository config in issue runs.`
-      );
-      expect(prArgs[prArgs.indexOf("--body") + 1]).toContain(`Closes #${issueNumber}`);
-      expect(prArgs[prArgs.indexOf("--body") + 1]).toContain(
+      const prBodyFilePath = prArgs[prArgs.indexOf("--body-file") + 1];
+      const prBody = readFileSync(prBodyFilePath, "utf8");
+      expect(prBody).toContain(`Implements #${issueNumber}: Use repository config in issue runs.`);
+      expect(prBody).toContain(`Closes #${issueNumber}`);
+      expect(prBody).toContain(
         "<!-- prs:pr-assistant:start -->"
       );
     } finally {
@@ -2869,10 +2869,152 @@ describe("Full issue run workflow", () => {
     );
     expect(prCreateCall).toBeDefined();
     const prArgs = prCreateCall?.[1] as string[];
-    const prBody = prArgs[prArgs.indexOf("--body") + 1];
+    const prBody = readFileSync(prArgs[prArgs.indexOf("--body-file") + 1], "utf8");
 
     expect(prBody).toContain(`Closes #${issueNumber}`);
     expect(prBody).toContain(`Closes #${sourceIssueNumber}`);
+  });
+
+  it("creates PRs from the generated body file so markdown newlines are preserved", async () => {
+    const issueNumber = 248;
+    const beforeRuns = listRunDirectories();
+    const sessionStateDir = resolve(REPO_ROOT, ".prs", "issues", String(issueNumber));
+    const issueWorkspaceDir = resolve(
+      REPO_ROOT,
+      ".prs",
+      "issues",
+      "248-preserve-pr-body-file-markdown-newlines"
+    );
+    rmSync(sessionStateDir, { recursive: true, force: true });
+    rmSync(issueWorkspaceDir, { recursive: true, force: true });
+    cleanupTargets.add(sessionStateDir);
+    cleanupTargets.add(issueWorkspaceDir);
+
+    let gitStatusCallCount = 0;
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          title: "Preserve PR body markdown newlines",
+          body: [
+            "Keep the PR body formatting intact.",
+            "",
+            "This issue description includes a hard line break.",
+          ].join("\n"),
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}`,
+        })
+      )
+      .mockResolvedValueOnce(createFetchResponse([]))
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          id: 8248,
+          body: "<!-- prs:issue-spec -->\nGenerated spec.",
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-8248`,
+          updated_at: "2026-04-26T11:47:00Z",
+        })
+      )
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          id: 9248,
+          body: "<!-- prs:issue-plan -->\nGenerated plan.",
+          html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-9248`,
+          updated_at: "2026-04-26T11:48:00Z",
+        })
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.OPENAI_API_KEY = "test-key";
+    process.env.GITHUB_TOKEN = "test-token";
+
+    const { run, spawnSync } = await loadCli({
+      prDescriptionResult: {
+        title: "feat: preserve PR body markdown newlines",
+        body: "Generated PR body.",
+      },
+      prAssistantResult: {
+        summary: "Preserves markdown formatting in the generated PR body file.",
+        riskAreas: [],
+        filesChanged: ["packages/cli/src/index.ts"],
+        testingNotes: ["pnpm exec vitest run packages/cli/src/issue-run.test.ts"],
+        rolloutConcerns: [],
+        reviewerChecklist: ["Confirm the body file keeps its markdown line breaks."],
+      },
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "status") {
+          gitStatusCallCount += 1;
+          return gitStatusCallCount === 1 ? "" : " M packages/cli/src/index.ts\n";
+        }
+        if (command === "git" && args[0] === "diff" && args[1] === "--name-only") {
+          return "packages/cli/src/index.ts\n";
+        }
+        if (
+          command === "git" &&
+          args[0] === "diff" &&
+          args[1] === "HEAD" &&
+          args[2] === "--" &&
+          args[3] === "packages/cli/src/index.ts"
+        ) {
+          return "diff --git a/packages/cli/src/index.ts b/packages/cli/src/index.ts";
+        }
+        if (command === "git" && args[0] === "remote") {
+          return "git@github.com:DevwareUK/prs.git\n";
+        }
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+      spawnSyncImpl: (command, args) => {
+        if (command === "gh" && args[0] === "--version") return { status: 0 };
+        if (command === "gh" && args[0] === "auth" && args[1] === "status") {
+          return { status: 0 };
+        }
+        if (command === "gh" && args[0] === "issue" && args[1] === "view") {
+          return { status: 1 };
+        }
+        if (command === "git" && args[0] === "rev-parse") return { status: 1 };
+        if (command === "git" && args[0] === "checkout") return { status: 0 };
+        if (command === "git" && args[0] === "fetch") return { status: 0 };
+        if (command === "git" && args[0] === "merge-base") return { status: 0 };
+        if (command === "git" && args[0] === "add") return { status: 0 };
+        if (command === "git" && args[0] === "commit") return { status: 0 };
+        if (command === "git" && args[0] === "push") {
+          return { status: 0, stdout: "", stderr: "" };
+        }
+        if (command === "codex" && args[0] === "--version") return { status: 0 };
+        if (command === "codex") return { status: 0 };
+        if (command === "pnpm" && args[0] === "--version") return { status: 0 };
+        if (command === "pnpm" && args[0] === "build") return { status: 0 };
+        if (command === "gh" && args[0] === "pr" && args[1] === "create") {
+          return { status: 0 };
+        }
+        throw new Error(`Unexpected spawnSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+
+    process.argv = ["node", "prs", "issue", String(issueNumber)];
+    await run();
+
+    const createdRunDir = listRunDirectories().find(
+      (entry) => !beforeRuns.includes(entry) && /-issue-248$/.test(entry)
+    );
+    expect(createdRunDir).toBeDefined();
+    const runDir = resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string);
+    cleanupTargets.add(runDir);
+
+    const bodyFilePath = resolve(runDir, "pull-request-body.md");
+    expect(readFileSync(bodyFilePath, "utf8")).toContain(
+      "\n\n<!-- prs:pr-assistant:start -->\n## PR Assistant\n\n### Summary\n"
+    );
+
+    const prCreateCall = spawnSync.mock.calls.find(
+      ([command, args]) =>
+        command === "gh" &&
+        Array.isArray(args) &&
+        args[0] === "pr" &&
+        args[1] === "create"
+    );
+    expect(prCreateCall).toBeDefined();
+    const prArgs = prCreateCall?.[1] as string[];
+    expect(prArgs).toContain("--body-file");
+    expect(prArgs).not.toContain("--body");
+    expect(prArgs[prArgs.indexOf("--body-file") + 1]).toBe(bodyFilePath);
   });
 
   it("does not duplicate existing closing references for PRS-created linked issues", async () => {
@@ -3014,7 +3156,7 @@ describe("Full issue run workflow", () => {
     );
     expect(prCreateCall).toBeDefined();
     const prArgs = prCreateCall?.[1] as string[];
-    const prBody = prArgs[prArgs.indexOf("--body") + 1];
+    const prBody = readFileSync(prArgs[prArgs.indexOf("--body-file") + 1], "utf8");
 
     expect(prBody.match(new RegExp(`Closes #${issueNumber}`, "g"))).toHaveLength(1);
     expect(prBody.match(new RegExp(`Closes #${sourceIssueNumber}`, "g"))).toHaveLength(1);
@@ -3152,7 +3294,7 @@ describe("Full issue run workflow", () => {
     );
     expect(prCreateCall).toBeDefined();
     const prArgs = prCreateCall?.[1] as string[];
-    const prBody = prArgs[prArgs.indexOf("--body") + 1];
+    const prBody = readFileSync(prArgs[prArgs.indexOf("--body-file") + 1], "utf8");
 
     expect(prBody).toContain(`Closes #${issueNumber}`);
     expect(prBody).not.toContain(`Closes #${sourceIssueNumber}`);

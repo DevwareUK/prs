@@ -948,7 +948,7 @@ describe("Issue prepare workflow", () => {
     expect(prArgs[prArgs.indexOf("--base") + 1]).toBe(
       "feat/existing-issue-workflow-change"
     );
-    const body = prArgs[prArgs.indexOf("--body") + 1];
+    const body = readFileSync(prArgs[prArgs.indexOf("--body-file") + 1], "utf8");
     expect(body).toContain("## Open PR File Overlap");
     expect(body).toContain("- #123 Existing issue workflow change");
     },
@@ -1130,7 +1130,7 @@ describe("Issue prepare workflow", () => {
     expect(prCreateCall).toBeDefined();
     const prArgs = prCreateCall?.[1] as string[];
     expect(prArgs[prArgs.indexOf("--base") + 1]).toBe("main");
-    const body = prArgs[prArgs.indexOf("--body") + 1];
+    const body = readFileSync(prArgs[prArgs.indexOf("--body-file") + 1], "utf8");
     expect(body).toContain("## Open PR File Overlap");
     expect(body).toContain(
       "Open PRs change planned files for this issue. Review them before merging if their changes are still open."

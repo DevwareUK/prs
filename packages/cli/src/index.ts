@@ -6792,6 +6792,7 @@ async function runUnattendedIssueCommand(
     baseBranch: context.baseBranch,
     title: pullRequest.title,
     body: pullRequest.body,
+    bodyFilePath: pullRequest.bodyFilePath,
     outputLogPath: context.workspace.outputLogPath,
   });
   updateIssueWorkspaceMetadata(context.workspace, (currentMetadata) => ({
@@ -7519,6 +7520,7 @@ async function runIssueCommand(): Promise<void> {
       baseBranch: context.baseBranch,
       title: pullRequest.title,
       body: pullRequest.body,
+      bodyFilePath: pullRequest.bodyFilePath,
       outputLogPath: context.workspace.outputLogPath,
     });
     updateIssueWorkspaceMetadata(context.workspace, (currentMetadata) => ({
