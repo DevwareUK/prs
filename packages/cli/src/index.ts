@@ -3832,33 +3832,123 @@ type ManagedCommentHint = {
   nextAction: string;
 };
 
-function createManagedCommentHints(input: {
-  issueNumbers: number[];
+type ManagedCommentPublication = {
+  issueNumber: number;
+  marker: typeof ISSUE_SPEC_COMMENT_MARKER | typeof ISSUE_PLAN_COMMENT_MARKER;
+  status: "published";
+  file: string;
+  id: number;
+  url: string;
+};
+
+function createManagedSpecCommentHint(
+  issueNumber: number,
+  specFilePath?: string
+): ManagedCommentHint {
+  return {
+    issueNumber,
+    marker: ISSUE_SPEC_COMMENT_MARKER,
+    requiredFor: "issue-source-of-truth",
+    status: specFilePath ? "artifact-provided" : "missing",
+    ...(specFilePath ? { file: specFilePath } : {}),
+    nextAction: specFilePath
+      ? `Publish a managed issue spec comment containing \`${ISSUE_SPEC_COMMENT_MARKER}\` after creating the issue.`
+      : `Create or publish a managed issue spec comment containing \`${ISSUE_SPEC_COMMENT_MARKER}\`.`,
+  };
+}
+
+function createManagedPlanCommentHint(
+  issueNumber: number,
+  planFilePath?: string
+): ManagedCommentHint {
+  return {
+    issueNumber,
+    marker: ISSUE_PLAN_COMMENT_MARKER,
+    requiredFor: `prs issue estimate ${issueNumber}`,
+    status: planFilePath ? "artifact-provided" : "missing",
+    ...(planFilePath ? { file: planFilePath } : {}),
+    nextAction: planFilePath
+      ? `Publish a managed issue plan comment containing \`${ISSUE_PLAN_COMMENT_MARKER}\` or run \`prs issue plan ${issueNumber}\` before estimating.`
+      : `Create or publish a managed issue plan comment containing \`${ISSUE_PLAN_COMMENT_MARKER}\`, or run \`prs issue plan ${issueNumber}\`, before estimating.`,
+  };
+}
+
+function resolveOptionalRepoPath(
+  repoRoot: string,
+  filePath: string | undefined
+): string | undefined {
+  return filePath ? resolve(repoRoot, filePath) : undefined;
+}
+
+async function publishManagedCommentsFromArtifacts(input: {
+  repoRoot: string;
+  forge: RepositoryForge;
+  issues: CreatedIssueRecord[];
   specFilePath?: string;
   planFilePath?: string;
-}): ManagedCommentHint[] {
-  return input.issueNumbers.flatMap((issueNumber) => [
-    {
-      issueNumber,
-      marker: ISSUE_SPEC_COMMENT_MARKER,
-      requiredFor: "issue-source-of-truth",
-      status: input.specFilePath ? "artifact-provided" : "missing",
-      ...(input.specFilePath ? { file: input.specFilePath } : {}),
-      nextAction: input.specFilePath
-        ? `Publish a managed issue spec comment containing \`${ISSUE_SPEC_COMMENT_MARKER}\` after creating the issue.`
-        : `Create or publish a managed issue spec comment containing \`${ISSUE_SPEC_COMMENT_MARKER}\`.`,
-    },
-    {
-      issueNumber,
-      marker: ISSUE_PLAN_COMMENT_MARKER,
-      requiredFor: `prs issue estimate ${issueNumber}`,
-      status: input.planFilePath ? "artifact-provided" : "missing",
-      ...(input.planFilePath ? { file: input.planFilePath } : {}),
-      nextAction: input.planFilePath
-        ? `Publish a managed issue plan comment containing \`${ISSUE_PLAN_COMMENT_MARKER}\` or run \`prs issue plan ${issueNumber}\` before estimating.`
-        : `Create or publish a managed issue plan comment containing \`${ISSUE_PLAN_COMMENT_MARKER}\`, or run \`prs issue plan ${issueNumber}\`, before estimating.`,
-    },
-  ]);
+}): Promise<{
+  managedComments: ManagedCommentPublication[];
+  managedCommentHints: ManagedCommentHint[];
+}> {
+  const specFilePath = resolveOptionalRepoPath(input.repoRoot, input.specFilePath);
+  const planFilePath = resolveOptionalRepoPath(input.repoRoot, input.planFilePath);
+  const managedComments: ManagedCommentPublication[] = [];
+  const managedCommentHints: ManagedCommentHint[] = [];
+
+  for (const issue of input.issues) {
+    if (specFilePath && existsSync(specFilePath)) {
+      const specMarkdown = readFileSync(specFilePath, "utf8").trim();
+      if (specMarkdown) {
+        const renderedSpec = formatSuperpowersSpecArtifactComment(specMarkdown);
+        const existingSpecComment = findLatestIssueSpecComment(
+          await input.forge.fetchIssueComments(issue.number)
+        );
+        const comment = existingSpecComment
+          ? await input.forge.updateIssueComment(existingSpecComment.id, renderedSpec)
+          : await input.forge.createIssuePlanComment(issue.number, renderedSpec);
+        managedComments.push({
+          issueNumber: issue.number,
+          marker: ISSUE_SPEC_COMMENT_MARKER,
+          status: "published",
+          file: specFilePath,
+          id: comment.id,
+          url: comment.url,
+        });
+      } else {
+        managedCommentHints.push(createManagedSpecCommentHint(issue.number, specFilePath));
+      }
+    } else {
+      managedCommentHints.push(createManagedSpecCommentHint(issue.number, specFilePath));
+    }
+
+    if (planFilePath && existsSync(planFilePath)) {
+      const planMarkdown = readFileSync(planFilePath, "utf8").trim();
+      if (planMarkdown) {
+        const renderedPlan = formatSuperpowersPlanArtifactComment(planMarkdown);
+        const existingPlanComment = await input.forge.fetchIssuePlanComment(issue.number);
+        const comment = existingPlanComment
+          ? await input.forge.updateIssuePlanComment(existingPlanComment.id, renderedPlan)
+          : await input.forge.createIssuePlanComment(issue.number, renderedPlan);
+        managedComments.push({
+          issueNumber: issue.number,
+          marker: ISSUE_PLAN_COMMENT_MARKER,
+          status: "published",
+          file: planFilePath,
+          id: comment.id,
+          url: comment.url,
+        });
+      } else {
+        managedCommentHints.push(createManagedPlanCommentHint(issue.number, planFilePath));
+      }
+    } else {
+      managedCommentHints.push(createManagedPlanCommentHint(issue.number, planFilePath));
+    }
+  }
+
+  return {
+    managedComments,
+    managedCommentHints,
+  };
 }
 
 async function promptForLine(prompt: string): Promise<string> {
@@ -4547,6 +4637,13 @@ async function runToolCommand(): Promise<void> {
         body,
         toolCommand.labels
       );
+      const managedCommentResult = await publishManagedCommentsFromArtifacts({
+        repoRoot,
+        forge,
+        issues: [issue],
+        specFilePath: toolCommand.specFilePath,
+        planFilePath: toolCommand.planFilePath,
+      });
 
       process.stdout.write(
         `${JSON.stringify(
@@ -4556,11 +4653,7 @@ async function runToolCommand(): Promise<void> {
             issues: [issue],
             createdIssues: [issue],
             auditPublicationHints: createAuditPublicationHints(),
-            managedCommentHints: createManagedCommentHints({
-              issueNumbers: [issue.number],
-              specFilePath: toolCommand.specFilePath,
-              planFilePath: toolCommand.planFilePath,
-            }),
+            ...managedCommentResult,
           },
           null,
           2
@@ -4591,6 +4684,13 @@ async function runToolCommand(): Promise<void> {
       labels: toolCommand.labels,
       forcePrsManaged: toolCommand.forcePrsManaged,
     });
+    const managedCommentResult = await publishManagedCommentsFromArtifacts({
+      repoRoot,
+      forge,
+      issues,
+      specFilePath: toolCommand.specFilePath,
+      planFilePath: toolCommand.planFilePath,
+    });
 
     process.stdout.write(
       `${JSON.stringify(
@@ -4600,11 +4700,7 @@ async function runToolCommand(): Promise<void> {
           issues,
           createdIssues: issues,
           auditPublicationHints: createAuditPublicationHints(),
-          managedCommentHints: createManagedCommentHints({
-            issueNumbers: issues.map((issue) => issue.number),
-            specFilePath: toolCommand.specFilePath,
-            planFilePath: toolCommand.planFilePath,
-          }),
+          ...managedCommentResult,
         },
         null,
         2
