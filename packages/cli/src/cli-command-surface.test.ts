@@ -22,6 +22,22 @@ import {
 } from "./index-test-support";
 
 describe("CLI command surface", () => {
+  it("keeps the process entrypoint small and free of embedded workflow runners", () => {
+    const entrypoint = readFileSync(
+      resolve(process.cwd(), "packages/cli/src/index.ts"),
+      "utf8"
+    );
+    const lines = entrypoint.split(/\r?\n/);
+
+    expect(lines.length).toBeLessThanOrEqual(160);
+    expect(entrypoint).not.toContain("async function runIssueCommand");
+    expect(entrypoint).not.toContain("async function runPrCommand");
+    expect(entrypoint).not.toContain("async function runToolCommand");
+    expect(entrypoint).not.toContain("async function runAuditCommand");
+    expect(entrypoint).not.toContain("async function runTestBacklogCommand");
+    expect(entrypoint).not.toContain("async function runFeatureBacklogCommand");
+  });
+
   it("documents no-number /prs issue and /prs pr URL display", () => {
     const docs = [
       readFileSync(resolve(process.cwd(), "README.md"), "utf8"),
