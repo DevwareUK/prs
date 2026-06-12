@@ -311,6 +311,19 @@ describe("prs tool command parser", () => {
     });
   });
 
+  it("parses local branch cleanup JSON command", () => {
+    expect(parsePrsToolCommandArgs(["branches", "cleanup", "--json"])).toEqual({
+      kind: "branches-cleanup",
+      apply: false,
+      json: true,
+    });
+    expect(parsePrsToolCommandArgs(["branches", "cleanup", "--apply", "--json"])).toEqual({
+      kind: "branches-cleanup",
+      apply: true,
+      json: true,
+    });
+  });
+
   it("rejects removed --all PR readiness shorthand", () => {
     expect(() =>
       parsePrsToolCommandArgs(["pr", "ready", "115", "--all", "--json"])
@@ -339,6 +352,9 @@ describe("prs tool command parser", () => {
     );
     expect(() => parsePrsToolCommandArgs(["issue", "list"])).toThrow(
       renderPrsToolCommandHelp()
+    );
+    expect(() => parsePrsToolCommandArgs(["branches", "cleanup"])).toThrow(
+      "prs tool branches cleanup requires --json."
     );
     expect(() =>
       parsePrsToolCommandArgs(["issue", "create", "--draft-file", "draft.md"])

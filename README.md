@@ -136,6 +136,7 @@ Supporting commands:
 - `prs setup`
 - `prs setup --update-skills`
 - `prs update skills`
+- `/prs cleanup branches`
 - `prs audit publish (--issue <number>|--pr <number>) --file <path> --section <name> [--local-run <path>] [--media-manifest <path>]`
 - `prs tool issue list [--actionable] --json`
 - `prs tool issue ready <issue-number> [--unattended|--auto|--jdi] --json`
@@ -149,12 +150,15 @@ Supporting commands:
 - `prs tool pr publish-review <pr-number> --report <path> --comments <path> [--unattended|--auto|--jdi] --json`
 - `prs tool pr prepare-review <pr-number> --json`
 - `prs tool pr push-reviewed <pr-number> --json`
+- `prs tool branches cleanup [--apply] --json`
 - `prs commit`
 - `prs diff`
 
 The old `prs codex ...` nested launcher group has been retired. To start an agentic `/prs` workflow from a shell, run Codex directly in the repository, for example `codex -C <repo> "/prs issue <number> refine"` or `codex exec -C <repo> "/prs pr <number> review"`. Inside an active Codex session, use the deterministic `prs tool ... --json` commands for handoff data. Legacy runtime-launching commands that would start a child Codex process are blocked when Codex session markers are present; for unattended issue work, use `prs tool issue ready <issue-number> --unattended --json` and continue in the active session.
 
 `prs tool issue list [--actionable] --json` and `prs tool pr list [--actionable] --json` include a `url` field for every returned issue or pull request. Issue list PRS plan status recognizes direct managed `<!-- prs:issue-plan -->` comments; audit trail comments published by `prs audit publish` do not count as source-of-truth plan comments. The interactive `/prs issue` and `/prs pr` entrypoints use those list tools and should show each returned item with its number, title, and GitHub URL before offering follow-up actions.
+
+`/prs cleanup branches` uses `prs tool branches cleanup --json` to dry-run local branch cleanup. It reports local branches that are already merged into the configured `.prs/config.json` `baseBranch`, plus skipped branches such as the current branch, protected branch names, unmerged branches, and branches checked out by any worktree. Apply mode is explicit: `prs tool branches cleanup --apply --json` recomputes the safe candidates and deletes them with normal safe local branch deletion. It does not force-delete branches, delete remote branches, prune remotes, or clean stale upstream branches.
 
 `prs issue refine <number>` is the guided issue-refinement flow for rough or non-technical tickets. It uses the GitHub issue comments as the refinement conversation, asks every currently blocking high-value question needed to understand the user's intention and likely knock-on effects, and does not publish a partial specification or plan while important answers are still missing. The original issue body is preserved as the initial request. If brainstorming is not satisfied yet, prs posts the next clarification questions as a normal issue comment and stops so the async discussion can continue. Once refinement is settled, prs keeps the original issue as the single ticket and publishes the source-of-truth artifacts as managed comments on that same issue: `<!-- prs:issue-spec -->` for the settled specification and `<!-- prs:issue-plan -->` for the implementation plan. In interactive runs, prs previews the refined issue draft, generated specification, and generated implementation plan, then waits for approval before posting those managed comments to GitHub. After the managed plan comment is created or updated, prs attempts a non-blocking deterministic estimate publication to the issue audit `Estimate` section. The active Codex `/prs issue <number> refine` route follows the same approval rule when it handles refinement directly in the current session. It then adds a final confidence comment confirming the issue is ready for development. This refinement flow does not create linked issues; split work should be decided explicitly outside refinement.
 

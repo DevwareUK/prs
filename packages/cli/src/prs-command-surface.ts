@@ -19,6 +19,7 @@ export type PrsPrAction =
 export type PrsCommandSurfaceAction =
   | { kind: "root"; mode: "interactive" }
   | { kind: "create"; target: "issue" }
+  | { kind: "cleanup"; mode: "direct"; target: "branches" }
   | { kind: "review"; mode: "interactive" }
   | {
       kind: "review";
@@ -45,6 +46,7 @@ export type PrsCommandRoute = {
     | "prs"
     | "prs:review"
     | "prs:start-issue-work"
+    | "prs:cleanup-branches"
     | "prs:parallel-batch"
     | "prs:publish-audit"
     | "prs:finish-work";
@@ -91,6 +93,7 @@ export function renderPrsCommandSurfaceHelp(): string {
     "Usage:",
     "  /prs",
     "  /prs create [issue]",
+    "  /prs cleanup branches",
     "  /prs review",
     "  /prs review diff [--base <git-ref>] [--head <git-ref>] [--format <markdown|json>]",
     "  /prs review tests [--format <markdown|json>] [--top <count>] [--create-issues]",
@@ -122,6 +125,14 @@ export function parsePrsCommandSurfaceArgs(args: string[]): PrsCommandSurfaceAct
       }
 
     return { kind: "create", target: "issue" };
+    }
+
+    throw new Error(renderPrsCommandSurfaceHelp());
+  }
+
+  if (first === "cleanup") {
+    if (second === "branches" && !third && rest.length === 0) {
+      return { kind: "cleanup", mode: "direct", target: "branches" };
     }
 
     throw new Error(renderPrsCommandSurfaceHelp());
@@ -239,6 +250,15 @@ export function routePrsCommandSurfaceAction(action: PrsCommandSurfaceAction): P
       skillName: "prs:start-issue-work",
       cliArgs: ["issue", "draft"],
       target: { type: "create", name: "issue" },
+    };
+  }
+
+  if (action.kind === "cleanup") {
+    return {
+      interaction: "direct",
+      skillName: "prs:cleanup-branches",
+      cliArgs: ["tool", "branches", "cleanup", "--json"],
+      toolOnly: true,
     };
   }
 

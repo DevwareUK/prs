@@ -34,6 +34,7 @@ Supporting commands:
 - `prs setup`: guided repository onboarding for `prs`
 - `prs setup --update-skills`: refresh only managed Codex `/prs` skills
 - `prs update skills`: refresh managed Codex `/prs` skills after upgrading the CLI
+- `/prs cleanup branches`: managed Codex route for dry-run-first local merged-branch cleanup
 - `prs tool issue list [--actionable] --json`: list open GitHub issues, optionally filtered to actionable-for-me issues; returned items include number, title, URL, ownership, labels, update time, linked-PR status, and PRS plan status; PRS plan status recognizes direct managed plan comments
 - `prs tool issue estimate <issue-number> --json`: return a deterministic compatibility implementation token estimate for the issue's managed plan comment
 - `prs tool issue estimate-context <issue-number> --json`: return the managed plan, configured profiles, verification commands, and output schema for an active Codex session to create a model-based estimate
@@ -48,10 +49,13 @@ Supporting commands:
 - `prs tool pr fix-tests <pr-number> --json`: deterministic Codex-safe failing-test fix preparation; captures failing verification output and returns file paths without launching a runtime
 - `prs tool pr add-tests <pr-number> [--selection <value>] --json`: deterministic Codex-safe AI-test-suggestion preparation; writes selected-suggestion artifacts and returns file paths without launching a runtime
 - `prs tool pr push-reviewed <pr-number> --json`: deterministic guarded push for reviewed PR fix commits; fetches the PR head and pushes only when local `HEAD` is ahead and not behind
+- `prs tool branches cleanup [--apply] --json`: dry-run or apply safe local cleanup for branches already merged into the configured base branch; apply mode recomputes candidates and uses safe local branch deletion
 - `prs commit`: generate a commit message from staged changes
 - `prs diff`: summarize `git diff HEAD`
 
 The old `prs codex ...` command group is retired. Start agentic `/prs` workflows with Codex itself, for example `codex -C <repo> "/prs issue <number> refine"` or `codex exec -C <repo> "/prs pr <number> review"`. Use `prs tool ... --json` for deterministic handoff data inside an active Codex session.
+
+`/prs cleanup branches` routes to the managed `prs:cleanup-branches` skill and starts with `prs tool branches cleanup --json`. The tool inspects local Git branches only, uses the configured `.prs/config.json` `baseBranch`, and reports branches that are already merged into that base as cleanup candidates. It skips the current branch, the configured base branch, common protected names such as `main`, `master`, and `develop`, unmerged branches, and branches checked out by any worktree. `prs tool branches cleanup --apply --json` recomputes candidates before deleting and uses safe deletion equivalent to `git branch -d`; it does not force-delete branches, delete remote branches, prune remotes, or clean stale upstream branches.
 
 ## CLI command reference
 

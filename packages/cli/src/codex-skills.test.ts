@@ -33,6 +33,7 @@ describe("managed prs Codex skills", () => {
       "prs:start-issue-work",
       "prs:publish-audit",
       "prs:finish-work",
+      "prs:cleanup-branches",
       "prs:parallel-batch",
       "prs:create",
       "prs:review",
@@ -159,6 +160,9 @@ describe("managed prs Codex skills", () => {
     expect(markdown).toContain("Do not assume the GitHub CLI (`gh`) is installed");
     expect(markdown).toContain("node packages/cli/dist/index.js <args>");
     expect(markdown).toContain("do not call that an actionable-for-me list");
+    expect(markdown).toContain("/prs cleanup branches");
+    expect(markdown).toContain("prs tool branches cleanup --json");
+    expect(markdown).toContain("prs tool branches cleanup --apply --json");
     expect(markdown).toContain("Existing managed skills are backing behaviors");
     expect(markdown).toContain("Read `.prs/config.json` before starting prs workflow work.");
     expect(markdown).toContain("ai.codex.preferSubagents");
@@ -168,13 +172,20 @@ describe("managed prs Codex skills", () => {
   });
 
   it("renders top-level alias skills for the shorter /prs colon commands", () => {
-    const createMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[5]);
-    const reviewMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[6]);
-    const issueMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[7]);
-    const prMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[8]);
-    const auditMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[9]);
-    const finishMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[10]);
+    const cleanupMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[4]);
+    const createMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[6]);
+    const reviewMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[7]);
+    const issueMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[8]);
+    const prMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[9]);
+    const auditMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[10]);
+    const finishMarkdown = renderCodexSkillMarkdown(PRS_CODEX_SKILLS[11]);
 
+    expect(cleanupMarkdown).toContain("name: prs:cleanup-branches");
+    expect(cleanupMarkdown).toContain("/prs cleanup branches");
+    expect(cleanupMarkdown).toContain("prs tool branches cleanup --json");
+    expect(cleanupMarkdown).toContain("prs tool branches cleanup --apply --json");
+    expect(cleanupMarkdown).toContain("Do not force-delete branches");
+    expect(cleanupMarkdown).toContain("Do not fall back to manual git branch deletion");
     expect(createMarkdown).toContain("name: prs:create");
     expect(createMarkdown).toContain("Draft a GitHub issue from a rough idea");
     expect(createMarkdown).toContain("Draft GitHub Issue: <short topic>");
@@ -368,7 +379,7 @@ describe("managed prs Codex skills", () => {
       ],
     });
 
-    expect(result.installed).toBe(11);
+    expect(result.installed).toBe(12);
     expect(result.updated).toBe(0);
     expect(result.unchanged).toBe(0);
     expect(result.skipped).toEqual([]);
@@ -395,7 +406,7 @@ describe("managed prs Codex skills", () => {
 
     const result = installManagedCodexSkills({ CODEX_HOME: codexHome }, "/Users/tester");
 
-    expect(result.installed).toBe(11);
+    expect(result.installed).toBe(12);
     expect(result.skillFiles.some((file) => file.endsWith("/prs/SKILL.md"))).toBe(true);
   });
 
@@ -408,7 +419,7 @@ describe("managed prs Codex skills", () => {
 
     expect(result.installed).toBe(0);
     expect(result.updated).toBe(0);
-    expect(result.unchanged).toBe(11);
+    expect(result.unchanged).toBe(12);
     expect(result.skipped).toEqual([]);
   });
 
@@ -435,7 +446,7 @@ describe("managed prs Codex skills", () => {
 
     const result = installManagedCodexSkills({ CODEX_HOME: codexHome }, "/Users/tester");
 
-    expect(result.installed).toBe(10);
+    expect(result.installed).toBe(11);
     expect(result.updated).toBe(1);
     expect(readFileSync(resolve(skillDir, "SKILL.md"), "utf8")).toContain(
       '<!-- prs:managed-skill name="prs"'
@@ -452,7 +463,7 @@ describe("managed prs Codex skills", () => {
 
     const result = installManagedCodexSkills({ CODEX_HOME: codexHome }, "/Users/tester");
 
-    expect(result.installed).toBe(10);
+    expect(result.installed).toBe(11);
     expect(result.updated).toBe(0);
     expect(result.skipped).toEqual([
       {
