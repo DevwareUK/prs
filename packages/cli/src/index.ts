@@ -49,6 +49,7 @@ import { listIssuesTool } from "./issue-list-tool";
 import {
   createIssueEstimateContext,
   estimateIssueTool,
+  publishAutomaticIssueEstimate,
   publishIssueEstimateAudit,
   publishIssueEstimateFile,
   renderIssueEstimate,
@@ -1462,7 +1463,7 @@ async function publishIssueRefinementArtifacts(options: {
   }
 
   if (!planComment) {
-    await createStructuredIssuePlanComment({
+    planComment = await createStructuredIssuePlanComment({
       repoRoot: options.repoRoot,
       forge: options.forge,
       issueNumber: options.issueNumber,
@@ -1477,6 +1478,21 @@ async function publishIssueRefinementArtifacts(options: {
       specAlreadyEnsured: Boolean(specComment),
       outputMode: options.outputMode,
     });
+  }
+
+  if (planComment) {
+    const publication = await publishAutomaticIssueEstimate({
+      issueNumber: options.issueNumber,
+      repoRoot: options.repoRoot,
+      forge: options.forge,
+      repositoryConfig: getRepositoryConfig(options.repoRoot),
+    });
+    logSuperpowersPlanPublicationMessage(
+      options.workspace.outputLogPath,
+      publication.status === "skipped"
+        ? `Automatic estimate skipped: ${publication.reason}`
+        : `Automatic estimate ${publication.status}: ${publication.url}`
+    );
   }
 
   await publishIssueRefinementCompleteComment({
@@ -3890,6 +3906,13 @@ type ManagedCommentPublication = {
   url: string;
 };
 
+type EstimatePublicationHint = {
+  issueNumber: number;
+  status: "created" | "updated" | "skipped";
+  url?: string;
+  reason?: string;
+};
+
 function createManagedSpecCommentHint(
   issueNumber: number,
   specFilePath?: string
@@ -3998,6 +4021,44 @@ async function publishManagedCommentsFromArtifacts(input: {
     managedComments,
     managedCommentHints,
   };
+}
+
+async function publishAutomaticEstimateHints(input: {
+  repoRoot: string;
+  forge: RepositoryForge;
+  repositoryConfig: ResolvedRepositoryConfigType;
+  issues: CreatedIssueRecord[];
+  managedComments: ManagedCommentPublication[];
+}): Promise<EstimatePublicationHint[]> {
+  const planIssueNumbers = new Set(
+    input.managedComments
+      .filter((comment) => comment.marker === ISSUE_PLAN_COMMENT_MARKER)
+      .map((comment) => comment.issueNumber)
+  );
+  const hints: EstimatePublicationHint[] = [];
+
+  for (const issue of input.issues) {
+    if (!planIssueNumbers.has(issue.number)) {
+      continue;
+    }
+
+    const publication = await publishAutomaticIssueEstimate({
+      issueNumber: issue.number,
+      repoRoot: input.repoRoot,
+      forge: input.forge,
+      repositoryConfig: input.repositoryConfig,
+    });
+
+    hints.push({
+      issueNumber: issue.number,
+      status: publication.status,
+      ...(publication.status === "skipped"
+        ? { reason: publication.reason }
+        : { url: publication.url }),
+    });
+  }
+
+  return hints;
 }
 
 async function promptForLine(prompt: string): Promise<string> {
@@ -4696,6 +4757,13 @@ async function runToolCommand(): Promise<void> {
         specFilePath: toolCommand.specFilePath,
         planFilePath: toolCommand.planFilePath,
       });
+      const estimatePublicationHints = await publishAutomaticEstimateHints({
+        repoRoot,
+        forge,
+        repositoryConfig,
+        issues: [issue],
+        managedComments: managedCommentResult.managedComments,
+      });
 
       process.stdout.write(
         `${JSON.stringify(
@@ -4708,6 +4776,7 @@ async function runToolCommand(): Promise<void> {
               issues: [issue],
               runDir,
             }),
+            estimatePublicationHints,
             ...managedCommentResult,
           },
           null,
@@ -4746,6 +4815,13 @@ async function runToolCommand(): Promise<void> {
       specFilePath: toolCommand.specFilePath,
       planFilePath: toolCommand.planFilePath,
     });
+    const estimatePublicationHints = await publishAutomaticEstimateHints({
+      repoRoot,
+      forge,
+      repositoryConfig,
+      issues,
+      managedComments: managedCommentResult.managedComments,
+    });
 
     process.stdout.write(
       `${JSON.stringify(
@@ -4758,6 +4834,7 @@ async function runToolCommand(): Promise<void> {
             issues,
             runDir,
           }),
+          estimatePublicationHints,
           ...managedCommentResult,
         },
         null,

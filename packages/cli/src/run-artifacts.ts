@@ -1,6 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { REPOSITORY_STATE_DIRECTORY } from "@prs/contracts";
+import {
+  DEFAULT_ISSUE_ESTIMATE_COST_SETTINGS,
+  DEFAULT_ISSUE_ESTIMATE_FALLBACK_MODEL_RATE_USD_PER_MILLION,
+  type IssueEstimateCostSettings,
+} from "@prs/core";
 import type { InteractiveRuntimeType } from "./runtime";
 
 export function toRepoRelativePath(repoRoot: string, filePath: string): string {
@@ -284,6 +289,30 @@ function formatLedgerInteger(value: number | undefined): string {
   return formatOptionalInteger(value) ?? "";
 }
 
+function formatLedgerCost(value: number | undefined): string {
+  return value === undefined ? "" : `$${value.toFixed(2)}`;
+}
+
+function estimateLedgerRowCost(
+  row: IssueTokenUsageLedgerRow,
+  costSettings: IssueEstimateCostSettings
+): number | undefined {
+  if (row.totalTokens === undefined || !row.model) {
+    return undefined;
+  }
+
+  const normalizedModel = row.model.toLowerCase();
+  const rates =
+    costSettings.modelRates[row.model] ??
+    costSettings.modelRates[normalizedModel] ??
+    DEFAULT_ISSUE_ESTIMATE_FALLBACK_MODEL_RATE_USD_PER_MILLION;
+  const blendedRate =
+    rates.inputPerMillionTokens * costSettings.inputTokenRatio +
+    rates.outputPerMillionTokens * costSettings.outputTokenRatio;
+
+  return Number(((row.totalTokens / 1_000_000) * blendedRate).toFixed(2));
+}
+
 function resolveLedgerModelSource(
   model: IssueTokenUsageArtifact["model"] | undefined
 ): IssueTokenUsageLedgerRow["modelSource"] {
@@ -349,16 +378,18 @@ export function issueTokenUsageArtifactToLedgerRow(
 }
 
 export function formatIssueTokenUsageLedgerAuditSection(
-  ledger: IssueTokenUsageLedger
+  ledger: IssueTokenUsageLedger,
+  costSettings: IssueEstimateCostSettings = DEFAULT_ISSUE_ESTIMATE_COST_SETTINGS
 ): string {
   const lines = [
     `Codex token usage ledger for issue #${ledger.issueNumber}.`,
     "",
-    "| Phase | Role | Model | Model source | Status | Total tokens | Elapsed | Captured |",
-    "| --- | --- | --- | --- | --- | ---: | --- | --- |",
+    "| Phase | Role | Model | Model source | Status | Total tokens | Estimated cost | Elapsed | Captured |",
+    "| --- | --- | --- | --- | --- | ---: | ---: | --- | --- |",
   ];
 
   for (const row of ledger.rows) {
+    const estimatedCost = estimateLedgerRowCost(row, costSettings);
     lines.push(
       [
         "",
@@ -368,6 +399,7 @@ export function formatIssueTokenUsageLedgerAuditSection(
         formatLedgerCell(row.modelSource),
         formatLedgerCell(row.status),
         formatLedgerInteger(row.totalTokens),
+        formatLedgerCost(estimatedCost),
         formatDuration(row.elapsedSeconds) ?? "",
         formatLedgerCell(row.capturedAt),
         "",
