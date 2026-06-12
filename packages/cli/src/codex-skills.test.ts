@@ -237,6 +237,10 @@ describe("managed prs Codex skills", () => {
     expect(finishWorkMarkdown).toContain("get_goal");
     expect(finishWorkMarkdown).toContain("token-usage");
     expect(finishWorkMarkdown).toContain("codex-token-usage.json");
+    expect(finishWorkMarkdown).toContain("original issue completion audit artifact");
+    expect(finishWorkMarkdown).toContain(
+      "prs audit publish --issue <number> --file <path> --section <name>"
+    );
     expect(finishWorkMarkdown).toContain("standard (gpt-5.4-mini, medium thinking)");
     expect(finishWorkMarkdown).toContain("premium (gpt-5.5, high thinking)");
     expect(finishMarkdown).toContain("name: prs:finish");
@@ -244,6 +248,10 @@ describe("managed prs Codex skills", () => {
     expect(finishMarkdown).toContain("get_goal");
     expect(finishMarkdown).toContain("token-usage");
     expect(finishMarkdown).toContain("codex-token-usage.json");
+    expect(finishMarkdown).toContain("original issue completion audit artifact");
+    expect(finishMarkdown).toContain(
+      "prs audit publish --issue <number> --file <path> --section <name>"
+    );
     expect(finishMarkdown).toContain("standard (gpt-5.4-mini, medium thinking)");
     expect(finishMarkdown).toContain("premium (gpt-5.5, high thinking)");
     expect(finishMarkdown).toContain("offer the next `/prs pr` step for that pull request");
