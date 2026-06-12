@@ -284,10 +284,6 @@ function formatLedgerInteger(value: number | undefined): string {
   return formatOptionalInteger(value) ?? "";
 }
 
-function formatLedgerNotes(row: IssueTokenUsageLedgerRow): string {
-  return row.notes?.length ? row.notes.join("; ") : "";
-}
-
 function resolveLedgerModelSource(
   model: IssueTokenUsageArtifact["model"] | undefined
 ): IssueTokenUsageLedgerRow["modelSource"] {
@@ -358,8 +354,8 @@ export function formatIssueTokenUsageLedgerAuditSection(
   const lines = [
     `Codex token usage ledger for issue #${ledger.issueNumber}.`,
     "",
-    "| Phase | Role | Model | Model source | Status | Total tokens | Input | Output | Elapsed | Captured | Run | Notes |",
-    "| --- | --- | --- | --- | --- | ---: | ---: | ---: | --- | --- | --- | --- |",
+    "| Phase | Role | Model | Model source | Status | Total tokens | Elapsed | Captured |",
+    "| --- | --- | --- | --- | --- | ---: | --- | --- |",
   ];
 
   for (const row of ledger.rows) {
@@ -372,12 +368,8 @@ export function formatIssueTokenUsageLedgerAuditSection(
         formatLedgerCell(row.modelSource),
         formatLedgerCell(row.status),
         formatLedgerInteger(row.totalTokens),
-        formatLedgerInteger(row.inputTokens),
-        formatLedgerInteger(row.outputTokens),
         formatDuration(row.elapsedSeconds) ?? "",
         formatLedgerCell(row.capturedAt),
-        formatLedgerCell(row.runDir),
-        formatLedgerCell(formatLedgerNotes(row)),
         "",
       ].join(" | ")
     );

@@ -269,14 +269,20 @@ describe("issue token usage artifacts", () => {
 
     expect(markdown).toContain("Codex token usage ledger for issue #287.");
     expect(markdown).toContain(
-      "| Phase | Role | Model | Model source | Status | Total tokens | Input | Output | Elapsed | Captured | Run | Notes |"
+      "| Phase | Role | Model | Model source | Status | Total tokens | Elapsed | Captured |"
     );
     expect(markdown).toContain(
-      "| issue-create | planner | gpt-5.5 | actual | tracked | 12,000 | 9,000 | 3,000 | 7m 0s | 2026-06-12T18:00:00.000Z | .prs/runs/20260612T180000000Z-issue-draft |  |"
+      "| issue-create | planner | gpt-5.5 | actual | tracked | 12,000 | 7m 0s | 2026-06-12T18:00:00.000Z |"
     );
     expect(markdown).toContain(
-      "| issue-implementation | implementer | gpt-5.4-mini | actual | partial | 50,000 |  |  |  | 2026-06-12T20:00:00.000Z | .prs/runs/20260612T200000000Z-issue-287 | Output token count was unavailable. |"
+      "| issue-implementation | implementer | gpt-5.4-mini | actual | partial | 50,000 |  | 2026-06-12T20:00:00.000Z |"
     );
+    expect(markdown).not.toContain("Input");
+    expect(markdown).not.toContain("Output");
+    expect(markdown).not.toContain("Run");
+    expect(markdown).not.toContain("Notes");
+    expect(markdown).not.toContain(".prs/runs/20260612T180000000Z-issue-draft");
+    expect(markdown).not.toContain("Output token count was unavailable.");
     expect(markdown).toContain(
       "This ledger reports available Codex run telemetry, not exact billing."
     );
