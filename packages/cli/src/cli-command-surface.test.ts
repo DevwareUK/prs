@@ -31,6 +31,7 @@ describe("CLI command surface", () => {
 
     expect(docs).toContain("prs tool issue list [--actionable] --json");
     expect(docs).toContain("prs tool pr list [--actionable] --json");
+    expect(docs).toContain("prs tool worktrees cleanup [--apply] --json");
     expect(docs).toContain("number, title, and GitHub URL");
     expect(docs).toContain("include a `url` field");
   });

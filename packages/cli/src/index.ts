@@ -93,6 +93,7 @@ import {
 import { listPullRequestsTool } from "./pr-list-tool";
 import { readyPullRequestTool } from "./pr-ready-tool";
 import { parsePrsToolCommandArgs } from "./prs-tool-command";
+import { cleanupWorktreesTool } from "./worktree-cleanup-tool";
 import {
   createRepositoryForge,
   type CreatedIssueRecord,
@@ -401,6 +402,7 @@ const TOP_LEVEL_HELP = [
   "  prs tool pr address-comments <pr-number> [--selection <value>] --json",
   "  prs tool pr fix-tests <pr-number> --json",
   "  prs tool pr add-tests <pr-number> [--selection <value>] --json",
+  "  prs tool worktrees cleanup [--apply] --json",
   "  prs test-backlog [--top <count>]",
   "  prs feature-backlog [repo-path]",
   "  prs audit publish (--issue <number>|--pr <number>) --file <path> --section <name> [--local-run <path>] [--media-manifest <path>]",
@@ -5082,6 +5084,15 @@ async function runToolCommand(): Promise<void> {
       console.log = originalConsoleLog;
     }
 
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (toolCommand.kind === "worktrees-cleanup") {
+    const result = cleanupWorktreesTool({
+      repoRoot,
+      apply: toolCommand.apply,
+    });
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return;
   }
