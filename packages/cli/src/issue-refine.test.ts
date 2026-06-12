@@ -395,6 +395,41 @@ describe("Issue refine workflow", () => {
 
     expect(runtimePrompt).toContain("superpowers:brainstorming");
     expect(runtimePrompt).toContain("write only the GitHub issue comment body");
+    const metadata = JSON.parse(
+      readFileSync(
+        resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string, "metadata.json"),
+        "utf8"
+      )
+    ) as {
+      tokenUsage?: {
+        artifactFile?: string;
+        workflow?: { name?: string; role?: string; sourceIssueNumber?: number };
+        auditPublication?: {
+          target?: string;
+          issueNumber?: number;
+          section?: string;
+          publishWhen?: string[];
+        };
+      };
+    };
+    expect(metadata.tokenUsage).toMatchObject({
+      artifactFile: `.prs/runs/${createdRunDir}/codex-token-usage.json`,
+      workflow: {
+        name: "issue-refine",
+        role: "planner",
+        sourceIssueNumber: issueNumber,
+      },
+      auditPublication: {
+        target: "issue",
+        issueNumber,
+        section: "token-usage",
+        publishWhen: [
+          "questions-posted",
+          "published-artifacts",
+          "refinement-complete",
+        ],
+      },
+    });
     const patchCall = fetchMock.mock.calls.find(
       ([input, init]) =>
         String(input).endsWith(`/issues/${issueNumber}`) &&
@@ -1220,6 +1255,41 @@ describe("Issue refine workflow", () => {
         (init as RequestInit | undefined)?.method === "PATCH"
     );
     expect(patchCall).toBeUndefined();
+    const metadata = JSON.parse(
+      readFileSync(
+        resolve(REPO_ROOT, ".prs", "runs", createdRunDir as string, "metadata.json"),
+        "utf8"
+      )
+    ) as {
+      tokenUsage?: {
+        artifactFile?: string;
+        workflow?: { name?: string; role?: string; sourceIssueNumber?: number };
+        auditPublication?: {
+          target?: string;
+          issueNumber?: number;
+          section?: string;
+          publishWhen?: string[];
+        };
+      };
+    };
+    expect(metadata.tokenUsage).toMatchObject({
+      artifactFile: `.prs/runs/${createdRunDir}/codex-token-usage.json`,
+      workflow: {
+        name: "issue-refine",
+        role: "planner",
+        sourceIssueNumber: issueNumber,
+      },
+      auditPublication: {
+        target: "issue",
+        issueNumber,
+        section: "token-usage",
+        publishWhen: [
+          "questions-posted",
+          "published-artifacts",
+          "refinement-complete",
+        ],
+      },
+    });
     const commentBodies = fetchMock.mock.calls
       .filter(
         ([input, init]) =>

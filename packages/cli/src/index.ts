@@ -127,6 +127,7 @@ import {
   getIssueBatchRunDir,
   getIssueBatchStateDir,
   getIssueBatchStateFilePath,
+  getIssueTokenUsageArtifactFilePath,
   type IssuePlanWorkspace,
   type IssueRefineSessionState,
   type IssueRefineWorkspace,
@@ -2143,6 +2144,35 @@ function updateIssueRefineWorkspaceMetadata(
   );
 }
 
+function buildIssueRefineTokenUsageMetadata(
+  repoRoot: string,
+  workspace: IssueRefineWorkspace,
+  issueNumber: number
+): Record<string, unknown> {
+  return {
+    artifactFile: toRepoRelativePath(
+      repoRoot,
+      getIssueTokenUsageArtifactFilePath(workspace.runDir)
+    ),
+    workflow: {
+      name: "issue-refine",
+      role: "planner",
+      sourceIssueNumber: issueNumber,
+      runDir: toRepoRelativePath(repoRoot, workspace.runDir),
+    },
+    auditPublication: {
+      target: "issue",
+      issueNumber,
+      section: "token-usage",
+      publishWhen: [
+        "questions-posted",
+        "published-artifacts",
+        "refinement-complete",
+      ],
+    },
+  };
+}
+
 function writeIssueRefineWorkspaceFiles(
   repoRoot: string,
   workspace: IssueRefineWorkspace,
@@ -2197,6 +2227,7 @@ function writeIssueRefineWorkspaceFiles(
         outputLog: toRepoRelativePath(repoRoot, workspace.outputLogPath),
         runDir: toRepoRelativePath(repoRoot, workspace.runDir),
         superpowers: superpowersMetadata,
+        tokenUsage: buildIssueRefineTokenUsageMetadata(repoRoot, workspace, issueNumber),
         runtime: {
           type: runtime.type,
           displayName: runtime.displayName,
@@ -3819,8 +3850,24 @@ async function createIssueDraftSetWithRecords(input: {
   return createdIssues;
 }
 
-function createAuditPublicationHints(): Array<{ issueNumber: number; file: string; section: string }> {
-  return [];
+function createAuditPublicationHints(input: {
+  issues: CreatedIssueRecord[];
+  runDir?: string;
+}): Array<{ issueNumber: number; file: string; section: string }> {
+  if (!input.runDir) {
+    return [];
+  }
+
+  const tokenUsageArtifactFilePath = getIssueTokenUsageArtifactFilePath(input.runDir);
+  if (!existsSync(tokenUsageArtifactFilePath)) {
+    return [];
+  }
+
+  return input.issues.map((issue) => ({
+    issueNumber: issue.number,
+    file: tokenUsageArtifactFilePath,
+    section: "token-usage",
+  }));
 }
 
 type ManagedCommentHint = {
@@ -4622,6 +4669,9 @@ async function runToolCommand(): Promise<void> {
 
     if (toolCommand.draftFilePath) {
       const draftFilePath = resolve(repoRoot, toolCommand.draftFilePath);
+      const runDir = toolCommand.runDir
+        ? resolve(repoRoot, toolCommand.runDir)
+        : dirname(draftFilePath);
       const mediaEvidence = loadMediaEvidenceForPublication(
         repoRoot,
         toolCommand.mediaManifestFilePath
@@ -4652,7 +4702,10 @@ async function runToolCommand(): Promise<void> {
             mode: "single",
             issues: [issue],
             createdIssues: [issue],
-            auditPublicationHints: createAuditPublicationHints(),
+            auditPublicationHints: createAuditPublicationHints({
+              issues: [issue],
+              runDir,
+            }),
             ...managedCommentResult,
           },
           null,
@@ -4699,7 +4752,10 @@ async function runToolCommand(): Promise<void> {
           mode: "multiple",
           issues,
           createdIssues: issues,
-          auditPublicationHints: createAuditPublicationHints(),
+          auditPublicationHints: createAuditPublicationHints({
+            issues,
+            runDir,
+          }),
           ...managedCommentResult,
         },
         null,
