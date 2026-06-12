@@ -33,3 +33,13 @@ export function includesManagedMarker(
 ): boolean {
   return markers.some((marker) => body.includes(marker));
 }
+
+export function startsWithManagedMarker(
+  body: string,
+  markers: readonly string[]
+): boolean {
+  const firstContentLine = body
+    .split(/\r?\n/)
+    .find((line) => line.trim().length > 0);
+  return markers.some((marker) => firstContentLine?.trim() === marker);
+}

@@ -48,6 +48,32 @@ describe("prs tool command parser", () => {
     ).toThrow("Usage:");
   });
 
+  it("parses Codex-mediated issue estimate context and publish commands", () => {
+    expect(parsePrsToolCommandArgs(["issue", "estimate-context", "151", "--json"])).toEqual({
+      kind: "issue-estimate-context",
+      issueNumber: 151,
+      json: true,
+    });
+    expect(
+      parsePrsToolCommandArgs([
+        "issue",
+        "publish-estimate",
+        "151",
+        "--file",
+        ".prs/runs/estimate/estimate.json",
+        "--json",
+      ])
+    ).toEqual({
+      kind: "issue-publish-estimate",
+      issueNumber: 151,
+      estimateFilePath: ".prs/runs/estimate/estimate.json",
+      json: true,
+    });
+    expect(() =>
+      parsePrsToolCommandArgs(["issue", "publish-estimate", "151", "--json"])
+    ).toThrow("Missing required --file");
+  });
+
   it("rejects removed --all issue readiness shorthand", () => {
     expect(() =>
       parsePrsToolCommandArgs(["issue", "ready", "151", "--all", "--json"])

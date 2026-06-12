@@ -2,6 +2,13 @@ export type PrsToolCommand =
   | { kind: "issue-list"; actionable: boolean; json: boolean }
   | { kind: "issue-ready"; issueNumber: number; unattended: boolean; json: boolean }
   | { kind: "issue-estimate"; issueNumber: number; json: boolean }
+  | { kind: "issue-estimate-context"; issueNumber: number; json: boolean }
+  | {
+      kind: "issue-publish-estimate";
+      issueNumber: number;
+      estimateFilePath: string;
+      json: boolean;
+    }
   | {
       kind: "issue-create";
       draftFilePath?: string;
@@ -40,6 +47,8 @@ export function renderPrsToolCommandHelp(): string {
     "  prs tool issue list [--actionable] --json",
     "  prs tool issue ready <issue-number> [--unattended|--auto|--jdi] --json",
     "  prs tool issue estimate <issue-number> --json",
+    "  prs tool issue estimate-context <issue-number> --json",
+    "  prs tool issue publish-estimate <issue-number> --file <path> --json",
     "  prs tool issue create (--draft-file <path>|--issue-set <path>) --json",
     "                        [--run-dir <path>] [--spec-file <path>] [--plan-file <path>] [--media-manifest <path>]",
     "                        [--label <name>] [--labels <a,b>]",
@@ -140,6 +149,67 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
         throw new Error(`Unknown tool option "--all". ${renderPrsToolCommandHelp()}`);
       }
       throw new Error(renderPrsToolCommandHelp());
+    }
+
+    if (command === "estimate-context") {
+      if (!third || third === "--json" || third === "--all") {
+        throw new Error(renderPrsToolCommandHelp());
+      }
+
+      const issueNumber = parseToolNumber(third, "issue");
+      if (fourth === "--json" && rest.length === 0) {
+        return { kind: "issue-estimate-context", issueNumber, json: true };
+      }
+      if (fourth === "--all") {
+        throw new Error(`Unknown tool option "--all". ${renderPrsToolCommandHelp()}`);
+      }
+      throw new Error(renderPrsToolCommandHelp());
+    }
+
+    if (command === "publish-estimate") {
+      if (!third || third === "--json" || third === "--all") {
+        throw new Error(renderPrsToolCommandHelp());
+      }
+
+      const issueNumber = parseToolNumber(third, "issue");
+      const optionArgs = [fourth, ...rest].filter((arg): arg is string => arg !== undefined);
+      let estimateFilePath: string | undefined;
+      let json = false;
+
+      for (let index = 0; index < optionArgs.length; index += 1) {
+        const rawArg = optionArgs[index];
+        if (rawArg === "--json") {
+          json = true;
+          continue;
+        }
+        if (rawArg === "--file") {
+          estimateFilePath = optionArgs[index + 1];
+          if (!estimateFilePath) {
+            throw new Error(`Missing required --file value. ${renderPrsToolCommandHelp()}`);
+          }
+          index += 1;
+          continue;
+        }
+        if (rawArg.startsWith("--file=")) {
+          estimateFilePath = rawArg.slice("--file=".length);
+          continue;
+        }
+        throw new Error(`Unknown tool option "${rawArg}". ${renderPrsToolCommandHelp()}`);
+      }
+
+      if (!estimateFilePath) {
+        throw new Error(`Missing required --file. ${renderPrsToolCommandHelp()}`);
+      }
+      if (!json) {
+        throw new Error(`prs tool issue publish-estimate requires --json. ${renderPrsToolCommandHelp()}`);
+      }
+
+      return {
+        kind: "issue-publish-estimate",
+        issueNumber,
+        estimateFilePath,
+        json: true,
+      };
     }
 
     if (command === "create") {

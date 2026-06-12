@@ -80,7 +80,7 @@ When it is enabled and the selected runtime is Codex:
 - `prs issue draft --runtime` can use Codex Superpowers-specific instructions while keeping final drafts under `.prs/issues/` or the current draft run directory.
 - `prs issue refine <number>` can use Superpowers-specific instructions while keeping refined drafts and optional issue sets under `.prs/runs/<timestamp>-issue-refine-<number>/`.
 - `prs issue plan <number> [--refresh]` reserves `superpowers-spec.md` and `superpowers-plan.md` under `.prs/runs/<timestamp>-issue-plan-<number>/` and publishes a non-empty plan artifact to the managed `<!-- prs:issue-plan -->` issue comment.
-- `prs issue estimate <number>` reads the managed `<!-- prs:issue-plan -->` comment, scans bounded repository context, and estimates the implementation token budget for actually working through the plan across configured AI profiles. Use `prs tool issue estimate <number> --json` when an active Codex session needs the same estimate without prose formatting.
+- `/prs issue <number> estimate` reads the managed `<!-- prs:issue-plan -->` comment through `prs tool issue estimate-context <number> --json`, has the active Codex session estimate implementation token usage from the plan across configured AI profiles, and publishes the Codex-authored JSON artifact with `prs tool issue publish-estimate <number> --file <path> --json`. `prs tool issue estimate <number> --json` remains a deterministic compatibility estimate for non-Codex automation.
 
 Issue plans should include an explicit `.prs/config.json` `prReadiness.commands` update when the work introduces required local checkout setup for future PR testing, such as migrations, config import, generated assets, dependency updates, or cache rebuilds.
 

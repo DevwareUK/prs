@@ -429,13 +429,16 @@ describe("Issue plan and GitHub forge workflows", () => {
     );
   });
 
-  it("finds issue plan comments nested inside audit comments", async () => {
+  it("ignores issue plan markers nested inside audit comments", async () => {
     const issueNumber = 255;
     const fetchMock = vi.fn().mockResolvedValueOnce(
       createFetchResponse([
         {
           id: 4001,
-          body: "Plain discussion comment.",
+          body: [
+            "<!-- prs:issue-plan -->",
+            "# Source-of-truth implementation plan",
+          ].join("\n"),
           html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-4001`,
           created_at: "2026-05-28T19:00:00Z",
           updated_at: "2026-05-28T19:00:00Z",
@@ -477,10 +480,10 @@ describe("Issue plan and GitHub forge workflows", () => {
     const forge = createGitHubRepositoryForge(REPO_ROOT);
 
     await expect((forge as any).fetchIssuePlanComment(issueNumber)).resolves.toMatchObject({
-      id: 4002,
-      url: `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-4002`,
-      updatedAt: "2026-05-28T19:10:00Z",
-      body: expect.stringContaining("<!-- prs:issue-plan -->"),
+      id: 4001,
+      url: `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-4001`,
+      updatedAt: "2026-05-28T19:00:00Z",
+      body: expect.stringContaining("# Source-of-truth implementation plan"),
     });
   });
 
@@ -589,10 +592,15 @@ describe("Issue plan and GitHub forge workflows", () => {
         createFetchResponse([
           {
             id: 3101,
-            body: "Ordinary issue discussion.",
+            body: [
+              "<!-- prs:issue-spec -->",
+              "# Specification",
+              "",
+              "Mentions `<!-- prs:audit -->` as prose, but is not an audit comment.",
+            ].join("\n"),
             html_url: `https://github.com/DevwareUK/prs/issues/${issueNumber}#issuecomment-3101`,
             created_at: "2026-04-24T11:00:00Z",
-            updated_at: "2026-04-24T11:01:00Z",
+            updated_at: "2026-04-24T11:05:00Z",
             user: {
               login: "alice",
               type: "User",
