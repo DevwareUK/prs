@@ -222,6 +222,83 @@ describe("issue implementation token estimates", () => {
     expect(estimate.recommendation).toContain("standard");
     expect(estimate.drivers.join("\n")).toContain("4 implementation steps");
     expect(estimate.scanBudget.status).toBe("complete");
+    expect(estimate.cost).toEqual({
+      currency: "USD",
+      inputTokenRatio: 0.8,
+      outputTokenRatio: 0.2,
+      explanation:
+        "Approximate planning cost = tokens / 1,000,000 * blended model rate. Blended model rate = input rate * 0.8 + output rate * 0.2.",
+    });
+    expect(estimate.profiles[0].costBasis).toEqual({
+      currency: "USD",
+      inputPerMillionTokens: 5,
+      outputPerMillionTokens: 30,
+      inputTokenRatio: 0.8,
+      outputTokenRatio: 0.2,
+      blendedRatePerMillionTokens: 10,
+      source: "model-rate:gpt-5.5",
+    });
+    expect(estimate.profiles[1].costBasis).toMatchObject({
+      inputPerMillionTokens: 0.75,
+      outputPerMillionTokens: 4.5,
+      blendedRatePerMillionTokens: 1.5,
+      source: "model-rate:gpt-5.4-mini",
+    });
+    expect(estimate.profiles[0].costRange.low).toBeCloseTo(
+      (estimate.profiles[0].range.low / 1_000_000) * 10,
+      2
+    );
+    expect(estimate.profiles[0].costRange.high).toBeCloseTo(
+      (estimate.profiles[0].range.high / 1_000_000) * 10,
+      2
+    );
+    expect(estimate.profiles[0].costRange).toMatchObject({
+      pricedTokenRange: estimate.profiles[0].range,
+      formula: "tokenRange / 1,000,000 * blendedRatePerMillionTokens",
+    });
+  });
+
+  it("uses caller-provided model rates and input/output ratios for cost estimates", () => {
+    const estimate = estimateIssueImplementationTokens({
+      planBody: [
+        "## Likely Files",
+        "",
+        "- `README.md`",
+        "",
+        "## Steps",
+        "",
+        "1. Update docs.",
+      ].join("\n"),
+      profiles: [
+        {
+          name: "standard",
+          model: "gpt-5.4-mini",
+          thinking: "medium",
+        },
+      ],
+      costEstimates: {
+        currency: "USD",
+        inputTokenRatio: 0.7,
+        outputTokenRatio: 0.3,
+        modelRates: {
+          "gpt-5.4-mini": {
+            inputPerMillionTokens: 1,
+            outputPerMillionTokens: 5,
+          },
+        },
+      },
+    });
+
+    expect(estimate.cost).toMatchObject({
+      inputTokenRatio: 0.7,
+      outputTokenRatio: 0.3,
+    });
+    expect(estimate.profiles[0].costBasis).toMatchObject({
+      inputPerMillionTokens: 1,
+      outputPerMillionTokens: 5,
+      blendedRatePerMillionTokens: 2.2,
+      source: "model-rate:gpt-5.4-mini",
+    });
   });
 
   it("marks plans without likely files or implementation steps as low confidence", () => {

@@ -266,6 +266,7 @@ function createEstimateResult(
     implementerProfileName:
       ((config.ai as { roles?: { implementer?: string } }).roles ??
         DEFAULT_ESTIMATE_ROLES).implementer,
+    costEstimates: config.ai.costEstimates,
     context: {
       likelyFiles: context.files,
       verificationCommands: createVerificationCommands(config),
@@ -353,6 +354,43 @@ function formatRange(range: { low: number; high: number }): string {
   return `${range.low.toLocaleString()}-${range.high.toLocaleString()} tokens`;
 }
 
+function formatCost(value: number): string {
+  return `$${value.toFixed(2)}`;
+}
+
+function formatCostRange(range: { low: number; high: number }): string {
+  return `${formatCost(range.low)}-${formatCost(range.high)}`;
+}
+
+function formatPercent(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}
+
+type IssueEstimateDisplayProfile =
+  | IssueEstimateArtifact["profiles"][number]
+  | IssueImplementationTokenEstimate["profiles"][number];
+
+function hasCostEstimateFields(
+  profile: IssueEstimateDisplayProfile
+): profile is IssueImplementationTokenEstimate["profiles"][number] {
+  return "costRange" in profile && "costBasis" in profile;
+}
+
+function formatProfileEstimate(profile: IssueEstimateDisplayProfile): string {
+  const base = `- ${profile.name} (${profile.model}, ${
+    profile.thinking
+  } thinking): ${formatRange(profile.range)}`;
+  if (!hasCostEstimateFields(profile)) {
+    return `${base} [${profile.confidence}]`;
+  }
+
+  return `${base} (~${formatCostRange(
+    profile.costRange
+  )} priced from token range at $${profile.costBasis.blendedRatePerMillionTokens.toFixed(
+    2
+  )}/1M blended) [${profile.confidence}]`;
+}
+
 export function renderIssueEstimate(
   result: IssueEstimateToolResult | IssueEstimateArtifact
 ): string {
@@ -376,12 +414,19 @@ export function renderIssueEstimate(
     `Confidence: ${result.confidence}`,
     "",
     "Model/profile estimates:",
-    ...result.profiles.map(
-      (profile) =>
-        `- ${profile.name} (${profile.model}, ${profile.thinking} thinking): ${formatRange(
-          profile.range
-        )} [${profile.confidence}]`
-    ),
+    ...result.profiles.map(formatProfileEstimate),
+    ...("cost" in result
+      ? [
+          "",
+          `Cost basis: approximate ${
+            result.cost.currency
+          } planning cost uses an ${formatPercent(
+            result.cost.inputTokenRatio
+          )} input / ${formatPercent(result.cost.outputTokenRatio)} output token split.`,
+          "Per-model blended rates come from PRS defaults unless overridden in `.prs/config.json`.",
+          "Actual billing can vary with model pricing, input/output mix, cached tokens, retries, and future price changes.",
+        ]
+      : []),
     "",
     "Recommendation:",
     result.recommendation,

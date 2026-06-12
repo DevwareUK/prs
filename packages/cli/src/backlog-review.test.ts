@@ -551,11 +551,15 @@ describe("Backlog and review commands", () => {
       const stdout = captureStdout();
       await run();
 
-      expect(analyzeFeatureBacklog).toHaveBeenCalledWith({
-        excludePaths: [...DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS],
-        repoRoot: process.cwd(),
-        maxSuggestions: 5,
-      });
+      expect(analyzeFeatureBacklog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          excludePaths: expect.arrayContaining([
+            ...DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS,
+          ]),
+          repoRoot: process.cwd(),
+          maxSuggestions: 5,
+        })
+      );
 
       const output = parseJsonPayloadFromOutput(stdout.output()) as {
         suggestions: Array<{ issueTitle: string }>;
@@ -595,11 +599,15 @@ describe("Backlog and review commands", () => {
       const stdout = captureStdout();
       await run();
 
-      expect(analyzeFeatureBacklog).toHaveBeenCalledWith({
-        excludePaths: [...DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS],
-        repoRoot: process.cwd(),
-        maxSuggestions: 2,
-      });
+      expect(analyzeFeatureBacklog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          excludePaths: expect.arrayContaining([
+            ...DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS,
+          ]),
+          repoRoot: process.cwd(),
+          maxSuggestions: 2,
+        })
+      );
       expect(stdout.output()).toContain("# AI Feature Backlog");
       expect(stdout.output()).toContain("## Repository signals");
       expect(stdout.output()).toContain(

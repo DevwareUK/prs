@@ -16130,6 +16130,8 @@ var require_dist = __commonJS({
       RepositoryAiCodexConfig: () => RepositoryAiCodexConfig,
       RepositoryAiConfig: () => RepositoryAiConfig,
       RepositoryAiContextConfig: () => RepositoryAiContextConfig,
+      RepositoryAiCostEstimateModelRateConfig: () => RepositoryAiCostEstimateModelRateConfig,
+      RepositoryAiCostEstimatesConfig: () => RepositoryAiCostEstimatesConfig,
       RepositoryAiIssueConfig: () => RepositoryAiIssueConfig,
       RepositoryAiIssueDraftConfig: () => RepositoryAiIssueDraftConfig,
       RepositoryAiProfileConfig: () => RepositoryAiProfileConfig,
@@ -16558,6 +16560,37 @@ var require_dist = __commonJS({
     var RepositoryAiIssueConfig = import_zod10.z.object({
       useCodexSuperpowers: import_zod10.z.boolean().optional()
     });
+    var RepositoryAiCostEstimateModelRateConfig = import_zod10.z.object({
+      inputPerMillionTokens: import_zod10.z.number().nonnegative(),
+      outputPerMillionTokens: import_zod10.z.number().nonnegative()
+    });
+    var RepositoryAiCostEstimatesConfig = import_zod10.z.object({
+      currency: import_zod10.z.literal("USD").optional(),
+      inputTokenRatio: import_zod10.z.number().min(0).max(1).optional(),
+      outputTokenRatio: import_zod10.z.number().min(0).max(1).optional(),
+      modelRates: import_zod10.z.record(
+        import_zod10.z.string().trim().min(1, "ai cost estimate model names must be non-empty"),
+        RepositoryAiCostEstimateModelRateConfig
+      ).optional()
+    }).strict().superRefine((config, context) => {
+      const hasInputRatio = config.inputTokenRatio !== void 0;
+      const hasOutputRatio = config.outputTokenRatio !== void 0;
+      if (hasInputRatio !== hasOutputRatio) {
+        context.addIssue({
+          code: import_zod10.z.ZodIssueCode.custom,
+          path: hasInputRatio ? ["outputTokenRatio"] : ["inputTokenRatio"],
+          message: "ai.costEstimates inputTokenRatio and outputTokenRatio must be configured together"
+        });
+        return;
+      }
+      if (config.inputTokenRatio !== void 0 && config.outputTokenRatio !== void 0 && Math.abs(config.inputTokenRatio + config.outputTokenRatio - 1) > 1e-6) {
+        context.addIssue({
+          code: import_zod10.z.ZodIssueCode.custom,
+          path: ["outputTokenRatio"],
+          message: "ai.costEstimates inputTokenRatio and outputTokenRatio must add up to 1"
+        });
+      }
+    });
     var RepositoryAiProviderType = import_zod10.z.enum(["openai", "bedrock-claude"]);
     var RepositoryOpenAiProviderConfig = import_zod10.z.object({
       type: import_zod10.z.literal("openai"),
@@ -16577,6 +16610,7 @@ var require_dist = __commonJS({
       codex: RepositoryAiCodexConfig.optional(),
       issue: RepositoryAiIssueConfig.optional(),
       issueDraft: RepositoryAiIssueDraftConfig.optional(),
+      costEstimates: RepositoryAiCostEstimatesConfig.optional(),
       profiles: RepositoryAiProfilesConfig.optional(),
       roles: RepositoryAiRoleProfileConfig.optional(),
       runtime: RepositoryAiRuntimeConfig.optional(),
@@ -16638,6 +16672,15 @@ var require_dist = __commonJS({
         }),
         issueDraft: import_zod10.z.object({
           useCodexSuperpowers: import_zod10.z.boolean()
+        }),
+        costEstimates: import_zod10.z.object({
+          currency: import_zod10.z.literal("USD"),
+          inputTokenRatio: import_zod10.z.number().min(0).max(1),
+          outputTokenRatio: import_zod10.z.number().min(0).max(1),
+          modelRates: import_zod10.z.record(
+            import_zod10.z.string().trim().min(1),
+            RepositoryAiCostEstimateModelRateConfig
+          )
         }),
         profiles: RepositoryAiProfilesConfig,
         roles: RepositoryAiRoleProfileConfig,
@@ -16817,8 +16860,14 @@ var require_dist2 = __commonJS({
     var __toCommonJS2 = (mod) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod);
     var index_exports = {};
     __export2(index_exports, {
+      DEFAULT_ISSUE_ESTIMATE_COST_SETTINGS: () => DEFAULT_ISSUE_ESTIMATE_COST_SETTINGS,
+      DEFAULT_ISSUE_ESTIMATE_FALLBACK_MODEL_RATE_USD_PER_MILLION: () => DEFAULT_ISSUE_ESTIMATE_FALLBACK_MODEL_RATE_USD_PER_MILLION,
+      DEFAULT_ISSUE_ESTIMATE_INPUT_TOKEN_RATIO: () => DEFAULT_ISSUE_ESTIMATE_INPUT_TOKEN_RATIO,
+      DEFAULT_ISSUE_ESTIMATE_MODEL_RATES_USD_PER_MILLION: () => DEFAULT_ISSUE_ESTIMATE_MODEL_RATES_USD_PER_MILLION,
+      DEFAULT_ISSUE_ESTIMATE_OUTPUT_TOKEN_RATIO: () => DEFAULT_ISSUE_ESTIMATE_OUTPUT_TOKEN_RATIO,
       DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS: () => DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS,
       DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS: () => DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS,
+      DEFAULT_REPOSITORY_AI_COST_ESTIMATES: () => DEFAULT_REPOSITORY_AI_COST_ESTIMATES,
       DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS: () => DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
       DEFAULT_REPOSITORY_AI_PROFILES: () => DEFAULT_REPOSITORY_AI_PROFILES,
       DEFAULT_REPOSITORY_AI_PROVIDER_TYPE: () => DEFAULT_REPOSITORY_AI_PROVIDER_TYPE,
@@ -16828,6 +16877,7 @@ var require_dist2 = __commonJS({
       DEFAULT_REPOSITORY_BUILD_COMMAND: () => DEFAULT_REPOSITORY_BUILD_COMMAND,
       DEFAULT_REPOSITORY_FORGE_TYPE: () => DEFAULT_REPOSITORY_FORGE_TYPE,
       EMPTY_PR_IMPACT_PROFILE: () => EMPTY_PR_IMPACT_PROFILE,
+      ISSUE_ESTIMATE_COST_RANGE_FORMULA: () => ISSUE_ESTIMATE_COST_RANGE_FORMULA,
       PR_ASSISTANT_END_MARKER: () => import_contracts10.PR_ASSISTANT_END_MARKER,
       PR_ASSISTANT_START_MARKER: () => import_contracts10.PR_ASSISTANT_START_MARKER,
       PR_IMPACT_PROFILE_GUIDANCE_LINES: () => PR_IMPACT_PROFILE_GUIDANCE_LINES,
@@ -17160,6 +17210,292 @@ ${formatValidationIssues(validationIssues)}`,
       return filePaths.filter((filePath) => !matchesExcludedPath(filePath));
     }
     var import_contracts32 = require_dist();
+    var DEFAULT_ISSUE_ESTIMATE_INPUT_TOKEN_RATIO = 0.8;
+    var DEFAULT_ISSUE_ESTIMATE_OUTPUT_TOKEN_RATIO = 0.2;
+    var DEFAULT_ISSUE_ESTIMATE_MODEL_RATES_USD_PER_MILLION = {
+      "gpt-5.5": {
+        inputPerMillionTokens: 5,
+        outputPerMillionTokens: 30
+      },
+      "gpt-5.4": {
+        inputPerMillionTokens: 2.5,
+        outputPerMillionTokens: 15
+      },
+      "gpt-5.4-mini": {
+        inputPerMillionTokens: 0.75,
+        outputPerMillionTokens: 4.5
+      }
+    };
+    var DEFAULT_ISSUE_ESTIMATE_FALLBACK_MODEL_RATE_USD_PER_MILLION = {
+      inputPerMillionTokens: 5,
+      outputPerMillionTokens: 30
+    };
+    var DEFAULT_ISSUE_ESTIMATE_COST_SETTINGS = {
+      currency: "USD",
+      inputTokenRatio: DEFAULT_ISSUE_ESTIMATE_INPUT_TOKEN_RATIO,
+      outputTokenRatio: DEFAULT_ISSUE_ESTIMATE_OUTPUT_TOKEN_RATIO,
+      modelRates: DEFAULT_ISSUE_ESTIMATE_MODEL_RATES_USD_PER_MILLION
+    };
+    var ISSUE_ESTIMATE_COST_RANGE_FORMULA = "tokenRange / 1,000,000 * blendedRatePerMillionTokens";
+    var MANAGED_MARKER_PATTERN = /^<!--\s*prs:issue-plan\s*-->\s*$/i;
+    var RISK_TERMS = [
+      "auth",
+      "cache",
+      "command",
+      "concurrency",
+      "contract",
+      "generated",
+      "migration",
+      "network",
+      "runtime",
+      "schema",
+      "workflow"
+    ];
+    var PATH_TOKEN_PATTERN = /`([^`\n]+)`|((?:\.\/)?(?:[a-z0-9_.-]+\/)+[A-Za-z0-9_.-]+|(?:\.\/)?[A-Za-z0-9_.-]+\.[A-Za-z][A-Za-z0-9]*)/g;
+    function normalizePlanPath(value) {
+      const trimmed = value.trim().replace(/^`|`$/g, "").replace(/^[<("'[]+/, "").replace(/[>.,;:)"'\]]+$/, "").replace(/^\.\//, "");
+      if (!trimmed || trimmed.includes("\n")) {
+        return void 0;
+      }
+      if (!/[/\\]/.test(trimmed) && !/\.[a-z0-9]+$/i.test(trimmed)) {
+        return void 0;
+      }
+      return trimmed.replace(/\\/g, "/");
+    }
+    function extractPathTokens(value) {
+      const paths = [];
+      for (const match of value.matchAll(PATH_TOKEN_PATTERN)) {
+        if (!match[1] && match.index && /[A-Za-z0-9_.-]/.test(value[match.index - 1] ?? "")) {
+          continue;
+        }
+        const candidate = match[1] ?? match[2] ?? "";
+        const path = normalizePlanPath(candidate);
+        if (path) {
+          paths.push(path);
+        }
+      }
+      return paths;
+    }
+    function planContentLines(planBody) {
+      const lines = stripManagedMarker(planBody).split(/\r?\n/);
+      let inFence = false;
+      const contentLines = [];
+      for (const line of lines) {
+        if (/^\s*```/.test(line)) {
+          inFence = !inFence;
+          continue;
+        }
+        if (!inFence) {
+          contentLines.push(line);
+        }
+      }
+      return contentLines;
+    }
+    function stripManagedMarker(planBody) {
+      return planBody.split(/\r?\n/).filter((line) => !MANAGED_MARKER_PATTERN.test(line.trim())).join("\n").trim();
+    }
+    function extractIssueImplementationPlanFiles(planBody) {
+      const lines = planContentLines(planBody);
+      const start = lines.findIndex(
+        (line) => /^#{2,3}\s+Likely files\s*$/i.test(line.trim())
+      );
+      if (start !== -1) {
+        const files = [];
+        for (const line of lines.slice(start + 1)) {
+          if (/^#{2,3}\s+/.test(line.trim())) {
+            break;
+          }
+          const match = line.match(/^\s*[-*]\s+(.+?)\s*$/);
+          if (!match) {
+            continue;
+          }
+          const path = normalizePlanPath(match[1] ?? "");
+          if (path) {
+            files.push(path);
+          }
+        }
+        if (files.length > 0) {
+          return [...new Set(files)];
+        }
+      }
+      return [...new Set(lines.flatMap((line) => extractPathTokens(line)))];
+    }
+    function countImplementationSteps(planBody) {
+      const lines = planContentLines(planBody);
+      const checklistSteps = lines.filter(
+        (line) => /^\s*[-*]\s+\[[ xX]\]\s+\S/.test(line)
+      ).length;
+      if (checklistSteps > 0) {
+        return checklistSteps;
+      }
+      const numberedSteps = lines.filter(
+        (line) => /^\s*\d+\.\s+\S/.test(line) || /^#{3,4}\s+\d+\.\s+\S/.test(line.trim())
+      ).length;
+      if (numberedSteps > 0) {
+        return numberedSteps;
+      }
+      const taskHeadings = lines.filter(
+        (line) => /^#{2,4}\s+Task\s+\d+\b/i.test(line.trim())
+      ).length;
+      if (taskHeadings > 0) {
+        return taskHeadings;
+      }
+      const stepsStart = lines.findIndex(
+        (line) => /^#{2,3}\s+(Steps|Implementation steps|Plan|Tasks)\s*$/i.test(line.trim())
+      );
+      if (stepsStart === -1) {
+        return 0;
+      }
+      return lines.slice(stepsStart + 1).filter((line) => /^\s*[-*]\s+\S/.test(line)).length;
+    }
+    function countRiskTerms(planBody) {
+      const normalized = planBody.toLowerCase();
+      return RISK_TERMS.filter((term) => normalized.includes(term)).length;
+    }
+    function roundToThousand(value) {
+      return Math.max(1e3, Math.round(value / 1e3) * 1e3);
+    }
+    function calculateBlendedRate(rates, costSettings) {
+      return Number(
+        (rates.inputPerMillionTokens * costSettings.inputTokenRatio + rates.outputPerMillionTokens * costSettings.outputTokenRatio).toFixed(4)
+      );
+    }
+    function estimateCostRange(range2, blendedRatePerMillionTokens) {
+      return {
+        low: Number((range2.low / 1e6 * blendedRatePerMillionTokens).toFixed(2)),
+        high: Number((range2.high / 1e6 * blendedRatePerMillionTokens).toFixed(2)),
+        pricedTokenRange: range2,
+        formula: ISSUE_ESTIMATE_COST_RANGE_FORMULA
+      };
+    }
+    function createCostBasis(profile, costSettings) {
+      const normalizedModel = profile.model.toLowerCase();
+      const rates = costSettings.modelRates[profile.model] ?? costSettings.modelRates[normalizedModel] ?? DEFAULT_ISSUE_ESTIMATE_FALLBACK_MODEL_RATE_USD_PER_MILLION;
+      const source = costSettings.modelRates[profile.model] || costSettings.modelRates[normalizedModel] ? `model-rate:${profile.model}` : "fallback-model-rate";
+      return {
+        currency: costSettings.currency,
+        inputPerMillionTokens: rates.inputPerMillionTokens,
+        outputPerMillionTokens: rates.outputPerMillionTokens,
+        inputTokenRatio: costSettings.inputTokenRatio,
+        outputTokenRatio: costSettings.outputTokenRatio,
+        blendedRatePerMillionTokens: calculateBlendedRate(rates, costSettings),
+        source
+      };
+    }
+    function pluralize(count, singular, plural = `${singular}s`) {
+      return `${count} ${count === 1 ? singular : plural}`;
+    }
+    function profileMultiplier(profile) {
+      const model = profile.model.toLowerCase();
+      let multiplier = 1;
+      if (model.includes("mini")) {
+        multiplier += 0.35;
+      }
+      if (model.includes("spark")) {
+        multiplier += 0.45;
+      }
+      if (profile.thinking === "none" || profile.thinking === "minimal") {
+        multiplier -= 0.08;
+      }
+      if (profile.thinking === "high" || profile.thinking === "xhigh") {
+        multiplier += 0.08;
+      }
+      return Math.max(0.8, multiplier);
+    }
+    function confidenceFor(input) {
+      if (input.stepCount === 0) {
+        return "low";
+      }
+      if (input.scanExhausted || input.riskTermCount > 4 || input.missingFiles > 0 || input.likelyFiles.length === 0) {
+        return "medium";
+      }
+      return "high";
+    }
+    function estimateIssueImplementationTokens(input) {
+      const planBody = stripManagedMarker(input.planBody);
+      const likelyFilesFromPlan = extractIssueImplementationPlanFiles(input.planBody);
+      const fileContext = input.context?.likelyFiles ?? [];
+      const likelyFiles = fileContext.length > 0 ? fileContext.map((file) => file.path) : likelyFilesFromPlan;
+      const stepCount = countImplementationSteps(planBody);
+      const riskTermCount = countRiskTerms(planBody);
+      const missingFiles = fileContext.filter((file) => !file.exists).length;
+      const largeFiles = fileContext.filter((file) => file.lineCount > 1e3).length;
+      const verificationCommandCount = input.context?.verificationCommands?.length ?? 0;
+      const scanBudget = input.context?.scanBudget ?? {
+        filesConsidered: likelyFiles.length,
+        filesScanned: fileContext.filter((file) => file.exists).length,
+        maxFiles: Math.max(likelyFiles.length, fileContext.length),
+        exhausted: false
+      };
+      const confidence = confidenceFor({
+        likelyFiles,
+        missingFiles,
+        stepCount,
+        riskTermCount,
+        scanExhausted: scanBudget.exhausted
+      });
+      const planTokens = Math.ceil(planBody.length / 4);
+      const baseTokens = planTokens + Math.max(stepCount, 1) * 2500 + Math.max(likelyFiles.length, 1) * 900 + largeFiles * 2500 + missingFiles * 700 + riskTermCount * 1200 + Math.max(verificationCommandCount, 1) * 1800;
+      const costSettings = input.costEstimates ?? DEFAULT_ISSUE_ESTIMATE_COST_SETTINGS;
+      const profiles = input.profiles.map((profile) => {
+        const multiplier = profileMultiplier(profile);
+        const range2 = {
+          low: roundToThousand(baseTokens * multiplier * 0.75),
+          high: roundToThousand(baseTokens * multiplier * (confidence === "low" ? 1.75 : 1.35))
+        };
+        const costBasis = createCostBasis(profile, costSettings);
+        const notes = [
+          profile.name === input.implementerProfileName ? "Configured implementer profile." : "Comparison profile.",
+          profile.model.toLowerCase().includes("mini") ? "Mini-class models may spend more turns on implementation/debug loops." : "Premium-class model estimate assumes fewer implementation/debug loops."
+        ];
+        return {
+          ...profile,
+          range: range2,
+          costBasis,
+          costRange: estimateCostRange(range2, costBasis.blendedRatePerMillionTokens),
+          confidence,
+          notes
+        };
+      });
+      const implementerProfile = profiles.find(
+        (profile) => profile.name === input.implementerProfileName
+      );
+      const recommendation = implementerProfile ? `Start with ${implementerProfile.name} (${implementerProfile.model}) unless the estimate drivers point to high-risk runtime, workflow, or command-surface work.` : "Use the configured implementer profile unless the estimate drivers point to high-risk runtime, workflow, or command-surface work.";
+      const drivers = [
+        `${stepCount || "No explicit"} implementation steps detected.`,
+        `${likelyFiles.length} repository targets detected.`,
+        `${verificationCommandCount || 1} verification command group${(verificationCommandCount || 1) === 1 ? "" : "s"} considered.`,
+        ...largeFiles > 0 ? [`${pluralize(largeFiles, "large repository target")}.`] : [],
+        ...riskTermCount > 0 ? [`${pluralize(riskTermCount, "risk signal")} in the plan.`] : []
+      ];
+      const warnings = [
+        ...missingFiles > 0 ? [
+          `${pluralize(missingFiles, "repository target")} ${missingFiles === 1 ? "was" : "were"} not found locally.`
+        ] : [],
+        ...scanBudget.exhausted ? ["Repository context scan limit was reached; estimate confidence is reduced."] : [],
+        ...confidence === "low" ? ["Estimate confidence is low; refine or split the plan before relying on the range."] : []
+      ];
+      return {
+        status: "estimated",
+        profiles,
+        cost: {
+          currency: costSettings.currency,
+          inputTokenRatio: costSettings.inputTokenRatio,
+          outputTokenRatio: costSettings.outputTokenRatio,
+          explanation: `Approximate planning cost = tokens / 1,000,000 * blended model rate. Blended model rate = input rate * ${costSettings.inputTokenRatio} + output rate * ${costSettings.outputTokenRatio}.`
+        },
+        drivers,
+        warnings,
+        recommendation,
+        confidence,
+        scanBudget: {
+          status: scanBudget.exhausted ? "exhausted" : "complete",
+          filesConsidered: scanBudget.filesConsidered,
+          filesScanned: scanBudget.filesScanned,
+          maxFiles: scanBudget.maxFiles
+        }
+      };
+    }
     var DEFAULT_REPOSITORY_BASE_BRANCH = "main";
     var DEFAULT_REPOSITORY_BUILD_COMMAND = ["pnpm", "build"];
     var DEFAULT_REPOSITORY_FORGE_TYPE = "github";
@@ -17183,6 +17519,12 @@ ${formatValidationIssues(validationIssues)}`,
       reviewer: "premium",
       tester: "standard"
     };
+    var DEFAULT_REPOSITORY_AI_COST_ESTIMATES = {
+      ...DEFAULT_ISSUE_ESTIMATE_COST_SETTINGS,
+      modelRates: {
+        ...DEFAULT_ISSUE_ESTIMATE_COST_SETTINGS.modelRates
+      }
+    };
     var DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS = [
       "**/node_modules/**",
       "**/vendor/**",
@@ -17203,6 +17545,14 @@ ${formatValidationIssues(validationIssues)}`,
         ...DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
         ...parsedConfig.ai?.roles ?? {}
       };
+      const costEstimates = {
+        ...DEFAULT_REPOSITORY_AI_COST_ESTIMATES,
+        ...parsedConfig.ai?.costEstimates ?? {},
+        modelRates: {
+          ...DEFAULT_REPOSITORY_AI_COST_ESTIMATES.modelRates,
+          ...parsedConfig.ai?.costEstimates?.modelRates ?? {}
+        }
+      };
       const useCodexSuperpowers = parsedConfig.ai?.issue?.useCodexSuperpowers ?? parsedConfig.ai?.issueDraft?.useCodexSuperpowers ?? DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS;
       return import_contracts32.ResolvedRepositoryConfig.parse({
         ai: {
@@ -17215,6 +17565,7 @@ ${formatValidationIssues(validationIssues)}`,
           issueDraft: {
             useCodexSuperpowers
           },
+          costEstimates,
           profiles,
           roles,
           runtime: parsedConfig.ai?.runtime ?? {
@@ -17867,228 +18218,6 @@ ${formatValidationIssues(validationIssues)}`,
         normalizeParsedJson: (value) => normalizeNullableFields(value, ["openQuestions"])
       });
       return normalizeIssueResolutionPlanOutput(modelOutput);
-    }
-    var MANAGED_MARKER_PATTERN = /^<!--\s*prs:issue-plan\s*-->\s*$/i;
-    var RISK_TERMS = [
-      "auth",
-      "cache",
-      "command",
-      "concurrency",
-      "contract",
-      "generated",
-      "migration",
-      "network",
-      "runtime",
-      "schema",
-      "workflow"
-    ];
-    var PATH_TOKEN_PATTERN = /`([^`\n]+)`|((?:\.\/)?(?:[a-z0-9_.-]+\/)+[A-Za-z0-9_.-]+|(?:\.\/)?[A-Za-z0-9_.-]+\.[A-Za-z][A-Za-z0-9]*)/g;
-    function normalizePlanPath(value) {
-      const trimmed = value.trim().replace(/^`|`$/g, "").replace(/^[<("'[]+/, "").replace(/[>.,;:)"'\]]+$/, "").replace(/^\.\//, "");
-      if (!trimmed || trimmed.includes("\n")) {
-        return void 0;
-      }
-      if (!/[/\\]/.test(trimmed) && !/\.[a-z0-9]+$/i.test(trimmed)) {
-        return void 0;
-      }
-      return trimmed.replace(/\\/g, "/");
-    }
-    function extractPathTokens(value) {
-      const paths = [];
-      for (const match of value.matchAll(PATH_TOKEN_PATTERN)) {
-        if (!match[1] && match.index && /[A-Za-z0-9_.-]/.test(value[match.index - 1] ?? "")) {
-          continue;
-        }
-        const candidate = match[1] ?? match[2] ?? "";
-        const path = normalizePlanPath(candidate);
-        if (path) {
-          paths.push(path);
-        }
-      }
-      return paths;
-    }
-    function planContentLines(planBody) {
-      const lines = stripManagedMarker(planBody).split(/\r?\n/);
-      let inFence = false;
-      const contentLines = [];
-      for (const line of lines) {
-        if (/^\s*```/.test(line)) {
-          inFence = !inFence;
-          continue;
-        }
-        if (!inFence) {
-          contentLines.push(line);
-        }
-      }
-      return contentLines;
-    }
-    function stripManagedMarker(planBody) {
-      return planBody.split(/\r?\n/).filter((line) => !MANAGED_MARKER_PATTERN.test(line.trim())).join("\n").trim();
-    }
-    function extractIssueImplementationPlanFiles(planBody) {
-      const lines = planContentLines(planBody);
-      const start = lines.findIndex(
-        (line) => /^#{2,3}\s+Likely files\s*$/i.test(line.trim())
-      );
-      if (start !== -1) {
-        const files = [];
-        for (const line of lines.slice(start + 1)) {
-          if (/^#{2,3}\s+/.test(line.trim())) {
-            break;
-          }
-          const match = line.match(/^\s*[-*]\s+(.+?)\s*$/);
-          if (!match) {
-            continue;
-          }
-          const path = normalizePlanPath(match[1] ?? "");
-          if (path) {
-            files.push(path);
-          }
-        }
-        if (files.length > 0) {
-          return [...new Set(files)];
-        }
-      }
-      return [...new Set(lines.flatMap((line) => extractPathTokens(line)))];
-    }
-    function countImplementationSteps(planBody) {
-      const lines = planContentLines(planBody);
-      const checklistSteps = lines.filter(
-        (line) => /^\s*[-*]\s+\[[ xX]\]\s+\S/.test(line)
-      ).length;
-      if (checklistSteps > 0) {
-        return checklistSteps;
-      }
-      const numberedSteps = lines.filter(
-        (line) => /^\s*\d+\.\s+\S/.test(line) || /^#{3,4}\s+\d+\.\s+\S/.test(line.trim())
-      ).length;
-      if (numberedSteps > 0) {
-        return numberedSteps;
-      }
-      const taskHeadings = lines.filter(
-        (line) => /^#{2,4}\s+Task\s+\d+\b/i.test(line.trim())
-      ).length;
-      if (taskHeadings > 0) {
-        return taskHeadings;
-      }
-      const stepsStart = lines.findIndex(
-        (line) => /^#{2,3}\s+(Steps|Implementation steps|Plan|Tasks)\s*$/i.test(line.trim())
-      );
-      if (stepsStart === -1) {
-        return 0;
-      }
-      return lines.slice(stepsStart + 1).filter((line) => /^\s*[-*]\s+\S/.test(line)).length;
-    }
-    function countRiskTerms(planBody) {
-      const normalized = planBody.toLowerCase();
-      return RISK_TERMS.filter((term) => normalized.includes(term)).length;
-    }
-    function roundToThousand(value) {
-      return Math.max(1e3, Math.round(value / 1e3) * 1e3);
-    }
-    function pluralize(count, singular, plural = `${singular}s`) {
-      return `${count} ${count === 1 ? singular : plural}`;
-    }
-    function profileMultiplier(profile) {
-      const model = profile.model.toLowerCase();
-      let multiplier = 1;
-      if (model.includes("mini")) {
-        multiplier += 0.35;
-      }
-      if (model.includes("spark")) {
-        multiplier += 0.45;
-      }
-      if (profile.thinking === "none" || profile.thinking === "minimal") {
-        multiplier -= 0.08;
-      }
-      if (profile.thinking === "high" || profile.thinking === "xhigh") {
-        multiplier += 0.08;
-      }
-      return Math.max(0.8, multiplier);
-    }
-    function confidenceFor(input) {
-      if (input.stepCount === 0) {
-        return "low";
-      }
-      if (input.scanExhausted || input.riskTermCount > 4 || input.missingFiles > 0 || input.likelyFiles.length === 0) {
-        return "medium";
-      }
-      return "high";
-    }
-    function estimateIssueImplementationTokens(input) {
-      const planBody = stripManagedMarker(input.planBody);
-      const likelyFilesFromPlan = extractIssueImplementationPlanFiles(input.planBody);
-      const fileContext = input.context?.likelyFiles ?? [];
-      const likelyFiles = fileContext.length > 0 ? fileContext.map((file) => file.path) : likelyFilesFromPlan;
-      const stepCount = countImplementationSteps(planBody);
-      const riskTermCount = countRiskTerms(planBody);
-      const missingFiles = fileContext.filter((file) => !file.exists).length;
-      const largeFiles = fileContext.filter((file) => file.lineCount > 1e3).length;
-      const verificationCommandCount = input.context?.verificationCommands?.length ?? 0;
-      const scanBudget = input.context?.scanBudget ?? {
-        filesConsidered: likelyFiles.length,
-        filesScanned: fileContext.filter((file) => file.exists).length,
-        maxFiles: Math.max(likelyFiles.length, fileContext.length),
-        exhausted: false
-      };
-      const confidence = confidenceFor({
-        likelyFiles,
-        missingFiles,
-        stepCount,
-        riskTermCount,
-        scanExhausted: scanBudget.exhausted
-      });
-      const planTokens = Math.ceil(planBody.length / 4);
-      const baseTokens = planTokens + Math.max(stepCount, 1) * 2500 + Math.max(likelyFiles.length, 1) * 900 + largeFiles * 2500 + missingFiles * 700 + riskTermCount * 1200 + Math.max(verificationCommandCount, 1) * 1800;
-      const profiles = input.profiles.map((profile) => {
-        const multiplier = profileMultiplier(profile);
-        const range2 = {
-          low: roundToThousand(baseTokens * multiplier * 0.75),
-          high: roundToThousand(baseTokens * multiplier * (confidence === "low" ? 1.75 : 1.35))
-        };
-        const notes = [
-          profile.name === input.implementerProfileName ? "Configured implementer profile." : "Comparison profile.",
-          profile.model.toLowerCase().includes("mini") ? "Mini-class models may spend more turns on implementation/debug loops." : "Premium-class model estimate assumes fewer implementation/debug loops."
-        ];
-        return {
-          ...profile,
-          range: range2,
-          confidence,
-          notes
-        };
-      });
-      const implementerProfile = profiles.find(
-        (profile) => profile.name === input.implementerProfileName
-      );
-      const recommendation = implementerProfile ? `Start with ${implementerProfile.name} (${implementerProfile.model}) unless the estimate drivers point to high-risk runtime, workflow, or command-surface work.` : "Use the configured implementer profile unless the estimate drivers point to high-risk runtime, workflow, or command-surface work.";
-      const drivers = [
-        `${stepCount || "No explicit"} implementation steps detected.`,
-        `${likelyFiles.length} repository targets detected.`,
-        `${verificationCommandCount || 1} verification command group${(verificationCommandCount || 1) === 1 ? "" : "s"} considered.`,
-        ...largeFiles > 0 ? [`${pluralize(largeFiles, "large repository target")}.`] : [],
-        ...riskTermCount > 0 ? [`${pluralize(riskTermCount, "risk signal")} in the plan.`] : []
-      ];
-      const warnings = [
-        ...missingFiles > 0 ? [
-          `${pluralize(missingFiles, "repository target")} ${missingFiles === 1 ? "was" : "were"} not found locally.`
-        ] : [],
-        ...scanBudget.exhausted ? ["Repository context scan limit was reached; estimate confidence is reduced."] : [],
-        ...confidence === "low" ? ["Estimate confidence is low; refine or split the plan before relying on the range."] : []
-      ];
-      return {
-        status: "estimated",
-        profiles,
-        drivers,
-        warnings,
-        recommendation,
-        confidence,
-        scanBudget: {
-          status: scanBudget.exhausted ? "exhausted" : "complete",
-          filesConsidered: scanBudget.filesConsidered,
-          filesScanned: scanBudget.filesScanned,
-          maxFiles: scanBudget.maxFiles
-        }
-      };
     }
     var import_contracts8 = require_dist();
     var import_zod = require_zod();

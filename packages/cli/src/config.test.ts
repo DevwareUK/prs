@@ -10,6 +10,7 @@ import {
   DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
   DEFAULT_REPOSITORY_AI_PROVIDER_TYPE,
   DEFAULT_REPOSITORY_AI_RUNTIME_TYPE,
+  DEFAULT_REPOSITORY_AI_COST_ESTIMATES,
 } from "../../core/src/repository-config";
 import {
   REPOSITORY_CONFIG_RELATIVE_PATH,
@@ -118,6 +119,7 @@ describe("config helpers", () => {
         },
         profiles: DEFAULT_REPOSITORY_AI_PROFILES,
         roles: DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
+        costEstimates: DEFAULT_REPOSITORY_AI_COST_ESTIMATES,
         runtime: {
           type: DEFAULT_REPOSITORY_AI_RUNTIME_TYPE,
         },
@@ -180,6 +182,7 @@ describe("config helpers", () => {
         },
         profiles: DEFAULT_REPOSITORY_AI_PROFILES,
         roles: DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
+        costEstimates: DEFAULT_REPOSITORY_AI_COST_ESTIMATES,
         runtime: {
           type: "claude-code",
         },

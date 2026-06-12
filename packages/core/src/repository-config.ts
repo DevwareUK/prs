@@ -2,10 +2,12 @@ import {
   RepositoryConfig,
   type RepositoryConfigType,
   type RepositoryAiProfilesConfigType,
+  type RepositoryAiCostEstimatesConfigType,
   type RepositoryAiWorkflowRole,
   ResolvedRepositoryConfig,
   type ResolvedRepositoryConfigType,
 } from "@prs/contracts";
+import { DEFAULT_ISSUE_ESTIMATE_COST_SETTINGS } from "./issue-token-estimate";
 
 export const DEFAULT_REPOSITORY_BASE_BRANCH = "main";
 export const DEFAULT_REPOSITORY_BUILD_COMMAND = ["pnpm", "build"] as const;
@@ -30,6 +32,12 @@ export const DEFAULT_REPOSITORY_AI_ROLE_PROFILES = {
   reviewer: "premium",
   tester: "standard",
 } satisfies Record<RepositoryAiWorkflowRole, keyof typeof DEFAULT_REPOSITORY_AI_PROFILES>;
+export const DEFAULT_REPOSITORY_AI_COST_ESTIMATES = {
+  ...DEFAULT_ISSUE_ESTIMATE_COST_SETTINGS,
+  modelRates: {
+    ...DEFAULT_ISSUE_ESTIMATE_COST_SETTINGS.modelRates,
+  },
+} satisfies Required<RepositoryAiCostEstimatesConfigType>;
 export const DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS = [
   "**/node_modules/**",
   "**/vendor/**",
@@ -54,6 +62,14 @@ export function resolveRepositoryConfig(
     ...DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
     ...(parsedConfig.ai?.roles ?? {}),
   };
+  const costEstimates = {
+    ...DEFAULT_REPOSITORY_AI_COST_ESTIMATES,
+    ...(parsedConfig.ai?.costEstimates ?? {}),
+    modelRates: {
+      ...DEFAULT_REPOSITORY_AI_COST_ESTIMATES.modelRates,
+      ...(parsedConfig.ai?.costEstimates?.modelRates ?? {}),
+    },
+  };
 
   const useCodexSuperpowers =
     parsedConfig.ai?.issue?.useCodexSuperpowers ??
@@ -73,6 +89,7 @@ export function resolveRepositoryConfig(
       issueDraft: {
         useCodexSuperpowers,
       },
+      costEstimates,
       profiles,
       roles,
       runtime: parsedConfig.ai?.runtime ?? {

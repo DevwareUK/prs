@@ -101,6 +101,59 @@ export const RepositoryAiIssueConfig = z.object({
 
 export type RepositoryAiIssueConfigType = z.infer<typeof RepositoryAiIssueConfig>;
 
+export const RepositoryAiCostEstimateModelRateConfig = z.object({
+  inputPerMillionTokens: z.number().nonnegative(),
+  outputPerMillionTokens: z.number().nonnegative(),
+});
+
+export type RepositoryAiCostEstimateModelRateConfigType = z.infer<
+  typeof RepositoryAiCostEstimateModelRateConfig
+>;
+
+export const RepositoryAiCostEstimatesConfig = z
+  .object({
+    currency: z.literal("USD").optional(),
+    inputTokenRatio: z.number().min(0).max(1).optional(),
+    outputTokenRatio: z.number().min(0).max(1).optional(),
+    modelRates: z
+      .record(
+        z.string().trim().min(1, "ai cost estimate model names must be non-empty"),
+        RepositoryAiCostEstimateModelRateConfig
+      )
+      .optional(),
+  })
+  .strict()
+  .superRefine((config, context) => {
+    const hasInputRatio = config.inputTokenRatio !== undefined;
+    const hasOutputRatio = config.outputTokenRatio !== undefined;
+
+    if (hasInputRatio !== hasOutputRatio) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: hasInputRatio ? ["outputTokenRatio"] : ["inputTokenRatio"],
+        message:
+          "ai.costEstimates inputTokenRatio and outputTokenRatio must be configured together",
+      });
+      return;
+    }
+
+    if (
+      config.inputTokenRatio !== undefined &&
+      config.outputTokenRatio !== undefined &&
+      Math.abs(config.inputTokenRatio + config.outputTokenRatio - 1) > 0.000001
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["outputTokenRatio"],
+        message: "ai.costEstimates inputTokenRatio and outputTokenRatio must add up to 1",
+      });
+    }
+  });
+
+export type RepositoryAiCostEstimatesConfigType = z.infer<
+  typeof RepositoryAiCostEstimatesConfig
+>;
+
 export const RepositoryAiProviderType = z.enum(["openai", "bedrock-claude"]);
 
 export const RepositoryOpenAiProviderConfig = z.object({
@@ -142,6 +195,7 @@ export const RepositoryAiConfig = z
     codex: RepositoryAiCodexConfig.optional(),
     issue: RepositoryAiIssueConfig.optional(),
     issueDraft: RepositoryAiIssueDraftConfig.optional(),
+    costEstimates: RepositoryAiCostEstimatesConfig.optional(),
     profiles: RepositoryAiProfilesConfig.optional(),
     roles: RepositoryAiRoleProfileConfig.optional(),
     runtime: RepositoryAiRuntimeConfig.optional(),
@@ -234,6 +288,15 @@ export const ResolvedRepositoryConfig = z.object({
     }),
     issueDraft: z.object({
       useCodexSuperpowers: z.boolean(),
+    }),
+    costEstimates: z.object({
+      currency: z.literal("USD"),
+      inputTokenRatio: z.number().min(0).max(1),
+      outputTokenRatio: z.number().min(0).max(1),
+      modelRates: z.record(
+        z.string().trim().min(1),
+        RepositoryAiCostEstimateModelRateConfig
+      ),
     }),
     profiles: RepositoryAiProfilesConfig,
     roles: RepositoryAiRoleProfileConfig,

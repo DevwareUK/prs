@@ -144,6 +144,13 @@ describe("issue estimate tool", () => {
 
     expect(result.status).toBe("estimated");
     if (result.status === "estimated") {
+      expect(result.cost).toMatchObject({
+        currency: "USD",
+        inputTokenRatio: 0.8,
+        outputTokenRatio: 0.2,
+      });
+      expect(result.profiles[0]).toHaveProperty("costBasis");
+      expect(result.profiles[0]).toHaveProperty("costRange");
       expect(result.profiles.map((profile) => profile.name)).toEqual([
         "premium",
         "standard",
@@ -222,9 +229,18 @@ describe("issue estimate tool", () => {
 
     expect(result.status).toBe("estimated");
     if (result.status === "estimated") {
+      const rendered = renderIssueEstimate(result);
+
       expect(result.scanBudget.status).toBe("exhausted");
       expect(result.warnings).toContain("12 repository targets were not found locally.");
-      expect(renderIssueEstimate(result)).toContain(
+      expect(rendered).toContain("~$");
+      expect(rendered).toContain(
+        "Cost basis: approximate USD planning cost uses an 80% input / 20% output token split."
+      );
+      expect(rendered).toContain("priced from token range");
+      expect(rendered).toContain("blended");
+      expect(rendered).toContain("Actual billing can vary");
+      expect(rendered).toContain(
         "Repository context: exhausted (13 targets detected, 12 inspected, 0 existing files scanned, max 12)"
       );
     }
