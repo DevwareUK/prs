@@ -143,7 +143,12 @@ export type IssueTokenUsageArtifact = {
     id?: string;
     displayName?: string;
     thinking?: "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | string;
-    source?: "codex-session" | "configured-role" | "manual" | "unavailable";
+    source?:
+      | "codex-session"
+      | "configured-role"
+      | "manual"
+      | "operator-provided"
+      | "unavailable";
     configuredProfile?: string;
     configuredRole?: string;
     configuredModel?: string;
@@ -290,7 +295,7 @@ function resolveLedgerModelSource(
     return "unavailable";
   }
 
-  if (model.source === "codex-session") {
+  if (model.source === "codex-session" || model.source === "operator-provided") {
     return "actual";
   }
 

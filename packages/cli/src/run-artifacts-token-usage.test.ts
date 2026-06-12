@@ -353,4 +353,32 @@ describe("issue token usage artifacts", () => {
       notes: ["Audit publication: published issue token-usage"],
     });
   });
+
+  it("treats operator-provided active model metadata as actual provenance", () => {
+    expect(
+      issueTokenUsageArtifactToLedgerRow({
+        version: 1,
+        status: "tracked",
+        issueNumber: 287,
+        capturedAt: "2026-06-12T18:00:00.000Z",
+        source: "codex-goal",
+        workflow: {
+          name: "issue-implementation",
+          role: "implementer",
+        },
+        model: {
+          profile: "premium",
+          role: "implementer",
+          model: "gpt-5.5",
+          thinking: "high",
+          source: "operator-provided",
+          configuredModel: "gpt-5.4-mini",
+        },
+      })
+    ).toMatchObject({
+      model: "gpt-5.5",
+      modelSource: "actual",
+      configuredModel: "gpt-5.4-mini",
+    });
+  });
 });
