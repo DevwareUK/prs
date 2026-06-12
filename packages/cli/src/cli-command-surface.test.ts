@@ -1394,6 +1394,13 @@ describe("CLI command surface", () => {
     const draftPath = resolve(repoRoot, ".prs", "issues", "draft.md");
     const specPath = resolve(repoRoot, ".prs", "runs", "create", "spec.md");
     const planPath = resolve(repoRoot, ".prs", "runs", "create", "plan.md");
+    const tokenUsagePath = resolve(
+      repoRoot,
+      ".prs",
+      "runs",
+      "create",
+      "codex-token-usage.json"
+    );
     mkdirSync(dirname(draftPath), { recursive: true });
     mkdirSync(dirname(specPath), { recursive: true });
     writeFileSync(
@@ -1403,6 +1410,31 @@ describe("CLI command surface", () => {
     );
     writeFileSync(specPath, "# Spec\n\nUse managed spec comments.\n", "utf8");
     writeFileSync(planPath, "# Plan\n\nUse managed plan comments.\n", "utf8");
+    writeFileSync(
+      tokenUsagePath,
+      `${JSON.stringify(
+        {
+          version: 1,
+          status: "partial",
+          issueNumber: 269,
+          capturedAt: "2026-06-12T18:00:00.000Z",
+          source: "codex-goal",
+          workflow: {
+            name: "issue-create",
+            role: "planner",
+            runDir: ".prs/runs/create",
+          },
+          auditPublication: {
+            status: "not-published",
+            target: "issue",
+            section: "token-usage",
+          },
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
 
     const fetchMock = vi
       .fn()
@@ -1455,6 +1487,8 @@ describe("CLI command surface", () => {
       "create",
       "--draft-file",
       draftPath,
+      "--run-dir",
+      resolve(repoRoot, ".prs", "runs", "create"),
       "--spec-file",
       specPath,
       "--plan-file",
@@ -1465,7 +1499,11 @@ describe("CLI command surface", () => {
     await run();
 
     const output = JSON.parse(stdout.output()) as {
-      auditPublicationHints: Array<unknown>;
+      auditPublicationHints: Array<{
+        issueNumber: number;
+        file: string;
+        section: string;
+      }>;
       managedComments: Array<{
         issueNumber: number;
         marker: string;
@@ -1483,7 +1521,13 @@ describe("CLI command surface", () => {
         nextAction: string;
       }>;
     };
-    expect(output.auditPublicationHints).toEqual([]);
+    expect(output.auditPublicationHints).toEqual([
+      {
+        issueNumber: 269,
+        file: tokenUsagePath,
+        section: "token-usage",
+      },
+    ]);
     expect(output.managedComments).toEqual([
       {
         issueNumber: 269,

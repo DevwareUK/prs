@@ -117,6 +117,20 @@ export type IssueTokenUsageArtifact = {
   capturedAt: string;
   source: "codex-goal";
   runDir?: string;
+  workflow?: {
+    name:
+      | "issue-create"
+      | "issue-draft"
+      | "issue-refine"
+      | "issue-refine-questions"
+      | "issue-refine-complete"
+      | "issue-implementation"
+      | string;
+    role?: "planner" | "implementer" | "reviewer" | "tester" | string;
+    runDir?: string;
+    targetIssueNumber?: number;
+    sourceIssueNumber?: number;
+  };
   goal?: {
     threadId?: string;
     objective?: string;
@@ -171,6 +185,22 @@ function formatDuration(seconds: number | undefined): string | undefined {
     `${remainingSeconds}s`,
   ];
   return parts.join(" ");
+}
+
+function formatWorkflowLines(
+  workflow: IssueTokenUsageArtifact["workflow"] | undefined
+): string[] {
+  if (!workflow) {
+    return [];
+  }
+
+  return [
+    `Workflow: ${workflow.name}`,
+    ...(workflow.role ? [`Workflow role: ${workflow.role}`] : []),
+    ...(workflow.sourceIssueNumber ? [`Source issue: #${workflow.sourceIssueNumber}`] : []),
+    ...(workflow.targetIssueNumber ? [`Target issue: #${workflow.targetIssueNumber}`] : []),
+    ...(workflow.runDir ? [`Run directory: ${workflow.runDir}`] : []),
+  ];
 }
 
 function formatModelLines(
@@ -228,6 +258,7 @@ export function formatIssueTokenUsageAuditSection(
       `Token usage was unavailable for issue #${artifact.issueNumber}.`,
       "",
       `Captured at: ${artifact.capturedAt}`,
+      ...formatWorkflowLines(artifact.workflow),
       ...formatModelLines(artifact.model),
       ...(formatCapturePhase(artifact.capturePhase)
         ? [formatCapturePhase(artifact.capturePhase) as string]
@@ -250,6 +281,7 @@ export function formatIssueTokenUsageAuditSection(
   const outputTokens = formatOptionalInteger(artifact.usage?.outputTokens);
   const elapsed = formatDuration(artifact.usage?.timeUsedSeconds);
 
+  lines.push(...formatWorkflowLines(artifact.workflow));
   lines.push(...formatModelLines(artifact.model));
   const capturePhase = formatCapturePhase(artifact.capturePhase);
   if (capturePhase) {

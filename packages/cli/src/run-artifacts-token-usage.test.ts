@@ -106,6 +106,52 @@ describe("issue token usage artifacts", () => {
     });
   });
 
+  it("writes planner workflow identity for create and refine runs", () => {
+    const runDir = mkdtempSync(resolve(tmpdir(), "prs-token-usage-"));
+    cleanupTargets.add(runDir);
+    const artifactPath = getIssueTokenUsageArtifactFilePath(runDir);
+
+    writeIssueTokenUsageArtifact(artifactPath, {
+      version: 1,
+      status: "tracked",
+      issueNumber: 285,
+      capturedAt: "2026-06-12T18:00:00.000Z",
+      source: "codex-goal",
+      workflow: {
+        name: "issue-create",
+        role: "planner",
+        runDir: ".prs/runs/20260612T180000000Z-issue-draft",
+        targetIssueNumber: 285,
+      },
+      capturePhase: "post-audit-publish",
+      auditPublication: {
+        status: "published",
+        target: "issue",
+        section: "token-usage",
+        publishedAt: "2026-06-12T18:01:00.000Z",
+      },
+      model: {
+        profile: "premium",
+        role: "planner",
+        model: "gpt-5.5",
+        thinking: "high",
+        source: "configured-role",
+      },
+      usage: {
+        totalTokens: 23456,
+        timeUsedSeconds: 420,
+      },
+    });
+
+    expect(JSON.parse(readFileSync(artifactPath, "utf8"))).toMatchObject({
+      workflow: {
+        name: "issue-create",
+        role: "planner",
+        targetIssueNumber: 285,
+      },
+    });
+  });
+
   it("renders concise audit markdown for tracked and unavailable token usage", () => {
     expect(
       formatIssueTokenUsageAuditSection({
@@ -163,5 +209,28 @@ describe("issue token usage artifacts", () => {
         notes: ["Codex goal was already complete before the final audit was published."],
       })
     ).toContain("Audit publication: publish-failed issue token-usage");
+
+    expect(
+      formatIssueTokenUsageAuditSection({
+        version: 1,
+        status: "tracked",
+        issueNumber: 285,
+        capturedAt: "2026-06-12T18:00:00.000Z",
+        source: "codex-goal",
+        workflow: {
+          name: "issue-refine-complete",
+          role: "planner",
+          sourceIssueNumber: 285,
+          runDir: ".prs/runs/20260612T180000000Z-issue-refine-285",
+        },
+        model: {
+          profile: "premium",
+          role: "planner",
+          model: "gpt-5.5",
+          thinking: "high",
+          source: "configured-role",
+        },
+      })
+    ).toContain("Workflow: issue-refine-complete");
   });
 });
