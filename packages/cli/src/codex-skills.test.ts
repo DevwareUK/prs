@@ -184,6 +184,10 @@ describe("managed prs Codex skills", () => {
     );
     expect(createMarkdown).toContain("`<!-- prs:issue-spec -->`");
     expect(createMarkdown).toContain("`prs audit publish` comments are audit trail comments");
+    expect(createMarkdown).toContain("prs tool issue create --draft-file <draft> --spec-file <spec> --plan-file <plan> --run-dir <run-dir> --json");
+    expect(createMarkdown).toContain("trust its `managedComments` result");
+    expect(createMarkdown).toContain("Do not run `prs issue plan`, `prs issue prepare`, or manual audit publication just to publish an already-approved plan artifact");
+    expect(createMarkdown).toContain("If the create result includes `managedCommentHints`");
     expect(createMarkdown).toContain("`prs issue estimate <number>`");
     expect(createMarkdown).toContain("offer the next `/prs issue` step for that issue");
     expect(createMarkdown).not.toContain("offer the `/prs issue <number>` step");

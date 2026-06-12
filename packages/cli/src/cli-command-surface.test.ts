@@ -1389,7 +1389,7 @@ describe("CLI command surface", () => {
     );
   });
 
-  it("returns managed comment hints for tool-created issues", async () => {
+  it("publishes supplied managed spec and plan artifacts for tool-created issues", async () => {
     const repoRoot = createTempRepoRoot();
     const draftPath = resolve(repoRoot, ".prs", "issues", "draft.md");
     const specPath = resolve(repoRoot, ".prs", "runs", "create", "spec.md");
@@ -1412,6 +1412,24 @@ describe("CLI command surface", () => {
           number: 269,
           title: "Clarify create output",
           html_url: "https://github.com/DevwareUK/prs/issues/269",
+        })
+      )
+      .mockResolvedValueOnce(createFetchResponse([]))
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          id: 9269,
+          body: "<!-- prs:issue-spec -->\n# Spec\n\nUse managed spec comments.\n",
+          html_url: "https://github.com/DevwareUK/prs/issues/269#issuecomment-9269",
+          updated_at: "2026-06-12T15:00:00Z",
+        })
+      )
+      .mockResolvedValueOnce(createFetchResponse([]))
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          id: 9270,
+          body: "<!-- prs:issue-plan -->\n# Plan\n\nUse managed plan comments.\n",
+          html_url: "https://github.com/DevwareUK/prs/issues/269#issuecomment-9270",
+          updated_at: "2026-06-12T15:01:00Z",
         })
       );
     vi.stubGlobal("fetch", fetchMock);
@@ -1448,6 +1466,14 @@ describe("CLI command surface", () => {
 
     const output = JSON.parse(stdout.output()) as {
       auditPublicationHints: Array<unknown>;
+      managedComments: Array<{
+        issueNumber: number;
+        marker: string;
+        status: string;
+        file: string;
+        id: number;
+        url: string;
+      }>;
       managedCommentHints: Array<{
         issueNumber: number;
         marker: string;
@@ -1458,26 +1484,25 @@ describe("CLI command surface", () => {
       }>;
     };
     expect(output.auditPublicationHints).toEqual([]);
-    expect(output.managedCommentHints).toEqual([
+    expect(output.managedComments).toEqual([
       {
         issueNumber: 269,
         marker: "<!-- prs:issue-spec -->",
-        requiredFor: "issue-source-of-truth",
-        status: "artifact-provided",
+        status: "published",
         file: specPath,
-        nextAction:
-          "Publish a managed issue spec comment containing `<!-- prs:issue-spec -->` after creating the issue.",
+        id: 9269,
+        url: "https://github.com/DevwareUK/prs/issues/269#issuecomment-9269",
       },
       {
         issueNumber: 269,
         marker: "<!-- prs:issue-plan -->",
-        requiredFor: "prs issue estimate 269",
-        status: "artifact-provided",
+        status: "published",
         file: planPath,
-        nextAction:
-          "Publish a managed issue plan comment containing `<!-- prs:issue-plan -->` or run `prs issue plan 269` before estimating.",
+        id: 9270,
+        url: "https://github.com/DevwareUK/prs/issues/269#issuecomment-9270",
       },
     ]);
+    expect(output.managedCommentHints).toEqual([]);
   });
 
   it("parses repo-level test-backlog flags for the CLI", async () => {
