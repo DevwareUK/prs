@@ -16173,6 +16173,7 @@ var require_dist = __commonJS({
       UNATTENDED_GITHUB_OUTPUT_NOTE: () => UNATTENDED_GITHUB_OUTPUT_NOTE,
       applyGitHubOutputFraming: () => applyGitHubOutputFraming,
       includesManagedMarker: () => includesManagedMarker,
+      startsWithManagedMarker: () => startsWithManagedMarker,
       stripGitHubOutputFraming: () => stripGitHubOutputFraming
     });
     module2.exports = __toCommonJS2(index_exports);
@@ -16194,6 +16195,10 @@ var require_dist = __commonJS({
     var ACTION_REPOSITORY = "DevwareUK/prs";
     function includesManagedMarker(body, markers) {
       return markers.some((marker) => body.includes(marker));
+    }
+    function startsWithManagedMarker(body, markers) {
+      const firstContentLine = body.split(/\r?\n/).find((line) => line.trim().length > 0);
+      return markers.some((marker) => firstContentLine?.trim() === marker);
     }
     var import_zod = require_zod();
     var CommitMessageInput = import_zod.z.object({
@@ -17246,8 +17251,9 @@ ${formatValidationIssues(validationIssues)}`,
       "schema",
       "workflow"
     ];
+    var PATH_TOKEN_PATTERN = /`([^`\n]+)`|((?:\.\/)?(?:[a-z0-9_.-]+\/)+[A-Za-z0-9_.-]+|(?:\.\/)?[A-Za-z0-9_.-]+\.[A-Za-z][A-Za-z0-9]*)/g;
     function normalizePlanPath(value) {
-      const trimmed = value.trim().replace(/^`|`$/g, "").replace(/^\.\//, "");
+      const trimmed = value.trim().replace(/^`|`$/g, "").replace(/^[<("'[]+/, "").replace(/[>.,;:)"'\]]+$/, "").replace(/^\.\//, "");
       if (!trimmed || trimmed.includes("\n")) {
         return void 0;
       }
@@ -17256,41 +17262,86 @@ ${formatValidationIssues(validationIssues)}`,
       }
       return trimmed.replace(/\\/g, "/");
     }
+    function extractPathTokens(value) {
+      const paths = [];
+      for (const match of value.matchAll(PATH_TOKEN_PATTERN)) {
+        if (!match[1] && match.index && /[A-Za-z0-9_.-]/.test(value[match.index - 1] ?? "")) {
+          continue;
+        }
+        const candidate = match[1] ?? match[2] ?? "";
+        const path = normalizePlanPath(candidate);
+        if (path) {
+          paths.push(path);
+        }
+      }
+      return paths;
+    }
+    function planContentLines(planBody) {
+      const lines = stripManagedMarker(planBody).split(/\r?\n/);
+      let inFence = false;
+      const contentLines = [];
+      for (const line of lines) {
+        if (/^\s*```/.test(line)) {
+          inFence = !inFence;
+          continue;
+        }
+        if (!inFence) {
+          contentLines.push(line);
+        }
+      }
+      return contentLines;
+    }
     function stripManagedMarker(planBody) {
       return planBody.split(/\r?\n/).filter((line) => !MANAGED_MARKER_PATTERN.test(line.trim())).join("\n").trim();
     }
     function extractIssueImplementationPlanFiles(planBody) {
-      const lines = stripManagedMarker(planBody).split(/\r?\n/);
+      const lines = planContentLines(planBody);
       const start = lines.findIndex(
         (line) => /^#{2,3}\s+Likely files\s*$/i.test(line.trim())
       );
-      if (start === -1) {
-        return [];
+      if (start !== -1) {
+        const files = [];
+        for (const line of lines.slice(start + 1)) {
+          if (/^#{2,3}\s+/.test(line.trim())) {
+            break;
+          }
+          const match = line.match(/^\s*[-*]\s+(.+?)\s*$/);
+          if (!match) {
+            continue;
+          }
+          const path = normalizePlanPath(match[1] ?? "");
+          if (path) {
+            files.push(path);
+          }
+        }
+        if (files.length > 0) {
+          return [...new Set(files)];
+        }
       }
-      const files = [];
-      for (const line of lines.slice(start + 1)) {
-        if (/^#{2,3}\s+/.test(line.trim())) {
-          break;
-        }
-        const match = line.match(/^\s*[-*]\s+(.+?)\s*$/);
-        if (!match) {
-          continue;
-        }
-        const path = normalizePlanPath(match[1] ?? "");
-        if (path) {
-          files.push(path);
-        }
-      }
-      return [...new Set(files)];
+      return [...new Set(lines.flatMap((line) => extractPathTokens(line)))];
     }
     function countImplementationSteps(planBody) {
-      const lines = stripManagedMarker(planBody).split(/\r?\n/);
-      const numberedSteps = lines.filter((line) => /^\s*\d+\.\s+\S/.test(line)).length;
+      const lines = planContentLines(planBody);
+      const checklistSteps = lines.filter(
+        (line) => /^\s*[-*]\s+\[[ xX]\]\s+\S/.test(line)
+      ).length;
+      if (checklistSteps > 0) {
+        return checklistSteps;
+      }
+      const numberedSteps = lines.filter(
+        (line) => /^\s*\d+\.\s+\S/.test(line) || /^#{3,4}\s+\d+\.\s+\S/.test(line.trim())
+      ).length;
       if (numberedSteps > 0) {
         return numberedSteps;
       }
+      const taskHeadings = lines.filter(
+        (line) => /^#{2,4}\s+Task\s+\d+\b/i.test(line.trim())
+      ).length;
+      if (taskHeadings > 0) {
+        return taskHeadings;
+      }
       const stepsStart = lines.findIndex(
-        (line) => /^#{2,3}\s+(Steps|Implementation steps|Plan)\s*$/i.test(line.trim())
+        (line) => /^#{2,3}\s+(Steps|Implementation steps|Plan|Tasks)\s*$/i.test(line.trim())
       );
       if (stepsStart === -1) {
         return 0;
@@ -17352,10 +17403,10 @@ ${formatValidationIssues(validationIssues)}`,
       return Math.max(0.8, multiplier);
     }
     function confidenceFor(input) {
-      if (input.scanExhausted || input.stepCount === 0 || input.likelyFiles.length === 0 || input.missingFiles > 3) {
+      if (input.stepCount === 0) {
         return "low";
       }
-      if (input.riskTermCount > 4 || input.missingFiles > 0) {
+      if (input.scanExhausted || input.riskTermCount > 4 || input.missingFiles > 0 || input.likelyFiles.length === 0) {
         return "medium";
       }
       return "high";
@@ -17412,16 +17463,16 @@ ${formatValidationIssues(validationIssues)}`,
       const recommendation = implementerProfile ? `Start with ${implementerProfile.name} (${implementerProfile.model}) unless the estimate drivers point to high-risk runtime, workflow, or command-surface work.` : "Use the configured implementer profile unless the estimate drivers point to high-risk runtime, workflow, or command-surface work.";
       const drivers = [
         `${stepCount || "No explicit"} implementation steps detected.`,
-        `${likelyFiles.length} likely files detected.`,
+        `${likelyFiles.length} repository targets detected.`,
         `${verificationCommandCount || 1} verification command group${(verificationCommandCount || 1) === 1 ? "" : "s"} considered.`,
-        ...largeFiles > 0 ? [`${pluralize(largeFiles, "large likely file")}.`] : [],
+        ...largeFiles > 0 ? [`${pluralize(largeFiles, "large repository target")}.`] : [],
         ...riskTermCount > 0 ? [`${pluralize(riskTermCount, "risk signal")} in the plan.`] : []
       ];
       const warnings = [
         ...missingFiles > 0 ? [
-          `${pluralize(missingFiles, "likely file")} ${missingFiles === 1 ? "was" : "were"} not found locally.`
+          `${pluralize(missingFiles, "repository target")} ${missingFiles === 1 ? "was" : "were"} not found locally.`
         ] : [],
-        ...scanBudget.exhausted ? ["Repository context scan budget was exhausted; estimate confidence is reduced."] : [],
+        ...scanBudget.exhausted ? ["Repository context scan limit was reached; estimate confidence is reduced."] : [],
         ...confidence === "low" ? ["Estimate confidence is low; refine or split the plan before relying on the range."] : []
       ];
       return {

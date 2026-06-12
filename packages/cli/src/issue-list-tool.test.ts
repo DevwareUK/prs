@@ -104,16 +104,8 @@ describe("issue list tool", () => {
         json: vi.fn().mockResolvedValue([
           {
             body: [
-              "<!-- prs:audit -->",
-              "",
-              "# Issue #3 audit",
-              "",
-              "<!-- prs:audit:plan:start -->",
-              "## plan",
-              "",
               "<!-- prs:issue-plan -->",
               "Plan",
-              "<!-- prs:audit:plan:end -->",
             ].join("\n"),
           },
         ]),

@@ -8,6 +8,7 @@ import {
   type IssueImplementationTokenEstimate,
 } from "@prs/core";
 import type { ResolvedRepositoryConfigType } from "@prs/contracts";
+import { publishAuditArtifact } from "./audit-artifacts";
 import type { IssuePlanComment, RepositoryForge } from "./forge";
 
 export type IssueEstimateToolResult =
@@ -27,12 +28,105 @@ export type IssueEstimateToolResult =
       };
     } & IssueImplementationTokenEstimate);
 
+export type IssueEstimateContextResult =
+  | {
+      status: "blocked";
+      issueNumber: number;
+      message: string;
+      nextAction: "create-issue-plan";
+    }
+  | {
+      status: "ready";
+      issueNumber: number;
+      plan: {
+        body: string;
+      };
+      planSource: {
+        type: "managed-comment";
+        url: string;
+        updatedAt: string;
+      };
+      profiles: Array<{
+        name: string;
+        role?: string;
+        model: string;
+        thinking: string;
+      }>;
+      implementerProfileName: string;
+      verificationCommands: string[][];
+      estimateInstructions: string;
+      outputSchema: {
+        status: "estimated";
+        issueNumber: number;
+        planSource: {
+          type: "managed-comment";
+          url: string;
+          updatedAt: string;
+        };
+        confidence: "high|medium|low";
+        profiles: string;
+        recommendation: string;
+        drivers: string;
+        warnings: string;
+        assumptions: string;
+      };
+    };
+
+export type IssueEstimateArtifact = {
+  status: "estimated";
+  issueNumber: number;
+  planSource: {
+    type: "managed-comment";
+    url: string;
+    updatedAt: string;
+  };
+  confidence: "high" | "medium" | "low";
+  profiles: Array<{
+    name: string;
+    role?: string;
+    model: string;
+    thinking: string;
+    range: {
+      low: number;
+      high: number;
+    };
+    confidence: "high" | "medium" | "low";
+    notes: string[];
+  }>;
+  recommendation: string;
+  drivers: string[];
+  warnings: string[];
+  assumptions?: string[];
+  scanBudget?: IssueImplementationTokenEstimate["scanBudget"];
+};
+
 type EstimateIssueToolOptions = {
   issueNumber: number;
   repoRoot: string;
   forge: Pick<RepositoryForge, "fetchIssuePlanComment">;
   repositoryConfig: ResolvedRepositoryConfigType;
 };
+
+type EstimateIssueContextOptions = {
+  issueNumber: number;
+  forge: Pick<RepositoryForge, "fetchIssuePlanComment">;
+  repositoryConfig: ResolvedRepositoryConfigType;
+};
+
+type IssueEstimateAuditForge = Pick<
+  RepositoryForge,
+  "isAuthenticated" | "fetchAuditComment" | "createAuditComment" | "updateIssueComment"
+>;
+
+export type IssueEstimateAuditPublication =
+  | {
+      status: "created" | "updated";
+      url: string;
+    }
+  | {
+      status: "skipped";
+      reason: string;
+    };
 
 const MAX_CONTEXT_FILES = 12;
 const DEFAULT_ESTIMATE_PROFILES = {
@@ -138,6 +232,13 @@ function createVerificationCommands(config: ResolvedRepositoryConfigType): strin
   ];
 }
 
+function getImplementerProfileName(config: ResolvedRepositoryConfigType): string {
+  return (
+    ((config.ai as { roles?: { implementer?: string } }).roles ?? DEFAULT_ESTIMATE_ROLES)
+      .implementer ?? DEFAULT_ESTIMATE_ROLES.implementer
+  );
+}
+
 function createBlockedResult(issueNumber: number): IssueEstimateToolResult {
   return {
     status: "blocked",
@@ -201,6 +302,54 @@ export async function estimateIssueTool(
   );
 }
 
+export async function createIssueEstimateContext(
+  options: EstimateIssueContextOptions
+): Promise<IssueEstimateContextResult> {
+  const planComment = await options.forge.fetchIssuePlanComment(options.issueNumber);
+  if (!planComment) {
+    return createBlockedResult(options.issueNumber);
+  }
+
+  return {
+    status: "ready",
+    issueNumber: options.issueNumber,
+    plan: {
+      body: planComment.body,
+    },
+    planSource: {
+      type: "managed-comment",
+      url: planComment.url,
+      updatedAt: planComment.updatedAt,
+    },
+    profiles: createEstimateProfiles(options.repositoryConfig),
+    implementerProfileName: getImplementerProfileName(options.repositoryConfig),
+    verificationCommands: createVerificationCommands(options.repositoryConfig),
+    estimateInstructions: [
+      "Use the managed issue plan as the source of truth for the implementation estimate.",
+      "Do not scan the repository or require local file existence to determine confidence.",
+      "Estimate implementation-session token usage for each configured profile.",
+      "Base confidence on plan clarity, scope, verification breadth, unresolved questions, and explicit risk signals.",
+      "Return only JSON matching the requested estimate artifact shape.",
+    ].join(" "),
+    outputSchema: {
+      status: "estimated",
+      issueNumber: options.issueNumber,
+      planSource: {
+        type: "managed-comment",
+        url: planComment.url,
+        updatedAt: planComment.updatedAt,
+      },
+      confidence: "high|medium|low",
+      profiles:
+        "Array of { name, role?, model, thinking, range: { low, high }, confidence, notes[] }.",
+      recommendation: "Short recommendation for which configured profile to use.",
+      drivers: "Array of concise estimate drivers.",
+      warnings: "Array of caveats or plan-quality warnings.",
+      assumptions: "Array of assumptions made by Codex while estimating.",
+    },
+  };
+}
+
 function formatRange(range: { low: number; high: number }): string {
   return `${range.low.toLocaleString()}-${range.high.toLocaleString()} tokens`;
 }
@@ -217,7 +366,34 @@ function formatPercent(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
 
-export function renderIssueEstimate(result: IssueEstimateToolResult): string {
+type IssueEstimateDisplayProfile =
+  | IssueEstimateArtifact["profiles"][number]
+  | IssueImplementationTokenEstimate["profiles"][number];
+
+function hasCostEstimateFields(
+  profile: IssueEstimateDisplayProfile
+): profile is IssueImplementationTokenEstimate["profiles"][number] {
+  return "costRange" in profile && "costBasis" in profile;
+}
+
+function formatProfileEstimate(profile: IssueEstimateDisplayProfile): string {
+  const base = `- ${profile.name} (${profile.model}, ${
+    profile.thinking
+  } thinking): ${formatRange(profile.range)}`;
+  if (!hasCostEstimateFields(profile)) {
+    return `${base} [${profile.confidence}]`;
+  }
+
+  return `${base} (~${formatCostRange(
+    profile.costRange
+  )} priced from token range at $${profile.costBasis.blendedRatePerMillionTokens.toFixed(
+    2
+  )}/1M blended) [${profile.confidence}]`;
+}
+
+export function renderIssueEstimate(
+  result: IssueEstimateToolResult | IssueEstimateArtifact
+): string {
   if (result.status === "blocked") {
     return [
       `Issue #${result.issueNumber} implementation estimate is blocked.`,
@@ -226,6 +402,11 @@ export function renderIssueEstimate(result: IssueEstimateToolResult): string {
     ].join("\n");
   }
 
+  const inspectedTargets = Math.min(
+    result.scanBudget?.filesConsidered ?? 0,
+    result.scanBudget?.maxFiles ?? 0
+  );
+
   return [
     `Implementation token estimate for issue #${result.issueNumber}`,
     "",
@@ -233,20 +414,19 @@ export function renderIssueEstimate(result: IssueEstimateToolResult): string {
     `Confidence: ${result.confidence}`,
     "",
     "Model/profile estimates:",
-    ...result.profiles.map(
-      (profile) =>
-        `- ${profile.name} (${profile.model}, ${profile.thinking} thinking): ${formatRange(
-          profile.range
-        )} (~${formatCostRange(profile.costRange)} priced from token range at $${profile.costBasis.blendedRatePerMillionTokens.toFixed(
-          2
-        )}/1M blended) [${profile.confidence}]`
-    ),
-    "",
-    `Cost basis: approximate ${result.cost.currency} planning cost uses an ${formatPercent(
-      result.cost.inputTokenRatio
-    )} input / ${formatPercent(result.cost.outputTokenRatio)} output token split.`,
-    "Per-model blended rates come from PRS defaults unless overridden in `.prs/config.json`.",
-    "Actual billing can vary with model pricing, input/output mix, cached tokens, retries, and future price changes.",
+    ...result.profiles.map(formatProfileEstimate),
+    ...("cost" in result
+      ? [
+          "",
+          `Cost basis: approximate ${
+            result.cost.currency
+          } planning cost uses an ${formatPercent(
+            result.cost.inputTokenRatio
+          )} input / ${formatPercent(result.cost.outputTokenRatio)} output token split.`,
+          "Per-model blended rates come from PRS defaults unless overridden in `.prs/config.json`.",
+          "Actual billing can vary with model pricing, input/output mix, cached tokens, retries, and future price changes.",
+        ]
+      : []),
     "",
     "Recommendation:",
     result.recommendation,
@@ -256,7 +436,138 @@ export function renderIssueEstimate(result: IssueEstimateToolResult): string {
     ...(result.warnings.length > 0
       ? ["", "Warnings:", ...result.warnings.map((warning) => `- ${warning}`)]
       : []),
-    "",
-    `Scan budget: ${result.scanBudget.status} (${result.scanBudget.filesScanned}/${result.scanBudget.filesConsidered} files scanned, max ${result.scanBudget.maxFiles})`,
+    ...(result.assumptions && result.assumptions.length > 0
+      ? ["", "Assumptions:", ...result.assumptions.map((assumption) => `- ${assumption}`)]
+      : []),
+    ...(result.scanBudget
+      ? [
+          "",
+          `Repository context: ${result.scanBudget.status} (${result.scanBudget.filesConsidered} targets detected, ${inspectedTargets} inspected, ${result.scanBudget.filesScanned} existing files scanned, max ${result.scanBudget.maxFiles})`,
+        ]
+      : []),
   ].join("\n");
+}
+
+function assertString(value: unknown, field: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`Invalid estimate artifact: ${field} must be a non-empty string.`);
+  }
+  return value;
+}
+
+function assertConfidence(value: unknown, field: string): "high" | "medium" | "low" {
+  if (value !== "high" && value !== "medium" && value !== "low") {
+    throw new Error(`Invalid estimate artifact: ${field} must be high, medium, or low.`);
+  }
+  return value;
+}
+
+function assertStringArray(value: unknown, field: string): string[] {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    throw new Error(`Invalid estimate artifact: ${field} must be a string array.`);
+  }
+  return value;
+}
+
+export function parseIssueEstimateArtifact(value: unknown): IssueEstimateArtifact {
+  if (typeof value !== "object" || value === null) {
+    throw new Error("Invalid estimate artifact: expected an object.");
+  }
+  const artifact = value as Record<string, unknown>;
+  if (artifact.status !== "estimated") {
+    throw new Error('Invalid estimate artifact: status must be "estimated".');
+  }
+  const planSource = artifact.planSource as Record<string, unknown> | undefined;
+  if (typeof planSource !== "object" || planSource === null) {
+    throw new Error("Invalid estimate artifact: planSource must be an object.");
+  }
+  const profiles = artifact.profiles;
+  if (!Array.isArray(profiles) || profiles.length === 0) {
+    throw new Error("Invalid estimate artifact: profiles must be a non-empty array.");
+  }
+
+  return {
+    status: "estimated",
+    issueNumber: Number(artifact.issueNumber),
+    planSource: {
+      type: "managed-comment",
+      url: assertString(planSource.url, "planSource.url"),
+      updatedAt: assertString(planSource.updatedAt, "planSource.updatedAt"),
+    },
+    confidence: assertConfidence(artifact.confidence, "confidence"),
+    profiles: profiles.map((profileValue, index) => {
+      if (typeof profileValue !== "object" || profileValue === null) {
+        throw new Error(`Invalid estimate artifact: profiles[${index}] must be an object.`);
+      }
+      const profile = profileValue as Record<string, unknown>;
+      const range = profile.range as Record<string, unknown> | undefined;
+      if (typeof range !== "object" || range === null) {
+        throw new Error(`Invalid estimate artifact: profiles[${index}].range must be an object.`);
+      }
+      return {
+        name: assertString(profile.name, `profiles[${index}].name`),
+        ...(typeof profile.role === "string" && profile.role.trim()
+          ? { role: profile.role }
+          : {}),
+        model: assertString(profile.model, `profiles[${index}].model`),
+        thinking: assertString(profile.thinking, `profiles[${index}].thinking`),
+        range: {
+          low: Number(range.low),
+          high: Number(range.high),
+        },
+        confidence: assertConfidence(profile.confidence, `profiles[${index}].confidence`),
+        notes: assertStringArray(profile.notes, `profiles[${index}].notes`),
+      };
+    }),
+    recommendation: assertString(artifact.recommendation, "recommendation"),
+    drivers: assertStringArray(artifact.drivers, "drivers"),
+    warnings: assertStringArray(artifact.warnings, "warnings"),
+    ...(artifact.assumptions === undefined
+      ? {}
+      : { assumptions: assertStringArray(artifact.assumptions, "assumptions") }),
+  };
+}
+
+export async function publishIssueEstimateAudit(
+  forge: IssueEstimateAuditForge,
+  result: IssueEstimateToolResult | IssueEstimateArtifact
+): Promise<IssueEstimateAuditPublication> {
+  if (!forge.isAuthenticated()) {
+    return {
+      status: "skipped",
+      reason:
+        "GitHub authentication is required to publish prs audit artifacts.",
+    };
+  }
+
+  const publication = await publishAuditArtifact(forge as RepositoryForge, {
+    target: {
+      type: "issue",
+      number: result.issueNumber,
+    },
+    sectionName: "Estimate",
+    content: renderIssueEstimate(result),
+  });
+
+  return {
+    status: publication.status,
+    url: publication.comment.url,
+  };
+}
+
+export async function publishIssueEstimateFile(input: {
+  issueNumber: number;
+  estimateFilePath: string;
+  forge: IssueEstimateAuditForge;
+}): Promise<IssueEstimateAuditPublication> {
+  const estimate = parseIssueEstimateArtifact(
+    JSON.parse(readFileSync(input.estimateFilePath, "utf8"))
+  );
+  if (estimate.issueNumber !== input.issueNumber) {
+    throw new Error(
+      `Estimate artifact issueNumber ${estimate.issueNumber} does not match issue #${input.issueNumber}.`
+    );
+  }
+
+  return publishIssueEstimateAudit(input.forge, estimate);
 }
