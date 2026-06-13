@@ -1555,6 +1555,104 @@ describe("CLI command surface", () => {
     expect(body).not.toContain('"workflow": "prs:create"');
   });
 
+  it("renders legacy planner token-usage artifacts as the issue ledger table", async () => {
+    const repoRoot = createTempRepoRoot();
+    const artifactPath = resolve(
+      repoRoot,
+      ".prs",
+      "runs",
+      "create",
+      "codex-token-usage.json"
+    );
+    mkdirSync(dirname(artifactPath), { recursive: true });
+    writeFileSync(
+      artifactPath,
+      `${JSON.stringify(
+        {
+          status: "available",
+          notes:
+            "Token usage captured from the active Codex app goal after formal prs issue draft ingestion and before GitHub issue creation.",
+          objective:
+            "Draft GitHub Issue: Replace no-recipe rows with next-shop gap banner",
+          tokensUsed: 279408,
+          timeUsedSeconds: 263,
+          configuredPlannerProfile: {
+            role: "planner",
+            profile: "premium",
+            model: "gpt-5.5",
+            thinking: "high",
+          },
+          actualSessionModel: "gpt-5",
+          createdAt: "2026-06-13T10:15:42Z",
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createFetchResponse({ number: 270 }))
+      .mockResolvedValueOnce(createFetchResponse([]))
+      .mockResolvedValueOnce(createFetchResponse({ number: 270 }))
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          id: 4270,
+          body: "<!-- prs:audit -->\n# Issue #270 audit\n",
+          html_url: "https://github.com/DevwareUK/prs/issues/270#issuecomment-4270",
+          created_at: "2026-06-13T10:16:00Z",
+          updated_at: "2026-06-13T10:16:00Z",
+          user: {
+            login: "prs-bot",
+            type: "Bot",
+          },
+        })
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.GH_TOKEN = "";
+    process.env.GITHUB_TOKEN = "test-token";
+
+    const { run } = await loadCli({
+      runtimeRepoRoot: repoRoot,
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "remote" && args[1] === "get-url") {
+          return "git@github.com:DevwareUK/prs.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    process.argv = [
+      "node",
+      "prs",
+      "audit",
+      "publish",
+      "--issue",
+      "270",
+      "--file",
+      artifactPath,
+      "--section",
+      "token-usage",
+    ];
+
+    await run();
+
+    expect(consoleLog).toHaveBeenCalledWith(
+      "Audit artifact created: https://github.com/DevwareUK/prs/issues/270#issuecomment-4270"
+    );
+    const body = JSON.parse(String(fetchMock.mock.calls[3]?.[1]?.body)).body as string;
+    expect(body).toContain("## token-usage");
+    expect(body).toContain("Codex token usage ledger for issue #270.");
+    expect(body).toContain(
+      "| issue-create | planner | gpt-5 | actual | tracked | 279,408 |"
+    );
+    expect(body).toContain("4m 23s | 2026-06-13T10:15:42Z |");
+    expect(body).not.toContain('"tokensUsed": 279408');
+    expect(body).not.toContain("configuredPlannerProfile");
+  });
+
   it("publishes supplied managed spec and plan artifacts for tool-created issues", async () => {
     const repoRoot = createTempRepoRoot();
     const draftPath = resolve(repoRoot, ".prs", "issues", "draft.md");

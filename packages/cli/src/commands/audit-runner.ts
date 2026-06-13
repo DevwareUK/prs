@@ -90,6 +90,10 @@ function isIssueTokenUsageArtifact(value: unknown): value is IssueTokenUsageArti
 function normalizeTokenUsageStatus(
   value: string | undefined
 ): IssueTokenUsageArtifact["status"] {
+  if (value === "available") {
+    return "tracked";
+  }
+
   if (value === "tracked" || value === "partial" || value === "unavailable") {
     return value;
   }
@@ -166,6 +170,58 @@ function normalizePlannerTokenUsageRow(
   };
 }
 
+function normalizeLegacyPlannerTokenUsageRow(
+  value: unknown
+): IssueTokenUsageLedgerRow | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const capturedAt = readStringField(value, "createdAt");
+  const configuredPlannerProfile = isRecord(value.configuredPlannerProfile)
+    ? value.configuredPlannerProfile
+    : undefined;
+
+  if (!capturedAt || !configuredPlannerProfile) {
+    return undefined;
+  }
+
+  const actualSessionModel = readStringField(value, "actualSessionModel");
+  const configuredModel = readStringField(configuredPlannerProfile, "model");
+  const role = readStringField(configuredPlannerProfile, "role") ?? "planner";
+  const model = actualSessionModel ?? configuredModel;
+  const notes = [
+    ...(readStringField(value, "notes") ? [readStringField(value, "notes") as string] : []),
+    ...(readStringField(value, "objective")
+      ? [`Objective: ${readStringField(value, "objective") as string}`]
+      : []),
+  ];
+
+  return {
+    phase: "issue-create",
+    role,
+    ...(model ? { model } : {}),
+    modelSource: actualSessionModel ? "actual" : "configured-fallback",
+    ...(readStringField(configuredPlannerProfile, "profile")
+      ? { configuredProfile: readStringField(configuredPlannerProfile, "profile") }
+      : {}),
+    configuredRole: role,
+    ...(configuredModel ? { configuredModel } : {}),
+    ...(readStringField(configuredPlannerProfile, "thinking")
+      ? { configuredThinking: readStringField(configuredPlannerProfile, "thinking") }
+      : {}),
+    status: normalizeTokenUsageStatus(readStringField(value, "status")),
+    ...(readNumberField(value, "tokensUsed") !== undefined
+      ? { totalTokens: readNumberField(value, "tokensUsed") }
+      : {}),
+    ...(readNumberField(value, "timeUsedSeconds") !== undefined
+      ? { elapsedSeconds: readNumberField(value, "timeUsedSeconds") }
+      : {}),
+    capturedAt,
+    ...(notes.length > 0 ? { notes } : {}),
+  };
+}
+
 function renderAuditContentForPublication(input: {
   content: string;
   sectionName: string;
@@ -187,7 +243,8 @@ function renderAuditContentForPublication(input: {
 
   const row = isIssueTokenUsageArtifact(parsed)
     ? issueTokenUsageArtifactToLedgerRow(parsed)
-    : normalizePlannerTokenUsageRow(parsed);
+    : normalizePlannerTokenUsageRow(parsed) ??
+      normalizeLegacyPlannerTokenUsageRow(parsed);
   if (!row) {
     return input.content;
   }
@@ -197,4 +254,3 @@ function renderAuditContentForPublication(input: {
     rows: [row],
   });
 }
-
