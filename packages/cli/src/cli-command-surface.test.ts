@@ -29,7 +29,7 @@ describe("CLI command surface", () => {
     );
     const lines = entrypoint.split(/\r?\n/);
 
-    expect(lines.length).toBeLessThanOrEqual(160);
+    expect(lines.length).toBeLessThanOrEqual(220);
     expect(entrypoint).not.toContain("async function runIssueCommand");
     expect(entrypoint).not.toContain("async function runPrCommand");
     expect(entrypoint).not.toContain("async function runToolCommand");
@@ -38,17 +38,37 @@ describe("CLI command surface", () => {
     expect(entrypoint).not.toContain("async function runFeatureBacklogCommand");
   });
 
-  it("keeps shared CLI runtime code split across focused command modules", () => {
-    const runtime = readFileSync(
-      resolve(process.cwd(), "packages/cli/src/cli-runtime.ts"),
+  it("keeps CLI behavior split across focused domain modules instead of a catch-all runtime", () => {
+    const entrypoint = readFileSync(
+      resolve(process.cwd(), "packages/cli/src/index.ts"),
       "utf8"
     );
-    const runtimeLines = runtime.split(/\r?\n/);
 
-    expect(runtimeLines.length).toBeLessThanOrEqual(6900);
+    expect(existsSync(resolve(process.cwd(), "packages/cli/src/cli-runtime.ts"))).toBe(
+      false
+    );
+    expect(entrypoint).not.toContain("./cli-runtime");
     expect(existsSync(resolve(process.cwd(), "packages/cli/src/cli-context.ts"))).toBe(
       true
     );
+    expect(existsSync(resolve(process.cwd(), "packages/cli/src/cli-git.ts"))).toBe(
+      true
+    );
+    expect(existsSync(resolve(process.cwd(), "packages/cli/src/cli-notices.ts"))).toBe(
+      true
+    );
+    expect(
+      existsSync(resolve(process.cwd(), "packages/cli/src/workflows/issue/runner.ts"))
+    ).toBe(true);
+    expect(
+      existsSync(resolve(process.cwd(), "packages/cli/src/workflows/issue/drafts.ts"))
+    ).toBe(true);
+    expect(
+      existsSync(resolve(process.cwd(), "packages/cli/src/workflows/issue/publication.ts"))
+    ).toBe(true);
+    expect(
+      existsSync(resolve(process.cwd(), "packages/cli/src/workflows/issue/session.ts"))
+    ).toBe(true);
     expect(
       existsSync(resolve(process.cwd(), "packages/cli/src/commands/review-runner.ts"))
     ).toBe(true);

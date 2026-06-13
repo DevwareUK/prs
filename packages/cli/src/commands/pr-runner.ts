@@ -1,22 +1,23 @@
-import { getCliArgs, getDefaultRepoRoot, getRepositoryConfig, getRepositoryForge } from "../cli-context";
+import { getCliArgs,getDefaultRepoRoot,getRepositoryConfig,getRepositoryForge } from "../cli-context";
 import {
-  captureVerificationFailure,
-  commitGeneratedChanges,
-  ensureCleanWorkingTree,
-  hasChanges,
-  parsePrCommandArgs,
-  promptForLine,
-  verifyBuild,
-} from "../cli-runtime";
-import { ensureVerificationCommandAvailable, preflightRemoteBranch } from "../workflow-preflights";
+captureVerificationFailure,
+commitGeneratedChanges,
+ensureCleanWorkingTree,
+hasChanges,
+verifyBuild,
+} from "../cli-git";
+import { promptForLine } from "../cli-prompts";
+import { ensureVerificationCommandAvailable,preflightRemoteBranch } from "../workflow-preflights";
 import { runPrFixCommentsCommand } from "../workflows/pr-fix-comments/run";
 import { runPrFixFailingTestsCommand } from "../workflows/pr-fix-failing-tests/run";
 import { runPrFixTestsCommand } from "../workflows/pr-fix-tests/run";
 import { runPrResolveConflictsCommand } from "../workflows/pr-resolve-conflicts/run";
+import { parseIssueNumber } from "./issue";
+import { parsePrCommandArgs } from "./pr";
 
 export async function runPrCommand(): Promise<void> {
   const repoRoot = getDefaultRepoRoot();
-  const prCommand = parsePrCommandArgs(getCliArgs());
+  const prCommand = parsePrCommandArgs(getCliArgs(), parseIssueNumber);
   const repositoryConfig = getRepositoryConfig(repoRoot);
 
   if (prCommand.action === "resolve-conflicts") {
@@ -123,5 +124,3 @@ async function runPrResolveConflictsCodexLauncher(
     verifyBuild,
   });
 }
-
-
