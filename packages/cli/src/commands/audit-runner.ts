@@ -90,7 +90,7 @@ function isIssueTokenUsageArtifact(value: unknown): value is IssueTokenUsageArti
 function normalizeTokenUsageStatus(
   value: string | undefined
 ): IssueTokenUsageArtifact["status"] {
-  if (value === "available") {
+  if (value === "available" || value === "complete") {
     return "tracked";
   }
 
@@ -113,16 +113,24 @@ function normalizePlannerTokenUsageRow(
   const profile = isRecord(value.profile) ? value.profile : undefined;
   const usage = isRecord(value.usage) ? value.usage : undefined;
   const capture = isRecord(value.capture) ? value.capture : undefined;
-  const capturedAt = capture ? readStringField(capture, "capturedAt") : undefined;
+  const capturedAt =
+    (capture ? readStringField(capture, "capturedAt") : undefined) ??
+    readStringField(value, "createdAt") ??
+    "unavailable";
 
-  if (!phase || !capturedAt) {
+  if (!phase) {
     return undefined;
   }
 
+  const resolvedRole =
+    role ?? (phase === "issue-draft" || phase === "issue-create" ? "planner" : undefined);
   const profileSource = profile ? readStringField(profile, "source") : undefined;
   const modelSource = profileSource?.toLowerCase().includes("fallback")
     ? "configured-fallback"
     : profileSource;
+  const totalTokens = usage
+    ? readNumberField(usage, "totalTokens") ?? readNumberField(usage, "tokensUsed")
+    : undefined;
   const notes = [
     ...(isRecord(value.actualModel) && readStringField(value.actualModel, "notes")
       ? [readStringField(value.actualModel, "notes") as string]
@@ -130,29 +138,31 @@ function normalizePlannerTokenUsageRow(
     ...(usage && readStringField(usage, "notes")
       ? [readStringField(usage, "notes") as string]
       : []),
+    ...(readStringField(value, "notes") ? [readStringField(value, "notes") as string] : []),
   ];
 
   return {
     phase,
-    ...(role ? { role } : {}),
+    ...(resolvedRole ? { role: resolvedRole } : {}),
     ...(profile && readStringField(profile, "model")
       ? { model: readStringField(profile, "model") }
       : {}),
-    ...(modelSource ? { modelSource } : {}),
+    modelSource: modelSource ?? "unavailable",
     ...(profile && readStringField(profile, "name")
       ? { configuredProfile: readStringField(profile, "name") }
       : {}),
-    ...(role ? { configuredRole: role } : {}),
+    ...(resolvedRole ? { configuredRole: resolvedRole } : {}),
     ...(profile && readStringField(profile, "model")
       ? { configuredModel: readStringField(profile, "model") }
       : {}),
     ...(profile && readStringField(profile, "thinking")
       ? { configuredThinking: readStringField(profile, "thinking") }
       : {}),
-    status: normalizeTokenUsageStatus(usage ? readStringField(usage, "status") : undefined),
-    ...(usage && readNumberField(usage, "totalTokens") !== undefined
-      ? { totalTokens: readNumberField(usage, "totalTokens") }
-      : {}),
+    status: normalizeTokenUsageStatus(
+      (usage ? readStringField(usage, "status") : undefined) ??
+        readStringField(value, "status")
+    ),
+    ...(totalTokens !== undefined ? { totalTokens } : {}),
     ...(usage && readNumberField(usage, "inputTokens") !== undefined
       ? { inputTokens: readNumberField(usage, "inputTokens") }
       : {}),
@@ -222,6 +232,87 @@ function normalizeLegacyPlannerTokenUsageRow(
   };
 }
 
+function parseConfiguredProfileLabel(value: string | undefined): {
+  profile?: string;
+  model?: string;
+  thinking?: string;
+} {
+  if (!value) {
+    return {};
+  }
+
+  const match = value.match(/^([^()]+?)\s*\(([^,()]+)(?:,\s*([^()]+?))?\)$/);
+  if (!match) {
+    return { profile: value };
+  }
+
+  const thinking = match[3]?.replace(/\s+thinking$/i, "").trim();
+  return {
+    profile: match[1]?.trim(),
+    model: match[2]?.trim(),
+    ...(thinking ? { thinking } : {}),
+  };
+}
+
+function normalizeCompletedGoalTokenUsageRow(
+  value: unknown
+): IssueTokenUsageLedgerRow | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const totalTokens = readNumberField(value, "tokensUsed");
+  if (totalTokens === undefined) {
+    return undefined;
+  }
+
+  const role = readStringField(value, "workflowRole");
+  const phase =
+    readStringField(value, "phase") ??
+    (role === "implementer" ? "issue-implementation" : undefined);
+  if (!phase) {
+    return undefined;
+  }
+
+  const configuredProfile = parseConfiguredProfileLabel(
+    readStringField(value, "configuredProfile")
+  );
+  const actualSessionModel = readStringField(value, "actualSessionModel");
+  const capturedAt =
+    readStringField(value, "updatedAt") ??
+    readStringField(value, "createdAt") ??
+    "unavailable";
+  const notes = [
+    ...(readStringField(value, "notes") ? [readStringField(value, "notes") as string] : []),
+    ...(readStringField(value, "objective")
+      ? [`Objective: ${readStringField(value, "objective") as string}`]
+      : []),
+    ...(readStringField(value, "pullRequest")
+      ? [`Pull request: ${readStringField(value, "pullRequest") as string}`]
+      : []),
+  ];
+
+  return {
+    phase,
+    ...(role ? { role } : {}),
+    ...(actualSessionModel ?? configuredProfile.model
+      ? { model: actualSessionModel ?? configuredProfile.model }
+      : {}),
+    modelSource: actualSessionModel ? "actual" : "configured-fallback",
+    ...(configuredProfile.profile ? { configuredProfile: configuredProfile.profile } : {}),
+    ...(role ? { configuredRole: role } : {}),
+    ...(configuredProfile.model ? { configuredModel: configuredProfile.model } : {}),
+    ...(configuredProfile.thinking ? { configuredThinking: configuredProfile.thinking } : {}),
+    status: normalizeTokenUsageStatus(readStringField(value, "status")),
+    totalTokens,
+    ...(readNumberField(value, "timeUsedSeconds") !== undefined
+      ? { elapsedSeconds: readNumberField(value, "timeUsedSeconds") }
+      : {}),
+    capturedAt,
+    ...(notes.length > 0 ? { notes } : {}),
+  };
+}
+
 function renderAuditContentForPublication(input: {
   content: string;
   sectionName: string;
@@ -244,7 +335,8 @@ function renderAuditContentForPublication(input: {
   const row = isIssueTokenUsageArtifact(parsed)
     ? issueTokenUsageArtifactToLedgerRow(parsed)
     : normalizePlannerTokenUsageRow(parsed) ??
-      normalizeLegacyPlannerTokenUsageRow(parsed);
+      normalizeLegacyPlannerTokenUsageRow(parsed) ??
+      normalizeCompletedGoalTokenUsageRow(parsed);
   if (!row) {
     return input.content;
   }

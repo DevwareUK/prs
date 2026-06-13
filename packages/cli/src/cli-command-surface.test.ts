@@ -1653,6 +1653,201 @@ describe("CLI command surface", () => {
     expect(body).not.toContain("configuredPlannerProfile");
   });
 
+  it("renders completed goal token-usage artifacts as the issue ledger table", async () => {
+    const repoRoot = createTempRepoRoot();
+    const artifactPath = resolve(
+      repoRoot,
+      ".prs",
+      "runs",
+      "create",
+      "codex-token-usage.json"
+    );
+    mkdirSync(dirname(artifactPath), { recursive: true });
+    writeFileSync(
+      artifactPath,
+      `${JSON.stringify(
+        {
+          status: "complete",
+          phase: "issue-draft",
+          objective:
+            "Draft GitHub Issue: Configure Brevo Transactional Email For Production",
+          usage: {
+            tokensUsed: 188585,
+            timeUsedSeconds: 227,
+          },
+          issue: {
+            number: 139,
+            url: "[#139](https://github.com/JamesDevware/dinner-bell/issues/139)",
+          },
+          notes:
+            "Usage recorded from the completed Codex goal tool result for the approved PRS create run.",
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createFetchResponse({ number: 139 }))
+      .mockResolvedValueOnce(createFetchResponse([]))
+      .mockResolvedValueOnce(createFetchResponse({ number: 139 }))
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          id: 4139,
+          body: "<!-- prs:audit -->\n# Issue #139 audit\n",
+          html_url: "https://github.com/JamesDevware/dinner-bell/issues/139#issuecomment-4139",
+          created_at: "2026-06-13T11:15:00Z",
+          updated_at: "2026-06-13T11:15:00Z",
+          user: {
+            login: "prs-bot",
+            type: "Bot",
+          },
+        })
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.GH_TOKEN = "";
+    process.env.GITHUB_TOKEN = "test-token";
+
+    const { run } = await loadCli({
+      runtimeRepoRoot: repoRoot,
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "remote" && args[1] === "get-url") {
+          return "git@github.com:JamesDevware/dinner-bell.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    process.argv = [
+      "node",
+      "prs",
+      "audit",
+      "publish",
+      "--issue",
+      "139",
+      "--file",
+      artifactPath,
+      "--section",
+      "token-usage",
+    ];
+
+    await run();
+
+    expect(consoleLog).toHaveBeenCalledWith(
+      "Audit artifact created: https://github.com/JamesDevware/dinner-bell/issues/139#issuecomment-4139"
+    );
+    const body = JSON.parse(String(fetchMock.mock.calls[3]?.[1]?.body)).body as string;
+    expect(body).toContain("## token-usage");
+    expect(body).toContain("Codex token usage ledger for issue #139.");
+    expect(body).toContain(
+      "| issue-draft | planner |  | unavailable | tracked | 188,585 |"
+    );
+    expect(body).toContain("3m 47s | unavailable |");
+    expect(body).not.toContain('"status": "complete"');
+    expect(body).not.toContain('"tokensUsed": 188585');
+  });
+
+  it("renders issue completion token-usage artifacts as the issue ledger table", async () => {
+    const repoRoot = createTempRepoRoot();
+    const artifactPath = resolve(
+      repoRoot,
+      ".prs",
+      "runs",
+      "issue-133",
+      "codex-token-usage.json"
+    );
+    mkdirSync(dirname(artifactPath), { recursive: true });
+    writeFileSync(
+      artifactPath,
+      `${JSON.stringify(
+        {
+          status: "tracked",
+          objective:
+            "Complete PRS issue #133: Replace pre-shop empty planner rows with a next-shop gap banner",
+          tokensUsed: 172632,
+          timeUsedSeconds: 646,
+          workflowRole: "implementer",
+          configuredProfile: "standard (gpt-5.4-mini, medium thinking)",
+          configuredProfileSource:
+            ".prs/config.json ai.roles.implementer -> ai.profiles.standard",
+          actualSessionModel: "gpt-5",
+          notes:
+            "Usage captured from the active Codex app goal after implementation, verification, push, and PR creation.",
+          createdAt: "2026-06-13T10:21:19Z",
+          updatedAt: "2026-06-13T10:32:03Z",
+          pullRequest: "https://github.com/JamesDevware/dinner-bell/pull/135",
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createFetchResponse({ number: 133 }))
+      .mockResolvedValueOnce(createFetchResponse([]))
+      .mockResolvedValueOnce(createFetchResponse({ number: 133 }))
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          id: 4133,
+          body: "<!-- prs:audit -->\n# Issue #133 audit\n",
+          html_url: "https://github.com/JamesDevware/dinner-bell/issues/133#issuecomment-4133",
+          created_at: "2026-06-13T10:33:00Z",
+          updated_at: "2026-06-13T10:33:00Z",
+          user: {
+            login: "prs-bot",
+            type: "Bot",
+          },
+        })
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.GH_TOKEN = "";
+    process.env.GITHUB_TOKEN = "test-token";
+
+    const { run } = await loadCli({
+      runtimeRepoRoot: repoRoot,
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "remote" && args[1] === "get-url") {
+          return "git@github.com:JamesDevware/dinner-bell.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    process.argv = [
+      "node",
+      "prs",
+      "audit",
+      "publish",
+      "--issue",
+      "133",
+      "--file",
+      artifactPath,
+      "--section",
+      "token-usage",
+    ];
+
+    await run();
+
+    expect(consoleLog).toHaveBeenCalledWith(
+      "Audit artifact created: https://github.com/JamesDevware/dinner-bell/issues/133#issuecomment-4133"
+    );
+    const body = JSON.parse(String(fetchMock.mock.calls[3]?.[1]?.body)).body as string;
+    expect(body).toContain("## token-usage");
+    expect(body).toContain("Codex token usage ledger for issue #133.");
+    expect(body).toContain(
+      "| issue-implementation | implementer | gpt-5 | actual | tracked | 172,632 |"
+    );
+    expect(body).toContain("10m 46s | 2026-06-13T10:32:03Z |");
+    expect(body).not.toContain('"workflowRole": "implementer"');
+    expect(body).not.toContain('"tokensUsed": 172632');
+  });
+
   it("publishes supplied managed spec and plan artifacts for tool-created issues", async () => {
     const repoRoot = createTempRepoRoot();
     const draftPath = resolve(repoRoot, ".prs", "issues", "draft.md");
