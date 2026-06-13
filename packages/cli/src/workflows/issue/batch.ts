@@ -21,6 +21,16 @@ parseSetupCommandArgs
 import {
 preflightIssueBaseBranch
 } from "../../workflow-preflights";
+import { runCommand, runInteractiveCommand } from "../../cli-git";
+import {
+  getDefaultRepoRoot,
+  getRepositoryConfig,
+  getRepositoryForge,
+} from "../../cli-context";
+import {
+  loadIssueSessionState,
+  requireCodexForUnattendedIssueRuns,
+} from "./session";
 
 export { parseAuditCommandArgs } from "../../commands/audit";
 export {
@@ -220,23 +230,6 @@ export function updateIssueBatchState(
   writeIssueBatchState(repoRoot, issueNumbers, nextState);
   writeIssueBatchArtifacts(repoRoot, nextState, workspace);
   return nextState;
-}
-
-export function createIssueNoChangesOutcome(
-  context: IssueRunContext,
-  runDir: string
-): IssueRunOutcomeSummary {
-  return {
-    issueNumber: context.issueNumber,
-    branchName: context.branchName,
-    baseBranch: context.baseBranch,
-    runDir,
-    committed: false,
-    pullRequest: {
-      status: "skipped",
-      reason: "no-changes",
-    },
-  };
 }
 
 export function getIssueBatchWorktreePath(

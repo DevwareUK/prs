@@ -73,14 +73,32 @@ export { parseIssueCommandArgs } from "../../commands/issue";
 export { parseReviewCommandArgs } from "../../commands/review";
 export { parseSetupCommandArgs };
 
-import { commitGeneratedChanges,ensureCleanWorkingTree,hasChanges,readIssueWorkflowDiff,verifyBuild } from "../../cli-git";
+import {
+  commitGeneratedChanges,
+  ensureCleanWorkingTree,
+  hasChanges,
+  readIssueWorkflowDiff,
+  runInteractiveCommand,
+  verifyBuild,
+} from "../../cli-git";
 
 import { promptForLine } from "../../cli-prompts";
 
 
-import { createSuperpowersIssuePlanComment,resolveIssuePlanComment } from "./publication";
-
-import { getPrsLinkedSourceIssueNumber } from "./refinement";
+import { createIssueBranchName, slugifyIssueTitle } from "./naming";
+import {
+  createSuperpowersIssuePlanComment,
+  ensureIssueSpecComment,
+  extractIssuePlanLikelyFiles,
+  findLatestIssuePlanComment,
+  findOverlappingPullRequests,
+  publishSuperpowersPlanArtifact,
+  recommendIssueBranchBase,
+  renderIssueResolutionPlanComment,
+  resolveIssuePlanComment,
+  stripIssuePlanCommentMarker,
+} from "./publication";
+import { ISSUE_RUN_NO_CHANGES_MESSAGE, PRS_MANAGED_ISSUE_MARKER } from "./types";
 
 export function getPrsLinkedSourceIssueNumber(issue: IssueDetails): number | undefined {
   const trimmedBody = issue.body.trimStart();
@@ -640,6 +658,23 @@ export function recordIssueRunOutcome(
       pullRequest: outcome.pullRequest,
     },
   }));
+}
+
+export function createIssueNoChangesOutcome(
+  context: IssueRunContext,
+  runDir: string
+): IssueRunOutcomeSummary {
+  return {
+    issueNumber: context.issueNumber,
+    branchName: context.branchName,
+    baseBranch: context.baseBranch,
+    runDir,
+    committed: false,
+    pullRequest: {
+      status: "skipped",
+      reason: "no-changes",
+    },
+  };
 }
 
 export function createIssueSessionState(

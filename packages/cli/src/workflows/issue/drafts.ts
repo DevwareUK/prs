@@ -7,7 +7,10 @@ mkdirSync,
 readFileSync,
 writeFileSync
 } from "node:fs";
-import { dirname,isAbsolute,relative,resolve } from "node:path";
+import { dirname,isAbsolute,resolve } from "node:path";
+import {
+loadMediaEvidenceForPublication,
+} from "../../cli-git";
 import {
 getDefaultRepoRoot,
 getRepositoryConfig,
@@ -57,25 +60,37 @@ import { promptForLine,promptForRequiredLine } from "../../cli-prompts";
 
 
 
+import {
+  buildIssueSummaryBodyFromDraftBody,
+  parseIssueDraftDocument,
+} from "./draft-parser";
+import {
+  formatIssueDraftSetPreview,
+  loadIssueDraftSet,
+  type ParsedIssueDraftSet,
+  type ParsedIssueDraftSetIssue,
+} from "./draft-set";
+import {
+  publishSuperpowersPlanArtifact,
+  publishSuperpowersSpecArtifact,
+} from "./publication";
 import { ensurePrsManagedIssueBody } from "./refinement";
+import { parseCreatedIssueUrl } from "./session";
 
-export function slugifyIssueTitle(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/['’]/g, "")
-    .replace(/[^a-z0-9\s-]/g, " ")
-    .trim()
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 48)
-    .replace(/^-+|-+$/g, "");
-}
-
-export function createIssueBranchName(issueNumber: number, title: string): string {
-  const slug = slugifyIssueTitle(title) || `issue-${issueNumber}`;
-  return `feat/issue-${issueNumber}-${slug}`;
-}
+export {
+  buildIssueSummaryBodyFromDraftBody,
+  extractMarkdownSection,
+  extractOpeningParagraphs,
+  parseIssueDraftDocument,
+} from "./draft-parser";
+export {
+  formatIssueDraftSetPreview,
+  isPathWithinDirectory,
+  loadIssueDraftSet,
+  type ParsedIssueDraftSet,
+  type ParsedIssueDraftSetIssue,
+} from "./draft-set";
+export { createIssueBranchName, slugifyIssueTitle } from "./naming";
 
 export function createIssueDraftWorkspace(repoRoot: string): IssueDraftWorkspace {
   const timestamp = formatRunTimestamp();
@@ -542,174 +557,6 @@ export function renderOptionalMediaEvidenceMarkdown(
   return rendered || undefined;
 }
 
-export function parseIssueDraftDocument(content: string): { title: string; body: string } {
-  const lines = content.split(/\r?\n/);
-  const titleLineIndex = lines.findIndex((line) => line.trim().length > 0);
-
-  if (titleLineIndex === -1 || !lines[titleLineIndex].startsWith("# ")) {
-    throw new Error(
-      "Issue draft must start with a top-level markdown heading like `# Issue title`."
-    );
-  }
-
-  const title = lines[titleLineIndex].slice(2).trim();
-  const body = lines.slice(titleLineIndex + 1).join("\n").trim();
-
-  if (!title) {
-    throw new Error("Issue draft title cannot be empty.");
-  }
-
-  if (!body) {
-    throw new Error("Issue draft body cannot be empty.");
-  }
-
-  return {
-    title,
-    body,
-  };
-}
-
-export function extractMarkdownSection(body: string, heading: string): string | undefined {
-  const lines = body.trim().split(/\r?\n/);
-  const headingPattern = new RegExp(`^##\\s+${heading}\\s*$`, "i");
-  const startIndex = lines.findIndex((line) => headingPattern.test(line.trim()));
-  if (startIndex === -1) {
-    return undefined;
-  }
-
-  const remainingLines = lines.slice(startIndex + 1);
-  const nextHeadingIndex = remainingLines.findIndex((line) =>
-    /^##\s+/.test(line.trim())
-  );
-  const sectionLines =
-    nextHeadingIndex === -1
-      ? remainingLines
-      : remainingLines.slice(0, nextHeadingIndex);
-  const sectionBody = sectionLines.join("\n").trim();
-  return sectionBody.length > 0 ? sectionBody : undefined;
-}
-
-export function extractOpeningParagraphs(body: string, maxParagraphs: number): string {
-  const withoutHeadings = body
-    .split(/\r?\n/)
-    .filter((line) => !/^#{1,6}\s+/.test(line.trim()))
-    .join("\n")
-    .trim();
-  const paragraphs = withoutHeadings
-    .split(/\n\s*\n/)
-    .map((paragraph) => paragraph.trim())
-    .filter((paragraph) => paragraph.length > 0);
-
-  return paragraphs.slice(0, maxParagraphs).join("\n\n");
-}
-
-export function buildIssueSummaryBodyFromDraftBody(body: string): string {
-  const summary =
-    extractMarkdownSection(body, "Summary") ??
-    extractMarkdownSection(body, "Context") ??
-    extractOpeningParagraphs(body, 2);
-  const lines = [
-    "## Summary",
-    "",
-    summary || "See the managed issue specification comment for the settled scope.",
-    "",
-    "The settled specification and implementation plan are maintained in managed issue comments.",
-  ];
-
-  return lines.join("\n").trim();
-}
-
-export type ParsedIssueDraftSetIssue = {
-  id: string;
-  draftFilePath: string;
-  title: string;
-  body: string;
-  dependsOn: string[];
-  blocks: string[];
-  related: string[];
-};
-
-export type ParsedIssueDraftSet = {
-  mode: "multiple";
-  sourceIssueNumber?: number;
-  linkingStrategy?: string;
-  issues: ParsedIssueDraftSetIssue[];
-};
-
-export function isPathWithinDirectory(parentDir: string, candidatePath: string): boolean {
-  const relativePath = relative(parentDir, candidatePath);
-  return (
-    relativePath === "" ||
-    (!relativePath.startsWith("..") && !isAbsolute(relativePath))
-  );
-}
-
-export function loadIssueDraftSet(input: {
-  repoRoot: string;
-  runDir: string;
-  issueSetFilePath: string;
-  fallbackSourceIssueNumber?: number;
-}): ParsedIssueDraftSet {
-  let manifest: unknown;
-  try {
-    manifest = JSON.parse(readFileSync(input.issueSetFilePath, "utf8"));
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(
-      `Issue set manifest at ${toRepoRelativePath(
-        input.repoRoot,
-        input.issueSetFilePath
-      )} is invalid JSON. ${message}`
-    );
-  }
-
-  const parsedManifest = IssueDraftSet.parse(manifest);
-  if (parsedManifest.mode !== "multiple") {
-    throw new Error("Issue set manifest must use mode \"multiple\".");
-  }
-
-  return {
-    mode: "multiple",
-    sourceIssueNumber:
-      parsedManifest.sourceIssueNumber ?? input.fallbackSourceIssueNumber,
-    linkingStrategy: parsedManifest.linkingStrategy,
-    issues: parsedManifest.issues.map((issue) => {
-      const draftFilePath = resolve(input.repoRoot, issue.draftFile);
-      if (!isPathWithinDirectory(input.runDir, draftFilePath)) {
-        throw new Error(
-          `Issue set draft file for "${issue.id}" must stay inside ${toRepoRelativePath(
-            input.repoRoot,
-            input.runDir
-          )}.`
-        );
-      }
-
-      if (!existsSync(draftFilePath)) {
-        throw new Error(
-          `Issue set draft file for "${issue.id}" does not exist: ${toRepoRelativePath(
-            input.repoRoot,
-            draftFilePath
-          )}.`
-        );
-      }
-
-      const parsedDraft = parseIssueDraftDocument(
-        readFileSync(draftFilePath, "utf8")
-      );
-
-      return {
-        id: issue.id,
-        draftFilePath,
-        title: parsedDraft.title,
-        body: parsedDraft.body,
-        dependsOn: issue.dependsOn,
-        blocks: issue.blocks,
-        related: issue.related,
-      };
-    }),
-  };
-}
-
 export type IssueSetCreatedIssue = {
   id: string;
   number: number;
@@ -788,21 +635,6 @@ export function buildLinkedIssueBody(
 
   const linkedBody = replaceLinkedIssuesSection(issue.body, lines.join("\n"));
   return options.forcePrsManaged ? ensurePrsManagedIssueBody(linkedBody) : linkedBody;
-}
-
-export function formatIssueDraftSetPreview(
-  repoRoot: string,
-  issueSet: ParsedIssueDraftSet
-): string {
-  return issueSet.issues
-    .map(
-      (issue, index) =>
-        `${index + 1}. ${issue.title}\n   Draft: ${toRepoRelativePath(
-          repoRoot,
-          issue.draftFilePath
-        )}`
-    )
-    .join("\n");
 }
 
 export async function reviewIssueDraftSet(input: {

@@ -56,6 +56,11 @@ import { promptForLine,promptForRequiredLine,promptForYesNoDefaultNo } from "../
 
 
 import { publishIssueRefinementArtifacts } from "./publication";
+import { parseIssueDraftDocument } from "./draft-parser";
+import { formatIssueDraftSetPreview, loadIssueDraftSet } from "./draft-set";
+import { ensureGuidedCheckoutReadyForRuntime } from "./session";
+import { PRS_MANAGED_ISSUE_MARKER } from "./types";
+import { publishIssueRefinementQuestionsComment } from "./publication";
 
 export function isPrsManagedIssue(issue: IssueDetails): boolean {
   return issue.body.trimStart().startsWith(PRS_MANAGED_ISSUE_MARKER);

@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { verifyBuild } from "../../cli-git";
 import {
 parseIssueCommandArgs
 } from "../../commands/issue";
@@ -32,14 +33,23 @@ import { runIssueDraftCommand } from "./drafts";
 import { runIssueRefineCommand } from "./refinement";
 
 import {
-emitIssuePrepareOutputs,
-finalizeIssueRun,
-prepareIssueRun,
-printIssueRunOutcomeSummary,
-printManualPrInstructions,
-runIssuePlanCommand,
-runUnattendedIssueCommand,
+  emitIssuePrepareOutputs,
+  finalizeIssueRun,
+  generateIssuePullRequest,
+  persistIssueSessionState,
+  prepareIssueRun,
+  printIssueRunOutcomeSummary,
+  printManualPrInstructions,
+  recordIssueRunOutcome,
+  runIssuePlanCommand,
+  runUnattendedIssueCommand,
+  updateIssueWorkspaceMetadata,
 } from "./session";
+import {
+  ISSUE_RUN_NO_CHANGES_MESSAGE,
+  type FinalizeIssueRunResult,
+  type IssueRunOutcomeSummary,
+} from "./types";
 
 import {
 getCliArgs,

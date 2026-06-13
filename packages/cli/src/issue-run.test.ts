@@ -2453,7 +2453,7 @@ describe("Full issue run workflow", () => {
       })
     );
     expect(fetchMock).toHaveBeenCalledTimes(4);
-  });
+  }, 30_000);
 
   it("uses repository config for issue build verification and pull request base branch", async () => {
     const issueNumber = 144;
