@@ -113,7 +113,7 @@ function parseMediaEntry(repoRoot: string, entry: unknown, index: number): Media
   }
 
   const rawKind = typeof entry.kind === "string" ? entry.kind.trim() : undefined;
-  const kind =
+  const kind: MediaEvidenceKind | undefined =
     rawKind === undefined
       ? undefined
       : rawKind === "image" || rawKind === "video"

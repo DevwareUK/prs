@@ -22,6 +22,70 @@ import {
 } from "./index-test-support";
 
 describe("CLI command surface", () => {
+  it("keeps the process entrypoint small and free of embedded workflow runners", () => {
+    const entrypoint = readFileSync(
+      resolve(process.cwd(), "packages/cli/src/index.ts"),
+      "utf8"
+    );
+    const lines = entrypoint.split(/\r?\n/);
+
+    expect(lines.length).toBeLessThanOrEqual(220);
+    expect(entrypoint).not.toContain("async function runIssueCommand");
+    expect(entrypoint).not.toContain("async function runPrCommand");
+    expect(entrypoint).not.toContain("async function runToolCommand");
+    expect(entrypoint).not.toContain("async function runAuditCommand");
+    expect(entrypoint).not.toContain("async function runTestBacklogCommand");
+    expect(entrypoint).not.toContain("async function runFeatureBacklogCommand");
+  });
+
+  it("keeps CLI behavior split across focused domain modules instead of a catch-all runtime", () => {
+    const entrypoint = readFileSync(
+      resolve(process.cwd(), "packages/cli/src/index.ts"),
+      "utf8"
+    );
+
+    expect(existsSync(resolve(process.cwd(), "packages/cli/src/cli-runtime.ts"))).toBe(
+      false
+    );
+    expect(entrypoint).not.toContain("./cli-runtime");
+    expect(existsSync(resolve(process.cwd(), "packages/cli/src/cli-context.ts"))).toBe(
+      true
+    );
+    expect(existsSync(resolve(process.cwd(), "packages/cli/src/cli-git.ts"))).toBe(
+      true
+    );
+    expect(existsSync(resolve(process.cwd(), "packages/cli/src/cli-notices.ts"))).toBe(
+      true
+    );
+    expect(
+      existsSync(resolve(process.cwd(), "packages/cli/src/workflows/issue/runner.ts"))
+    ).toBe(true);
+    expect(
+      existsSync(resolve(process.cwd(), "packages/cli/src/workflows/issue/drafts.ts"))
+    ).toBe(true);
+    expect(
+      existsSync(resolve(process.cwd(), "packages/cli/src/workflows/issue/publication.ts"))
+    ).toBe(true);
+    expect(
+      existsSync(resolve(process.cwd(), "packages/cli/src/workflows/issue/session.ts"))
+    ).toBe(true);
+    expect(
+      existsSync(resolve(process.cwd(), "packages/cli/src/commands/review-runner.ts"))
+    ).toBe(true);
+    expect(
+      existsSync(resolve(process.cwd(), "packages/cli/src/commands/audit-runner.ts"))
+    ).toBe(true);
+    expect(
+      existsSync(resolve(process.cwd(), "packages/cli/src/commands/backlog-runner.ts"))
+    ).toBe(true);
+    expect(
+      existsSync(resolve(process.cwd(), "packages/cli/src/commands/pr-runner.ts"))
+    ).toBe(true);
+    expect(
+      existsSync(resolve(process.cwd(), "packages/cli/src/commands/tool-runner.ts"))
+    ).toBe(true);
+  });
+
   it("documents no-number /prs issue and /prs pr URL display", () => {
     const docs = [
       readFileSync(resolve(process.cwd(), "README.md"), "utf8"),
