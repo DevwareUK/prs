@@ -1555,6 +1555,111 @@ describe("CLI command surface", () => {
     expect(body).not.toContain('"workflow": "prs:create"');
   });
 
+  it("renders token-usage JSON artifacts as the PR ledger table", async () => {
+    const repoRoot = createTempRepoRoot();
+    const artifactPath = resolve(
+      repoRoot,
+      ".prs",
+      "runs",
+      "pr-review",
+      "codex-token-usage.json"
+    );
+    mkdirSync(dirname(artifactPath), { recursive: true });
+    writeFileSync(
+      artifactPath,
+      `${JSON.stringify(
+        {
+          version: 1,
+          status: "tracked",
+          target: {
+            type: "pull-request",
+            number: 88,
+          },
+          capturedAt: "2026-06-14T08:00:00.000Z",
+          source: "codex-goal",
+          workflow: {
+            name: "pr-review",
+            role: "reviewer",
+            runDir: ".prs/runs/20260614T080000000Z-pr-88-review",
+          },
+          model: {
+            profile: "premium",
+            role: "reviewer",
+            model: "gpt-5.5",
+            thinking: "high",
+            source: "codex-session",
+          },
+          usage: {
+            totalTokens: 32100,
+            timeUsedSeconds: 255,
+          },
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createFetchResponse({ number: 88 }))
+      .mockResolvedValueOnce(createFetchResponse([]))
+      .mockResolvedValueOnce(createFetchResponse({ number: 88 }))
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          id: 4288,
+          body: "<!-- prs:audit -->\n# Pull request #88 audit\n",
+          html_url: "https://github.com/DevwareUK/prs/issues/88#issuecomment-4288",
+          created_at: "2026-06-14T08:01:00Z",
+          updated_at: "2026-06-14T08:01:00Z",
+          user: {
+            login: "prs-bot",
+            type: "Bot",
+          },
+        })
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.GH_TOKEN = "";
+    process.env.GITHUB_TOKEN = "test-token";
+
+    const { run } = await loadCli({
+      runtimeRepoRoot: repoRoot,
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "remote" && args[1] === "get-url") {
+          return "git@github.com:DevwareUK/prs.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    process.argv = [
+      "node",
+      "prs",
+      "audit",
+      "publish",
+      "--pr",
+      "88",
+      "--file",
+      artifactPath,
+      "--section",
+      "token-usage",
+    ];
+
+    await run();
+
+    expect(consoleLog).toHaveBeenCalledWith(
+      "Audit artifact created: https://github.com/DevwareUK/prs/issues/88#issuecomment-4288"
+    );
+    const body = JSON.parse(String(fetchMock.mock.calls[3]?.[1]?.body)).body as string;
+    expect(body).toContain("## token-usage");
+    expect(body).toContain("Codex token usage ledger for PR #88.");
+    expect(body).toContain(
+      "| pr-review | reviewer | gpt-5.5 | actual | tracked | 32,100 |"
+    );
+    expect(body).not.toContain('"target"');
+  });
+
   it("renders legacy planner token-usage artifacts as the issue ledger table", async () => {
     const repoRoot = createTempRepoRoot();
     const artifactPath = resolve(

@@ -4,6 +4,10 @@ import { formatCommandForDisplay } from "../../config";
 import { buildDoneStateInstructions } from "../../done-state";
 import type { PullRequestDetails } from "../../forge";
 import { formatRunTimestamp, toRepoRelativePath } from "../../run-artifacts";
+import {
+  buildPullRequestTokenUsageMetadata,
+  getTokenUsageArtifactFilePath,
+} from "../../token-audit";
 import { formatPullRequestTestSuggestionsSnapshot } from "./snapshot";
 import type {
   PullRequestFixTestsWorkspace,
@@ -121,6 +125,17 @@ export function writePullRequestFixTestsWorkspaceFiles(
           title: issue.title,
           url: issue.url,
         })),
+        tokenUsage: buildPullRequestTokenUsageMetadata({
+          artifactFile: toRepoRelativePath(
+            repoRoot,
+            getTokenUsageArtifactFilePath(workspace.runDir)
+          ),
+          workflowName: "pr-add-tests",
+          role: "tester",
+          prNumber: pullRequest.number,
+          runDir: toRepoRelativePath(repoRoot, workspace.runDir),
+          publishWhen: ["reviewed-updates-pushed"],
+        }),
         selectedSuggestions: selectedSuggestions.map((suggestion) => ({
           id: suggestion.suggestionId,
           area: suggestion.area,

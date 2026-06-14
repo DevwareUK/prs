@@ -4,6 +4,10 @@ import { formatCommandForDisplay } from "../../config";
 import { buildDoneStateInstructions } from "../../done-state";
 import type { PullRequestDetails } from "../../forge";
 import { formatRunTimestamp, toRepoRelativePath } from "../../run-artifacts";
+import {
+  buildPullRequestTokenUsageMetadata,
+  getTokenUsageArtifactFilePath,
+} from "../../token-audit";
 import { getReviewCommentDisplayLine } from "./selection";
 import { formatPullRequestReviewCommentsSnapshot } from "./snapshot";
 import type {
@@ -110,6 +114,17 @@ export function writePullRequestFixWorkspaceFiles(
           title: issue.title,
           url: issue.url,
         })),
+        tokenUsage: buildPullRequestTokenUsageMetadata({
+          artifactFile: toRepoRelativePath(
+            repoRoot,
+            getTokenUsageArtifactFilePath(workspace.runDir)
+          ),
+          workflowName: "pr-address-comments",
+          role: "implementer",
+          prNumber: pullRequest.number,
+          runDir: toRepoRelativePath(repoRoot, workspace.runDir),
+          publishWhen: ["reviewed-updates-pushed"],
+        }),
         selectedTasks: tasks.map((task) => ({
           id: task.taskId,
           kind: task.kind,

@@ -1,6 +1,11 @@
 import type { RepositoryForge } from "../../forge";
 import type { ReviewedGeneratedText } from "../../generated-text-review";
 import { finalizeRuntimeChanges } from "../../runtime-change-review";
+import {
+  buildPullRequestTokenUsageMetadata,
+  getTokenUsageArtifactFilePath,
+  type PullRequestTokenUsageMetadata,
+} from "../../token-audit";
 import { ensureVerificationCommandAvailable } from "../../workflow-preflights";
 import { pushReviewedPullRequestUpdates } from "../pull-request-reviewed-updates";
 import { fetchLinkedIssuesForPullRequest } from "./snapshot";
@@ -57,6 +62,7 @@ export type PullRequestFixFailingTestsPreparationResult = {
   metadataFilePath: string;
   outputLogPath: string;
   selectedCount: number;
+  tokenUsage: PullRequestTokenUsageMetadata;
   nextAction: "continue-in-current-codex-session";
 };
 
@@ -115,6 +121,14 @@ export async function runPrFixFailingTestsCommand(
       metadataFilePath: workspace.metadataFilePath,
       outputLogPath: workspace.outputLogPath,
       selectedCount: 1,
+      tokenUsage: buildPullRequestTokenUsageMetadata({
+        artifactFile: getTokenUsageArtifactFilePath(workspace.runDir),
+        workflowName: "pr-fix-tests",
+        role: "tester",
+        prNumber: pullRequest.number,
+        runDir: workspace.runDir,
+        publishWhen: ["reviewed-updates-pushed"],
+      }),
       nextAction: "continue-in-current-codex-session",
     };
   }

@@ -66,6 +66,22 @@ export type PullRequestLocalReviewToolResult =
       baseSync: PullRequestPrepareReviewBaseSyncState;
       changedFiles: string[];
       outputMode: GitHubOutputMode;
+      tokenUsage: {
+        artifactFile: string;
+        mode: "pr-token-usage-ledger";
+        workflow: {
+          name: "pr-review";
+          role: "reviewer";
+          targetPullRequestNumber: number;
+          runDir: string;
+        };
+        auditPublication: {
+          target: "pr";
+          prNumber: number;
+          section: "token-usage";
+          publishWhen: string[];
+        };
+      };
       nextAction: "write-codex-pr-review-report";
     }
   | {
@@ -82,5 +98,21 @@ export type PullRequestLocalReviewToolResult =
       checkout: PullRequestPrepareReviewCheckoutTarget;
       baseSync: PullRequestPrepareReviewBaseSyncState;
       outputMode: GitHubOutputMode;
+      tokenUsage: {
+        artifactFile: string;
+        mode: "pr-token-usage-ledger";
+        workflow: {
+          name: "pr-review";
+          role: "reviewer";
+          targetPullRequestNumber: number;
+          runDir: string;
+        };
+        auditPublication: {
+          target: "pr";
+          prNumber: number;
+          section: "token-usage";
+          publishWhen: string[];
+        };
+      };
       nextAction: "resolve-conflicts-in-current-codex-session";
     };

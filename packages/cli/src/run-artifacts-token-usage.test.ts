@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   formatIssueTokenUsageAuditSection,
   formatIssueTokenUsageLedgerAuditSection,
+  formatTokenUsageLedgerAuditSection,
   getIssueTokenUsageArtifactFilePath,
   issueTokenUsageArtifactToLedgerRow,
   writeIssueTokenUsageArtifact,
@@ -283,6 +284,35 @@ describe("issue token usage artifacts", () => {
     expect(markdown).not.toContain("Notes");
     expect(markdown).not.toContain(".prs/runs/20260612T180000000Z-issue-draft");
     expect(markdown).not.toContain("Output token count was unavailable.");
+    expect(markdown).toContain(
+      "This ledger reports available Codex run telemetry, not exact billing."
+    );
+  });
+
+  it("renders a single PR-lifetime token usage ledger table", () => {
+    const markdown = formatTokenUsageLedgerAuditSection({
+      target: {
+        type: "pull-request",
+        number: 88,
+      },
+      rows: [
+        {
+          phase: "pr-review",
+          role: "reviewer",
+          model: "gpt-5.5",
+          modelSource: "actual",
+          status: "tracked",
+          totalTokens: 32100,
+          elapsedSeconds: 255,
+          capturedAt: "2026-06-14T08:00:00.000Z",
+        },
+      ],
+    });
+
+    expect(markdown).toContain("Codex token usage ledger for PR #88.");
+    expect(markdown).toContain(
+      "| pr-review | reviewer | gpt-5.5 | actual | tracked | 32,100 |"
+    );
     expect(markdown).toContain(
       "This ledger reports available Codex run telemetry, not exact billing."
     );

@@ -326,6 +326,22 @@ describe("PR fix workflows", () => {
       prTitle: "Tighten PR review comment fixing flow",
       baseRefName: "main",
       headRefName: "feat/pr-fix-comments",
+      tokenUsage: {
+        artifactFile: `.prs/runs/${createdRun}/codex-token-usage.json`,
+        mode: "pr-token-usage-ledger",
+        workflow: {
+          name: "pr-address-comments",
+          role: "implementer",
+          targetPullRequestNumber: 88,
+          runDir: `.prs/runs/${createdRun}`,
+        },
+        auditPublication: {
+          target: "pr",
+          prNumber: 88,
+          section: "token-usage",
+          publishWhen: ["reviewed-updates-pushed"],
+        },
+      },
       selectedComments: [
         {
           id: 501,

@@ -2,6 +2,10 @@ import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { GitHubOutputMode } from "@prs/contracts";
 import { formatCommandForDisplay } from "../../config";
+import {
+  buildPullRequestTokenUsageMetadata,
+  getTokenUsageArtifactFilePath,
+} from "../../token-audit";
 import type {
   PullRequestCheckSignal,
   PullRequestReviewComment,
@@ -401,6 +405,17 @@ export function writePullRequestLocalReviewMetadata(
         baseSync: input.baseSync,
         changedFiles: input.changedFiles,
         warnings: input.warnings,
+        tokenUsage: buildPullRequestTokenUsageMetadata({
+          artifactFile: toRepoRelativePath(
+            repoRoot,
+            getTokenUsageArtifactFilePath(workspace.runDir)
+          ),
+          workflowName: input.flow,
+          role: "reviewer",
+          prNumber: input.pullRequest.number,
+          runDir: toRepoRelativePath(repoRoot, workspace.runDir),
+          publishWhen: ["review-published"],
+        }),
       },
       null,
       2

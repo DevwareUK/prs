@@ -222,6 +222,22 @@ describe("runPrFixCommentsCommand", () => {
       metadataFilePath: workspace.metadataFilePath,
       outputLogPath: workspace.outputLogPath,
       selectedCount: 1,
+      tokenUsage: {
+        artifactFile: resolve(workspace.runDir, "codex-token-usage.json"),
+        mode: "pr-token-usage-ledger",
+        workflow: {
+          name: "pr-address-comments",
+          role: "implementer",
+          targetPullRequestNumber: 88,
+          runDir: workspace.runDir,
+        },
+        auditPublication: {
+          target: "pr",
+          prNumber: 88,
+          section: "token-usage",
+          publishWhen: ["reviewed-updates-pushed"],
+        },
+      },
       nextAction: "continue-in-current-codex-session",
     });
     expect(writePullRequestFixWorkspaceFiles).toHaveBeenCalled();

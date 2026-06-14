@@ -7,6 +7,7 @@ import {
   type IssueEstimateCostSettings,
 } from "@prs/core";
 import type { InteractiveRuntimeType } from "./runtime";
+export { formatTokenUsageLedgerAuditSection } from "./token-audit";
 
 export function toRepoRelativePath(repoRoot: string, filePath: string): string {
   return (relative(repoRoot, filePath) || ".").split("\\").join("/");

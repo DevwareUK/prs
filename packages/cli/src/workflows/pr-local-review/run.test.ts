@@ -252,6 +252,22 @@ describe("preparePullRequestLocalReviewTool", () => {
       outputLogPath: workspace.outputLogPath,
       reportFilePath: workspace.reportFilePath,
       commentsFilePath: workspace.commentsFilePath,
+      tokenUsage: {
+        artifactFile: `${workspace.runDir}/codex-token-usage.json`,
+        mode: "pr-token-usage-ledger",
+        workflow: {
+          name: "pr-review",
+          role: "reviewer",
+          targetPullRequestNumber: 224,
+          runDir: workspace.runDir,
+        },
+        auditPublication: {
+          target: "pr",
+          prNumber: 224,
+          section: "token-usage",
+          publishWhen: ["review-published"],
+        },
+      },
       nextAction: "write-codex-pr-review-report",
       changedFiles: ["src/filter.ts", "README.md"],
     });

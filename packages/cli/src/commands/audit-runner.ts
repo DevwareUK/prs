@@ -6,11 +6,12 @@ import { loadMediaEvidenceForPublication } from "../cli-git";
 import type { AuditTarget } from "../forge";
 import { appendMediaEvidenceSection } from "../media-evidence";
 import {
-formatIssueTokenUsageLedgerAuditSection,
-issueTokenUsageArtifactToLedgerRow,
-type IssueTokenUsageArtifact,
-type IssueTokenUsageLedgerRow,
-} from "../run-artifacts";
+  auditTargetToTokenUsageTarget,
+  formatTokenUsageLedgerAuditSection,
+  tokenUsageArtifactToLedgerRow,
+  type TokenUsageArtifact,
+  type TokenUsageLedgerRow,
+} from "../token-audit";
 import { parseAuditCommandArgs } from "./audit";
 
 export async function runAuditCommand(): Promise<void> {
@@ -71,7 +72,7 @@ function readNumberField(
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
-function isIssueTokenUsageArtifact(value: unknown): value is IssueTokenUsageArtifact {
+function isTokenUsageArtifact(value: unknown): value is TokenUsageArtifact {
   if (!isRecord(value)) {
     return false;
   }
@@ -81,15 +82,18 @@ function isIssueTokenUsageArtifact(value: unknown): value is IssueTokenUsageArti
     (value.status === "tracked" ||
       value.status === "partial" ||
       value.status === "unavailable") &&
-    typeof value.issueNumber === "number" &&
     typeof value.capturedAt === "string" &&
-    value.source === "codex-goal"
+    value.source === "codex-goal" &&
+    (typeof value.issueNumber === "number" ||
+      (isRecord(value.target) &&
+        (value.target.type === "issue" || value.target.type === "pull-request") &&
+        typeof value.target.number === "number"))
   );
 }
 
 function normalizeTokenUsageStatus(
   value: string | undefined
-): IssueTokenUsageArtifact["status"] {
+): TokenUsageArtifact["status"] {
   if (value === "available" || value === "complete") {
     return "tracked";
   }
@@ -103,7 +107,7 @@ function normalizeTokenUsageStatus(
 
 function normalizePlannerTokenUsageRow(
   value: unknown
-): IssueTokenUsageLedgerRow | undefined {
+): TokenUsageLedgerRow | undefined {
   if (!isRecord(value)) {
     return undefined;
   }
@@ -182,7 +186,7 @@ function normalizePlannerTokenUsageRow(
 
 function normalizeLegacyPlannerTokenUsageRow(
   value: unknown
-): IssueTokenUsageLedgerRow | undefined {
+): TokenUsageLedgerRow | undefined {
   if (!isRecord(value)) {
     return undefined;
   }
@@ -256,7 +260,7 @@ function parseConfiguredProfileLabel(value: string | undefined): {
 
 function normalizeCompletedGoalTokenUsageRow(
   value: unknown
-): IssueTokenUsageLedgerRow | undefined {
+): TokenUsageLedgerRow | undefined {
   if (!isRecord(value)) {
     return undefined;
   }
@@ -319,7 +323,7 @@ function renderAuditContentForPublication(input: {
   target: AuditTarget;
 }): string {
   if (
-    input.target.type !== "issue" ||
+    (input.target.type !== "issue" && input.target.type !== "pull-request") ||
     input.sectionName.trim().toLowerCase() !== "token-usage"
   ) {
     return input.content;
@@ -332,8 +336,8 @@ function renderAuditContentForPublication(input: {
     return input.content;
   }
 
-  const row = isIssueTokenUsageArtifact(parsed)
-    ? issueTokenUsageArtifactToLedgerRow(parsed)
+  const row = isTokenUsageArtifact(parsed)
+    ? tokenUsageArtifactToLedgerRow(parsed)
     : normalizePlannerTokenUsageRow(parsed) ??
       normalizeLegacyPlannerTokenUsageRow(parsed) ??
       normalizeCompletedGoalTokenUsageRow(parsed);
@@ -341,8 +345,8 @@ function renderAuditContentForPublication(input: {
     return input.content;
   }
 
-  return formatIssueTokenUsageLedgerAuditSection({
-    issueNumber: input.target.number,
+  return formatTokenUsageLedgerAuditSection({
+    target: auditTargetToTokenUsageTarget(input.target),
     rows: [row],
   });
 }

@@ -8,6 +8,11 @@ import type {
 } from "../../forge";
 import type { ReviewedGeneratedText } from "../../generated-text-review";
 import { finalizeRuntimeChanges } from "../../runtime-change-review";
+import {
+  buildPullRequestTokenUsageMetadata,
+  getTokenUsageArtifactFilePath,
+  type PullRequestTokenUsageMetadata,
+} from "../../token-audit";
 import { ensureVerificationCommandAvailable } from "../../workflow-preflights";
 import { pushReviewedPullRequestUpdates } from "../pull-request-reviewed-updates";
 import {
@@ -70,6 +75,7 @@ export type PullRequestFixCommentsPreparationResult = {
   metadataFilePath: string;
   outputLogPath: string;
   selectedCount: number;
+  tokenUsage: PullRequestTokenUsageMetadata;
   nextAction: "continue-in-current-codex-session";
 };
 
@@ -505,6 +511,14 @@ export async function runPrFixCommentsCommand(
       metadataFilePath: workspace.metadataFilePath,
       outputLogPath: workspace.outputLogPath,
       selectedCount: selectedTasks.length,
+      tokenUsage: buildPullRequestTokenUsageMetadata({
+        artifactFile: getTokenUsageArtifactFilePath(workspace.runDir),
+        workflowName: "pr-address-comments",
+        role: "implementer",
+        prNumber: pullRequest.number,
+        runDir: workspace.runDir,
+        publishWhen: ["reviewed-updates-pushed"],
+      }),
       nextAction: "continue-in-current-codex-session",
     };
   }

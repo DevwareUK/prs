@@ -281,6 +281,11 @@ describe("managed prs Codex skills", () => {
     expect(prMarkdown).toContain(
       "publish with `prs tool pr publish-review <number> --report <reportFilePath> --comments <commentsFilePath> --unattended --json`"
     );
+    expect(prMarkdown).toContain("When a PR tool result or metadata includes `tokenUsage`");
+    expect(prMarkdown).toContain("codex-token-usage.json");
+    expect(prMarkdown).toContain(
+      "prs audit publish --pr <number> --file <path> --section token-usage"
+    );
     expect(prMarkdown).toContain("/prs:pr <number> prepare-review");
     expect(prMarkdown).toContain("browse/functional test first");
     expect(auditMarkdown).toContain("name: prs:audit");
