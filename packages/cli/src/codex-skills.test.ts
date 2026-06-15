@@ -226,7 +226,10 @@ describe("managed prs Codex skills", () => {
     expect(createMarkdown).toContain("trust its `managedComments` result");
     expect(createMarkdown).toContain("Record planner token usage for the create run");
     expect(createMarkdown).toContain("call `create_goal` with an objective like `Draft GitHub Issue: <short topic>`");
-    expect(createMarkdown).toContain("update the issue-lifetime token-usage ledger");
+    expect(createMarkdown).toContain("managed `<!-- prs:token-usage -->` comment");
+    expect(createMarkdown).toContain(
+      "prs tool token-usage publish --issue <number> --file <path> --json"
+    );
     expect(createMarkdown).toContain("prefer the actual active Codex session model");
     expect(createMarkdown).toContain("Do not run `prs issue plan`, `prs issue prepare`, or manual audit publication just to publish an already-approved plan artifact");
     expect(createMarkdown).toContain("If the create result includes `managedCommentHints`");
@@ -284,7 +287,7 @@ describe("managed prs Codex skills", () => {
     expect(prMarkdown).toContain("When a PR tool result or metadata includes `tokenUsage`");
     expect(prMarkdown).toContain("codex-token-usage.json");
     expect(prMarkdown).toContain(
-      "prs audit publish --pr <number> --file <path> --section token-usage"
+      "prs tool token-usage publish --pr <number> --file <path> --json"
     );
     expect(prMarkdown).toContain("/prs:pr <number> prepare-review");
     expect(prMarkdown).toContain("browse/functional test first");
