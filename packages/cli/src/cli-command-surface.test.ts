@@ -1855,6 +1855,102 @@ describe("CLI command surface", () => {
     expect(body).not.toContain('"tokensUsed": 188585');
   });
 
+  it("renders Codex app goal tracker token-usage artifacts as the issue ledger table", async () => {
+    const repoRoot = createTempRepoRoot();
+    const artifactPath = resolve(
+      repoRoot,
+      ".prs",
+      "runs",
+      "create",
+      "codex-token-usage.json"
+    );
+    mkdirSync(dirname(artifactPath), { recursive: true });
+    writeFileSync(
+      artifactPath,
+      `${JSON.stringify(
+        {
+          status: "captured",
+          source: "Codex app goal tracker",
+          capturedAt: "2026-06-15",
+          goal:
+            "Draft GitHub Issue: Cloudflare DNS integration for server moves and site binding",
+          tokensUsed: 136118,
+          timeUsedSeconds: 191,
+          model: {
+            actual: null,
+            notes:
+              "The active Codex session model identifier was not exposed to this run. Do not treat configured PRS role metadata as the actual model.",
+          },
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createFetchResponse({ number: 66 }))
+      .mockResolvedValueOnce(createFetchResponse([]))
+      .mockResolvedValueOnce(createFetchResponse({ number: 66 }))
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          id: 4066,
+          body: "<!-- prs:audit -->\n# Issue #66 audit\n",
+          html_url: "https://github.com/DevwareUK/dsm/issues/66#issuecomment-4066",
+          created_at: "2026-06-15T08:08:00Z",
+          updated_at: "2026-06-15T08:08:00Z",
+          user: {
+            login: "prs-bot",
+            type: "Bot",
+          },
+        })
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.GH_TOKEN = "";
+    process.env.GITHUB_TOKEN = "test-token";
+
+    const { run } = await loadCli({
+      runtimeRepoRoot: repoRoot,
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "remote" && args[1] === "get-url") {
+          return "git@github.com:DevwareUK/dsm.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    process.argv = [
+      "node",
+      "prs",
+      "audit",
+      "publish",
+      "--issue",
+      "66",
+      "--file",
+      artifactPath,
+      "--section",
+      "token-usage",
+    ];
+
+    await run();
+
+    expect(consoleLog).toHaveBeenCalledWith(
+      "Audit artifact created: https://github.com/DevwareUK/dsm/issues/66#issuecomment-4066"
+    );
+    const body = JSON.parse(String(fetchMock.mock.calls[3]?.[1]?.body)).body as string;
+    expect(body).toContain("## token-usage");
+    expect(body).toContain("Codex token usage ledger for issue #66.");
+    expect(body).toContain(
+      "| issue-create | planner |  | unavailable | tracked | 136,118 |"
+    );
+    expect(body).toContain("3m 11s | 2026-06-15 |");
+    expect(body).not.toContain('"status": "captured"');
+    expect(body).not.toContain('"tokensUsed": 136118');
+    expect(body).not.toContain("Codex app goal tracker");
+  });
+
   it("renders issue completion token-usage artifacts as the issue ledger table", async () => {
     const repoRoot = createTempRepoRoot();
     const artifactPath = resolve(

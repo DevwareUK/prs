@@ -94,7 +94,7 @@ function isTokenUsageArtifact(value: unknown): value is TokenUsageArtifact {
 function normalizeTokenUsageStatus(
   value: string | undefined
 ): TokenUsageArtifact["status"] {
-  if (value === "available" || value === "complete") {
+  if (value === "available" || value === "captured" || value === "complete") {
     return "tracked";
   }
 
@@ -236,6 +236,45 @@ function normalizeLegacyPlannerTokenUsageRow(
   };
 }
 
+function normalizeCodexAppGoalTrackerTokenUsageRow(
+  value: unknown
+): TokenUsageLedgerRow | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  if (readStringField(value, "source") !== "Codex app goal tracker") {
+    return undefined;
+  }
+
+  const totalTokens = readNumberField(value, "tokensUsed");
+  const capturedAt = readStringField(value, "capturedAt") ?? "unavailable";
+  const model = isRecord(value.model) ? value.model : undefined;
+  const actualModel = model ? readStringField(model, "actual") : undefined;
+  const notes = [
+    ...(model && readStringField(model, "notes")
+      ? [readStringField(model, "notes") as string]
+      : []),
+    ...(readStringField(value, "goal")
+      ? [`Goal: ${readStringField(value, "goal") as string}`]
+      : []),
+  ];
+
+  return {
+    phase: "issue-create",
+    role: "planner",
+    ...(actualModel ? { model: actualModel } : {}),
+    modelSource: actualModel ? "actual" : "unavailable",
+    status: normalizeTokenUsageStatus(readStringField(value, "status")),
+    ...(totalTokens !== undefined ? { totalTokens } : {}),
+    ...(readNumberField(value, "timeUsedSeconds") !== undefined
+      ? { elapsedSeconds: readNumberField(value, "timeUsedSeconds") }
+      : {}),
+    capturedAt,
+    ...(notes.length > 0 ? { notes } : {}),
+  };
+}
+
 function parseConfiguredProfileLabel(value: string | undefined): {
   profile?: string;
   model?: string;
@@ -340,6 +379,7 @@ function renderAuditContentForPublication(input: {
     ? tokenUsageArtifactToLedgerRow(parsed)
     : normalizePlannerTokenUsageRow(parsed) ??
       normalizeLegacyPlannerTokenUsageRow(parsed) ??
+      normalizeCodexAppGoalTrackerTokenUsageRow(parsed) ??
       normalizeCompletedGoalTokenUsageRow(parsed);
   if (!row) {
     return input.content;
