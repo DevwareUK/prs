@@ -10,6 +10,10 @@ import {
   issueTokenUsageArtifactToLedgerRow,
   writeIssueTokenUsageArtifact,
 } from "./run-artifacts";
+import {
+  parseTokenUsageLedgerRowFromContent,
+  parseTokenUsageLedgerRowsFromContent,
+} from "./token-audit";
 
 const cleanupTargets = new Set<string>();
 
@@ -363,10 +367,14 @@ describe("issue token usage artifacts", () => {
     expect(
       issueTokenUsageArtifactToLedgerRow({
         version: 1,
+        id: "issue-287:issue-create:thread-287",
         status: "tracked",
         issueNumber: 287,
         capturedAt: "2026-06-12T18:00:00.000Z",
         source: "codex-goal",
+        goal: {
+          threadId: "thread-287",
+        },
         workflow: {
           name: "issue-create",
           role: "planner",
@@ -393,6 +401,7 @@ describe("issue token usage artifacts", () => {
         },
       })
     ).toEqual({
+      id: "issue-287:issue-create:thread-287",
       phase: "issue-create",
       role: "planner",
       model: "gpt-5.5",
@@ -405,8 +414,89 @@ describe("issue token usage artifacts", () => {
       elapsedSeconds: 420,
       capturedAt: "2026-06-12T18:00:00.000Z",
       runDir: ".prs/runs/20260612T180000000Z-issue-draft",
+      sessionId: "thread-287",
       notes: ["Audit publication: published issue token-usage"],
     });
+  });
+
+  it("extracts goal-reported token totals from partial continuation notes", () => {
+    expect(
+      parseTokenUsageLedgerRowFromContent(
+        JSON.stringify({
+          status: "partial",
+          capturedAt: "2026-06-15T14:33:00+01:00",
+          objective: "Draft GitHub Issue: Faro transport fetch failures on staging",
+          note:
+            "Planner token usage was captured from the active Codex app goal after the approved prs create draft. Goal tool reported 76253 tokens used and 152 seconds elapsed before later approval edits; exact create-run scoped usage is not available.",
+        })
+      )
+    ).toMatchObject({
+      phase: "issue-create",
+      role: "planner",
+      status: "partial",
+      totalTokens: 76253,
+      elapsedSeconds: 152,
+      capturedAt: "2026-06-15T14:33:00+01:00",
+    });
+  });
+
+  it("parses append-only token usage ledger entries from one artifact", () => {
+    expect(
+      parseTokenUsageLedgerRowsFromContent(
+        JSON.stringify({
+          version: 1,
+          kind: "token-usage-ledger",
+          target: { type: "issue", number: 239 },
+          entries: [
+            {
+              version: 1,
+              status: "partial",
+              target: { type: "issue", number: 239 },
+              capturedAt: "2026-06-15T14:33:00+01:00",
+              source: "codex-goal",
+              workflow: {
+                name: "issue-create",
+                role: "planner",
+                runDir: ".prs/runs/create",
+              },
+              usage: {
+                totalTokens: 76253,
+                timeUsedSeconds: 152,
+              },
+            },
+            {
+              version: 1,
+              status: "tracked",
+              target: { type: "issue", number: 239 },
+              capturedAt: "2026-06-15T15:20:00+01:00",
+              source: "codex-goal",
+              workflow: {
+                name: "issue-implementation",
+                role: "implementer",
+                runDir: ".prs/runs/issue-239",
+              },
+              usage: {
+                totalTokens: 88100,
+                timeUsedSeconds: 423,
+              },
+            },
+          ],
+        })
+      )
+    ).toMatchObject([
+      {
+        phase: "issue-create",
+        role: "planner",
+        totalTokens: 76253,
+        elapsedSeconds: 152,
+      },
+      {
+        phase: "issue-implementation",
+        role: "implementer",
+        totalTokens: 88100,
+        elapsedSeconds: 423,
+      },
+    ]);
   });
 
   it("treats operator-provided active model metadata as actual provenance", () => {

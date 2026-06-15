@@ -2168,11 +2168,12 @@ describe("CLI command surface", () => {
     expect(body).not.toContain("<!-- prs:audit -->");
     expect(body).toContain("Codex token usage ledger for issue #68.");
     expect(body).toContain(
-      "| issue-create | planner |  | unavailable | partial |  |"
+      "| issue-create | planner |  | unavailable | partial | 97,100 |"
     );
     expect(body).toContain("2026-06-15T12:24:57+01:00 |");
-    expect(body).not.toContain('"status": "partial"');
-    expect(body).not.toContain("Goal tool reported 97100 tokens");
+    expect(body).toContain("<!-- prs:token-usage-data");
+    expect(body).toContain('"status": "partial"');
+    expect(body).toContain('"totalTokens": 97100');
   });
 
   it("renders issue completion token-usage artifacts as the issue ledger table", async () => {

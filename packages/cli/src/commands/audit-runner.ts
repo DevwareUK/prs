@@ -4,7 +4,7 @@ import { publishAuditArtifact } from "../audit-artifacts";
 import { getCliArgs,getDefaultRepoRoot,getRepositoryForge } from "../cli-context";
 import { loadMediaEvidenceForPublication } from "../cli-git";
 import { appendMediaEvidenceSection } from "../media-evidence";
-import { parseTokenUsageLedgerRowFromContent } from "../token-audit";
+import { parseTokenUsageLedgerRowsFromContent } from "../token-audit";
 import { publishTokenUsageLedger } from "../token-usage-comments";
 import { parseAuditCommandArgs } from "./audit";
 
@@ -29,8 +29,8 @@ export async function runAuditCommand(): Promise<void> {
     (command.target.type === "issue" || command.target.type === "pull-request") &&
     command.sectionName.trim().toLowerCase() === "token-usage"
   ) {
-    const row = parseTokenUsageLedgerRowFromContent(content);
-    if (!row) {
+    const rows = parseTokenUsageLedgerRowsFromContent(content);
+    if (rows.length === 0) {
       throw new Error(
         "Token usage artifacts must be structured JSON supported by prs token audit publisher."
       );
@@ -38,7 +38,7 @@ export async function runAuditCommand(): Promise<void> {
 
     const result = await publishTokenUsageLedger(forge, {
       target: command.target,
-      rows: [row],
+      rows,
     });
     console.log(`Token usage artifact ${result.status}: ${result.comment.url}`);
     return;

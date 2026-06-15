@@ -14,7 +14,7 @@ verifyBuild,
 import { promptForLine } from "../cli-prompts";
 import {
 getTokenUsageArtifactFilePath,
-parseTokenUsageLedgerRowFromContent
+parseTokenUsageLedgerRowsFromContent
 } from "../token-audit";
 import {
 publishTokenUsageLedger,
@@ -73,10 +73,10 @@ async function publishIssueTokenUsageCommentsFromRun(input: {
     return [];
   }
 
-  const row = parseTokenUsageLedgerRowFromContent(
+  const rows = parseTokenUsageLedgerRowsFromContent(
     readFileSync(artifactPath, "utf8").trim()
   );
-  if (!row) {
+  if (rows.length === 0) {
     throw new Error(
       "Token usage artifacts must be structured JSON supported by prs token audit publisher."
     );
@@ -86,7 +86,7 @@ async function publishIssueTokenUsageCommentsFromRun(input: {
   for (const issue of input.issues) {
     const result = await publishTokenUsageLedger(input.forge, {
       target: { type: "issue", number: issue.number },
-      rows: [row],
+      rows,
     });
     publications.push({
       issueNumber: issue.number,
@@ -112,8 +112,8 @@ export async function runToolCommand(): Promise<void> {
       ? toolCommand.filePath
       : resolve(repoRoot, toolCommand.filePath);
     const content = readFileSync(artifactPath, "utf8").trim();
-    const row = parseTokenUsageLedgerRowFromContent(content);
-    if (!row) {
+    const rows = parseTokenUsageLedgerRowsFromContent(content);
+    if (rows.length === 0) {
       throw new Error(
         "Token usage artifacts must be structured JSON supported by prs token audit publisher."
       );
@@ -121,7 +121,7 @@ export async function runToolCommand(): Promise<void> {
 
     const result = await publishTokenUsageLedger(getRepositoryForge(repoRoot), {
       target: toolCommand.target,
-      rows: [row],
+      rows,
     });
     process.stdout.write(
       `${JSON.stringify(

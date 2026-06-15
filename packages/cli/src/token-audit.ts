@@ -16,6 +16,7 @@ export type TokenUsageTarget = {
 
 export type TokenUsageArtifact = {
   version: 1;
+  id?: string;
   status: TokenUsageStatus;
   issueNumber?: number;
   target?: TokenUsageTarget;
@@ -82,6 +83,13 @@ export type TokenUsageArtifact = {
     error?: string;
   };
   notes?: string[];
+};
+
+export type TokenUsageLedgerArtifact = {
+  version: 1;
+  kind: "token-usage-ledger";
+  target?: TokenUsageTarget;
+  entries: TokenUsageArtifact[];
 };
 
 export type IssueTokenUsageArtifact = TokenUsageArtifact & {
@@ -178,6 +186,7 @@ function formatAuditPublication(
 }
 
 export type TokenUsageLedgerRow = {
+  id?: string;
   phase: string;
   role?: string;
   model?: string;
@@ -193,6 +202,7 @@ export type TokenUsageLedgerRow = {
   elapsedSeconds?: number;
   capturedAt: string;
   runDir?: string;
+  sessionId?: string;
   notes?: string[];
 };
 
@@ -304,6 +314,7 @@ function normalizePlannerTokenUsageRow(
   ];
 
   return {
+    ...(readStringField(value, "id") ? { id: readStringField(value, "id") } : {}),
     phase,
     ...(resolvedRole ? { role: resolvedRole } : {}),
     ...(profile && readStringField(profile, "model")
@@ -338,6 +349,9 @@ function normalizePlannerTokenUsageRow(
     ...(capture && readStringField(capture, "runDir")
       ? { runDir: readStringField(capture, "runDir") }
       : {}),
+    ...(readStringField(value, "sessionId")
+      ? { sessionId: readStringField(value, "sessionId") }
+      : {}),
     ...(notes.length > 0 ? { notes } : {}),
   };
 }
@@ -370,6 +384,7 @@ function normalizeLegacyPlannerTokenUsageRow(
   ];
 
   return {
+    ...(readStringField(value, "id") ? { id: readStringField(value, "id") } : {}),
     phase: "issue-create",
     role,
     ...(model ? { model } : {}),
@@ -419,6 +434,7 @@ function normalizeCodexAppGoalTrackerTokenUsageRow(
   ];
 
   return {
+    ...(readStringField(value, "id") ? { id: readStringField(value, "id") } : {}),
     phase: "issue-create",
     role: "planner",
     ...(actualModel ? { model: actualModel } : {}),
@@ -443,16 +459,25 @@ function normalizePlannerContinuationTokenUsageRow(
   const capturedAt = readStringField(value, "capturedAt");
   const objective = readStringField(value, "objective");
   const note = readStringField(value, "note");
+  const reportedTokens = note?.match(/reported\s+([\d,]+)\s+tokens?\s+used/i)?.[1];
+  const reportedSeconds = note?.match(/([\d,]+)\s+seconds?\s+elapsed/i)?.[1];
 
   if (!capturedAt || (!objective && !note)) {
     return undefined;
   }
 
   return {
+    ...(readStringField(value, "id") ? { id: readStringField(value, "id") } : {}),
     phase: "issue-create",
     role: "planner",
     modelSource: "unavailable",
     status: normalizeTokenUsageStatus(readStringField(value, "status")),
+    ...(reportedTokens
+      ? { totalTokens: Number.parseInt(reportedTokens.replace(/,/g, ""), 10) }
+      : {}),
+    ...(reportedSeconds
+      ? { elapsedSeconds: Number.parseInt(reportedSeconds.replace(/,/g, ""), 10) }
+      : {}),
     capturedAt,
     notes: [
       ...(note ? [note] : []),
@@ -522,6 +547,7 @@ function normalizeCompletedGoalTokenUsageRow(
   ];
 
   return {
+    ...(readStringField(value, "id") ? { id: readStringField(value, "id") } : {}),
     phase,
     ...(role ? { role } : {}),
     ...(actualSessionModel ?? configuredProfile.model
@@ -554,6 +580,25 @@ export function parseTokenUsageLedgerRowFromJsonValue(
         normalizeCompletedGoalTokenUsageRow(value);
 }
 
+export function parseTokenUsageLedgerRowsFromJsonValue(
+  value: unknown
+): TokenUsageLedgerRow[] {
+  if (isRecord(value) && Array.isArray(value.entries)) {
+    return value.entries
+      .map((entry) => parseTokenUsageLedgerRowFromJsonValue(entry))
+      .filter((row): row is TokenUsageLedgerRow => row !== undefined);
+  }
+
+  if (isRecord(value) && Array.isArray(value.auditLogs)) {
+    return value.auditLogs
+      .map((entry) => parseTokenUsageLedgerRowFromJsonValue(entry))
+      .filter((row): row is TokenUsageLedgerRow => row !== undefined);
+  }
+
+  const row = parseTokenUsageLedgerRowFromJsonValue(value);
+  return row ? [row] : [];
+}
+
 export function parseTokenUsageLedgerRowFromContent(
   content: string
 ): TokenUsageLedgerRow | undefined {
@@ -565,6 +610,19 @@ export function parseTokenUsageLedgerRowFromContent(
   }
 
   return parseTokenUsageLedgerRowFromJsonValue(parsed);
+}
+
+export function parseTokenUsageLedgerRowsFromContent(
+  content: string
+): TokenUsageLedgerRow[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    return [];
+  }
+
+  return parseTokenUsageLedgerRowsFromJsonValue(parsed);
 }
 
 export type PullRequestTokenUsageMetadata = {
@@ -666,6 +724,7 @@ export function tokenUsageArtifactToLedgerRow(
   const modelName =
     artifact.model?.displayName ?? artifact.model?.model ?? artifact.model?.id;
   return {
+    ...(artifact.id ? { id: artifact.id } : {}),
     phase: artifact.workflow?.name ?? "issue-implementation",
     role: artifact.workflow?.role ?? artifact.model?.role,
     ...(modelName ? { model: modelName } : {}),
@@ -699,6 +758,7 @@ export function tokenUsageArtifactToLedgerRow(
     ...(artifact.workflow?.runDir ?? artifact.runDir
       ? { runDir: artifact.workflow?.runDir ?? artifact.runDir }
       : {}),
+    ...(artifact.goal?.threadId ? { sessionId: artifact.goal.threadId } : {}),
     notes: [
       ...formatAuditPublication(artifact.auditPublication),
       ...(artifact.notes ?? []),
