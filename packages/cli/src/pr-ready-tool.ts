@@ -7,6 +7,11 @@ import type {
 } from "@prs/contracts";
 import { TEST_SUGGESTIONS_COMMENT_MARKER } from "@prs/contracts";
 import { formatRunTimestamp, toRepoRelativePath } from "./run-artifacts";
+import {
+  buildPullRequestTokenUsageMetadata,
+  getTokenUsageArtifactFilePath,
+  type PullRequestTokenUsageMetadata,
+} from "./token-audit";
 import type {
   PullRequestCheckSignal,
   PullRequestDetails,
@@ -202,6 +207,7 @@ export type PrReadyToolResult =
       runtime: PrReadyRuntime;
       localReadiness: PrReadyLocalReadiness;
       prContext: PrReadyPullRequestContext;
+      tokenUsage: PullRequestTokenUsageMetadata;
       nextAction: "browse-local-app";
     }
   | {
@@ -216,6 +222,7 @@ export type PrReadyToolResult =
       runtime: PrReadyRuntime;
       localReadiness: PrReadyLocalReadiness;
       prContext: PrReadyPullRequestContext;
+      tokenUsage: PullRequestTokenUsageMetadata;
       nextAction: "start-runtime";
     }
   | {
@@ -231,6 +238,7 @@ export type PrReadyToolResult =
       runtime: PrReadyRuntime;
       localReadiness: PrReadyLocalReadiness;
       prContext: PrReadyPullRequestContext;
+      tokenUsage: PullRequestTokenUsageMetadata;
       nextAction:
         | "resolve-conflicts"
         | "start-runtime-manually"
@@ -960,6 +968,18 @@ function writeMetadata(
   metadataFilePath: string,
   result: PrReadyToolResult
 ): void {
+  const tokenUsage = buildPullRequestTokenUsageMetadata({
+    artifactFile: toRepoRelativePath(
+      repoRoot,
+      getTokenUsageArtifactFilePath(result.runDir)
+    ),
+    workflowName: result.tokenUsage.workflow.name,
+    role: result.tokenUsage.workflow.role,
+    prNumber: result.prNumber,
+    runDir: toRepoRelativePath(repoRoot, result.runDir),
+    publishWhen: result.tokenUsage.auditPublication.publishWhen,
+  });
+
   writeFileSync(
     metadataFilePath,
     `${JSON.stringify(
@@ -967,6 +987,7 @@ function writeMetadata(
         ...result,
         runDir: toRepoRelativePath(repoRoot, result.runDir),
         metadataFilePath: toRepoRelativePath(repoRoot, result.metadataFilePath),
+        tokenUsage,
       },
       null,
       2
@@ -995,6 +1016,14 @@ export async function readyPullRequestTool(
   const pullRequest = await options.forge.fetchPullRequestDetails(options.prNumber);
   const runDir = createRunDir(options.repoRoot, pullRequest.number);
   const metadataFilePath = resolve(runDir, "metadata.json");
+  const tokenUsage = buildPullRequestTokenUsageMetadata({
+    artifactFile: getTokenUsageArtifactFilePath(runDir),
+    workflowName: "pr-ready",
+    role: "reviewer",
+    prNumber: pullRequest.number,
+    runDir,
+    publishWhen: ["readiness-prepared"],
+  });
   const branchName = checkoutPullRequestBranch(runCommand, options.repoRoot, pullRequest);
   const runtime = detectRuntime(options.localRuntime);
   const baseSync = fetchBaseState(
@@ -1027,6 +1056,7 @@ export async function readyPullRequestTool(
           ? skippedReadiness
           : noConfiguredLocalReadiness(),
       prContext,
+      tokenUsage,
       nextAction: "resolve-conflicts",
     };
     writeMetadata(options.repoRoot, metadataFilePath, result);
@@ -1054,6 +1084,7 @@ export async function readyPullRequestTool(
         runtime.kind === "command" ? { ...runtime, status: "not-started" } : runtime,
       localReadiness,
       prContext,
+      tokenUsage,
       nextAction: "inspect-local-readiness",
     };
     writeMetadata(options.repoRoot, metadataFilePath, result);
@@ -1076,6 +1107,7 @@ export async function readyPullRequestTool(
       runtime: startedRuntime,
       localReadiness,
       prContext,
+      tokenUsage,
       nextAction: "start-runtime-manually",
     };
     writeMetadata(options.repoRoot, metadataFilePath, result);
@@ -1095,6 +1127,7 @@ export async function readyPullRequestTool(
       runtime: startedRuntime,
       localReadiness,
       prContext,
+      tokenUsage,
       nextAction: "start-runtime",
     };
     writeMetadata(options.repoRoot, metadataFilePath, result);
@@ -1113,6 +1146,7 @@ export async function readyPullRequestTool(
     runtime: startedRuntime,
     localReadiness,
     prContext,
+    tokenUsage,
     nextAction: "browse-local-app",
   };
   writeMetadata(options.repoRoot, metadataFilePath, result);
