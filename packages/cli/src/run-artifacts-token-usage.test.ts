@@ -499,6 +499,43 @@ describe("issue token usage artifacts", () => {
     ]);
   });
 
+  it("parses prs create ledger entries with top-level goal usage fields", () => {
+    expect(
+      parseTokenUsageLedgerRowsFromContent(
+        JSON.stringify({
+          version: 1,
+          kind: "token-usage-ledger",
+          entries: [
+            {
+              id: "issue-draft-20260615T164420Z-codex-app-session",
+              phase: "issue-draft",
+              recordedAt: "2026-06-15T16:44:20Z",
+              status: "available",
+              objective:
+                "Draft GitHub Issue: Fix production asset build missing vendor CKEditor path",
+              tokensUsed: 109535,
+              timeUsedSeconds: 176,
+              model: "unavailable",
+              notes:
+                "Usage recorded from the active Codex goal after local draft artifacts were generated.",
+            },
+          ],
+        })
+      )
+    ).toMatchObject([
+      {
+        id: "issue-draft-20260615T164420Z-codex-app-session",
+        phase: "issue-draft",
+        role: "planner",
+        modelSource: "unavailable",
+        status: "tracked",
+        totalTokens: 109535,
+        elapsedSeconds: 176,
+        capturedAt: "2026-06-15T16:44:20Z",
+      },
+    ]);
+  });
+
   it("treats operator-provided active model metadata as actual provenance", () => {
     expect(
       issueTokenUsageArtifactToLedgerRow({

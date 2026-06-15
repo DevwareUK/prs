@@ -287,6 +287,8 @@ function normalizePlannerTokenUsageRow(
   const capture = isRecord(value.capture) ? value.capture : undefined;
   const capturedAt =
     (capture ? readStringField(capture, "capturedAt") : undefined) ??
+    readStringField(value, "capturedAt") ??
+    readStringField(value, "recordedAt") ??
     readStringField(value, "createdAt") ??
     "unavailable";
 
@@ -302,7 +304,18 @@ function normalizePlannerTokenUsageRow(
     : profileSource;
   const totalTokens = usage
     ? readNumberField(usage, "totalTokens") ?? readNumberField(usage, "tokensUsed")
-    : undefined;
+    : readNumberField(value, "totalTokens") ?? readNumberField(value, "tokensUsed");
+  const inputTokens = usage
+    ? readNumberField(usage, "inputTokens")
+    : readNumberField(value, "inputTokens");
+  const outputTokens = usage
+    ? readNumberField(usage, "outputTokens")
+    : readNumberField(value, "outputTokens");
+  const elapsedSeconds = usage
+    ? readNumberField(usage, "timeUsedSeconds") ??
+      readNumberField(usage, "elapsedSeconds")
+    : readNumberField(value, "timeUsedSeconds") ??
+      readNumberField(value, "elapsedSeconds");
   const notes = [
     ...(isRecord(value.actualModel) && readStringField(value.actualModel, "notes")
       ? [readStringField(value.actualModel, "notes") as string]
@@ -336,15 +349,9 @@ function normalizePlannerTokenUsageRow(
         readStringField(value, "status")
     ),
     ...(totalTokens !== undefined ? { totalTokens } : {}),
-    ...(usage && readNumberField(usage, "inputTokens") !== undefined
-      ? { inputTokens: readNumberField(usage, "inputTokens") }
-      : {}),
-    ...(usage && readNumberField(usage, "outputTokens") !== undefined
-      ? { outputTokens: readNumberField(usage, "outputTokens") }
-      : {}),
-    ...(usage && readNumberField(usage, "timeUsedSeconds") !== undefined
-      ? { elapsedSeconds: readNumberField(usage, "timeUsedSeconds") }
-      : {}),
+    ...(inputTokens !== undefined ? { inputTokens } : {}),
+    ...(outputTokens !== undefined ? { outputTokens } : {}),
+    ...(elapsedSeconds !== undefined ? { elapsedSeconds } : {}),
     capturedAt,
     ...(capture && readStringField(capture, "runDir")
       ? { runDir: readStringField(capture, "runDir") }
