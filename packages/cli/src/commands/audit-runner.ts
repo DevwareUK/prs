@@ -275,6 +275,34 @@ function normalizeCodexAppGoalTrackerTokenUsageRow(
   };
 }
 
+function normalizePlannerContinuationTokenUsageRow(
+  value: unknown
+): TokenUsageLedgerRow | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const capturedAt = readStringField(value, "capturedAt");
+  const objective = readStringField(value, "objective");
+  const note = readStringField(value, "note");
+
+  if (!capturedAt || (!objective && !note)) {
+    return undefined;
+  }
+
+  return {
+    phase: "issue-create",
+    role: "planner",
+    modelSource: "unavailable",
+    status: normalizeTokenUsageStatus(readStringField(value, "status")),
+    capturedAt,
+    notes: [
+      ...(note ? [note] : []),
+      ...(objective ? [`Objective: ${objective}`] : []),
+    ],
+  };
+}
+
 function parseConfiguredProfileLabel(value: string | undefined): {
   profile?: string;
   model?: string;
@@ -380,6 +408,7 @@ function renderAuditContentForPublication(input: {
     : normalizePlannerTokenUsageRow(parsed) ??
       normalizeLegacyPlannerTokenUsageRow(parsed) ??
       normalizeCodexAppGoalTrackerTokenUsageRow(parsed) ??
+      normalizePlannerContinuationTokenUsageRow(parsed) ??
       normalizeCompletedGoalTokenUsageRow(parsed);
   if (!row) {
     return input.content;

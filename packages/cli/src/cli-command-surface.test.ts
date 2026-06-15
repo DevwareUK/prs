@@ -1951,6 +1951,95 @@ describe("CLI command surface", () => {
     expect(body).not.toContain("Codex app goal tracker");
   });
 
+  it("renders partial planner continuation token-usage artifacts as the issue ledger table", async () => {
+    const repoRoot = createTempRepoRoot();
+    const artifactPath = resolve(
+      repoRoot,
+      ".prs",
+      "runs",
+      "create",
+      "codex-token-usage.json"
+    );
+    mkdirSync(dirname(artifactPath), { recursive: true });
+    writeFileSync(
+      artifactPath,
+      `${JSON.stringify(
+        {
+          status: "partial",
+          note:
+            "Planner token usage is unavailable from the active Codex app session. Goal tool reported 97100 tokens used at continuation; exact run-scoped usage is not available.",
+          capturedAt: "2026-06-15T12:24:57+01:00",
+          objective:
+            "Draft GitHub Issue: restore relevant backups after site assignment/deploy",
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createFetchResponse({ number: 68 }))
+      .mockResolvedValueOnce(createFetchResponse([]))
+      .mockResolvedValueOnce(createFetchResponse({ number: 68 }))
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          id: 4068,
+          body: "<!-- prs:audit -->\n# Issue #68 audit\n",
+          html_url: "https://github.com/DevwareUK/dsm/issues/68#issuecomment-4068",
+          created_at: "2026-06-15T11:29:36Z",
+          updated_at: "2026-06-15T11:29:36Z",
+          user: {
+            login: "prs-bot",
+            type: "Bot",
+          },
+        })
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.GH_TOKEN = "";
+    process.env.GITHUB_TOKEN = "test-token";
+
+    const { run } = await loadCli({
+      runtimeRepoRoot: repoRoot,
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "remote" && args[1] === "get-url") {
+          return "git@github.com:DevwareUK/dsm.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    process.argv = [
+      "node",
+      "prs",
+      "audit",
+      "publish",
+      "--issue",
+      "68",
+      "--file",
+      artifactPath,
+      "--section",
+      "token-usage",
+    ];
+
+    await run();
+
+    expect(consoleLog).toHaveBeenCalledWith(
+      "Audit artifact created: https://github.com/DevwareUK/dsm/issues/68#issuecomment-4068"
+    );
+    const body = JSON.parse(String(fetchMock.mock.calls[3]?.[1]?.body)).body as string;
+    expect(body).toContain("## token-usage");
+    expect(body).toContain("Codex token usage ledger for issue #68.");
+    expect(body).toContain(
+      "| issue-create | planner |  | unavailable | partial |  |"
+    );
+    expect(body).toContain("2026-06-15T12:24:57+01:00 |");
+    expect(body).not.toContain('"status": "partial"');
+    expect(body).not.toContain("Goal tool reported 97100 tokens");
+  });
+
   it("renders issue completion token-usage artifacts as the issue ledger table", async () => {
     const repoRoot = createTempRepoRoot();
     const artifactPath = resolve(
