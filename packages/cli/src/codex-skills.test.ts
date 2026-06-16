@@ -224,7 +224,17 @@ describe("managed prs Codex skills", () => {
     expect(createMarkdown).toContain("`prs audit publish` comments are audit trail comments");
     expect(createMarkdown).toContain("prs tool issue create --draft-file <draft> --spec-file <spec> --plan-file <plan> --run-dir <run-dir> --json");
     expect(createMarkdown).toContain("trust its `managedComments` result");
-    expect(createMarkdown).toContain("Record planner token usage for the create run");
+    expect(createMarkdown).toContain("Immediately before writing create-run token usage, call `get_goal`");
+    expect(createMarkdown).toContain("Then call `get_goal` and confirm an active goal is visible before continuing.");
+    expect(createMarkdown).toContain(
+      "record token telemetry as unavailable because no active goal was available"
+    );
+    expect(createMarkdown).toContain("call `get_goal` again");
+    expect(createMarkdown).toContain("use `tokensUsed` or `usage.totalTokens`");
+    expect(createMarkdown).toContain("Use `status: \"tracked\"` when token totals are present");
+    expect(createMarkdown).toContain(
+      "Do not write an unavailable artifact merely because model metadata is unavailable."
+    );
     expect(createMarkdown).toContain("call `create_goal` with an objective like `Draft GitHub Issue: <short topic>`");
     expect(createMarkdown).toContain("managed `<!-- prs:token-usage -->` comment");
     expect(createMarkdown).toContain(
