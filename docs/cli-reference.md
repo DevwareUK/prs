@@ -239,6 +239,8 @@ The managed `/prs pr <number> address-comments`, `/prs pr <number> fix-tests`, a
 
 The direct local `prs pr address-comments`, `prs pr fix-tests`, and `prs pr add-tests` commands are Codex-safe preparation aliases. They write the same `.prs/runs/...` artifacts and print the preparation result for the active session without launching a configured runtime, running final verification, committing, or pushing. Compatibility aliases remain during the rename window: `fix-comments` maps to `address-comments`, and `fix-failing-tests` maps to `fix-tests`. The old AI-test-suggestion meaning of `fix-tests` has moved to `add-tests`.
 
+Implementation note: PR commands and deterministic PR tools share the internal PR lifecycle coordinator in `packages/cli/src/workflows/pr-lifecycle/`. That coordinator owns canonical action names and compatibility alias normalization, while existing workflow folders such as `pr-fix-comments`, `pr-fix-failing-tests`, `pr-fix-tests`, `pr-local-review`, `pr-prepare-review`, and `pr-resolve-conflicts` remain internal implementation steps. This is not a public command rename.
+
 Usage:
 
 ```bash
