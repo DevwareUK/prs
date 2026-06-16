@@ -7,6 +7,7 @@ import {
   type IssueEstimateCostSettings,
 } from "@prs/core";
 import type { InteractiveRuntimeType } from "./runtime";
+export { formatTokenUsageLedgerAuditSection } from "./token-audit";
 
 export function toRepoRelativePath(repoRoot: string, filePath: string): string {
   return (relative(repoRoot, filePath) || ".").split("\\").join("/");
@@ -117,6 +118,7 @@ export function getIssuePlanRunDir(
 
 export type IssueTokenUsageArtifact = {
   version: 1;
+  id?: string;
   status: "tracked" | "partial" | "unavailable";
   issueNumber: number;
   capturedAt: string;
@@ -258,6 +260,7 @@ function formatAuditPublication(
 }
 
 export type IssueTokenUsageLedgerRow = {
+  id?: string;
   phase: string;
   role?: string;
   model?: string;
@@ -273,6 +276,7 @@ export type IssueTokenUsageLedgerRow = {
   elapsedSeconds?: number;
   capturedAt: string;
   runDir?: string;
+  sessionId?: string;
   notes?: string[];
 };
 
@@ -337,6 +341,7 @@ export function issueTokenUsageArtifactToLedgerRow(
   const modelName =
     artifact.model?.displayName ?? artifact.model?.model ?? artifact.model?.id;
   return {
+    ...(artifact.id ? { id: artifact.id } : {}),
     phase: artifact.workflow?.name ?? "issue-implementation",
     role: artifact.workflow?.role ?? artifact.model?.role,
     ...(modelName ? { model: modelName } : {}),
@@ -370,6 +375,7 @@ export function issueTokenUsageArtifactToLedgerRow(
     ...(artifact.workflow?.runDir ?? artifact.runDir
       ? { runDir: artifact.workflow?.runDir ?? artifact.runDir }
       : {}),
+    ...(artifact.goal?.threadId ? { sessionId: artifact.goal.threadId } : {}),
     notes: [
       ...formatAuditPublication(artifact.auditPublication),
       ...(artifact.notes ?? []),

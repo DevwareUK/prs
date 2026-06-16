@@ -4,6 +4,10 @@ import { formatCommandForDisplay } from "../../config";
 import { buildDoneStateInstructions } from "../../done-state";
 import type { PullRequestDetails } from "../../forge";
 import { formatRunTimestamp, toRepoRelativePath } from "../../run-artifacts";
+import {
+  buildPullRequestTokenUsageMetadata,
+  getTokenUsageArtifactFilePath,
+} from "../../token-audit";
 import { formatPullRequestFailingTestsSnapshot } from "./snapshot";
 import type {
   PullRequestFixFailingTestsWorkspace,
@@ -133,6 +137,17 @@ export function writePullRequestFixFailingTestsWorkspaceFiles(
           title: issue.title,
           url: issue.url,
         })),
+        tokenUsage: buildPullRequestTokenUsageMetadata({
+          artifactFile: toRepoRelativePath(
+            repoRoot,
+            getTokenUsageArtifactFilePath(workspace.runDir)
+          ),
+          workflowName: "pr-fix-tests",
+          role: "tester",
+          prNumber: pullRequest.number,
+          runDir: toRepoRelativePath(repoRoot, workspace.runDir),
+          publishWhen: ["reviewed-updates-pushed"],
+        }),
         verificationCommand: buildCommand,
         initialVerification: {
           status: initialFailure.status,

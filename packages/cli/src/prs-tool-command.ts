@@ -1,4 +1,10 @@
 export type PrsToolCommand =
+  | {
+      kind: "token-usage-publish";
+      target: { type: "issue" | "pull-request"; number: number };
+      filePath: string;
+      json: boolean;
+    }
   | { kind: "issue-list"; actionable: boolean; json: boolean }
   | { kind: "issue-ready"; issueNumber: number; unattended: boolean; json: boolean }
   | { kind: "issue-estimate"; issueNumber: number; json: boolean }
@@ -46,6 +52,7 @@ export type PrsToolCommand =
 export function renderPrsToolCommandHelp(): string {
   return [
     "Usage:",
+    "  prs tool token-usage publish (--issue <number>|--pr <number>) --file <path> --json",
     "  prs tool issue list [--actionable] --json",
     "  prs tool issue ready <issue-number> [--unattended|--auto|--jdi] --json",
     "  prs tool issue estimate <issue-number> --json",
@@ -106,9 +113,108 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
 
   if (
     !command ||
-    (scope !== "issue" && scope !== "pr" && scope !== "branches" && scope !== "worktrees")
+    (scope !== "token-usage" &&
+      scope !== "issue" &&
+      scope !== "pr" &&
+      scope !== "branches" &&
+      scope !== "worktrees")
   ) {
     throw new Error(renderPrsToolCommandHelp());
+  }
+
+  if (scope === "token-usage") {
+    if (command !== "publish") {
+      throw new Error(renderPrsToolCommandHelp());
+    }
+
+    const optionArgs = [third, fourth, ...rest].filter(
+      (arg): arg is string => arg !== undefined
+    );
+    let target: PrsToolCommand["target"] | undefined;
+    let filePath: string | undefined;
+    let json = false;
+
+    for (let index = 0; index < optionArgs.length; index += 1) {
+      const rawArg = optionArgs[index];
+
+      if (rawArg === "--json") {
+        json = true;
+        continue;
+      }
+
+      if (rawArg === "--issue" || rawArg === "--pr") {
+        if (target) {
+          throw new Error(
+            `prs tool token-usage publish requires exactly one of --issue or --pr. ${renderPrsToolCommandHelp()}`
+          );
+        }
+        const number = parseToolNumber(
+          optionArgs[index + 1],
+          rawArg === "--issue" ? "issue" : "pr"
+        );
+        target = {
+          type: rawArg === "--issue" ? "issue" : "pull-request",
+          number,
+        };
+        index += 1;
+        continue;
+      }
+
+      if (rawArg.startsWith("--issue=") || rawArg.startsWith("--pr=")) {
+        if (target) {
+          throw new Error(
+            `prs tool token-usage publish requires exactly one of --issue or --pr. ${renderPrsToolCommandHelp()}`
+          );
+        }
+        const isIssue = rawArg.startsWith("--issue=");
+        const number = parseToolNumber(
+          rawArg.slice(isIssue ? "--issue=".length : "--pr=".length),
+          isIssue ? "issue" : "pr"
+        );
+        target = {
+          type: isIssue ? "issue" : "pull-request",
+          number,
+        };
+        continue;
+      }
+
+      if (rawArg === "--file") {
+        filePath = optionArgs[index + 1];
+        if (!filePath) {
+          throw new Error(`Missing required --file value. ${renderPrsToolCommandHelp()}`);
+        }
+        index += 1;
+        continue;
+      }
+
+      if (rawArg.startsWith("--file=")) {
+        filePath = rawArg.slice("--file=".length);
+        continue;
+      }
+
+      throw new Error(`Unknown tool option "${rawArg}". ${renderPrsToolCommandHelp()}`);
+    }
+
+    if (!target) {
+      throw new Error(
+        `prs tool token-usage publish requires exactly one of --issue or --pr. ${renderPrsToolCommandHelp()}`
+      );
+    }
+    if (!filePath) {
+      throw new Error(`Missing required --file. ${renderPrsToolCommandHelp()}`);
+    }
+    if (!json) {
+      throw new Error(
+        `prs tool token-usage publish requires --json. ${renderPrsToolCommandHelp()}`
+      );
+    }
+
+    return {
+      kind: "token-usage-publish",
+      target,
+      filePath,
+      json: true,
+    };
   }
 
   if (scope === "issue") {

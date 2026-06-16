@@ -8,6 +8,10 @@ import {
   toRepoRelativePath,
 } from "../../run-artifacts";
 import {
+  buildPullRequestTokenUsageMetadata,
+  getTokenUsageArtifactFilePath,
+} from "../../token-audit";
+import {
   ensureVerificationCommandAvailable,
   preflightRemoteBranch,
 } from "../../workflow-preflights";
@@ -71,6 +75,20 @@ class PullRequestLocalReviewBaseSyncError extends Error {
     this.name = "PullRequestLocalReviewBaseSyncError";
     this.baseSync = baseSync;
   }
+}
+
+function buildPullRequestReviewTokenUsageMetadata(
+  workspace: PullRequestLocalReviewWorkspace,
+  prNumber: number
+): Extract<PullRequestLocalReviewToolResult, { status: "ready" }>["tokenUsage"] {
+  return buildPullRequestTokenUsageMetadata({
+    artifactFile: getTokenUsageArtifactFilePath(workspace.runDir),
+    workflowName: "pr-review",
+    role: "reviewer",
+    prNumber,
+    runDir: workspace.runDir,
+    publishWhen: ["review-published"],
+  });
 }
 
 function runTrackedCommand(
@@ -400,6 +418,10 @@ export async function preparePullRequestLocalReviewTool(
     options.repoRoot,
     pullRequest.number
   );
+  const tokenUsage = buildPullRequestReviewTokenUsageMetadata(
+    workspace,
+    pullRequest.number
+  );
   initializePullRequestLocalReviewOutputLog(options.repoRoot, workspace);
   checkoutPullRequestReviewBranch(
     options.repoRoot,
@@ -483,6 +505,7 @@ export async function preparePullRequestLocalReviewTool(
       baseSync,
       changedFiles,
       outputMode,
+      tokenUsage,
       nextAction: "write-codex-pr-review-report",
     };
   } catch (error) {
@@ -535,6 +558,7 @@ export async function preparePullRequestLocalReviewTool(
       checkout: checkoutTarget,
       baseSync: error.baseSync,
       outputMode,
+      tokenUsage,
       nextAction: "resolve-conflicts-in-current-codex-session",
     };
   }

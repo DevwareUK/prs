@@ -224,9 +224,22 @@ describe("managed prs Codex skills", () => {
     expect(createMarkdown).toContain("`prs audit publish` comments are audit trail comments");
     expect(createMarkdown).toContain("prs tool issue create --draft-file <draft> --spec-file <spec> --plan-file <plan> --run-dir <run-dir> --json");
     expect(createMarkdown).toContain("trust its `managedComments` result");
-    expect(createMarkdown).toContain("Record planner token usage for the create run");
+    expect(createMarkdown).toContain("Immediately before writing create-run token usage, call `get_goal`");
+    expect(createMarkdown).toContain("Then call `get_goal` and confirm an active goal is visible before continuing.");
+    expect(createMarkdown).toContain(
+      "record token telemetry as unavailable because no active goal was available"
+    );
+    expect(createMarkdown).toContain("call `get_goal` again");
+    expect(createMarkdown).toContain("use `tokensUsed` or `usage.totalTokens`");
+    expect(createMarkdown).toContain("Use `status: \"tracked\"` when token totals are present");
+    expect(createMarkdown).toContain(
+      "Do not write an unavailable artifact merely because model metadata is unavailable."
+    );
     expect(createMarkdown).toContain("call `create_goal` with an objective like `Draft GitHub Issue: <short topic>`");
-    expect(createMarkdown).toContain("update the issue-lifetime token-usage ledger");
+    expect(createMarkdown).toContain("managed `<!-- prs:token-usage -->` comment");
+    expect(createMarkdown).toContain(
+      "prs tool token-usage publish --issue <number> --file <path> --json"
+    );
     expect(createMarkdown).toContain("prefer the actual active Codex session model");
     expect(createMarkdown).toContain("Do not run `prs issue plan`, `prs issue prepare`, or manual audit publication just to publish an already-approved plan artifact");
     expect(createMarkdown).toContain("If the create result includes `managedCommentHints`");
@@ -256,6 +269,8 @@ describe("managed prs Codex skills", () => {
     expect(issueMarkdown).toContain("create_goal");
     expect(issueMarkdown).toContain("Complete PRS issue #<number>");
     expect(issueMarkdown).toContain("codex-token-usage.json");
+    expect(issueMarkdown).toContain("stable `id`");
+    expect(issueMarkdown).toContain("`token-usage-ledger` with an `entries` array");
     expect(issueMarkdown).toContain("profile/tier name");
     expect(issueMarkdown).toContain("<profile> (<model>, <thinking> thinking)");
     expect(issueMarkdown).toContain(
@@ -281,6 +296,13 @@ describe("managed prs Codex skills", () => {
     expect(prMarkdown).toContain(
       "publish with `prs tool pr publish-review <number> --report <reportFilePath> --comments <commentsFilePath> --unattended --json`"
     );
+    expect(prMarkdown).toContain("When a PR tool result or metadata includes `tokenUsage`");
+    expect(prMarkdown).toContain("codex-token-usage.json");
+    expect(prMarkdown).toContain("stable `id`");
+    expect(prMarkdown).toContain("`token-usage-ledger` with an `entries` array");
+    expect(prMarkdown).toContain(
+      "prs tool token-usage publish --pr <number> --file <path> --json"
+    );
     expect(prMarkdown).toContain("/prs:pr <number> prepare-review");
     expect(prMarkdown).toContain("browse/functional test first");
     expect(auditMarkdown).toContain("name: prs:audit");
@@ -289,6 +311,8 @@ describe("managed prs Codex skills", () => {
     expect(finishWorkMarkdown).toContain("get_goal");
     expect(finishWorkMarkdown).toContain("token-usage");
     expect(finishWorkMarkdown).toContain("codex-token-usage.json");
+    expect(finishWorkMarkdown).toContain("stable entry `id`");
+    expect(finishWorkMarkdown).toContain("`token-usage-ledger` with an `entries` array");
     expect(finishWorkMarkdown).toContain("update the original issue's `token-usage` ledger");
     expect(finishWorkMarkdown).toContain("Prefer the actual active Codex session model");
     expect(finishWorkMarkdown).toContain(
@@ -304,6 +328,8 @@ describe("managed prs Codex skills", () => {
     expect(finishMarkdown).toContain("get_goal");
     expect(finishMarkdown).toContain("token-usage");
     expect(finishMarkdown).toContain("codex-token-usage.json");
+    expect(finishMarkdown).toContain("stable entry `id`");
+    expect(finishMarkdown).toContain("`token-usage-ledger` with an `entries` array");
     expect(finishMarkdown).toContain("update the original issue's `token-usage` ledger");
     expect(finishMarkdown).toContain("Prefer the actual active Codex session model");
     expect(finishMarkdown).toContain(

@@ -279,6 +279,22 @@ describe("runPrFixTestsCommand", () => {
       metadataFilePath: workspace.metadataFilePath,
       outputLogPath: workspace.outputLogPath,
       selectedCount: 1,
+      tokenUsage: {
+        artifactFile: resolve(workspace.runDir, "codex-token-usage.json"),
+        mode: "pr-token-usage-ledger",
+        workflow: {
+          name: "pr-add-tests",
+          role: "tester",
+          targetPullRequestNumber: 71,
+          runDir: workspace.runDir,
+        },
+        auditPublication: {
+          target: "pr",
+          prNumber: 71,
+          section: "token-usage",
+          publishWhen: ["reviewed-updates-pushed"],
+        },
+      },
       nextAction: "continue-in-current-codex-session",
     });
     expect(writePullRequestFixTestsWorkspaceFiles).toHaveBeenCalled();

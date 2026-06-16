@@ -222,6 +222,22 @@ describe("PR ready tool", () => {
 
     expect(result).toMatchObject({
       status: "ready",
+      tokenUsage: {
+        artifactFile: resolve(result.runDir, "codex-token-usage.json"),
+        mode: "pr-token-usage-ledger",
+        workflow: {
+          name: "pr-ready",
+          role: "reviewer",
+          targetPullRequestNumber: 115,
+          runDir: result.runDir,
+        },
+        auditPublication: {
+          target: "pr",
+          prNumber: 115,
+          section: "token-usage",
+          publishWhen: ["readiness-prepared"],
+        },
+      },
       localReadiness: {
         status: "passed",
         steps: [
@@ -248,6 +264,22 @@ describe("PR ready tool", () => {
     ]);
     const metadata = JSON.parse(readFileSync(result.metadataFilePath, "utf8")) as typeof result;
     expect(metadata.localReadiness).toEqual(result.localReadiness);
+    expect(metadata.tokenUsage).toMatchObject({
+      artifactFile: `${metadata.runDir}/codex-token-usage.json`,
+      mode: "pr-token-usage-ledger",
+      workflow: {
+        name: "pr-ready",
+        role: "reviewer",
+        targetPullRequestNumber: 115,
+        runDir: metadata.runDir,
+      },
+      auditPublication: {
+        target: "pr",
+        prNumber: 115,
+        section: "token-usage",
+        publishWhen: ["readiness-prepared"],
+      },
+    });
   });
 
   it("blocks PR readiness when a configured local readiness command fails", async () => {

@@ -1,4 +1,4 @@
-import { mkdirSync,readFileSync,writeFileSync } from "node:fs";
+import { existsSync,mkdirSync,readFileSync,writeFileSync } from "node:fs";
 import { dirname,isAbsolute,resolve } from "node:path";
 import { cleanupMergedBranchesTool } from "../branch-cleanup-tool";
 import { createProvider,getCliArgs,getDefaultRepoRoot,getRepositoryConfig,getRepositoryForge,loadRepoEnv } from "../cli-context";
@@ -12,6 +12,14 @@ readIssueWorkflowDiff,
 verifyBuild,
 } from "../cli-git";
 import { promptForLine } from "../cli-prompts";
+import {
+getTokenUsageArtifactFilePath,
+parseTokenUsageLedgerRowsFromContent
+} from "../token-audit";
+import {
+publishTokenUsageLedger,
+TOKEN_USAGE_COMMENT_MARKER
+} from "../token-usage-comments";
 import {
 createIssueEstimateContext,
 estimateIssueTool,
@@ -45,11 +53,89 @@ import { preparePullRequestReviewTool } from "../workflows/pr-prepare-review/run
 import { pushReviewedPullRequestUpdates } from "../workflows/pull-request-reviewed-updates";
 import { cleanupWorktreesTool } from "../worktree-cleanup-tool";
 
+async function publishIssueTokenUsageCommentsFromRun(input: {
+  repoRoot: string;
+  forge: ReturnType<typeof getRepositoryForge>;
+  issues: Array<{ number: number }>;
+  runDir: string;
+}): Promise<
+  Array<{
+    issueNumber: number;
+    marker: typeof TOKEN_USAGE_COMMENT_MARKER;
+    status: "published";
+    file: string;
+    id: number;
+    url: string;
+  }>
+> {
+  const artifactPath = getTokenUsageArtifactFilePath(input.runDir);
+  if (!existsSync(artifactPath)) {
+    return [];
+  }
+
+  const rows = parseTokenUsageLedgerRowsFromContent(
+    readFileSync(artifactPath, "utf8").trim()
+  );
+  if (rows.length === 0) {
+    throw new Error(
+      "Token usage artifacts must be structured JSON supported by prs token audit publisher."
+    );
+  }
+
+  const publications = [];
+  for (const issue of input.issues) {
+    const result = await publishTokenUsageLedger(input.forge, {
+      target: { type: "issue", number: issue.number },
+      rows,
+    });
+    publications.push({
+      issueNumber: issue.number,
+      marker: TOKEN_USAGE_COMMENT_MARKER,
+      status: "published" as const,
+      file: artifactPath,
+      id: result.comment.id,
+      url: result.comment.url,
+    });
+  }
+
+  return publications;
+}
+
 export async function runToolCommand(): Promise<void> {
   const repoRoot = getDefaultRepoRoot();
   loadRepoEnv(repoRoot);
   const toolCommand = parsePrsToolCommandArgs(getCliArgs().slice(1));
   const repositoryConfig = getRepositoryConfig(repoRoot);
+
+  if (toolCommand.kind === "token-usage-publish") {
+    const artifactPath = isAbsolute(toolCommand.filePath)
+      ? toolCommand.filePath
+      : resolve(repoRoot, toolCommand.filePath);
+    const content = readFileSync(artifactPath, "utf8").trim();
+    const rows = parseTokenUsageLedgerRowsFromContent(content);
+    if (rows.length === 0) {
+      throw new Error(
+        "Token usage artifacts must be structured JSON supported by prs token audit publisher."
+      );
+    }
+
+    const result = await publishTokenUsageLedger(getRepositoryForge(repoRoot), {
+      target: toolCommand.target,
+      rows,
+    });
+    process.stdout.write(
+      `${JSON.stringify(
+        {
+          status: result.status,
+          target: toolCommand.target,
+          url: result.comment.url,
+        },
+        null,
+        2
+      )}\n`
+    );
+    return;
+  }
 
   if (toolCommand.kind === "pr-list") {
     const result = await listPullRequestsTool({
@@ -175,6 +261,12 @@ export async function runToolCommand(): Promise<void> {
         body,
         toolCommand.labels
       );
+      const tokenUsageComments = await publishIssueTokenUsageCommentsFromRun({
+        repoRoot,
+        forge,
+        issues: [issue],
+        runDir,
+      });
       const managedCommentResult = await publishManagedCommentsFromArtifacts({
         repoRoot,
         forge,
@@ -197,11 +289,15 @@ export async function runToolCommand(): Promise<void> {
             mode: "single",
             issues: [issue],
             createdIssues: [issue],
-            auditPublicationHints: createAuditPublicationHints({
-              issues: [issue],
-              runDir,
-            }),
+            auditPublicationHints:
+              tokenUsageComments.length > 0
+                ? []
+                : createAuditPublicationHints({
+                    issues: [issue],
+                    runDir,
+                  }),
             estimatePublicationHints,
+            tokenUsageComments,
             ...managedCommentResult,
           },
           null,
@@ -233,6 +329,12 @@ export async function runToolCommand(): Promise<void> {
       labels: toolCommand.labels,
       forcePrsManaged: toolCommand.forcePrsManaged,
     });
+    const tokenUsageComments = await publishIssueTokenUsageCommentsFromRun({
+      repoRoot,
+      forge,
+      issues,
+      runDir,
+    });
     const managedCommentResult = await publishManagedCommentsFromArtifacts({
       repoRoot,
       forge,
@@ -255,11 +357,15 @@ export async function runToolCommand(): Promise<void> {
           mode: "multiple",
           issues,
           createdIssues: issues,
-          auditPublicationHints: createAuditPublicationHints({
-            issues,
-            runDir,
-          }),
+          auditPublicationHints:
+            tokenUsageComments.length > 0
+              ? []
+              : createAuditPublicationHints({
+                  issues,
+                  runDir,
+                }),
           estimatePublicationHints,
+          tokenUsageComments,
           ...managedCommentResult,
         },
         null,
