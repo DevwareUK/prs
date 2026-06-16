@@ -15,7 +15,7 @@ Managed `/prs` skills also resolve `ai.roles` through `ai.profiles` for the acti
 Runtime-specific behavior:
 
 - `prs pr resolve-conflicts <pr-number>` always requires `codex` on `PATH` for guided merge-conflict resolution, even though Codex only opens when the base merge conflicts.
-- `prs issue <number> --unattended`, multi-issue `prs issue <number> <number> ...`, and `prs issue batch ...` require `ai.runtime.type` to be `codex`.
+- `prs issue <number> --unattended` and multi-issue `prs issue <number> <number> ...` require `ai.runtime.type` to be `codex`.
 - Interactive local workflows such as `prs issue refine <number>` and `prs issue <number>` use the configured runtime, with fallback to Codex when a configured non-default runtime is unavailable. PR fix commands prepare handoff artifacts for the active Codex session and do not launch another runtime. `prs issue draft --draft-file <path>` ingests a draft from the active Codex skill context and does not launch another runtime.
 - Legacy unattended issue commands launch `codex exec` only from an outer terminal or automation context. When Codex session markers are already present, prs blocks the nested launch and tells the active session to use `prs tool issue ready <issue-number> --unattended --json` instead.
 - Structured-text workflows such as `prs commit`, `prs diff`, `prs review`, and provider-backed issue-plan generation use the configured provider, defaulting to OpenAI. Codex-first issue finalization never uses the configured provider; Codex performs the repository work, and `prs` uses deterministic local commit and PR text for the CLI-owned final step.
@@ -39,8 +39,6 @@ prs issue refine <number>
 prs issue plan <number> [--refresh]
 prs issue <number> [--unattended|--auto|--jdi|--mode <interactive|unattended>]
 prs issue <number> <number> [...number] [--unattended|--auto|--jdi]
-prs issue prepare <number> [--mode <local|github-action>]
-prs issue finalize <number>
 prs tool pr review <pr-number> [--unattended|--auto|--jdi] --json
 prs tool pr publish-review <pr-number> --report <path> --comments <path> [--unattended|--auto|--jdi] --json
 prs tool pr push-reviewed <pr-number> --json
@@ -70,7 +68,7 @@ When the Codex skill alias `/prs issue <number> --unattended` is requested, trea
 5. run the configured verification command
 6. commit, push, and open or update a pull request
 
-For one issue, the built-in `prs issue <number> --unattended` path prepares a branch, launches Codex non-interactively, verifies, commits, pushes, and opens a pull request when it is run from an outer terminal or automation context. From inside an active Codex session, use `prs tool issue ready <number> --unattended --json` and continue the implementation in that session instead of launching the built-in unattended path. For multiple issues, `prs issue <number> <number> ...` and `prs issue batch ...` create one isolated worktree per issue from the configured updated `baseBranch`.
+For one issue, the built-in `prs issue <number> --unattended` path prepares a branch, launches Codex non-interactively, verifies, commits, pushes, and opens a pull request when it is run from an outer terminal or automation context. From inside an active Codex session, use `prs tool issue ready <number> --unattended --json` and continue the implementation in that session instead of launching the built-in unattended path. For multiple issues, `prs issue <number> <number> ...` creates one isolated worktree per issue from the configured updated `baseBranch`; the older batch spelling remains documented only as a compatibility alias in the CLI reference.
 
 When the active Codex app exposes goal tools, `/prs issue <number> --unattended`, `/prs issue <number> --auto`, and `/prs issue <number> --jdi` should create or reuse an issue-scoped goal such as `Complete PRS issue #<number>: <title>`. During `/prs finish`, capture the latest available usage and estimate-style model profile metadata into `codex-token-usage.json` in the issue run directory and update the original issue's managed `<!-- prs:token-usage -->` comment with `prs tool token-usage publish --issue <number> --file <path> --json`. Model metadata should mirror `prs issue estimate` profile formatting, such as `standard (gpt-5.4-mini, medium thinking)` for the default implementer profile or `premium (gpt-5.5, high thinking)` for premium-profile work, but actual active Codex session metadata wins over configured fallback profile data. The `.prs/runs/.../codex-token-usage.json` artifact is the workflow source of truth. Codex goal data may populate it, but the token-usage comment must be published before the skill marks the goal or managed run complete. This is actual available run/session telemetry, not exact billing and not the forecast from the managed plan.
 

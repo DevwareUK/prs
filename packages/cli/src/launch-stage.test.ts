@@ -38,12 +38,13 @@ describe("formatLaunchStageNotice", () => {
     expect(notice).toContain("legacy issue automation path");
   });
 
-  it("frames issue batch as the widest beta automation path", () => {
+  it("frames issue batch as a compatibility alias instead of a first-choice beta path", () => {
     const notice = formatLaunchStageNotice("issue-batch");
 
     expect(notice).toContain("fans out unattended issue-to-PR runs");
-    expect(notice).toContain("widest automation path in the CLI today");
-    expect(notice).toContain("Codex + Superpowers + GitHub audit");
+    expect(notice).toContain("compatibility alias");
+    expect(notice).toContain("Use `prs issue <number> <number> ...`");
+    expect(notice).not.toContain("widest automation path in the CLI today");
   });
 
   it("describes resolve-conflicts as a Codex-specific beta PR workflow", () => {

@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { TOP_LEVEL_HELP } from "./cli-notices";
 import { parsePrsToolCommandArgs } from "./prs-tool-command";
 import {
   createIssuePlanWorkspace,
@@ -23,6 +24,65 @@ import {
 } from "./index-test-support";
 
 describe("CLI command surface", () => {
+  it("keeps legacy issue compatibility commands out of top-level help tiers", () => {
+    expect(TOP_LEVEL_HELP).toContain(
+      "  prs issue <number> [--unattended|--auto|--jdi|--mode <interactive|unattended>]"
+    );
+    expect(TOP_LEVEL_HELP).toContain(
+      "  prs issue <number> <number> [...number] [--unattended|--auto|--jdi]"
+    );
+    expect(TOP_LEVEL_HELP).toContain(
+      "Beta:\n  prs issue <number> <number> [...number] [--unattended|--auto|--jdi]"
+    );
+    expect(TOP_LEVEL_HELP).not.toContain("  prs issue batch ");
+    expect(TOP_LEVEL_HELP).not.toContain("  prs issue prepare <number>");
+    expect(TOP_LEVEL_HELP).not.toContain("  prs issue finalize <number>");
+  });
+
+  it("keeps README and CLI reference command tiers aligned with demoted issue compatibility commands", () => {
+    const readme = readFileSync(resolve(process.cwd(), "README.md"), "utf8");
+    const cliReference = readFileSync(
+      resolve(process.cwd(), "docs/cli-reference.md"),
+      "utf8"
+    );
+    const readmeTiers = readme.slice(
+      readme.indexOf("## Command tiers"),
+      readme.indexOf("`/prs cleanup worktrees`")
+    );
+    const cliReferenceTiers = cliReference.slice(
+      cliReference.indexOf("## Command tiers"),
+      cliReference.indexOf("## CLI command reference")
+    );
+
+    for (const tiers of [readmeTiers, cliReferenceTiers]) {
+      expect(tiers).toContain("prs issue <number>");
+      expect(tiers).toContain("prs issue <number> <number>");
+      expect(tiers).not.toContain("prs issue batch");
+      expect(tiers).not.toContain("prs issue prepare");
+      expect(tiers).not.toContain("prs issue finalize");
+    }
+
+    expect(cliReference).toContain(
+      "Compatibility alias for `prs issue <number> <number> [...number]`."
+    );
+    expect(cliReference).toContain("GitHub Action and manual recovery support");
+  });
+
+  it("keeps launch demo summaries from advertising demoted issue compatibility commands", () => {
+    const launchDemo = readFileSync(
+      resolve(process.cwd(), "docs/launch-demo.md"),
+      "utf8"
+    );
+    const keepOutSection = launchDemo.slice(
+      launchDemo.indexOf("## Commands To Keep Out Of The First Demo")
+    );
+
+    expect(keepOutSection).toContain("prs issue <number>");
+    expect(keepOutSection).not.toContain("prs issue batch");
+    expect(keepOutSection).not.toContain("prs issue prepare");
+    expect(keepOutSection).not.toContain("prs issue finalize");
+  });
+
   it("keeps the process entrypoint small and free of embedded workflow runners", () => {
     const entrypoint = readFileSync(
       resolve(process.cwd(), "packages/cli/src/index.ts"),

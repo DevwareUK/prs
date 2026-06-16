@@ -72,7 +72,7 @@ Keep the onboarding story narrow and opinionated:
 
 Do not mix these into the primary buyer journey unless the buyer asks for broader automation:
 
-- Advanced: `prs issue draft --draft-file <path>`, `prs issue plan <number> [--refresh]`, `prs issue prepare <number>`, `prs issue finalize <number>`, `prs issue <number>`
-- Beta: `prs issue batch <number> <number> [...number]`, `prs feature-backlog`
+- Advanced: issue drafting, planning, and full issue-to-PR automation such as `prs issue <number>`
+- Beta: multi-issue fan-out and `prs feature-backlog`
 
 Those commands are real and supported, but they ask the buyer to trust wider branch automation, issue orchestration, or higher-variance repository discovery earlier than the first-offer path needs.
