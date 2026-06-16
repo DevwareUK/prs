@@ -8,6 +8,7 @@ import {
 import type { AuditTarget } from "./forge";
 
 export type TokenUsageStatus = "tracked" | "partial" | "unavailable";
+export type TokenTelemetryStatus = TokenUsageStatus | "estimated";
 
 export type TokenUsageTarget = {
   type: "issue" | "pull-request";
@@ -187,6 +188,7 @@ function formatAuditPublication(
 
 export type TokenUsageLedgerRow = {
   id?: string;
+  kind?: "actual" | "estimate";
   phase: string;
   role?: string;
   model?: string;
@@ -195,14 +197,27 @@ export type TokenUsageLedgerRow = {
   configuredRole?: string;
   configuredModel?: string;
   configuredThinking?: string;
-  status: TokenUsageStatus;
+  status: TokenTelemetryStatus;
   totalTokens?: number;
+  tokenRange?: {
+    low: number;
+    high: number;
+  };
+  costRange?: {
+    low: number;
+    high: number;
+  };
+  confidence?: "high" | "medium" | "low" | string;
   inputTokens?: number;
   outputTokens?: number;
   elapsedSeconds?: number;
   capturedAt: string;
   runDir?: string;
   sessionId?: string;
+  recommendation?: string;
+  drivers?: string[];
+  warnings?: string[];
+  assumptions?: string[];
   notes?: string[];
 };
 
@@ -683,8 +698,26 @@ function formatLedgerInteger(value: number | undefined): string {
   return formatOptionalInteger(value) ?? "";
 }
 
+function formatLedgerRange(range: { low: number; high: number } | undefined): string {
+  if (!range) {
+    return "";
+  }
+
+  return `${range.low.toLocaleString()}-${range.high.toLocaleString()}`;
+}
+
 function formatLedgerCost(value: number | undefined): string {
   return value === undefined ? "" : `$${value.toFixed(2)}`;
+}
+
+function formatLedgerCostRange(
+  range: { low: number; high: number } | undefined
+): string {
+  if (!range) {
+    return "";
+  }
+
+  return `${formatLedgerCost(range.low)}-${formatLedgerCost(range.high)}`;
 }
 
 function estimateLedgerRowCost(
@@ -705,6 +738,38 @@ function estimateLedgerRowCost(
     rates.outputPerMillionTokens * costSettings.outputTokenRatio;
 
   return Number(((row.totalTokens / 1_000_000) * blendedRate).toFixed(2));
+}
+
+function formatLedgerStatus(row: TokenUsageLedgerRow): string {
+  return row.kind === "estimate" && row.confidence
+    ? `${row.status} (${row.confidence})`
+    : row.status;
+}
+
+function formatLedgerTokenCell(row: TokenUsageLedgerRow): string {
+  return row.tokenRange
+    ? formatLedgerRange(row.tokenRange)
+    : formatLedgerInteger(row.totalTokens);
+}
+
+function formatLedgerCostCell(
+  row: TokenUsageLedgerRow,
+  costSettings: IssueEstimateCostSettings
+): string {
+  if (row.costRange) {
+    return formatLedgerCostRange(row.costRange);
+  }
+
+  return formatLedgerCost(estimateLedgerRowCost(row, costSettings));
+}
+
+function estimateRowLabel(row: TokenUsageLedgerRow): string {
+  if (row.configuredProfile) {
+    return row.configuredProfile;
+  }
+
+  const idSuffix = row.id?.split(":").filter(Boolean).at(-1);
+  return idSuffix ?? row.model ?? row.phase;
 }
 
 function resolveLedgerModelSource(
@@ -788,14 +853,13 @@ export function formatTokenUsageLedgerAuditSection(
       ? `issue #${ledger.target.number}`
       : `PR #${ledger.target.number}`;
   const lines = [
-    `Codex token usage ledger for ${targetLabel}.`,
+    `Codex token telemetry ledger for ${targetLabel}.`,
     "",
     "| Phase | Role | Model | Model source | Status | Total tokens | Estimated cost | Elapsed | Captured |",
     "| --- | --- | --- | --- | --- | ---: | ---: | --- | --- |",
   ];
 
   for (const row of ledger.rows) {
-    const estimatedCost = estimateLedgerRowCost(row, costSettings);
     lines.push(
       [
         "",
@@ -803,9 +867,9 @@ export function formatTokenUsageLedgerAuditSection(
         formatLedgerCell(row.role),
         formatLedgerCell(row.model),
         formatLedgerCell(row.modelSource),
-        formatLedgerCell(row.status),
-        formatLedgerInteger(row.totalTokens),
-        formatLedgerCost(estimatedCost),
+        formatLedgerCell(formatLedgerStatus(row)),
+        formatLedgerTokenCell(row),
+        formatLedgerCostCell(row, costSettings),
         formatDuration(row.elapsedSeconds) ?? "",
         formatLedgerCell(row.capturedAt),
         "",
@@ -813,9 +877,40 @@ export function formatTokenUsageLedgerAuditSection(
     );
   }
 
+  const estimateRows = ledger.rows.filter(
+    (row) =>
+      row.kind === "estimate" &&
+      (row.recommendation ||
+        row.drivers?.length ||
+        row.warnings?.length ||
+        row.assumptions?.length ||
+        row.notes?.length)
+  );
+  if (estimateRows.length > 0) {
+    lines.push("", "Estimate recommendations:");
+    for (const row of estimateRows) {
+      if (row.recommendation) {
+        lines.push(`- ${estimateRowLabel(row)}: ${row.recommendation}`);
+      }
+    }
+
+    const detailGroups = [
+      ["Estimate drivers", "drivers"],
+      ["Estimate warnings", "warnings"],
+      ["Estimate assumptions", "assumptions"],
+      ["Estimate notes", "notes"],
+    ] as const;
+    for (const [heading, field] of detailGroups) {
+      const values = estimateRows.flatMap((row) => row[field] ?? []);
+      if (values.length > 0) {
+        lines.push("", `${heading}:`, ...values.map((value) => `- ${value}`));
+      }
+    }
+  }
+
   lines.push(
     "",
-    "This ledger reports available Codex run telemetry, not exact billing."
+    "This ledger reports available Codex run telemetry and planning forecasts, not exact billing."
   );
 
   return lines.join("\n");

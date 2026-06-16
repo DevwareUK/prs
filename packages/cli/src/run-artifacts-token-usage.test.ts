@@ -272,7 +272,7 @@ describe("issue token usage artifacts", () => {
       ],
     });
 
-    expect(markdown).toContain("Codex token usage ledger for issue #287.");
+    expect(markdown).toContain("Codex token telemetry ledger for issue #287.");
     expect(markdown).toContain(
       "| Phase | Role | Model | Model source | Status | Total tokens | Estimated cost | Elapsed | Captured |"
     );
@@ -289,7 +289,7 @@ describe("issue token usage artifacts", () => {
     expect(markdown).not.toContain(".prs/runs/20260612T180000000Z-issue-draft");
     expect(markdown).not.toContain("Output token count was unavailable.");
     expect(markdown).toContain(
-      "This ledger reports available Codex run telemetry, not exact billing."
+      "This ledger reports available Codex run telemetry and planning forecasts, not exact billing."
     );
   });
 
@@ -313,12 +313,12 @@ describe("issue token usage artifacts", () => {
       ],
     });
 
-    expect(markdown).toContain("Codex token usage ledger for PR #88.");
+    expect(markdown).toContain("Codex token telemetry ledger for PR #88.");
     expect(markdown).toContain(
       "| pr-review | reviewer | gpt-5.5 | actual | tracked | 32,100 |"
     );
     expect(markdown).toContain(
-      "This ledger reports available Codex run telemetry, not exact billing."
+      "This ledger reports available Codex run telemetry and planning forecasts, not exact billing."
     );
   });
 

@@ -388,7 +388,7 @@ export function formatIssueTokenUsageLedgerAuditSection(
   costSettings: IssueEstimateCostSettings = DEFAULT_ISSUE_ESTIMATE_COST_SETTINGS
 ): string {
   const lines = [
-    `Codex token usage ledger for issue #${ledger.issueNumber}.`,
+    `Codex token telemetry ledger for issue #${ledger.issueNumber}.`,
     "",
     "| Phase | Role | Model | Model source | Status | Total tokens | Estimated cost | Elapsed | Captured |",
     "| --- | --- | --- | --- | --- | ---: | ---: | --- | --- |",
@@ -415,7 +415,7 @@ export function formatIssueTokenUsageLedgerAuditSection(
 
   lines.push(
     "",
-    "This ledger reports available Codex run telemetry, not exact billing."
+    "This ledger reports available Codex run telemetry and planning forecasts, not exact billing."
   );
 
   return lines.join("\n");
