@@ -11,6 +11,8 @@ This section is for contributors working on this monorepo rather than users runn
 | `packages/cli` | The `prs` CLI entrypoint, argument parsing, repository config loading, forge integration, and local issue workflow orchestration. |
 | `packages/core` | Shared workflow logic for commit messages, diff summaries, PR review, issue drafting, issue planning, and backlog analysis. |
 | `packages/contracts` | Shared Zod contracts and schema types for workflow inputs and outputs. |
+
+PR command routing in `packages/cli` uses `packages/cli/src/workflows/pr-lifecycle/` as the internal coordinator for canonical PR action names and compatibility aliases. The legacy-named workflow folders under `packages/cli/src/workflows/pr-*` remain implementation steps behind that coordinator unless a future command-surface change deliberately renames them.
 | `packages/providers` | AI provider integrations, including OpenAI and Bedrock Claude adapters plus shared provider selection helpers. |
 | `actions/pr-review` | GitHub Action bundle for AI pull request review. |
 | `actions/pr-assistant` | GitHub Action bundle for managed pull request assistant sections. |

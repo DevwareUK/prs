@@ -42,6 +42,8 @@ Start here if you are evaluating `prs` for a team:
 | `/prs pr <pr-number> add-tests` | Prepares selected managed AI test suggestions as local `.prs/` artifacts with preserved task context, then expects verified committed test changes to be pushed through the guarded PR-head push tool. |
 | `prs test-backlog` | Finds the highest-value automated testing gaps in the repository. |
 
+Internally, local PR actions route through a PR lifecycle coordinator; older workflow folders such as `pr-fix-comments`, `pr-fix-failing-tests`, and `pr-fix-tests` remain implementation steps behind the public command names above.
+
 Use [docs/launch-demo.md](docs/launch-demo.md) when you need a buyer-facing walkthrough of this first-offer path.
 
 ## Recommended workflows

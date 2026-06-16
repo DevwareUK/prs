@@ -1,5 +1,15 @@
+import {
+  normalizePrLifecycleAction,
+  type PrLifecycleAction,
+} from "../workflows/pr-lifecycle/actions";
+
+type DirectPrCommandAction = Extract<
+  PrLifecycleAction,
+  "address-comments" | "fix-tests" | "add-tests" | "resolve-conflicts"
+>;
+
 export type PrCommandOptions = {
-  action: "address-comments" | "fix-tests" | "add-tests" | "resolve-conflicts";
+  action: DirectPrCommandAction;
   prNumber: number;
 };
 
@@ -32,8 +42,8 @@ export function parsePrCommandArgs(
     throw new Error(PR_PREPARE_REVIEW_RETIRED_MESSAGE);
   }
 
-  const action = normalizePrSubcommand(subcommand);
-  if (!action) {
+  const action = normalizePrLifecycleAction(subcommand);
+  if (!isDirectPrCommandAction(action)) {
     throw new Error(`Unknown pr subcommand "${subcommand ?? ""}". ${PR_USAGE}`);
   }
 
@@ -48,23 +58,13 @@ export function parsePrCommandArgs(
   };
 }
 
-function normalizePrSubcommand(
-  subcommand: string | undefined
-): PrCommandOptions["action"] | undefined {
-  if (subcommand === "fix-comments") {
-    return "address-comments";
-  }
-  if (subcommand === "fix-failing-tests") {
-    return "fix-tests";
-  }
-  if (
-    subcommand === "address-comments" ||
-    subcommand === "fix-tests" ||
-    subcommand === "add-tests" ||
-    subcommand === "resolve-conflicts"
-  ) {
-    return subcommand;
-  }
-
-  return undefined;
+function isDirectPrCommandAction(
+  action: PrLifecycleAction | undefined
+): action is DirectPrCommandAction {
+  return (
+    action === "address-comments" ||
+    action === "fix-tests" ||
+    action === "add-tests" ||
+    action === "resolve-conflicts"
+  );
 }

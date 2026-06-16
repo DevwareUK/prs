@@ -61,6 +61,8 @@ For `/prs pr <number> review --unattended`, `/prs pr <number> review --auto`, or
 
 For `/prs pr <number> address-comments`, `/prs pr <number> fix-tests`, and `/prs pr <number> add-tests`, keep the fix work in the active Codex conversation. The skill should run the deterministic `prs tool pr <action> <number> --json` preparation command, read the returned prompt and snapshot, apply the selected fixes, run configured verification, commit reviewed changes, and then run `prs tool pr push-reviewed <number> --json`. That final tool fetches the PR head, checks ahead/behind status, and pushes only when `HEAD` is ahead and not behind `origin/<pr-head-branch>`.
 
+The CLI keeps these public PR action names stable through `packages/cli/src/workflows/pr-lifecycle/`, which normalizes compatibility aliases and routes them to the older workflow folders as internal steps. Do not introduce a new user-facing lifecycle command for these flows without updating the command reference and README examples.
+
 When the Codex skill alias `/prs issue <number> --unattended` is requested, treat it as an operator workflow. `--auto` and `--jdi` are equivalent aliases. The intended end-to-end path is:
 
 1. inspect the issue and verify the implemented command surface from source

@@ -1,3 +1,5 @@
+import { normalizePrLifecycleAction } from "./workflows/pr-lifecycle/actions";
+
 export type PrsToolCommand =
   | {
       kind: "token-usage-publish";
@@ -801,10 +803,11 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
 function normalizePrFixToolKind(
   command: string
 ): Extract<PrsToolCommand, { prNumber: number; selection: string }>["kind"] {
-  if (command === "fix-comments" || command === "address-comments") {
+  const action = normalizePrLifecycleAction(command);
+  if (action === "address-comments") {
     return "pr-address-comments";
   }
-  if (command === "fix-failing-tests" || command === "fix-tests") {
+  if (action === "fix-tests") {
     return "pr-fix-tests";
   }
 

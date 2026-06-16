@@ -4,17 +4,24 @@ import {
   type ActionableIssue,
   type ActionablePullRequest,
 } from "./actionable-github";
+import {
+  normalizePrLifecycleAction,
+  type PrLifecycleAction,
+} from "./workflows/pr-lifecycle/actions";
 
 export type PrsIssueAction = "work" | "refine" | "plan" | "finish";
 export type PrsReviewAction = "choose" | "diff" | "tests" | "features";
 export type PrsPrAction =
   | "choose"
-  | "review"
-  | "prepare-review"
-  | "resolve-conflicts"
-  | "address-comments"
-  | "fix-tests"
-  | "add-tests";
+  | Extract<
+      PrLifecycleAction,
+      | "review"
+      | "prepare-review"
+      | "resolve-conflicts"
+      | "address-comments"
+      | "fix-tests"
+      | "add-tests"
+    >;
 
 export type PrsCommandSurfaceAction =
   | { kind: "root"; mode: "interactive" }
@@ -65,14 +72,12 @@ export type PrsInteractivePickerModel =
   | { kind: "pull-requests"; items: ActionablePullRequest[] };
 
 const ISSUE_ACTIONS = new Set(["refine", "plan", "finish"]);
-const PR_ACTIONS = new Set([
+const PR_SURFACE_ACTIONS = new Set<PrsPrAction>([
   "review",
   "prepare-review",
   "resolve-conflicts",
   "address-comments",
   "add-tests",
-  "fix-comments",
-  "fix-failing-tests",
   "fix-tests",
 ]);
 
@@ -193,7 +198,7 @@ export function parsePrsCommandSurfaceArgs(args: string[]): PrsCommandSurfaceAct
     if (rest.length > 1) {
       throw new Error(renderPrsCommandSurfaceHelp());
     }
-    if (PR_ACTIONS.has(second)) {
+    if (isPrSurfaceActionInput(second)) {
       throw new Error(renderPrsCommandSurfaceHelp());
     }
 
@@ -204,11 +209,11 @@ export function parsePrsCommandSurfaceArgs(args: string[]): PrsCommandSurfaceAct
     if (!third) {
       return { kind: "pr", mode: "direct", prNumber, action: "choose", unattended: false };
     }
-    if (!PR_ACTIONS.has(third)) {
+    const action = normalizePrSurfaceAction(third);
+    if (!action) {
       throw new Error(renderPrsCommandSurfaceHelp());
     }
 
-    const action = normalizePrSurfaceAction(third);
     if (rest[0] && (action !== "review" || !isUnattendedAlias(rest[0]))) {
       throw new Error(renderPrsCommandSurfaceHelp());
     }
@@ -427,15 +432,17 @@ export function routePrsCommandSurfaceAction(action: PrsCommandSurfaceAction): P
   return { interaction: "interactive", skillName: "prs:finish-work", cliArgs: undefined };
 }
 
-function normalizePrSurfaceAction(rawAction: string | undefined): PrsPrAction {
-  if (rawAction === "fix-comments") {
-    return "address-comments";
-  }
-  if (rawAction === "fix-failing-tests") {
-    return "fix-tests";
+function normalizePrSurfaceAction(rawAction: string | undefined): PrsPrAction | undefined {
+  const action = normalizePrLifecycleAction(rawAction);
+  if (action && PR_SURFACE_ACTIONS.has(action as PrsPrAction)) {
+    return action as PrsPrAction;
   }
 
-  return rawAction as PrsPrAction;
+  return undefined;
+}
+
+function isPrSurfaceActionInput(rawAction: string | undefined): boolean {
+  return normalizePrSurfaceAction(rawAction) !== undefined;
 }
 
 export function buildPrsInteractivePickerModel(
