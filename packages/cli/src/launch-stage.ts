@@ -36,11 +36,11 @@ const LAUNCH_STAGE_NOTICE_DEFINITIONS: Record<
     tier: "beta",
     command: "`prs issue <number> <number> ...`",
     reason:
-      "It fans out unattended issue-to-PR runs across separate worktrees and remains the widest automation path in the CLI today.",
+      "It fans out unattended issue-to-PR runs across separate worktrees; `prs issue batch ...` remains only a compatibility alias.",
     recommendedFirst:
-      "Codex + Superpowers + GitHub audit for issue work, or `prs review` and PR fix workflows for narrower changes.",
+      "Use `prs issue <number> <number> ...` for multi-issue fan-out, or Codex + Superpowers + GitHub audit for single-issue work.",
     constraints:
-      'Requires at least two issue numbers, authenticated GitHub access, and `ai.runtime.type: "codex"`; `prs issue batch ...` remains a compatibility alias.',
+      'Requires at least two issue numbers, authenticated GitHub access, and `ai.runtime.type: "codex"`.',
   },
   "issue-draft": {
     tier: "advanced",

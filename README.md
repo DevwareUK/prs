@@ -121,13 +121,10 @@ Advanced commands:
 - `prs issue plan <number> [--refresh]`
 - `prs issue estimate <number>`
 - `prs issue <number>`
-- `prs issue prepare <number>`
-- `prs issue finalize <number>`
 
 Beta commands:
 
 - `prs issue <number> <number> ...`
-- `prs issue batch <number> <number> [...number]`
 - `prs pr resolve-conflicts <pr-number>`
 - `/prs cleanup worktrees`
 - `prs feature-backlog`
@@ -158,6 +155,8 @@ Supporting commands:
 - `prs diff`
 
 `/prs cleanup worktrees` routes to the managed `prs:cleanup-worktrees` skill and uses `prs tool worktrees cleanup --json` for the dry-run report. Apply mode is intentionally explicit because the command can remove PRS-managed worktrees only when they are clean and proven safe to remove.
+
+Legacy issue support commands such as the batch alias, runtime-launched drafting, and split prepare/finalize flows stay callable for older automation, GitHub Action support, and manual recovery, but they are not first-choice command-tier entries. See [docs/cli-reference.md](docs/cli-reference.md) for their reference behavior and current replacements.
 
 The old `prs codex ...` nested launcher group has been retired. To start an agentic `/prs` workflow from a shell, run Codex directly in the repository, for example `codex -C <repo> "/prs issue <number> refine"` or `codex exec -C <repo> "/prs pr <number> review"`. Inside an active Codex session, use the deterministic `prs tool ... --json` commands for handoff data. Legacy runtime-launching commands that would start a child Codex process are blocked when Codex session markers are present; for unattended issue work, use `prs tool issue ready <issue-number> --unattended --json` and continue in the active session.
 
