@@ -740,12 +740,6 @@ function estimateLedgerRowCost(
   return Number(((row.totalTokens / 1_000_000) * blendedRate).toFixed(2));
 }
 
-function formatLedgerStatus(row: TokenUsageLedgerRow): string {
-  return row.kind === "estimate" && row.confidence
-    ? `${row.status} (${row.confidence})`
-    : row.status;
-}
-
 function formatLedgerTokenCell(row: TokenUsageLedgerRow): string {
   return row.tokenRange
     ? formatLedgerRange(row.tokenRange)
@@ -770,6 +764,77 @@ function estimateRowLabel(row: TokenUsageLedgerRow): string {
 
   const idSuffix = row.id?.split(":").filter(Boolean).at(-1);
   return idSuffix ?? row.model ?? row.phase;
+}
+
+function formatUsageLedgerTable(
+  rows: TokenUsageLedgerRow[],
+  costSettings: IssueEstimateCostSettings
+): string[] {
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const lines = [
+    "## Usage",
+    "",
+    "| Phase | Role | Model | Model source | Status | Total tokens | Estimated cost | Elapsed | Captured |",
+    "| --- | --- | --- | --- | --- | ---: | ---: | --- | --- |",
+  ];
+
+  for (const row of rows) {
+    lines.push(
+      [
+        "",
+        formatLedgerCell(row.phase),
+        formatLedgerCell(row.role),
+        formatLedgerCell(row.model),
+        formatLedgerCell(row.modelSource),
+        formatLedgerCell(row.status),
+        formatLedgerTokenCell(row),
+        formatLedgerCostCell(row, costSettings),
+        formatDuration(row.elapsedSeconds) ?? "",
+        formatLedgerCell(row.capturedAt),
+        "",
+      ].join(" | ")
+    );
+  }
+
+  return lines;
+}
+
+function formatEstimateLedgerTable(
+  rows: TokenUsageLedgerRow[],
+  costSettings: IssueEstimateCostSettings
+): string[] {
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const lines = [
+    "## Estimates",
+    "",
+    "| Profile | Role | Model | Thinking | Confidence | Token range | Cost range | Captured |",
+    "| --- | --- | --- | --- | --- | ---: | ---: | --- |",
+  ];
+
+  for (const row of rows) {
+    lines.push(
+      [
+        "",
+        formatLedgerCell(estimateRowLabel(row)),
+        formatLedgerCell(row.role),
+        formatLedgerCell(row.model),
+        formatLedgerCell(row.configuredThinking),
+        formatLedgerCell(row.confidence),
+        formatLedgerTokenCell(row),
+        formatLedgerCostCell(row, costSettings),
+        formatLedgerCell(row.capturedAt),
+        "",
+      ].join(" | ")
+    );
+  }
+
+  return lines;
 }
 
 function resolveLedgerModelSource(
@@ -852,60 +917,18 @@ export function formatTokenUsageLedgerAuditSection(
     ledger.target.type === "issue"
       ? `issue #${ledger.target.number}`
       : `PR #${ledger.target.number}`;
-  const lines = [
-    `Codex token telemetry ledger for ${targetLabel}.`,
-    "",
-    "| Phase | Role | Model | Model source | Status | Total tokens | Estimated cost | Elapsed | Captured |",
-    "| --- | --- | --- | --- | --- | ---: | ---: | --- | --- |",
-  ];
+  const usageRows = ledger.rows.filter((row) => row.kind !== "estimate");
+  const estimateRows = ledger.rows.filter((row) => row.kind === "estimate");
+  const usageTable = formatUsageLedgerTable(usageRows, costSettings);
+  const estimateTable = formatEstimateLedgerTable(estimateRows, costSettings);
+  const lines = [`Codex token telemetry ledger for ${targetLabel}.`];
 
-  for (const row of ledger.rows) {
-    lines.push(
-      [
-        "",
-        formatLedgerCell(row.phase),
-        formatLedgerCell(row.role),
-        formatLedgerCell(row.model),
-        formatLedgerCell(row.modelSource),
-        formatLedgerCell(formatLedgerStatus(row)),
-        formatLedgerTokenCell(row),
-        formatLedgerCostCell(row, costSettings),
-        formatDuration(row.elapsedSeconds) ?? "",
-        formatLedgerCell(row.capturedAt),
-        "",
-      ].join(" | ")
-    );
+  if (usageTable.length > 0) {
+    lines.push("", ...usageTable);
   }
 
-  const estimateRows = ledger.rows.filter(
-    (row) =>
-      row.kind === "estimate" &&
-      (row.recommendation ||
-        row.drivers?.length ||
-        row.warnings?.length ||
-        row.assumptions?.length ||
-        row.notes?.length)
-  );
-  if (estimateRows.length > 0) {
-    lines.push("", "Estimate recommendations:");
-    for (const row of estimateRows) {
-      if (row.recommendation) {
-        lines.push(`- ${estimateRowLabel(row)}: ${row.recommendation}`);
-      }
-    }
-
-    const detailGroups = [
-      ["Estimate drivers", "drivers"],
-      ["Estimate warnings", "warnings"],
-      ["Estimate assumptions", "assumptions"],
-      ["Estimate notes", "notes"],
-    ] as const;
-    for (const [heading, field] of detailGroups) {
-      const values = estimateRows.flatMap((row) => row[field] ?? []);
-      if (values.length > 0) {
-        lines.push("", `${heading}:`, ...values.map((value) => `- ${value}`));
-      }
-    }
+  if (estimateTable.length > 0) {
+    lines.push("", ...estimateTable);
   }
 
   lines.push(

@@ -118,10 +118,13 @@ describe("issue estimate tool", () => {
     expect(body).toContain(TOKEN_USAGE_COMMENT_MARKER);
     expect(body).not.toContain("<!-- prs:audit -->");
     expect(body).toContain("Codex token telemetry ledger for issue #267.");
-    expect(body).toContain("| issue-estimate | implementer, tester | gpt-5.4-mini | configured | estimated (medium) | 30,000-54,000 |");
-    expect(body).toContain("Estimate recommendations:");
-    expect(body).toContain("- standard: Start with standard.");
-    expect(body).toContain("No repository scan was used.");
+    const visibleBody = body.split("<!-- prs:token-usage-data")[0] ?? body;
+    expect(visibleBody).toContain("## Estimates");
+    expect(visibleBody).toContain(
+      "| standard | implementer, tester | gpt-5.4-mini | medium | medium | 30,000-54,000 |"
+    );
+    expect(visibleBody).not.toContain("Estimate recommendations:");
+    expect(visibleBody).not.toContain("No repository scan was used.");
     const rows = parseTokenUsageRowsFromCommentBody(body);
     expect(rows).toEqual([
       expect.objectContaining({
@@ -357,6 +360,9 @@ describe("issue estimate tool", () => {
     const body = forge.createAuditComment.mock.calls[0][1];
     expect(body).toContain("Codex token telemetry ledger for issue #267.");
     expect(body).not.toContain("<!-- prs:audit -->");
+    const visibleBody = body.split("<!-- prs:token-usage-data")[0] ?? body;
+    expect(visibleBody).toContain("## Estimates");
+    expect(visibleBody).not.toContain("Estimate notes:");
     expect(body).toContain(
       "Plan source: https://github.com/DevwareUK/prs/issues/267#issuecomment-3"
     );
@@ -406,7 +412,9 @@ describe("issue estimate tool", () => {
     });
 
     const body = forge.createAuditComment.mock.calls[0][1];
-    expect(body).toContain("| issue-estimate | implementer | gpt-6 | configured | estimated (medium) | 30,000-54,000 | $0.30-$0.54 |");
+    expect(body).toContain(
+      "| future | implementer | gpt-6 | medium | medium | 30,000-54,000 | $0.30-$0.54 |"
+    );
   });
 
   it("skips direct publication when the estimate is blocked", async () => {

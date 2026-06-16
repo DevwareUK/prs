@@ -234,14 +234,26 @@ describe("token usage comments", () => {
     });
 
     const body = updateIssueComment.mock.calls[0]?.[1] as string;
+    const visibleBody = body.split("<!-- prs:token-usage-data")[0] ?? body;
     expect(body).toContain(
       "| issue-implementation | implementer | gpt-5 | actual | tracked | 88,100 |"
     );
     expect(body).toContain(
-      "| issue-estimate | implementer, tester | gpt-5.4-mini | configured | estimated (medium) | 30,000-54,000 | $0.12-$0.22 |"
+      "| standard | implementer, tester | gpt-5.4-mini |  | medium | 30,000-54,000 | $0.12-$0.22 | 2026-06-11T08:47:44Z |"
     );
-    expect(body).toContain("Estimate recommendations:");
-    expect(body).toContain("- standard: Start with standard.");
+    expect(visibleBody).toContain("## Usage");
+    expect(visibleBody).toContain("## Estimates");
+    expect(visibleBody.indexOf("## Usage")).toBeLessThan(
+      visibleBody.indexOf("## Estimates")
+    );
+    expect(visibleBody).not.toContain("Estimate recommendations:");
+    expect(visibleBody).not.toContain("Estimate drivers:");
+    expect(visibleBody).not.toContain("Estimate warnings:");
+    expect(visibleBody).not.toContain("Estimate assumptions:");
+    expect(visibleBody).not.toContain("Estimate notes:");
+    expect(visibleBody).not.toContain("Start with standard.");
+    expect(visibleBody).not.toContain("Plan has explicit implementation tasks.");
+    expect(visibleBody).not.toContain("No repository scan was used.");
     expect(body).toContain('"kind": "actual"');
     expect(body).toContain('"kind": "estimate"');
   });
