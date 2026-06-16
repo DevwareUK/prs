@@ -8,6 +8,7 @@ import {
 import type { AuditTarget } from "./forge";
 
 export type TokenUsageStatus = "tracked" | "partial" | "unavailable";
+export type TokenTelemetryStatus = TokenUsageStatus | "estimated";
 
 export type TokenUsageTarget = {
   type: "issue" | "pull-request";
@@ -187,6 +188,7 @@ function formatAuditPublication(
 
 export type TokenUsageLedgerRow = {
   id?: string;
+  kind?: "actual" | "estimate";
   phase: string;
   role?: string;
   model?: string;
@@ -195,14 +197,27 @@ export type TokenUsageLedgerRow = {
   configuredRole?: string;
   configuredModel?: string;
   configuredThinking?: string;
-  status: TokenUsageStatus;
+  status: TokenTelemetryStatus;
   totalTokens?: number;
+  tokenRange?: {
+    low: number;
+    high: number;
+  };
+  costRange?: {
+    low: number;
+    high: number;
+  };
+  confidence?: "high" | "medium" | "low" | string;
   inputTokens?: number;
   outputTokens?: number;
   elapsedSeconds?: number;
   capturedAt: string;
   runDir?: string;
   sessionId?: string;
+  recommendation?: string;
+  drivers?: string[];
+  warnings?: string[];
+  assumptions?: string[];
   notes?: string[];
 };
 
@@ -683,8 +698,26 @@ function formatLedgerInteger(value: number | undefined): string {
   return formatOptionalInteger(value) ?? "";
 }
 
+function formatLedgerRange(range: { low: number; high: number } | undefined): string {
+  if (!range) {
+    return "";
+  }
+
+  return `${range.low.toLocaleString()}-${range.high.toLocaleString()}`;
+}
+
 function formatLedgerCost(value: number | undefined): string {
   return value === undefined ? "" : `$${value.toFixed(2)}`;
+}
+
+function formatLedgerCostRange(
+  range: { low: number; high: number } | undefined
+): string {
+  if (!range) {
+    return "";
+  }
+
+  return `${formatLedgerCost(range.low)}-${formatLedgerCost(range.high)}`;
 }
 
 function estimateLedgerRowCost(
@@ -705,6 +738,103 @@ function estimateLedgerRowCost(
     rates.outputPerMillionTokens * costSettings.outputTokenRatio;
 
   return Number(((row.totalTokens / 1_000_000) * blendedRate).toFixed(2));
+}
+
+function formatLedgerTokenCell(row: TokenUsageLedgerRow): string {
+  return row.tokenRange
+    ? formatLedgerRange(row.tokenRange)
+    : formatLedgerInteger(row.totalTokens);
+}
+
+function formatLedgerCostCell(
+  row: TokenUsageLedgerRow,
+  costSettings: IssueEstimateCostSettings
+): string {
+  if (row.costRange) {
+    return formatLedgerCostRange(row.costRange);
+  }
+
+  return formatLedgerCost(estimateLedgerRowCost(row, costSettings));
+}
+
+function estimateRowLabel(row: TokenUsageLedgerRow): string {
+  if (row.configuredProfile) {
+    return row.configuredProfile;
+  }
+
+  const idSuffix = row.id?.split(":").filter(Boolean).at(-1);
+  return idSuffix ?? row.model ?? row.phase;
+}
+
+function formatUsageLedgerTable(
+  rows: TokenUsageLedgerRow[],
+  costSettings: IssueEstimateCostSettings
+): string[] {
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const lines = [
+    "## Usage",
+    "",
+    "| Phase | Role | Model | Model source | Status | Total tokens | Estimated cost | Elapsed | Captured |",
+    "| --- | --- | --- | --- | --- | ---: | ---: | --- | --- |",
+  ];
+
+  for (const row of rows) {
+    lines.push(
+      [
+        "",
+        formatLedgerCell(row.phase),
+        formatLedgerCell(row.role),
+        formatLedgerCell(row.model),
+        formatLedgerCell(row.modelSource),
+        formatLedgerCell(row.status),
+        formatLedgerTokenCell(row),
+        formatLedgerCostCell(row, costSettings),
+        formatDuration(row.elapsedSeconds) ?? "",
+        formatLedgerCell(row.capturedAt),
+        "",
+      ].join(" | ")
+    );
+  }
+
+  return lines;
+}
+
+function formatEstimateLedgerTable(
+  rows: TokenUsageLedgerRow[],
+  costSettings: IssueEstimateCostSettings
+): string[] {
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const lines = [
+    "## Estimates",
+    "",
+    "| Profile | Role | Model | Thinking | Confidence | Token range | Cost range | Captured |",
+    "| --- | --- | --- | --- | --- | ---: | ---: | --- |",
+  ];
+
+  for (const row of rows) {
+    lines.push(
+      [
+        "",
+        formatLedgerCell(estimateRowLabel(row)),
+        formatLedgerCell(row.role),
+        formatLedgerCell(row.model),
+        formatLedgerCell(row.configuredThinking),
+        formatLedgerCell(row.confidence),
+        formatLedgerTokenCell(row),
+        formatLedgerCostCell(row, costSettings),
+        formatLedgerCell(row.capturedAt),
+        "",
+      ].join(" | ")
+    );
+  }
+
+  return lines;
 }
 
 function resolveLedgerModelSource(
@@ -787,35 +917,23 @@ export function formatTokenUsageLedgerAuditSection(
     ledger.target.type === "issue"
       ? `issue #${ledger.target.number}`
       : `PR #${ledger.target.number}`;
-  const lines = [
-    `Codex token usage ledger for ${targetLabel}.`,
-    "",
-    "| Phase | Role | Model | Model source | Status | Total tokens | Estimated cost | Elapsed | Captured |",
-    "| --- | --- | --- | --- | --- | ---: | ---: | --- | --- |",
-  ];
+  const usageRows = ledger.rows.filter((row) => row.kind !== "estimate");
+  const estimateRows = ledger.rows.filter((row) => row.kind === "estimate");
+  const usageTable = formatUsageLedgerTable(usageRows, costSettings);
+  const estimateTable = formatEstimateLedgerTable(estimateRows, costSettings);
+  const lines = [`Codex token telemetry ledger for ${targetLabel}.`];
 
-  for (const row of ledger.rows) {
-    const estimatedCost = estimateLedgerRowCost(row, costSettings);
-    lines.push(
-      [
-        "",
-        formatLedgerCell(row.phase),
-        formatLedgerCell(row.role),
-        formatLedgerCell(row.model),
-        formatLedgerCell(row.modelSource),
-        formatLedgerCell(row.status),
-        formatLedgerInteger(row.totalTokens),
-        formatLedgerCost(estimatedCost),
-        formatDuration(row.elapsedSeconds) ?? "",
-        formatLedgerCell(row.capturedAt),
-        "",
-      ].join(" | ")
-    );
+  if (usageTable.length > 0) {
+    lines.push("", ...usageTable);
+  }
+
+  if (estimateTable.length > 0) {
+    lines.push("", ...estimateTable);
   }
 
   lines.push(
     "",
-    "This ledger reports available Codex run telemetry, not exact billing."
+    "This ledger reports available Codex run telemetry and planning forecasts, not exact billing."
   );
 
   return lines.join("\n");

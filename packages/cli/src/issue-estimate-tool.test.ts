@@ -11,6 +11,10 @@ import {
   publishIssueEstimateFile,
   renderIssueEstimate,
 } from "./issue-estimate-tool";
+import {
+  TOKEN_USAGE_COMMENT_MARKER,
+  parseTokenUsageRowsFromCommentBody,
+} from "./token-usage-comments";
 
 describe("issue estimate tool", () => {
   it("creates a plan-first Codex estimate context without scanning repository files", async () => {
@@ -51,7 +55,7 @@ describe("issue estimate tool", () => {
     }
   });
 
-  it("publishes a Codex-authored estimate JSON artifact", async () => {
+  it("publishes a Codex-authored estimate JSON artifact to the token telemetry comment", async () => {
     const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-issue-estimate-"));
     const estimatePath = resolve(repoRoot, "estimate.json");
     writeFileSync(
@@ -85,7 +89,7 @@ describe("issue estimate tool", () => {
     );
     const createdComment = {
       id: 4101,
-      body: "<!-- prs:audit -->\n# Issue #267 audit\n",
+      body: "<!-- prs:token-usage -->\n# Issue #267 token usage\n",
       url: "https://github.com/DevwareUK/prs/issues/267#issuecomment-4101",
       createdAt: "2026-06-11T09:00:00Z",
       updatedAt: "2026-06-11T09:00:00Z",
@@ -94,7 +98,8 @@ describe("issue estimate tool", () => {
     };
     const forge = {
       isAuthenticated: vi.fn(() => true),
-      fetchAuditComment: vi.fn().mockResolvedValue(undefined),
+      fetchIssueComments: vi.fn().mockResolvedValue([]),
+      fetchPullRequestIssueComments: vi.fn(),
       createAuditComment: vi.fn().mockResolvedValue(createdComment),
       updateIssueComment: vi.fn(),
     };
@@ -110,9 +115,26 @@ describe("issue estimate tool", () => {
       url: createdComment.url,
     });
     const body = forge.createAuditComment.mock.calls[0][1];
-    expect(body).toContain("Implementation token estimate for issue #267");
-    expect(body).toContain("No repository scan was used.");
-    expect(body).not.toContain("Repository context:");
+    expect(body).toContain(TOKEN_USAGE_COMMENT_MARKER);
+    expect(body).not.toContain("<!-- prs:audit -->");
+    expect(body).toContain("Codex token telemetry ledger for issue #267.");
+    const visibleBody = body.split("<!-- prs:token-usage-data")[0] ?? body;
+    expect(visibleBody).toContain("## Estimates");
+    expect(visibleBody).toContain(
+      "| standard | implementer, tester | gpt-5.4-mini | medium | medium | 30,000-54,000 |"
+    );
+    expect(visibleBody).not.toContain("Estimate recommendations:");
+    expect(visibleBody).not.toContain("No repository scan was used.");
+    const rows = parseTokenUsageRowsFromCommentBody(body);
+    expect(rows).toEqual([
+      expect.objectContaining({
+        id: "issue-estimate:267:standard",
+        kind: "estimate",
+        phase: "issue-estimate",
+        status: "estimated",
+        tokenRange: { low: 30000, high: 54000 },
+      }),
+    ]);
   });
 
   it("uses default comparison profiles when repository config has no explicit profiles", async () => {
@@ -285,7 +307,7 @@ describe("issue estimate tool", () => {
     expect(rendered).not.toContain("Model/profile estimates:");
   });
 
-  it("publishes successful estimates to an issue audit section", async () => {
+  it("publishes successful estimates to issue token telemetry", async () => {
     const result = await estimateIssueTool({
       issueNumber: 267,
       repoRoot: mkdtempSync(resolve(tmpdir(), "prs-issue-estimate-")),
@@ -310,7 +332,7 @@ describe("issue estimate tool", () => {
     });
     const createdComment = {
       id: 4101,
-      body: "<!-- prs:audit -->\n# Issue #267 audit\n",
+      body: "<!-- prs:token-usage -->\n# Issue #267 token telemetry\n",
       url: "https://github.com/DevwareUK/prs/issues/267#issuecomment-4101",
       createdAt: "2026-06-11T09:00:00Z",
       updatedAt: "2026-06-11T09:00:00Z",
@@ -319,7 +341,8 @@ describe("issue estimate tool", () => {
     };
     const forge = {
       isAuthenticated: vi.fn(() => true),
-      fetchAuditComment: vi.fn().mockResolvedValue(undefined),
+      fetchIssueComments: vi.fn().mockResolvedValue([]),
+      fetchPullRequestIssueComments: vi.fn(),
       createAuditComment: vi.fn().mockResolvedValue(createdComment),
       updateIssueComment: vi.fn(),
     };
@@ -332,19 +355,95 @@ describe("issue estimate tool", () => {
     });
     expect(forge.createAuditComment).toHaveBeenCalledWith(
       { type: "issue", number: 267 },
-      expect.stringContaining("## Estimate")
+      expect.stringContaining(TOKEN_USAGE_COMMENT_MARKER)
     );
     const body = forge.createAuditComment.mock.calls[0][1];
-    expect(body).toContain("Implementation token estimate for issue #267");
+    expect(body).toContain("Codex token telemetry ledger for issue #267.");
+    expect(body).not.toContain("<!-- prs:audit -->");
+    const visibleBody = body.split("<!-- prs:token-usage-data")[0] ?? body;
+    expect(visibleBody).toContain("## Estimates");
+    expect(visibleBody).not.toContain("Estimate notes:");
     expect(body).toContain(
       "Plan source: https://github.com/DevwareUK/prs/issues/267#issuecomment-3"
     );
   });
 
+  it("publishes Codex-authored estimate artifacts with fallback cost ranges", async () => {
+    const createdComment = {
+      id: 4101,
+      body: "<!-- prs:token-usage -->\n# Issue #267 token telemetry\n",
+      url: "https://github.com/DevwareUK/prs/issues/267#issuecomment-4101",
+      createdAt: "2026-06-11T09:00:00Z",
+      updatedAt: "2026-06-11T09:00:00Z",
+      author: "prs-bot",
+      isBot: true,
+    };
+    const forge = {
+      isAuthenticated: vi.fn(() => true),
+      fetchIssueComments: vi.fn().mockResolvedValue([]),
+      fetchPullRequestIssueComments: vi.fn(),
+      createAuditComment: vi.fn().mockResolvedValue(createdComment),
+      updateIssueComment: vi.fn(),
+    };
+
+    await publishIssueEstimateAudit(forge, {
+      status: "estimated",
+      issueNumber: 267,
+      planSource: {
+        type: "managed-comment",
+        url: "https://github.com/DevwareUK/prs/issues/267#issuecomment-10",
+        updatedAt: "2026-06-11T08:47:44Z",
+      },
+      confidence: "medium",
+      profiles: [
+        {
+          name: "future",
+          role: "implementer",
+          model: "gpt-6",
+          thinking: "medium",
+          range: { low: 30000, high: 54000 },
+          confidence: "medium",
+          notes: ["Codex-authored plan estimate."],
+        },
+      ],
+      recommendation: "Start with future.",
+      drivers: ["Plan has explicit implementation tasks."],
+      warnings: [],
+    });
+
+    const body = forge.createAuditComment.mock.calls[0][1];
+    expect(body).toContain(
+      "| future | implementer | gpt-6 | medium | medium | 30,000-54,000 | $0.30-$0.54 |"
+    );
+  });
+
+  it("skips direct publication when the estimate is blocked", async () => {
+    const forge = {
+      isAuthenticated: vi.fn(() => true),
+      fetchIssueComments: vi.fn(),
+      fetchPullRequestIssueComments: vi.fn(),
+      createAuditComment: vi.fn(),
+      updateIssueComment: vi.fn(),
+    };
+
+    const publication = await publishIssueEstimateAudit(forge, {
+      status: "blocked",
+      issueNumber: 268,
+      message: "No managed plan.",
+      nextAction: "create-issue-plan",
+    });
+
+    expect(publication).toEqual({
+      status: "skipped",
+      reason: "No managed plan.",
+    });
+    expect(forge.createAuditComment).not.toHaveBeenCalled();
+  });
+
   it("publishes automatic deterministic estimates without throwing", async () => {
     const createdComment = {
       id: 4101,
-      body: "<!-- prs:audit -->\n# Issue #267 audit\n",
+      body: "<!-- prs:token-usage -->\n# Issue #267 token telemetry\n",
       url: "https://github.com/DevwareUK/prs/issues/267#issuecomment-4101",
       createdAt: "2026-06-11T09:00:00Z",
       updatedAt: "2026-06-11T09:00:00Z",
@@ -368,7 +467,8 @@ describe("issue estimate tool", () => {
         ].join("\n"),
       }),
       isAuthenticated: vi.fn(() => true),
-      fetchAuditComment: vi.fn().mockResolvedValue(undefined),
+      fetchIssueComments: vi.fn().mockResolvedValue([]),
+      fetchPullRequestIssueComments: vi.fn(),
       createAuditComment: vi.fn().mockResolvedValue(createdComment),
       updateIssueComment: vi.fn(),
     };

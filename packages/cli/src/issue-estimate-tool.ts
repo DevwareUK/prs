@@ -1,6 +1,8 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import {
+  DEFAULT_ISSUE_ESTIMATE_COST_SETTINGS,
+  DEFAULT_ISSUE_ESTIMATE_FALLBACK_MODEL_RATE_USD_PER_MILLION,
   estimateIssueImplementationTokens,
   extractIssueImplementationPlanFiles,
   filterRepositoryPaths,
@@ -8,8 +10,9 @@ import {
   type IssueImplementationTokenEstimate,
 } from "@prs/core";
 import type { ResolvedRepositoryConfigType } from "@prs/contracts";
-import { publishAuditArtifact } from "./audit-artifacts";
 import type { IssuePlanComment, RepositoryForge } from "./forge";
+import type { TokenUsageLedgerRow } from "./token-audit";
+import { publishTokenUsageLedger } from "./token-usage-comments";
 
 export type IssueEstimateToolResult =
   | {
@@ -115,7 +118,11 @@ type EstimateIssueContextOptions = {
 
 type IssueEstimateAuditForge = Pick<
   RepositoryForge,
-  "isAuthenticated" | "fetchAuditComment" | "createAuditComment" | "updateIssueComment"
+  | "isAuthenticated"
+  | "fetchIssueComments"
+  | "fetchPullRequestIssueComments"
+  | "createAuditComment"
+  | "updateIssueComment"
 >;
 
 export type IssueEstimateAuditPublication =
@@ -362,6 +369,28 @@ function formatCostRange(range: { low: number; high: number }): string {
   return `${formatCost(range.low)}-${formatCost(range.high)}`;
 }
 
+function estimateCostRangeForProfile(profile: IssueEstimateArtifact["profiles"][number]): {
+  low: number;
+  high: number;
+} {
+  const normalizedModel = profile.model.toLowerCase();
+  const rates =
+    DEFAULT_ISSUE_ESTIMATE_COST_SETTINGS.modelRates[profile.model] ??
+    DEFAULT_ISSUE_ESTIMATE_COST_SETTINGS.modelRates[normalizedModel] ??
+    DEFAULT_ISSUE_ESTIMATE_FALLBACK_MODEL_RATE_USD_PER_MILLION;
+
+  const blendedRate =
+    rates.inputPerMillionTokens *
+      DEFAULT_ISSUE_ESTIMATE_COST_SETTINGS.inputTokenRatio +
+    rates.outputPerMillionTokens *
+      DEFAULT_ISSUE_ESTIMATE_COST_SETTINGS.outputTokenRatio;
+
+  return {
+    low: Number(((profile.range.low / 1_000_000) * blendedRate).toFixed(2)),
+    high: Number(((profile.range.high / 1_000_000) * blendedRate).toFixed(2)),
+  };
+}
+
 function formatEstimateTableCell(value: string | undefined): string {
   return (value ?? "").replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
 }
@@ -374,6 +403,43 @@ function hasCostEstimateFields(
   profile: IssueEstimateDisplayProfile
 ): profile is IssueImplementationTokenEstimate["profiles"][number] {
   return "costRange" in profile && "costBasis" in profile;
+}
+
+function estimateResultToTelemetryRows(
+  result: IssueEstimateToolResult | IssueEstimateArtifact
+): TokenUsageLedgerRow[] {
+  if (result.status === "blocked") {
+    return [];
+  }
+
+  return result.profiles.map((profile) => ({
+    id: `issue-estimate:${result.issueNumber}:${profile.name}`,
+    kind: "estimate" as const,
+    phase: "issue-estimate",
+    ...(profile.role ? { role: profile.role } : {}),
+    model: profile.model,
+    modelSource: "configured",
+    configuredProfile: profile.name,
+    ...(profile.role ? { configuredRole: profile.role } : {}),
+    configuredModel: profile.model,
+    configuredThinking: profile.thinking,
+    status: "estimated" as const,
+    tokenRange: profile.range,
+    costRange: hasCostEstimateFields(profile)
+      ? profile.costRange
+      : estimateCostRangeForProfile(profile),
+    confidence: profile.confidence,
+    capturedAt: result.planSource.updatedAt,
+    recommendation: result.recommendation,
+    drivers: result.drivers,
+    warnings: result.warnings,
+    assumptions: result.assumptions ?? [],
+    notes: [
+      `Plan source: ${result.planSource.url}`,
+      ...profile.notes,
+      "Costs are rough planning estimates, not exact billing.",
+    ],
+  }));
 }
 
 function formatProfileEstimateRow(profile: IssueEstimateDisplayProfile): string {
@@ -513,6 +579,13 @@ export async function publishIssueEstimateAudit(
   forge: IssueEstimateAuditForge,
   result: IssueEstimateToolResult | IssueEstimateArtifact
 ): Promise<IssueEstimateAuditPublication> {
+  if (result.status === "blocked") {
+    return {
+      status: "skipped",
+      reason: result.message,
+    };
+  }
+
   if (!forge.isAuthenticated()) {
     return {
       status: "skipped",
@@ -521,13 +594,12 @@ export async function publishIssueEstimateAudit(
     };
   }
 
-  const publication = await publishAuditArtifact(forge as RepositoryForge, {
+  const publication = await publishTokenUsageLedger(forge, {
     target: {
       type: "issue",
       number: result.issueNumber,
     },
-    sectionName: "Estimate",
-    content: renderIssueEstimate(result),
+    rows: estimateResultToTelemetryRows(result),
   });
 
   return {

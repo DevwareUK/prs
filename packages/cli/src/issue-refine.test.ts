@@ -651,7 +651,14 @@ describe("Issue refine workflow", () => {
     expect(commentBodies).toContain(
       "<!-- prs:issue-plan -->\n## Refine Plan\n\n- Apply the refined work.\n"
     );
-    expect(commentBodies.some((body) => body.includes("## Estimate"))).toBe(true);
+    expect(
+      commentBodies.some(
+        (body) =>
+          body.includes("<!-- prs:token-usage -->") &&
+          body.includes("Codex token telemetry ledger") &&
+          body.includes("issue-estimate")
+      )
+    ).toBe(true);
     expect(commentBodies).toContain(
       "<!-- prs:issue-refinement-complete -->\nRefinement is complete. The settled specification and implementation plan have been attached to this issue in managed comments, so development can start from those artifacts.\n"
     );

@@ -160,4 +160,101 @@ describe("token usage comments", () => {
     expect(body).toContain('"id": "create:239"');
     expect(body).toContain('"id": "implementation:239"');
   });
+
+  it("preserves actual usage rows when publishing forecast estimate telemetry", async () => {
+    const existing = comment(
+      [
+        TOKEN_USAGE_COMMENT_MARKER,
+        "",
+        "# Issue #239 token usage",
+        "",
+        "Codex token telemetry ledger for issue #239.",
+        "",
+        "| Phase | Role | Model | Model source | Status | Total tokens | Estimated cost | Elapsed | Captured |",
+        "| --- | --- | --- | --- | --- | ---: | ---: | --- | --- |",
+        " | issue-implementation | implementer | gpt-5 | actual | tracked | 88,100 | $1.06 | 7m 3s | 2026-06-15T15:20:00+01:00 | ",
+        "",
+        "<!-- prs:token-usage-data",
+        JSON.stringify(
+          {
+            version: 1,
+            rows: [
+              {
+                id: "implementation:239",
+                kind: "actual",
+                phase: "issue-implementation",
+                role: "implementer",
+                model: "gpt-5",
+                modelSource: "actual",
+                status: "tracked",
+                totalTokens: 88100,
+                elapsedSeconds: 423,
+                capturedAt: "2026-06-15T15:20:00+01:00",
+              },
+            ],
+          },
+          null,
+          2
+        ),
+        "-->",
+      ].join("\n")
+    );
+    const updateIssueComment = vi.fn(async (_commentId: number, body: string) =>
+      comment(body)
+    );
+    const forge = {
+      isAuthenticated: () => true,
+      fetchIssueComments: vi.fn(async () => [existing]),
+      fetchPullRequestIssueComments: vi.fn(),
+      createAuditComment: vi.fn(),
+      updateIssueComment,
+    };
+
+    await publishTokenUsageLedger(forge, {
+      target: { type: "issue", number: 239 },
+      rows: [
+        {
+          id: "issue-estimate:239:standard",
+          kind: "estimate",
+          phase: "issue-estimate",
+          role: "implementer, tester",
+          model: "gpt-5.4-mini",
+          modelSource: "configured",
+          status: "estimated",
+          tokenRange: { low: 30000, high: 54000 },
+          costRange: { low: 0.12, high: 0.22 },
+          confidence: "medium",
+          capturedAt: "2026-06-11T08:47:44Z",
+          recommendation: "Start with standard.",
+          drivers: ["Plan has explicit implementation tasks."],
+          warnings: [],
+          assumptions: ["No repository scan was used."],
+        },
+      ],
+    });
+
+    const body = updateIssueComment.mock.calls[0]?.[1] as string;
+    const visibleBody = body.split("<!-- prs:token-usage-data")[0] ?? body;
+    expect(body).toContain(
+      "| issue-implementation | implementer | gpt-5 | actual | tracked | 88,100 |"
+    );
+    expect(body).toContain(
+      "| standard | implementer, tester | gpt-5.4-mini |  | medium | 30,000-54,000 | $0.12-$0.22 | 2026-06-11T08:47:44Z |"
+    );
+    expect(visibleBody).toContain("## Usage");
+    expect(visibleBody).toContain("## Estimates");
+    expect(visibleBody.indexOf("## Usage")).toBeLessThan(
+      visibleBody.indexOf("## Estimates")
+    );
+    expect(visibleBody).not.toContain("Estimate recommendations:");
+    expect(visibleBody).not.toContain("Estimate drivers:");
+    expect(visibleBody).not.toContain("Estimate warnings:");
+    expect(visibleBody).not.toContain("Estimate assumptions:");
+    expect(visibleBody).not.toContain("Estimate notes:");
+    expect(visibleBody).not.toContain("Start with standard.");
+    expect(visibleBody).not.toContain("Plan has explicit implementation tasks.");
+    expect(visibleBody).not.toContain("No repository scan was used.");
+    expect(body).toContain('"kind": "actual"');
+    expect(body).toContain('"kind": "estimate"');
+  });
 });

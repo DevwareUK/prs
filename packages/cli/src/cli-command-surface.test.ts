@@ -1474,7 +1474,7 @@ describe("CLI command surface", () => {
     });
     const body = JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body)).body as string;
     expect(body).toContain("<!-- prs:token-usage -->");
-    expect(body).toContain("Codex token usage ledger for issue #269.");
+    expect(body).toContain("Codex token telemetry ledger for issue #269.");
     expect(body).toContain("| issue-draft | planner | gpt-5.5 | configured-fallback | unavailable |");
     expect(body).not.toContain("<!-- prs:audit -->");
     expect(body).not.toContain('"workflow": "prs:create"');
@@ -1684,7 +1684,7 @@ describe("CLI command surface", () => {
     const body = JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body)).body as string;
     expect(body).toContain("<!-- prs:token-usage -->");
     expect(body).not.toContain("<!-- prs:audit -->");
-    expect(body).toContain("Codex token usage ledger for issue #269.");
+    expect(body).toContain("Codex token telemetry ledger for issue #269.");
     expect(body).toContain("| Phase | Role | Model | Model source | Status | Total tokens | Estimated cost | Elapsed | Captured |");
     expect(body).toContain("| issue-draft | planner | gpt-5.5 | configured-fallback | unavailable |");
     expect(body).not.toContain('"workflow": "prs:create"');
@@ -1788,7 +1788,7 @@ describe("CLI command surface", () => {
     const body = JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body)).body as string;
     expect(body).toContain("<!-- prs:token-usage -->");
     expect(body).not.toContain("<!-- prs:audit -->");
-    expect(body).toContain("Codex token usage ledger for PR #88.");
+    expect(body).toContain("Codex token telemetry ledger for PR #88.");
     expect(body).toContain(
       "| pr-review | reviewer | gpt-5.5 | actual | tracked | 32,100 |"
     );
@@ -1884,7 +1884,7 @@ describe("CLI command surface", () => {
     const body = JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body)).body as string;
     expect(body).toContain("<!-- prs:token-usage -->");
     expect(body).not.toContain("<!-- prs:audit -->");
-    expect(body).toContain("Codex token usage ledger for issue #270.");
+    expect(body).toContain("Codex token telemetry ledger for issue #270.");
     expect(body).toContain(
       "| issue-create | planner | gpt-5 | actual | tracked | 279,408 |"
     );
@@ -1981,7 +1981,7 @@ describe("CLI command surface", () => {
     const body = JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body)).body as string;
     expect(body).toContain("<!-- prs:token-usage -->");
     expect(body).not.toContain("<!-- prs:audit -->");
-    expect(body).toContain("Codex token usage ledger for issue #139.");
+    expect(body).toContain("Codex token telemetry ledger for issue #139.");
     expect(body).toContain(
       "| issue-draft | planner |  | unavailable | tracked | 188,585 |"
     );
@@ -2076,7 +2076,7 @@ describe("CLI command surface", () => {
     const body = JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body)).body as string;
     expect(body).toContain("<!-- prs:token-usage -->");
     expect(body).not.toContain("<!-- prs:audit -->");
-    expect(body).toContain("Codex token usage ledger for issue #66.");
+    expect(body).toContain("Codex token telemetry ledger for issue #66.");
     expect(body).toContain(
       "| issue-create | planner |  | unavailable | tracked | 136,118 |"
     );
@@ -2166,7 +2166,7 @@ describe("CLI command surface", () => {
     const body = JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body)).body as string;
     expect(body).toContain("<!-- prs:token-usage -->");
     expect(body).not.toContain("<!-- prs:audit -->");
-    expect(body).toContain("Codex token usage ledger for issue #68.");
+    expect(body).toContain("Codex token telemetry ledger for issue #68.");
     expect(body).toContain(
       "| issue-create | planner |  | unavailable | partial | 97,100 |"
     );
@@ -2265,7 +2265,7 @@ describe("CLI command surface", () => {
     const body = JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body)).body as string;
     expect(body).toContain("<!-- prs:token-usage -->");
     expect(body).not.toContain("<!-- prs:audit -->");
-    expect(body).toContain("Codex token usage ledger for issue #133.");
+    expect(body).toContain("Codex token telemetry ledger for issue #133.");
     expect(body).toContain(
       "| issue-implementation | implementer | gpt-5 | actual | tracked | 172,632 |"
     );
@@ -2369,6 +2369,16 @@ describe("CLI command surface", () => {
         };
         postedComments.push(comment);
         return createFetchResponse(comment);
+      }
+
+      if (url.endsWith("/issues/comments/9269") && init?.method === "PATCH") {
+        const body = JSON.parse(String(init.body)) as { body: string };
+        postedComments[0] = {
+          ...postedComments[0],
+          body: body.body,
+          updated_at: "2026-06-12T15:05:00Z",
+        };
+        return createFetchResponse(postedComments[0]);
       }
 
       throw new Error(`Unexpected fetch call: ${url}`);
@@ -2478,14 +2488,13 @@ describe("CLI command surface", () => {
       "<!-- prs:token-usage -->",
       "<!-- prs:issue-spec -->",
       "<!-- prs:issue-plan -->",
-      "<!-- prs:audit -->",
     ]);
     expect(output.managedCommentHints).toEqual([]);
     expect(output.estimatePublicationHints).toEqual([
       {
         issueNumber: 269,
-        status: "created",
-        url: "https://github.com/DevwareUK/prs/issues/269#issuecomment-9272",
+        status: "updated",
+        url: "https://github.com/DevwareUK/prs/issues/269#issuecomment-9269",
       },
     ]);
   });

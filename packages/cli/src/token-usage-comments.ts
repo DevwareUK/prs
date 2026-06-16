@@ -2,7 +2,7 @@ import type { AuditTarget, RepositoryComment, RepositoryForge } from "./forge";
 import {
   auditTargetToTokenUsageTarget,
   formatTokenUsageLedgerAuditSection,
-  type TokenUsageStatus,
+  type TokenTelemetryStatus,
   type TokenUsageLedgerRow,
   type TokenUsageTarget,
 } from "./token-audit";
@@ -29,7 +29,7 @@ export function renderTokenUsageCommentBody(input: {
   return [
     TOKEN_USAGE_COMMENT_MARKER,
     "",
-    `# ${tokenUsageTargetLabel(input.target)} token usage`,
+    `# ${tokenUsageTargetLabel(input.target)} token telemetry`,
     "",
     formatTokenUsageLedgerAuditSection(input),
     "",
@@ -100,8 +100,11 @@ function parseDurationCell(value: string | undefined): number | undefined {
   return hours * 3600 + minutes * 60 + seconds;
 }
 
-function parseTokenUsageStatus(value: string): TokenUsageStatus | undefined {
-  return value === "tracked" || value === "partial" || value === "unavailable"
+function parseTokenUsageStatus(value: string): TokenTelemetryStatus | undefined {
+  return value === "tracked" ||
+    value === "partial" ||
+    value === "unavailable" ||
+    value === "estimated"
     ? value
     : undefined;
 }
@@ -168,11 +171,17 @@ function rowCompletenessScore(row: TokenUsageLedgerRow): number {
     row.modelSource,
     row.status,
     row.totalTokens,
+    row.tokenRange?.low,
+    row.tokenRange?.high,
+    row.costRange?.low,
+    row.costRange?.high,
+    row.confidence,
     row.inputTokens,
     row.outputTokens,
     row.elapsedSeconds,
     row.capturedAt,
     row.runDir,
+    row.recommendation,
   ].filter((value) => value !== undefined && value !== "").length;
 }
 
