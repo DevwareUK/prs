@@ -2043,7 +2043,7 @@ describe("CLI command surface", () => {
     expect(body).not.toContain("<!-- prs:audit -->");
     expect(body).toContain("Codex token telemetry ledger for issue #139.");
     expect(body).toContain(
-      "| issue-draft | planner |  | unavailable | tracked | 188,585 |"
+      "| issue-draft | planner | gpt-5.5 | configured-fallback | tracked | 188,585 | $1.89 |"
     );
     expect(body).toContain("3m 47s | unavailable |");
     expect(body).not.toContain('"status": "complete"');
@@ -2138,7 +2138,7 @@ describe("CLI command surface", () => {
     expect(body).not.toContain("<!-- prs:audit -->");
     expect(body).toContain("Codex token telemetry ledger for issue #66.");
     expect(body).toContain(
-      "| issue-create | planner |  | unavailable | tracked | 136,118 |"
+      "| issue-create | planner | gpt-5.5 | configured-fallback | tracked | 136,118 | $1.36 |"
     );
     expect(body).toContain("3m 11s | 2026-06-15 |");
     expect(body).not.toContain('"status": "captured"');
@@ -2228,7 +2228,7 @@ describe("CLI command surface", () => {
     expect(body).not.toContain("<!-- prs:audit -->");
     expect(body).toContain("Codex token telemetry ledger for issue #68.");
     expect(body).toContain(
-      "| issue-create | planner |  | unavailable | partial | 97,100 |"
+      "| issue-create | planner | gpt-5.5 | configured-fallback | partial | 97,100 | $0.97 |"
     );
     expect(body).toContain("2026-06-15T12:24:57+01:00 |");
     expect(body).toContain("<!-- prs:token-usage-data");

@@ -13,6 +13,7 @@ verifyBuild,
 } from "../cli-git";
 import { promptForLine } from "../cli-prompts";
 import {
+enrichTokenUsageLedgerRowsWithConfiguredModelFallbacks,
 getTokenUsageArtifactFilePath,
 parseTokenUsageLedgerRowsFromContent
 } from "../token-audit";
@@ -73,8 +74,9 @@ async function publishIssueTokenUsageCommentsFromRun(input: {
     return [];
   }
 
-  const rows = parseTokenUsageLedgerRowsFromContent(
-    readFileSync(artifactPath, "utf8").trim()
+  const rows = enrichTokenUsageLedgerRowsWithConfiguredModelFallbacks(
+    parseTokenUsageLedgerRowsFromContent(readFileSync(artifactPath, "utf8").trim()),
+    getRepositoryConfig(input.repoRoot)
   );
   if (rows.length === 0) {
     throw new Error(
@@ -112,7 +114,10 @@ export async function runToolCommand(): Promise<void> {
       ? toolCommand.filePath
       : resolve(repoRoot, toolCommand.filePath);
     const content = readFileSync(artifactPath, "utf8").trim();
-    const rows = parseTokenUsageLedgerRowsFromContent(content);
+    const rows = enrichTokenUsageLedgerRowsWithConfiguredModelFallbacks(
+      parseTokenUsageLedgerRowsFromContent(content),
+      repositoryConfig
+    );
     if (rows.length === 0) {
       throw new Error(
         "Token usage artifacts must be structured JSON supported by prs token audit publisher."

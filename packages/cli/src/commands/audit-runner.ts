@@ -1,10 +1,13 @@
 import { existsSync,readFileSync } from "node:fs";
 import { isAbsolute,resolve } from "node:path";
 import { publishAuditArtifact } from "../audit-artifacts";
-import { getCliArgs,getDefaultRepoRoot,getRepositoryForge } from "../cli-context";
+import { getCliArgs,getDefaultRepoRoot,getRepositoryConfig,getRepositoryForge } from "../cli-context";
 import { loadMediaEvidenceForPublication } from "../cli-git";
 import { appendMediaEvidenceSection } from "../media-evidence";
-import { parseTokenUsageLedgerRowsFromContent } from "../token-audit";
+import {
+enrichTokenUsageLedgerRowsWithConfiguredModelFallbacks,
+parseTokenUsageLedgerRowsFromContent
+} from "../token-audit";
 import { publishTokenUsageLedger } from "../token-usage-comments";
 import { parseAuditCommandArgs } from "./audit";
 
@@ -29,7 +32,10 @@ export async function runAuditCommand(): Promise<void> {
     (command.target.type === "issue" || command.target.type === "pull-request") &&
     command.sectionName.trim().toLowerCase() === "token-usage"
   ) {
-    const rows = parseTokenUsageLedgerRowsFromContent(content);
+    const rows = enrichTokenUsageLedgerRowsWithConfiguredModelFallbacks(
+      parseTokenUsageLedgerRowsFromContent(content),
+      getRepositoryConfig(repoRoot)
+    );
     if (rows.length === 0) {
       throw new Error(
         "Token usage artifacts must be structured JSON supported by prs token audit publisher."

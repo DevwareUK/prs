@@ -231,6 +231,9 @@ describe("managed prs Codex skills", () => {
     );
     expect(createMarkdown).toContain("call `get_goal` again");
     expect(createMarkdown).toContain("use `tokensUsed` or `usage.totalTokens`");
+    expect(createMarkdown).toContain(
+      "Include the configured planner role profile/model/thinking from `.prs/config.json`"
+    );
     expect(createMarkdown).toContain("Use `status: \"tracked\"` when token totals are present");
     expect(createMarkdown).toContain(
       "Do not write an unavailable artifact merely because model metadata is unavailable."
