@@ -582,6 +582,42 @@ describe("issue token usage artifacts", () => {
     ]);
   });
 
+  it("parses implementation ledger entries with workflowRole and threadId", () => {
+    expect(
+      parseTokenUsageLedgerRowsFromContent(
+        JSON.stringify({
+          version: 1,
+          type: "token-usage-ledger",
+          entries: [
+            {
+              id: "issue-274-implementation-019ed54a-27e9-7682-8bdc-112bf7326dbc-20260617T112744Z",
+              phase: "implementation",
+              status: "tracked",
+              workflowRole: "implementer",
+              threadId: "019ed54a-27e9-7682-8bdc-112bf7326dbc",
+              objective:
+                "Complete PRS issue #274: Harden DSM restore deploys against Redis bootstrap failures",
+              totalTokens: 50218,
+              timeUsedSeconds: 336,
+              capturedAt: "2026-06-17T11:30:24Z",
+            },
+          ],
+        })
+      )
+    ).toMatchObject([
+      {
+        id: "issue-274-implementation-019ed54a-27e9-7682-8bdc-112bf7326dbc-20260617T112744Z",
+        phase: "issue-implementation",
+        role: "implementer",
+        status: "tracked",
+        totalTokens: 50218,
+        elapsedSeconds: 336,
+        sessionId: "019ed54a-27e9-7682-8bdc-112bf7326dbc",
+        capturedAt: "2026-06-17T11:30:24Z",
+      },
+    ]);
+  });
+
   it("prefers actual model metadata in prs create ledger entries", () => {
     expect(
       parseTokenUsageLedgerRowsFromContent(

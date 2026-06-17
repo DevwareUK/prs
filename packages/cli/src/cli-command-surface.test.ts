@@ -1649,6 +1649,118 @@ describe("CLI command surface", () => {
     );
   });
 
+  it("publishes same-run token usage artifacts after audit publish", async () => {
+    const repoRoot = createTempRepoRoot();
+    const artifactPath = resolve(repoRoot, ".prs", "runs", "finish", "completion.md");
+    const tokenUsagePath = resolve(
+      repoRoot,
+      ".prs",
+      "runs",
+      "finish",
+      "codex-token-usage.json"
+    );
+    mkdirSync(dirname(artifactPath), { recursive: true });
+    writeFileSync(artifactPath, "# Completion\n\nDone.\n", "utf8");
+    writeFileSync(
+      tokenUsagePath,
+      `${JSON.stringify(
+        {
+          version: 1,
+          kind: "token-usage-ledger",
+          entries: [
+            {
+              id: "issue-implementation-session-1",
+              phase: "issue-implementation",
+              role: "implementer",
+              status: "tracked",
+              totalTokens: 172632,
+              elapsedTimeSeconds: 646,
+              capturedAt: "2026-06-17T11:29:00Z",
+            },
+          ],
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createFetchResponse({ number: 274 }))
+      .mockResolvedValueOnce(createFetchResponse([]))
+      .mockResolvedValueOnce(createFetchResponse({ number: 274 }))
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          id: 4274,
+          body: "<!-- prs:audit -->\n# Issue #274 audit\n",
+          html_url: "https://github.com/DevwareUK/CF8/issues/274#issuecomment-4274",
+          created_at: "2026-06-17T11:29:26Z",
+          updated_at: "2026-06-17T11:29:26Z",
+          user: {
+            login: "prs-bot",
+            type: "Bot",
+          },
+        })
+      )
+      .mockResolvedValueOnce(createFetchResponse([]))
+      .mockResolvedValueOnce(createFetchResponse({ number: 274 }))
+      .mockResolvedValueOnce(
+        createFetchResponse({
+          id: 5274,
+          body: "<!-- prs:token-usage -->\n# Issue #274 token telemetry\n",
+          html_url: "https://github.com/DevwareUK/CF8/issues/274#issuecomment-5274",
+          created_at: "2026-06-17T11:29:27Z",
+          updated_at: "2026-06-17T11:29:27Z",
+          user: {
+            login: "prs-bot",
+            type: "Bot",
+          },
+        })
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.GH_TOKEN = "";
+    process.env.GITHUB_TOKEN = "test-token";
+
+    const { run } = await loadCli({
+      runtimeRepoRoot: repoRoot,
+      execFileSyncImpl: (command, args) => {
+        if (command === "git" && args[0] === "remote" && args[1] === "get-url") {
+          return "git@github.com:DevwareUK/CF8.git\n";
+        }
+
+        throw new Error(`Unexpected execFileSync call: ${command} ${args.join(" ")}`);
+      },
+    });
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    process.argv = [
+      "node",
+      "prs",
+      "audit",
+      "publish",
+      "--issue",
+      "274",
+      "--file",
+      artifactPath,
+      "--section",
+      "implementation",
+    ];
+
+    await run();
+
+    expect(consoleLog).toHaveBeenCalledWith(
+      "Audit artifact created: https://github.com/DevwareUK/CF8/issues/274#issuecomment-4274"
+    );
+    expect(consoleLog).toHaveBeenCalledWith(
+      "Token usage artifact created: https://github.com/DevwareUK/CF8/issues/274#issuecomment-5274"
+    );
+    const tokenUsageBody = JSON.parse(String(fetchMock.mock.calls[6]?.[1]?.body)).body as string;
+    expect(tokenUsageBody).toContain("Codex token telemetry ledger for issue #274.");
+    expect(tokenUsageBody).toContain(
+      "| issue-implementation | implementer | gpt-5.4-mini | configured-fallback | tracked | 172,632 | $0.26 | 10m 46s | 2026-06-17T11:29:00Z |"
+    );
+  });
+
   it("renders token-usage JSON artifacts as the issue ledger table", async () => {
     const repoRoot = createTempRepoRoot();
     const artifactPath = resolve(

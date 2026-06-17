@@ -1,5 +1,5 @@
 import { existsSync,readFileSync } from "node:fs";
-import { isAbsolute,resolve } from "node:path";
+import { dirname,isAbsolute,resolve } from "node:path";
 import { publishAuditArtifact } from "../audit-artifacts";
 import { getCliArgs,getDefaultRepoRoot,getRepositoryConfig,getRepositoryForge } from "../cli-context";
 import { loadMediaEvidenceForPublication } from "../cli-git";
@@ -8,10 +8,56 @@ import { appendMediaEvidenceSection } from "../media-evidence";
 import {
 enrichTokenUsageLedgerRowsWithCodexSessionModel,
 enrichTokenUsageLedgerRowsWithConfiguredModelFallbacks,
+getTokenUsageArtifactFilePath,
 parseTokenUsageLedgerRowsFromContent
 } from "../token-audit";
 import { publishTokenUsageLedger } from "../token-usage-comments";
 import { parseAuditCommandArgs } from "./audit";
+
+function parseTokenUsageRowsForPublication(input: {
+  content: string;
+  repoRoot: string;
+}) {
+  return enrichTokenUsageLedgerRowsWithConfiguredModelFallbacks(
+    enrichTokenUsageLedgerRowsWithCodexSessionModel(
+      parseTokenUsageLedgerRowsFromContent(input.content),
+      loadCodexSessionModelMetadata()
+    ),
+    getRepositoryConfig(input.repoRoot)
+  );
+}
+
+async function publishRunTokenUsageArtifact(input: {
+  artifactPath: string;
+  forge: ReturnType<typeof getRepositoryForge>;
+  repoRoot: string;
+  target: ReturnType<typeof parseAuditCommandArgs>["target"];
+}): Promise<void> {
+  if (input.target.type !== "issue" && input.target.type !== "pull-request") {
+    return;
+  }
+
+  const tokenUsageArtifactPath = getTokenUsageArtifactFilePath(dirname(input.artifactPath));
+  if (!existsSync(tokenUsageArtifactPath)) {
+    return;
+  }
+
+  const rows = parseTokenUsageRowsForPublication({
+    content: readFileSync(tokenUsageArtifactPath, "utf8").trim(),
+    repoRoot: input.repoRoot,
+  });
+  if (rows.length === 0) {
+    throw new Error(
+      "Token usage artifacts must be structured JSON supported by prs token audit publisher."
+    );
+  }
+
+  const result = await publishTokenUsageLedger(input.forge, {
+    target: input.target,
+    rows,
+  });
+  console.log(`Token usage artifact ${result.status}: ${result.comment.url}`);
+}
 
 export async function runAuditCommand(): Promise<void> {
   const repoRoot = getDefaultRepoRoot();
@@ -34,13 +80,7 @@ export async function runAuditCommand(): Promise<void> {
     (command.target.type === "issue" || command.target.type === "pull-request") &&
     command.sectionName.trim().toLowerCase() === "token-usage"
   ) {
-    const rows = enrichTokenUsageLedgerRowsWithConfiguredModelFallbacks(
-      enrichTokenUsageLedgerRowsWithCodexSessionModel(
-        parseTokenUsageLedgerRowsFromContent(content),
-        loadCodexSessionModelMetadata()
-      ),
-      getRepositoryConfig(repoRoot)
-    );
+    const rows = parseTokenUsageRowsForPublication({ content, repoRoot });
     if (rows.length === 0) {
       throw new Error(
         "Token usage artifacts must be structured JSON supported by prs token audit publisher."
@@ -68,4 +108,10 @@ export async function runAuditCommand(): Promise<void> {
   });
 
   console.log(`Audit artifact ${result.status}: ${result.comment.url}`);
+  await publishRunTokenUsageArtifact({
+    artifactPath,
+    forge,
+    repoRoot,
+    target: command.target,
+  });
 }

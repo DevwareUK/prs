@@ -290,6 +290,17 @@ function normalizeTokenUsageStatus(
   return "partial";
 }
 
+function normalizeTokenUsagePhase(
+  phase: string,
+  role: string | undefined
+): string {
+  if (phase === "implementation" && role === "implementer") {
+    return "issue-implementation";
+  }
+
+  return phase;
+}
+
 function normalizeModelSource(value: string | undefined): string | undefined {
   const normalized = value?.toLowerCase();
   if (!normalized) {
@@ -314,8 +325,8 @@ function normalizePlannerTokenUsageRow(
     return undefined;
   }
 
-  const phase = readStringField(value, "phase");
-  const role = readStringField(value, "role");
+  const rawPhase = readStringField(value, "phase");
+  const role = readStringField(value, "role") ?? readStringField(value, "workflowRole");
   const profile = isRecord(value.profile) ? value.profile : undefined;
   const model = isRecord(value.model) ? value.model : undefined;
   const usage = isRecord(value.usage) ? value.usage : undefined;
@@ -327,12 +338,14 @@ function normalizePlannerTokenUsageRow(
     readStringField(value, "createdAt") ??
     "unavailable";
 
-  if (!phase) {
+  if (!rawPhase) {
     return undefined;
   }
 
   const resolvedRole =
-    role ?? (phase === "issue-draft" || phase === "issue-create" ? "planner" : undefined);
+    role ??
+    (rawPhase === "issue-draft" || rawPhase === "issue-create" ? "planner" : undefined);
+  const phase = normalizeTokenUsagePhase(rawPhase, resolvedRole);
   const profileSource =
     (profile ? readStringField(profile, "source") : undefined) ??
     (model
@@ -400,8 +413,8 @@ function normalizePlannerTokenUsageRow(
     ...(capture && readStringField(capture, "runDir")
       ? { runDir: readStringField(capture, "runDir") }
       : {}),
-    ...(readStringField(value, "sessionId")
-      ? { sessionId: readStringField(value, "sessionId") }
+    ...(readStringField(value, "sessionId") ?? readStringField(value, "threadId")
+      ? { sessionId: readStringField(value, "sessionId") ?? readStringField(value, "threadId") }
       : {}),
     ...(notes.length > 0 ? { notes } : {}),
   };
