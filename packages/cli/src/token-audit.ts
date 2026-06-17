@@ -288,6 +288,23 @@ function normalizeTokenUsageStatus(
   return "partial";
 }
 
+function normalizeModelSource(value: string | undefined): string | undefined {
+  const normalized = value?.toLowerCase();
+  if (!normalized) {
+    return undefined;
+  }
+
+  if (normalized.includes("actual") || normalized.includes("session")) {
+    return "actual";
+  }
+
+  if (normalized.includes("fallback")) {
+    return "configured-fallback";
+  }
+
+  return value;
+}
+
 function normalizePlannerTokenUsageRow(
   value: unknown
 ): TokenUsageLedgerRow | undefined {
@@ -298,6 +315,7 @@ function normalizePlannerTokenUsageRow(
   const phase = readStringField(value, "phase");
   const role = readStringField(value, "role");
   const profile = isRecord(value.profile) ? value.profile : undefined;
+  const model = isRecord(value.model) ? value.model : undefined;
   const usage = isRecord(value.usage) ? value.usage : undefined;
   const capture = isRecord(value.capture) ? value.capture : undefined;
   const capturedAt =
@@ -313,10 +331,25 @@ function normalizePlannerTokenUsageRow(
 
   const resolvedRole =
     role ?? (phase === "issue-draft" || phase === "issue-create" ? "planner" : undefined);
-  const profileSource = profile ? readStringField(profile, "source") : undefined;
-  const modelSource = profileSource?.toLowerCase().includes("fallback")
-    ? "configured-fallback"
-    : profileSource;
+  const profileSource =
+    (profile ? readStringField(profile, "source") : undefined) ??
+    (model
+      ? readStringField(model, "provenance") ?? readStringField(model, "source")
+      : undefined);
+  const actualModel = model ? readStringField(model, "actual") : undefined;
+  const configuredModel =
+    (profile ? readStringField(profile, "model") : undefined) ??
+    (model
+      ? readStringField(model, "name") ?? readStringField(model, "model")
+      : undefined);
+  const configuredProfile =
+    (profile ? readStringField(profile, "name") : undefined) ??
+    (model ? readStringField(model, "profile") : undefined);
+  const configuredThinking =
+    (profile ? readStringField(profile, "thinking") : undefined) ??
+    (model ? readStringField(model, "thinking") : undefined);
+  const modelSource = actualModel ? "actual" : normalizeModelSource(profileSource);
+  const modelName = actualModel ?? configuredModel;
   const totalTokens = usage
     ? readNumberField(usage, "totalTokens") ?? readNumberField(usage, "tokensUsed")
     : readNumberField(value, "totalTokens") ?? readNumberField(value, "tokensUsed");
@@ -328,9 +361,11 @@ function normalizePlannerTokenUsageRow(
     : readNumberField(value, "outputTokens");
   const elapsedSeconds = usage
     ? readNumberField(usage, "timeUsedSeconds") ??
-      readNumberField(usage, "elapsedSeconds")
+      readNumberField(usage, "elapsedSeconds") ??
+      readNumberField(usage, "elapsedTimeSeconds")
     : readNumberField(value, "timeUsedSeconds") ??
-      readNumberField(value, "elapsedSeconds");
+      readNumberField(value, "elapsedSeconds") ??
+      readNumberField(value, "elapsedTimeSeconds");
   const notes = [
     ...(isRecord(value.actualModel) && readStringField(value.actualModel, "notes")
       ? [readStringField(value.actualModel, "notes") as string]
@@ -345,20 +380,12 @@ function normalizePlannerTokenUsageRow(
     ...(readStringField(value, "id") ? { id: readStringField(value, "id") } : {}),
     phase,
     ...(resolvedRole ? { role: resolvedRole } : {}),
-    ...(profile && readStringField(profile, "model")
-      ? { model: readStringField(profile, "model") }
-      : {}),
+    ...(modelName ? { model: modelName } : {}),
     modelSource: modelSource ?? "unavailable",
-    ...(profile && readStringField(profile, "name")
-      ? { configuredProfile: readStringField(profile, "name") }
-      : {}),
+    ...(configuredProfile ? { configuredProfile } : {}),
     ...(resolvedRole ? { configuredRole: resolvedRole } : {}),
-    ...(profile && readStringField(profile, "model")
-      ? { configuredModel: readStringField(profile, "model") }
-      : {}),
-    ...(profile && readStringField(profile, "thinking")
-      ? { configuredThinking: readStringField(profile, "thinking") }
-      : {}),
+    ...(configuredModel ? { configuredModel } : {}),
+    ...(configuredThinking ? { configuredThinking } : {}),
     status: normalizeTokenUsageStatus(
       (usage ? readStringField(usage, "status") : undefined) ??
         readStringField(value, "status")

@@ -74,6 +74,50 @@ describe("token usage comments", () => {
     );
   });
 
+  it("renders configured fallback model cost and elapsed for tracked usage rows", async () => {
+    const updateIssueComment = vi.fn(async (_commentId: number, body: string) =>
+      comment(body)
+    );
+    const forge = {
+      isAuthenticated: () => true,
+      fetchIssueComments: vi.fn(async () => [
+        comment(`${TOKEN_USAGE_COMMENT_MARKER}\n\n# Issue #309 token telemetry\n`),
+      ]),
+      fetchPullRequestIssueComments: vi.fn(),
+      createAuditComment: vi.fn(),
+      updateIssueComment,
+    };
+
+    await publishTokenUsageLedger(forge, {
+      target: { type: "issue", number: 309 },
+      rows: [
+        {
+          id: "create-draft-20260616T134453906Z-019ed0aa-03f9",
+          phase: "create-draft",
+          role: "planner",
+          model: "gpt-5.5",
+          modelSource: "configured-fallback",
+          configuredProfile: "premium",
+          configuredRole: "planner",
+          configuredModel: "gpt-5.5",
+          configuredThinking: "high",
+          status: "tracked",
+          totalTokens: 267102,
+          elapsedSeconds: 365,
+          capturedAt: "2026-06-16T13:47:48Z",
+        },
+      ],
+    });
+
+    const body = updateIssueComment.mock.calls[0]?.[1] as string;
+    expect(body).toContain(
+      "| create-draft | planner | gpt-5.5 | configured-fallback | tracked | 267,102 | $2.67 | 6m 5s | 2026-06-16T13:47:48Z |"
+    );
+    expect(body).toContain('"model": "gpt-5.5"');
+    expect(body).toContain('"modelSource": "configured-fallback"');
+    expect(body).toContain('"elapsedSeconds": 365');
+  });
+
   it("upserts only matching entry IDs from the GitHub source-of-truth ledger", async () => {
     const existing = comment(
       [

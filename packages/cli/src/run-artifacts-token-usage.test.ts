@@ -536,6 +536,92 @@ describe("issue token usage artifacts", () => {
     ]);
   });
 
+  it("parses prs create ledger entries with configured fallback model metadata", () => {
+    expect(
+      parseTokenUsageLedgerRowsFromContent(
+        JSON.stringify({
+          version: 1,
+          kind: "token-usage-ledger",
+          entries: [
+            {
+              id: "create-draft-20260616T134453906Z-019ed0aa-03f9",
+              workflow: "prs:create",
+              phase: "create-draft",
+              role: "planner",
+              model: {
+                provenance: "configured-role-fallback",
+                profile: "premium",
+                name: "gpt-5.5",
+                thinking: "high",
+              },
+              status: "tracked",
+              totalTokens: 267102,
+              elapsedTimeSeconds: 365,
+              capturedAt: "2026-06-16T13:47:48Z",
+            },
+          ],
+        })
+      )
+    ).toMatchObject([
+      {
+        id: "create-draft-20260616T134453906Z-019ed0aa-03f9",
+        phase: "create-draft",
+        role: "planner",
+        model: "gpt-5.5",
+        modelSource: "configured-fallback",
+        configuredProfile: "premium",
+        configuredRole: "planner",
+        configuredModel: "gpt-5.5",
+        configuredThinking: "high",
+        status: "tracked",
+        totalTokens: 267102,
+        elapsedSeconds: 365,
+        capturedAt: "2026-06-16T13:47:48Z",
+      },
+    ]);
+  });
+
+  it("prefers actual model metadata in prs create ledger entries", () => {
+    expect(
+      parseTokenUsageLedgerRowsFromContent(
+        JSON.stringify({
+          version: 1,
+          kind: "token-usage-ledger",
+          entries: [
+            {
+              id: "create-draft-actual-model",
+              phase: "create-draft",
+              role: "planner",
+              model: {
+                actual: "gpt-5",
+                provenance: "configured-role-fallback",
+                profile: "premium",
+                name: "gpt-5.5",
+                thinking: "high",
+              },
+              status: "tracked",
+              totalTokens: 267102,
+              elapsedTimeSeconds: 365,
+              capturedAt: "2026-06-16T13:47:48Z",
+            },
+          ],
+        })
+      )
+    ).toMatchObject([
+      {
+        id: "create-draft-actual-model",
+        phase: "create-draft",
+        role: "planner",
+        model: "gpt-5",
+        modelSource: "actual",
+        configuredProfile: "premium",
+        configuredRole: "planner",
+        configuredModel: "gpt-5.5",
+        configuredThinking: "high",
+      },
+    ]);
+  });
+
   it("treats operator-provided active model metadata as actual provenance", () => {
     expect(
       issueTokenUsageArtifactToLedgerRow({
