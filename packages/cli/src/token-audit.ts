@@ -6,6 +6,7 @@ import {
   type IssueEstimateCostSettings,
 } from "@prs/core";
 import type { ResolvedRepositoryConfigType } from "@prs/contracts";
+import type { CodexSessionModelMetadata } from "./codex-session-metadata";
 import type { AuditTarget } from "./forge";
 
 export type TokenUsageStatus = "tracked" | "partial" | "unavailable";
@@ -753,6 +754,38 @@ export function enrichTokenUsageLedgerRowsWithConfiguredModelFallbacks(
       configuredRole: row.configuredRole ?? fallback.role,
       configuredModel: row.configuredModel ?? fallback.model,
       configuredThinking: row.configuredThinking ?? fallback.thinking,
+    };
+  });
+}
+
+export function enrichTokenUsageLedgerRowsWithCodexSessionModel(
+  rows: TokenUsageLedgerRow[],
+  sessionModel: CodexSessionModelMetadata | undefined
+): TokenUsageLedgerRow[] {
+  if (!sessionModel) {
+    return rows;
+  }
+
+  return rows.map((row) => {
+    if (
+      row.kind === "estimate" ||
+      row.modelSource === "actual" ||
+      (row.sessionId !== undefined && row.sessionId !== sessionModel.threadId)
+    ) {
+      return row;
+    }
+
+    return {
+      ...row,
+      model: sessionModel.model,
+      modelSource: "actual",
+      sessionId: row.sessionId ?? sessionModel.threadId,
+      notes: [
+        ...(row.notes ?? []),
+        ...(sessionModel.reasoningEffort
+          ? [`Codex reasoning effort: ${sessionModel.reasoningEffort}`]
+          : []),
+      ],
     };
   });
 }

@@ -3,8 +3,10 @@ import { isAbsolute,resolve } from "node:path";
 import { publishAuditArtifact } from "../audit-artifacts";
 import { getCliArgs,getDefaultRepoRoot,getRepositoryConfig,getRepositoryForge } from "../cli-context";
 import { loadMediaEvidenceForPublication } from "../cli-git";
+import { loadCodexSessionModelMetadata } from "../codex-session-metadata";
 import { appendMediaEvidenceSection } from "../media-evidence";
 import {
+enrichTokenUsageLedgerRowsWithCodexSessionModel,
 enrichTokenUsageLedgerRowsWithConfiguredModelFallbacks,
 parseTokenUsageLedgerRowsFromContent
 } from "../token-audit";
@@ -33,7 +35,10 @@ export async function runAuditCommand(): Promise<void> {
     command.sectionName.trim().toLowerCase() === "token-usage"
   ) {
     const rows = enrichTokenUsageLedgerRowsWithConfiguredModelFallbacks(
-      parseTokenUsageLedgerRowsFromContent(content),
+      enrichTokenUsageLedgerRowsWithCodexSessionModel(
+        parseTokenUsageLedgerRowsFromContent(content),
+        loadCodexSessionModelMetadata()
+      ),
       getRepositoryConfig(repoRoot)
     );
     if (rows.length === 0) {

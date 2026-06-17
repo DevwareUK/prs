@@ -232,7 +232,13 @@ describe("managed prs Codex skills", () => {
     expect(createMarkdown).toContain("call `get_goal` again");
     expect(createMarkdown).toContain("use `tokensUsed` or `usage.totalTokens`");
     expect(createMarkdown).toContain(
-      "Include the configured planner role profile/model/thinking from `.prs/config.json`"
+      "the goal `threadId` as `sessionId` or `goal.threadId`"
+    );
+    expect(createMarkdown).toContain(
+      "publisher will enrich the current Codex session model from local Codex thread state"
+    );
+    expect(createMarkdown).toContain(
+      "include the configured planner role profile/model/thinking from `.prs/config.json`"
     );
     expect(createMarkdown).toContain("Use `status: \"tracked\"` when token totals are present");
     expect(createMarkdown).toContain(

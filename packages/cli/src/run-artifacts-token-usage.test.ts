@@ -11,6 +11,7 @@ import {
   writeIssueTokenUsageArtifact,
 } from "./run-artifacts";
 import {
+  enrichTokenUsageLedgerRowsWithCodexSessionModel,
   parseTokenUsageLedgerRowFromContent,
   parseTokenUsageLedgerRowsFromContent,
 } from "./token-audit";
@@ -618,6 +619,73 @@ describe("issue token usage artifacts", () => {
         configuredRole: "planner",
         configuredModel: "gpt-5.5",
         configuredThinking: "high",
+      },
+    ]);
+  });
+
+  it("enriches parsed rows with the current Codex session model before fallback metadata", () => {
+    expect(
+      enrichTokenUsageLedgerRowsWithCodexSessionModel(
+        [
+          {
+            id: "issue-draft-current-session",
+            phase: "issue-draft",
+            role: "planner",
+            model: "gpt-5.5",
+            modelSource: "configured-fallback",
+            configuredProfile: "premium",
+            configuredRole: "planner",
+            configuredModel: "gpt-5.5",
+            configuredThinking: "high",
+            status: "tracked",
+            totalTokens: 92786,
+            elapsedSeconds: 121,
+            capturedAt: "2026-06-17T11:06:36Z",
+          },
+        ],
+        {
+          threadId: "019ed540-2666-74f0-b987-515d935ec1e3",
+          model: "gpt-5",
+          reasoningEffort: "high",
+        }
+      )
+    ).toMatchObject([
+      {
+        id: "issue-draft-current-session",
+        model: "gpt-5",
+        modelSource: "actual",
+        sessionId: "019ed540-2666-74f0-b987-515d935ec1e3",
+        configuredModel: "gpt-5.5",
+        notes: ["Codex reasoning effort: high"],
+      },
+    ]);
+  });
+
+  it("does not enrich rows from a different Codex session", () => {
+    expect(
+      enrichTokenUsageLedgerRowsWithCodexSessionModel(
+        [
+          {
+            id: "issue-draft-other-session",
+            phase: "issue-draft",
+            role: "planner",
+            modelSource: "unavailable",
+            sessionId: "019ed540-2666-74f0-b987-515d935ec1e3",
+            status: "tracked",
+            totalTokens: 92786,
+            capturedAt: "2026-06-17T11:06:36Z",
+          },
+        ],
+        {
+          threadId: "019ed0b7-2554-75b1-ae2e-a949c6455c0f",
+          model: "gpt-5",
+        }
+      )
+    ).toMatchObject([
+      {
+        id: "issue-draft-other-session",
+        modelSource: "unavailable",
+        sessionId: "019ed540-2666-74f0-b987-515d935ec1e3",
       },
     ]);
   });

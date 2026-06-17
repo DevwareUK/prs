@@ -12,7 +12,9 @@ readIssueWorkflowDiff,
 verifyBuild,
 } from "../cli-git";
 import { promptForLine } from "../cli-prompts";
+import { loadCodexSessionModelMetadata } from "../codex-session-metadata";
 import {
+enrichTokenUsageLedgerRowsWithCodexSessionModel,
 enrichTokenUsageLedgerRowsWithConfiguredModelFallbacks,
 getTokenUsageArtifactFilePath,
 parseTokenUsageLedgerRowsFromContent
@@ -75,7 +77,10 @@ async function publishIssueTokenUsageCommentsFromRun(input: {
   }
 
   const rows = enrichTokenUsageLedgerRowsWithConfiguredModelFallbacks(
-    parseTokenUsageLedgerRowsFromContent(readFileSync(artifactPath, "utf8").trim()),
+    enrichTokenUsageLedgerRowsWithCodexSessionModel(
+      parseTokenUsageLedgerRowsFromContent(readFileSync(artifactPath, "utf8").trim()),
+      loadCodexSessionModelMetadata()
+    ),
     getRepositoryConfig(input.repoRoot)
   );
   if (rows.length === 0) {
@@ -115,7 +120,10 @@ export async function runToolCommand(): Promise<void> {
       : resolve(repoRoot, toolCommand.filePath);
     const content = readFileSync(artifactPath, "utf8").trim();
     const rows = enrichTokenUsageLedgerRowsWithConfiguredModelFallbacks(
-      parseTokenUsageLedgerRowsFromContent(content),
+      enrichTokenUsageLedgerRowsWithCodexSessionModel(
+        parseTokenUsageLedgerRowsFromContent(content),
+        loadCodexSessionModelMetadata()
+      ),
       repositoryConfig
     );
     if (rows.length === 0) {
