@@ -231,6 +231,15 @@ describe("managed prs Codex skills", () => {
     );
     expect(createMarkdown).toContain("call `get_goal` again");
     expect(createMarkdown).toContain("use `tokensUsed` or `usage.totalTokens`");
+    expect(createMarkdown).toContain(
+      "the goal `threadId` as `sessionId` or `goal.threadId`"
+    );
+    expect(createMarkdown).toContain(
+      "publisher will enrich the current Codex session model from local Codex thread state"
+    );
+    expect(createMarkdown).toContain(
+      "include the configured planner role profile/model/thinking from `.prs/config.json`"
+    );
     expect(createMarkdown).toContain("Use `status: \"tracked\"` when token totals are present");
     expect(createMarkdown).toContain(
       "Do not write an unavailable artifact merely because model metadata is unavailable."
@@ -313,7 +322,9 @@ describe("managed prs Codex skills", () => {
     expect(finishWorkMarkdown).toContain("codex-token-usage.json");
     expect(finishWorkMarkdown).toContain("stable entry `id`");
     expect(finishWorkMarkdown).toContain("`token-usage-ledger` with an `entries` array");
-    expect(finishWorkMarkdown).toContain("update the original issue's `token-usage` ledger");
+    expect(finishWorkMarkdown).toContain(
+      "the audit publisher also updates the managed `token-usage` ledger"
+    );
     expect(finishWorkMarkdown).toContain("Prefer the actual active Codex session model");
     expect(finishWorkMarkdown).toContain(
       "prs audit publish --issue <number> --file <path> --section <name>"
@@ -330,7 +341,9 @@ describe("managed prs Codex skills", () => {
     expect(finishMarkdown).toContain("codex-token-usage.json");
     expect(finishMarkdown).toContain("stable entry `id`");
     expect(finishMarkdown).toContain("`token-usage-ledger` with an `entries` array");
-    expect(finishMarkdown).toContain("update the original issue's `token-usage` ledger");
+    expect(finishMarkdown).toContain(
+      "the audit publisher also updates the managed `token-usage` ledger"
+    );
     expect(finishMarkdown).toContain("Prefer the actual active Codex session model");
     expect(finishMarkdown).toContain(
       "prs audit publish --issue <number> --file <path> --section <name>"

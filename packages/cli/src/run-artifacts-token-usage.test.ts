@@ -11,6 +11,7 @@ import {
   writeIssueTokenUsageArtifact,
 } from "./run-artifacts";
 import {
+  enrichTokenUsageLedgerRowsWithCodexSessionModel,
   parseTokenUsageLedgerRowFromContent,
   parseTokenUsageLedgerRowsFromContent,
 } from "./token-audit";
@@ -532,6 +533,195 @@ describe("issue token usage artifacts", () => {
         totalTokens: 109535,
         elapsedSeconds: 176,
         capturedAt: "2026-06-15T16:44:20Z",
+      },
+    ]);
+  });
+
+  it("parses prs create ledger entries with configured fallback model metadata", () => {
+    expect(
+      parseTokenUsageLedgerRowsFromContent(
+        JSON.stringify({
+          version: 1,
+          kind: "token-usage-ledger",
+          entries: [
+            {
+              id: "create-draft-20260616T134453906Z-019ed0aa-03f9",
+              workflow: "prs:create",
+              phase: "create-draft",
+              role: "planner",
+              model: {
+                provenance: "configured-role-fallback",
+                profile: "premium",
+                name: "gpt-5.5",
+                thinking: "high",
+              },
+              status: "tracked",
+              totalTokens: 267102,
+              elapsedTimeSeconds: 365,
+              capturedAt: "2026-06-16T13:47:48Z",
+            },
+          ],
+        })
+      )
+    ).toMatchObject([
+      {
+        id: "create-draft-20260616T134453906Z-019ed0aa-03f9",
+        phase: "create-draft",
+        role: "planner",
+        model: "gpt-5.5",
+        modelSource: "configured-fallback",
+        configuredProfile: "premium",
+        configuredRole: "planner",
+        configuredModel: "gpt-5.5",
+        configuredThinking: "high",
+        status: "tracked",
+        totalTokens: 267102,
+        elapsedSeconds: 365,
+        capturedAt: "2026-06-16T13:47:48Z",
+      },
+    ]);
+  });
+
+  it("parses implementation ledger entries with workflowRole and threadId", () => {
+    expect(
+      parseTokenUsageLedgerRowsFromContent(
+        JSON.stringify({
+          version: 1,
+          type: "token-usage-ledger",
+          entries: [
+            {
+              id: "issue-274-implementation-019ed54a-27e9-7682-8bdc-112bf7326dbc-20260617T112744Z",
+              phase: "implementation",
+              status: "tracked",
+              workflowRole: "implementer",
+              threadId: "019ed54a-27e9-7682-8bdc-112bf7326dbc",
+              objective:
+                "Complete PRS issue #274: Harden DSM restore deploys against Redis bootstrap failures",
+              totalTokens: 50218,
+              timeUsedSeconds: 336,
+              capturedAt: "2026-06-17T11:30:24Z",
+            },
+          ],
+        })
+      )
+    ).toMatchObject([
+      {
+        id: "issue-274-implementation-019ed54a-27e9-7682-8bdc-112bf7326dbc-20260617T112744Z",
+        phase: "issue-implementation",
+        role: "implementer",
+        status: "tracked",
+        totalTokens: 50218,
+        elapsedSeconds: 336,
+        sessionId: "019ed54a-27e9-7682-8bdc-112bf7326dbc",
+        capturedAt: "2026-06-17T11:30:24Z",
+      },
+    ]);
+  });
+
+  it("prefers actual model metadata in prs create ledger entries", () => {
+    expect(
+      parseTokenUsageLedgerRowsFromContent(
+        JSON.stringify({
+          version: 1,
+          kind: "token-usage-ledger",
+          entries: [
+            {
+              id: "create-draft-actual-model",
+              phase: "create-draft",
+              role: "planner",
+              model: {
+                actual: "gpt-5",
+                provenance: "configured-role-fallback",
+                profile: "premium",
+                name: "gpt-5.5",
+                thinking: "high",
+              },
+              status: "tracked",
+              totalTokens: 267102,
+              elapsedTimeSeconds: 365,
+              capturedAt: "2026-06-16T13:47:48Z",
+            },
+          ],
+        })
+      )
+    ).toMatchObject([
+      {
+        id: "create-draft-actual-model",
+        phase: "create-draft",
+        role: "planner",
+        model: "gpt-5",
+        modelSource: "actual",
+        configuredProfile: "premium",
+        configuredRole: "planner",
+        configuredModel: "gpt-5.5",
+        configuredThinking: "high",
+      },
+    ]);
+  });
+
+  it("enriches parsed rows with the current Codex session model before fallback metadata", () => {
+    expect(
+      enrichTokenUsageLedgerRowsWithCodexSessionModel(
+        [
+          {
+            id: "issue-draft-current-session",
+            phase: "issue-draft",
+            role: "planner",
+            model: "gpt-5.5",
+            modelSource: "configured-fallback",
+            configuredProfile: "premium",
+            configuredRole: "planner",
+            configuredModel: "gpt-5.5",
+            configuredThinking: "high",
+            status: "tracked",
+            totalTokens: 92786,
+            elapsedSeconds: 121,
+            capturedAt: "2026-06-17T11:06:36Z",
+          },
+        ],
+        {
+          threadId: "019ed540-2666-74f0-b987-515d935ec1e3",
+          model: "gpt-5",
+          reasoningEffort: "high",
+        }
+      )
+    ).toMatchObject([
+      {
+        id: "issue-draft-current-session",
+        model: "gpt-5",
+        modelSource: "actual",
+        sessionId: "019ed540-2666-74f0-b987-515d935ec1e3",
+        configuredModel: "gpt-5.5",
+        notes: ["Codex reasoning effort: high"],
+      },
+    ]);
+  });
+
+  it("does not enrich rows from a different Codex session", () => {
+    expect(
+      enrichTokenUsageLedgerRowsWithCodexSessionModel(
+        [
+          {
+            id: "issue-draft-other-session",
+            phase: "issue-draft",
+            role: "planner",
+            modelSource: "unavailable",
+            sessionId: "019ed540-2666-74f0-b987-515d935ec1e3",
+            status: "tracked",
+            totalTokens: 92786,
+            capturedAt: "2026-06-17T11:06:36Z",
+          },
+        ],
+        {
+          threadId: "019ed0b7-2554-75b1-ae2e-a949c6455c0f",
+          model: "gpt-5",
+        }
+      )
+    ).toMatchObject([
+      {
+        id: "issue-draft-other-session",
+        modelSource: "unavailable",
+        sessionId: "019ed540-2666-74f0-b987-515d935ec1e3",
       },
     ]);
   });

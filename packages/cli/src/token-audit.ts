@@ -5,6 +5,8 @@ import {
   DEFAULT_ISSUE_ESTIMATE_FALLBACK_MODEL_RATE_USD_PER_MILLION,
   type IssueEstimateCostSettings,
 } from "@prs/core";
+import type { ResolvedRepositoryConfigType } from "@prs/contracts";
+import type { CodexSessionModelMetadata } from "./codex-session-metadata";
 import type { AuditTarget } from "./forge";
 
 export type TokenUsageStatus = "tracked" | "partial" | "unavailable";
@@ -288,6 +290,34 @@ function normalizeTokenUsageStatus(
   return "partial";
 }
 
+function normalizeTokenUsagePhase(
+  phase: string,
+  role: string | undefined
+): string {
+  if (phase === "implementation" && role === "implementer") {
+    return "issue-implementation";
+  }
+
+  return phase;
+}
+
+function normalizeModelSource(value: string | undefined): string | undefined {
+  const normalized = value?.toLowerCase();
+  if (!normalized) {
+    return undefined;
+  }
+
+  if (normalized.includes("actual") || normalized.includes("session")) {
+    return "actual";
+  }
+
+  if (normalized.includes("fallback")) {
+    return "configured-fallback";
+  }
+
+  return value;
+}
+
 function normalizePlannerTokenUsageRow(
   value: unknown
 ): TokenUsageLedgerRow | undefined {
@@ -295,9 +325,10 @@ function normalizePlannerTokenUsageRow(
     return undefined;
   }
 
-  const phase = readStringField(value, "phase");
-  const role = readStringField(value, "role");
+  const rawPhase = readStringField(value, "phase");
+  const role = readStringField(value, "role") ?? readStringField(value, "workflowRole");
   const profile = isRecord(value.profile) ? value.profile : undefined;
+  const model = isRecord(value.model) ? value.model : undefined;
   const usage = isRecord(value.usage) ? value.usage : undefined;
   const capture = isRecord(value.capture) ? value.capture : undefined;
   const capturedAt =
@@ -307,16 +338,33 @@ function normalizePlannerTokenUsageRow(
     readStringField(value, "createdAt") ??
     "unavailable";
 
-  if (!phase) {
+  if (!rawPhase) {
     return undefined;
   }
 
   const resolvedRole =
-    role ?? (phase === "issue-draft" || phase === "issue-create" ? "planner" : undefined);
-  const profileSource = profile ? readStringField(profile, "source") : undefined;
-  const modelSource = profileSource?.toLowerCase().includes("fallback")
-    ? "configured-fallback"
-    : profileSource;
+    role ??
+    (rawPhase === "issue-draft" || rawPhase === "issue-create" ? "planner" : undefined);
+  const phase = normalizeTokenUsagePhase(rawPhase, resolvedRole);
+  const profileSource =
+    (profile ? readStringField(profile, "source") : undefined) ??
+    (model
+      ? readStringField(model, "provenance") ?? readStringField(model, "source")
+      : undefined);
+  const actualModel = model ? readStringField(model, "actual") : undefined;
+  const configuredModel =
+    (profile ? readStringField(profile, "model") : undefined) ??
+    (model
+      ? readStringField(model, "name") ?? readStringField(model, "model")
+      : undefined);
+  const configuredProfile =
+    (profile ? readStringField(profile, "name") : undefined) ??
+    (model ? readStringField(model, "profile") : undefined);
+  const configuredThinking =
+    (profile ? readStringField(profile, "thinking") : undefined) ??
+    (model ? readStringField(model, "thinking") : undefined);
+  const modelSource = actualModel ? "actual" : normalizeModelSource(profileSource);
+  const modelName = actualModel ?? configuredModel;
   const totalTokens = usage
     ? readNumberField(usage, "totalTokens") ?? readNumberField(usage, "tokensUsed")
     : readNumberField(value, "totalTokens") ?? readNumberField(value, "tokensUsed");
@@ -328,9 +376,11 @@ function normalizePlannerTokenUsageRow(
     : readNumberField(value, "outputTokens");
   const elapsedSeconds = usage
     ? readNumberField(usage, "timeUsedSeconds") ??
-      readNumberField(usage, "elapsedSeconds")
+      readNumberField(usage, "elapsedSeconds") ??
+      readNumberField(usage, "elapsedTimeSeconds")
     : readNumberField(value, "timeUsedSeconds") ??
-      readNumberField(value, "elapsedSeconds");
+      readNumberField(value, "elapsedSeconds") ??
+      readNumberField(value, "elapsedTimeSeconds");
   const notes = [
     ...(isRecord(value.actualModel) && readStringField(value.actualModel, "notes")
       ? [readStringField(value.actualModel, "notes") as string]
@@ -345,20 +395,12 @@ function normalizePlannerTokenUsageRow(
     ...(readStringField(value, "id") ? { id: readStringField(value, "id") } : {}),
     phase,
     ...(resolvedRole ? { role: resolvedRole } : {}),
-    ...(profile && readStringField(profile, "model")
-      ? { model: readStringField(profile, "model") }
-      : {}),
+    ...(modelName ? { model: modelName } : {}),
     modelSource: modelSource ?? "unavailable",
-    ...(profile && readStringField(profile, "name")
-      ? { configuredProfile: readStringField(profile, "name") }
-      : {}),
+    ...(configuredProfile ? { configuredProfile } : {}),
     ...(resolvedRole ? { configuredRole: resolvedRole } : {}),
-    ...(profile && readStringField(profile, "model")
-      ? { configuredModel: readStringField(profile, "model") }
-      : {}),
-    ...(profile && readStringField(profile, "thinking")
-      ? { configuredThinking: readStringField(profile, "thinking") }
-      : {}),
+    ...(configuredModel ? { configuredModel } : {}),
+    ...(configuredThinking ? { configuredThinking } : {}),
     status: normalizeTokenUsageStatus(
       (usage ? readStringField(usage, "status") : undefined) ??
         readStringField(value, "status")
@@ -371,8 +413,8 @@ function normalizePlannerTokenUsageRow(
     ...(capture && readStringField(capture, "runDir")
       ? { runDir: readStringField(capture, "runDir") }
       : {}),
-    ...(readStringField(value, "sessionId")
-      ? { sessionId: readStringField(value, "sessionId") }
+    ...(readStringField(value, "sessionId") ?? readStringField(value, "threadId")
+      ? { sessionId: readStringField(value, "sessionId") ?? readStringField(value, "threadId") }
       : {}),
     ...(notes.length > 0 ? { notes } : {}),
   };
@@ -645,6 +687,120 @@ export function parseTokenUsageLedgerRowsFromContent(
   }
 
   return parseTokenUsageLedgerRowsFromJsonValue(parsed);
+}
+
+const CONFIGURABLE_WORKFLOW_ROLES = [
+  "planner",
+  "implementer",
+  "reviewer",
+  "tester",
+] as const;
+
+type ConfigurableWorkflowRole = (typeof CONFIGURABLE_WORKFLOW_ROLES)[number];
+
+function isConfigurableWorkflowRole(
+  role: string | undefined
+): role is ConfigurableWorkflowRole {
+  return CONFIGURABLE_WORKFLOW_ROLES.includes(role as ConfigurableWorkflowRole);
+}
+
+function configuredFallbackForRole(
+  role: string | undefined,
+  config: ResolvedRepositoryConfigType
+):
+  | {
+      role: string;
+      profileName: string;
+      model: string;
+      thinking: string;
+    }
+  | undefined {
+  if (!isConfigurableWorkflowRole(role)) {
+    return undefined;
+  }
+
+  const profileName = config.ai.roles[role];
+  if (!profileName) {
+    return undefined;
+  }
+
+  const profile = config.ai.profiles[profileName];
+  if (!profile) {
+    return undefined;
+  }
+
+  return {
+    role,
+    profileName,
+    model: profile.model,
+    thinking: profile.thinking,
+  };
+}
+
+export function enrichTokenUsageLedgerRowsWithConfiguredModelFallbacks(
+  rows: TokenUsageLedgerRow[],
+  config: ResolvedRepositoryConfigType
+): TokenUsageLedgerRow[] {
+  return rows.map((row) => {
+    if (row.kind === "estimate") {
+      return row;
+    }
+
+    const fallback = configuredFallbackForRole(row.role, config);
+    if (!fallback) {
+      return row;
+    }
+
+    const mayUseConfiguredModel =
+      !row.model &&
+      (row.modelSource === undefined ||
+        row.modelSource === "unavailable" ||
+        row.modelSource === "configured-fallback");
+
+    return {
+      ...row,
+      ...(mayUseConfiguredModel ? { model: fallback.model } : {}),
+      modelSource: mayUseConfiguredModel
+        ? "configured-fallback"
+        : row.modelSource ?? "configured-fallback",
+      configuredProfile: row.configuredProfile ?? fallback.profileName,
+      configuredRole: row.configuredRole ?? fallback.role,
+      configuredModel: row.configuredModel ?? fallback.model,
+      configuredThinking: row.configuredThinking ?? fallback.thinking,
+    };
+  });
+}
+
+export function enrichTokenUsageLedgerRowsWithCodexSessionModel(
+  rows: TokenUsageLedgerRow[],
+  sessionModel: CodexSessionModelMetadata | undefined
+): TokenUsageLedgerRow[] {
+  if (!sessionModel) {
+    return rows;
+  }
+
+  return rows.map((row) => {
+    if (
+      row.kind === "estimate" ||
+      row.modelSource === "actual" ||
+      (row.sessionId !== undefined && row.sessionId !== sessionModel.threadId)
+    ) {
+      return row;
+    }
+
+    return {
+      ...row,
+      model: sessionModel.model,
+      modelSource: "actual",
+      sessionId: row.sessionId ?? sessionModel.threadId,
+      notes: [
+        ...(row.notes ?? []),
+        ...(sessionModel.reasoningEffort
+          ? [`Codex reasoning effort: ${sessionModel.reasoningEffort}`]
+          : []),
+      ],
+    };
+  });
 }
 
 export type PullRequestTokenUsageMetadata = {
