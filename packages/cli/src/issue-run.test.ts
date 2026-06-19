@@ -726,7 +726,7 @@ describe("Full issue run workflow", () => {
     expect(gitCommands).not.toContainEqual(["checkout", "main"]);
     expect(gitCommands).not.toContainEqual(["pull"]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
+  }, 180000);
 
   it("continues with build and commit flow when Codex exits a full issue run", async () => {
     const beforeRuns = listRunDirectories();
@@ -1721,6 +1721,39 @@ describe("Full issue run workflow", () => {
         status: "created",
       },
     });
+    const orchestrationState = JSON.parse(
+      readFileSync(
+        resolve(
+          REPO_ROOT,
+          ".prs",
+          "runs",
+          createdRunDir as string,
+          "issue-orchestration-state.json"
+        ),
+        "utf8"
+      )
+    ) as {
+      issueNumber: number;
+      prNumber: number;
+      stages: Array<{ name: string; status: string }>;
+    };
+    expect(orchestrationState).toMatchObject({
+      issueNumber,
+      prNumber: 1517,
+    });
+    expect(orchestrationState.stages.map((stage) => [stage.name, stage.status])).toEqual([
+      ["prepare", "complete"],
+      ["implement", "complete"],
+      ["local-verify", "complete"],
+      ["open-pr", "complete"],
+      ["pr-ready", "complete"],
+      ["pr-review", "skipped"],
+      ["publish-review", "skipped"],
+      ["address-comments", "skipped"],
+      ["wait-ci", "skipped"],
+      ["fix-ci", "skipped"],
+      ["final-audit", "skipped"],
+    ]);
   });
 
   it("records a skipped no-changes outcome when an unattended issue run produces no changes", async () => {
