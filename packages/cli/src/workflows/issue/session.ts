@@ -63,6 +63,7 @@ ensureVerificationCommandAvailable,
 preflightIssueBaseBranch,
 preflightRemoteBranch,
 } from "../../workflow-preflights";
+import { runIssueOrchestratedPipeline } from "./orchestrated-pipeline";
 
 export { parseAuditCommandArgs } from "../../commands/audit";
 export {
@@ -1807,6 +1808,14 @@ export async function runUnattendedIssueCommand(
     },
   };
   recordIssueRunOutcome(context.workspace, outcome);
+  await runIssueOrchestratedPipeline({
+    runDir: context.workspace.runDir,
+    issueNumber: context.issueNumber,
+    branchName: context.branchName,
+    committed: true,
+    pullRequest: outcome.pullRequest,
+    hooks: createDefaultIssueOrchestrationHooks(context.issueNumber),
+  });
   printIssueRunOutcomeSummary(outcome);
 
   return {
@@ -1814,5 +1823,38 @@ export async function runUnattendedIssueCommand(
     runDir,
     committed: true,
     pullRequest: outcome.pullRequest,
+  };
+}
+
+function createDefaultIssueOrchestrationHooks(issueNumber: number) {
+  return {
+    readyPullRequest: async (prNumber: number) => ({
+      status: "ready" as const,
+      summary: `Pull request #${prNumber} was opened and is ready for follow-up orchestration.`,
+    }),
+    reviewPullRequest: async (prNumber: number) => ({
+      status: "skipped" as const,
+      summary: `Run \`prs pr ${prNumber} review --jdi\` to perform local PR review for issue #${issueNumber}.`,
+    }),
+    publishReview: async (prNumber: number) => ({
+      status: "skipped" as const,
+      summary: `Review publication was skipped until review artifacts exist for PR #${prNumber}.`,
+    }),
+    addressComments: async (prNumber: number) => ({
+      status: "skipped" as const,
+      summary: `Run \`prs pr ${prNumber} address-comments\` if actionable review comments are present.`,
+    }),
+    waitForCi: async (prNumber: number) => ({
+      status: "skipped" as const,
+      summary: `CI waiting was not run automatically for PR #${prNumber}.`,
+    }),
+    fixCi: async (prNumber: number) => ({
+      status: "skipped" as const,
+      summary: `Run \`prs pr ${prNumber} fix-tests\` if CI or local verification fails.`,
+    }),
+    finalAudit: async (prNumber: number) => ({
+      status: "skipped" as const,
+      summary: `Run \`prs audit publish --issue ${issueNumber} --file <path> --section completion\` after PR #${prNumber} is ready.`,
+    }),
   };
 }
