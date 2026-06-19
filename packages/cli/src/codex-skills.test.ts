@@ -275,6 +275,8 @@ describe("managed prs Codex skills", () => {
     expect(issueMarkdown).toContain("call `create_goal` with an objective like `Refine PRS issue #<number>: <title>`");
     expect(issueMarkdown).toContain("update the source issue's token-usage ledger");
     expect(issueMarkdown).toContain("/prs:issue <number> --unattended");
+    expect(issueMarkdown).toContain("After implementation completes, use `/prs finish` discipline");
+    expect(issueMarkdown).toContain("open or update the pull request before entering post-PR orchestration");
     expect(issueMarkdown).toContain("issue-orchestration-state.json");
     expect(issueMarkdown).toContain("wait for bounded CI/check completion");
     expect(issueMarkdown).toContain("fix failing CI with the PR fix-tests workflow");
