@@ -277,6 +277,10 @@ describe("managed prs Codex skills", () => {
     expect(issueMarkdown).toContain("/prs:issue <number> --unattended");
     expect(issueMarkdown).toContain("After implementation completes, use `/prs finish` discipline");
     expect(issueMarkdown).toContain("open or update the pull request before entering post-PR orchestration");
+    expect(issueMarkdown).toContain("After `/prs finish` opens or updates the pull request, continue immediately with the active issue pipeline");
+    expect(issueMarkdown).toContain("run `prs tool pr review <pr-number> --unattended --json`");
+    expect(issueMarkdown).toContain("Do not treat GitHub Actions `pr-review` output as the active Codex review stage");
+    expect(issueMarkdown).toContain("publish issue implementation token usage to the original issue before publishing any PR-lifetime token telemetry");
     expect(issueMarkdown).toContain("issue-orchestration-state.json");
     expect(issueMarkdown).toContain("wait for bounded CI/check completion");
     expect(issueMarkdown).toContain("fix failing CI with the PR fix-tests workflow");
@@ -339,6 +343,12 @@ describe("managed prs Codex skills", () => {
     expect(finishWorkMarkdown).toContain(
       "Publish the final issue audit before marking any Codex goal complete or reporting the managed skill run complete."
     );
+    expect(finishWorkMarkdown).toContain(
+      "When finishing issue work, publish implementation token usage to the original issue ledger before publishing any PR-lifetime token telemetry."
+    );
+    expect(finishWorkMarkdown).toContain(
+      "If `/prs finish` is being used inside `/prs issue <number> --jdi`, return to that issue pipeline after the pull request exists instead of stopping at the handoff."
+    );
     expect(finishMarkdown).toContain("name: prs:finish");
     expect(finishMarkdown).toContain("safely cleaning up");
     expect(finishMarkdown).toContain("get_goal");
@@ -357,6 +367,12 @@ describe("managed prs Codex skills", () => {
     expect(finishMarkdown).toContain("premium (gpt-5.5, high thinking)");
     expect(finishMarkdown).toContain(
       "Publish the final issue audit before marking any Codex goal complete or reporting the managed skill run complete."
+    );
+    expect(finishMarkdown).toContain(
+      "When finishing issue work, publish implementation token usage to the original issue ledger before publishing any PR-lifetime token telemetry."
+    );
+    expect(finishMarkdown).toContain(
+      "If `/prs finish` is being used inside `/prs issue <number> --jdi`, return to that issue pipeline after the pull request exists instead of stopping at the handoff."
     );
     expect(finishMarkdown).toContain("offer the next `/prs pr` step for that pull request");
     expect(finishMarkdown).not.toContain("offer to prepare the pull request for review with `/prs pr <number> prepare-review`");
@@ -401,7 +417,7 @@ describe("managed prs Codex skills", () => {
     ).join("\n");
     const documentedToolCommands = [
       ...markdown.matchAll(/prs tool ([^`.\n]+)/g),
-    ].map((match) => match[1]?.trim().replace("<number>", "123"));
+    ].map((match) => match[1]?.trim().replace(/<pr-number>|<number>/g, "123"));
 
     expect(documentedToolCommands).toContain("issue list --actionable --json");
     for (const documentedCommand of documentedToolCommands) {
