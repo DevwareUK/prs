@@ -67,6 +67,10 @@ describe("managed prs Codex skills", () => {
     expect(markdown).toContain("/prs create");
     expect(markdown).toContain("/prs:create");
     expect(markdown).toContain("/prs create issue");
+    expect(markdown).toContain("/prs create observability");
+    expect(markdown).toContain("run `dsm grafana triage` first");
+    expect(markdown).toContain("defaults are `--env prod` and `--since 24h`");
+    expect(markdown).toContain("do not treat `observability` as a rough idea");
     expect(markdown).toContain("Default workflow handoff: `/prs create` -> `/prs issue` -> `/prs pr`");
     expect(markdown).toContain("Draft GitHub Issue: <short topic>");
     expect(markdown).toContain("ask the user to approve the draft before creating it in GitHub");
@@ -214,7 +218,17 @@ describe("managed prs Codex skills", () => {
     expect(worktreeCleanupMarkdown).toContain("Do not remove dirty worktrees");
     expect(worktreeCleanupMarkdown).toContain("do not fall back to manual git worktree remove");
     expect(createMarkdown).toContain("name: prs:create");
-    expect(createMarkdown).toContain("Draft a GitHub issue from a rough idea");
+    expect(createMarkdown).toContain(
+      "Draft a GitHub issue from a rough idea or import DSM observability findings"
+    );
+    expect(createMarkdown).toContain("If the supplied idea is exactly `observability`");
+    expect(createMarkdown).toContain("If the first command topic is `observability`");
+    expect(createMarkdown).toContain("Do not turn pasted notes, attachments, logs, or prior draft text into the issue source");
+    expect(createMarkdown).toContain("infer the site from the current repository");
+    expect(createMarkdown).toContain("default to `--env prod` and `--since 24h`");
+    expect(createMarkdown).toContain("run `dsm grafana triage`");
+    expect(createMarkdown).toContain("prs issue draft --observability-findings");
+    expect(createMarkdown).toContain("Do not inspect old observability drafts");
     expect(createMarkdown).toContain("Draft GitHub Issue: <short topic>");
     expect(createMarkdown).toContain("ask the user to approve them before creating");
     expect(createMarkdown).toContain(

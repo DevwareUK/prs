@@ -3,6 +3,10 @@ export type IssuePrepareMode = "local" | "github-action";
 
 export type IssueDraftCommandOptions =
   | {
+      mode: "observability-import";
+      observabilityFindingsFilePath: string;
+    }
+  | {
       mode: "caller";
       draftFilePath?: string;
       issueSetFilePath?: string;
@@ -63,6 +67,7 @@ const ISSUE_USAGE = [
   "  prs issue <number> [--unattended|--auto|--jdi|--mode <interactive|unattended>]",
   "  prs issue <number> <number> [...number] [--unattended|--auto|--jdi]",
   "  prs issue batch <number> <number> [...number] [--unattended|--auto|--jdi]",
+  "  prs issue draft --observability-findings <path>",
   "  prs issue draft --draft-file <path> [--rough-idea <text>|--rough-idea-file <path>] [--context <text>] [--context-file <path>] [--superpowers-spec-file <path>] [--superpowers-plan-file <path>] [--media-manifest <path>]",
   "  prs issue draft --issue-set-file <path> [--rough-idea <text>|--rough-idea-file <path>] [--context <text>] [--context-file <path>] [--superpowers-spec-file <path>] [--superpowers-plan-file <path>]",
   "  prs issue draft --runtime",
@@ -245,6 +250,7 @@ function parseIssueDraftOptions(args: string[]): IssueDraftCommandOptions {
   let superpowersSpecFilePath: string | undefined;
   let superpowersPlanFilePath: string | undefined;
   let mediaManifestFilePath: string | undefined;
+  let observabilityFindingsFilePath: string | undefined;
   const contextValues: string[] = [];
   const contextFilePaths: string[] = [];
 
@@ -262,6 +268,12 @@ function parseIssueDraftOptions(args: string[]): IssueDraftCommandOptions {
     }
 
     if (rawArg === "--from-caller") {
+      continue;
+    }
+
+    if (rawArg === "--observability-findings") {
+      observabilityFindingsFilePath = takeRequiredOptionValue(args, index, rawArg);
+      index += 1;
       continue;
     }
 
@@ -327,9 +339,32 @@ function parseIssueDraftOptions(args: string[]): IssueDraftCommandOptions {
     throw new Error(`Unknown issue option "${rawArg}". ${ISSUE_USAGE}`);
   }
 
+  if (observabilityFindingsFilePath) {
+    if (
+      draftFilePath ||
+      issueSetFilePath ||
+      roughIdea ||
+      roughIdeaFilePath ||
+      contextValues.length > 0 ||
+      contextFilePaths.length > 0 ||
+      superpowersSpecFilePath ||
+      superpowersPlanFilePath ||
+      mediaManifestFilePath
+    ) {
+      throw new Error(
+        "`prs issue draft --observability-findings` cannot be combined with caller draft options."
+      );
+    }
+
+    return {
+      mode: "observability-import",
+      observabilityFindingsFilePath,
+    };
+  }
+
   if (!draftFilePath && !issueSetFilePath) {
     throw new Error(
-      "`prs issue draft` now ingests a skill-produced draft. Pass --draft-file <path> for one issue, --issue-set-file <path> for linked issues, or --runtime to intentionally open a separate drafting session."
+      "`prs issue draft` now ingests a skill-produced draft. Pass --draft-file <path> for one issue, --issue-set-file <path> for linked issues, --observability-findings <path> for DSM observability imports, or --runtime to intentionally open a separate drafting session."
     );
   }
 

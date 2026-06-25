@@ -1051,7 +1051,7 @@ async function listOpenIssues(
   owner: string,
   repo: string,
   token: string
-): Promise<Array<{ number: number; title: string; url: string }>> {
+): Promise<Array<{ number: number; title: string; url: string; body?: string }>> {
   const response = await fetch(
     `https://api.github.com/repos/${owner}/${repo}/issues?state=open&per_page=100`,
     {
@@ -1070,6 +1070,7 @@ async function listOpenIssues(
   const payload = (await response.json()) as Array<{
     number?: number;
     title?: string;
+    body?: string | null;
     html_url?: string;
     pull_request?: unknown;
   }>;
@@ -1079,8 +1080,20 @@ async function listOpenIssues(
     .map((item) => ({
       number: item.number as number,
       title: item.title as string,
+      body: item.body ?? undefined,
       url: item.html_url as string,
     }));
+}
+
+export async function listOpenGitHubIssuesForRepoRoot(
+  repoRoot: string
+): Promise<Array<{ number: number; title: string; url: string; body?: string }>> {
+  const token = getGitHubApiToken(
+    "Listing GitHub issues requires GH_TOKEN or GITHUB_TOKEN to be set.",
+    repoRoot
+  );
+  const { owner, repo } = parseGitHubRepoFromRemote(repoRoot);
+  return listOpenIssues(owner, repo, token);
 }
 
 async function createGitHubIssue(
