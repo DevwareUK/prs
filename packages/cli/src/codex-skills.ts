@@ -446,7 +446,7 @@ export const PRS_CODEX_SKILLS: ManagedCodexSkill[] = [
     folderName: "prs-create",
     name: "prs:create",
     description:
-      "Draft a GitHub issue from a rough idea with the prs create workflow.",
+      "Draft a GitHub issue from a rough idea or import DSM observability findings with the prs create workflow.",
     body: [
       SHARED_WORKFLOW_CONTRACT,
       "",

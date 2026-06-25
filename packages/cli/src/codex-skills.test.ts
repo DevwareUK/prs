@@ -218,7 +218,9 @@ describe("managed prs Codex skills", () => {
     expect(worktreeCleanupMarkdown).toContain("Do not remove dirty worktrees");
     expect(worktreeCleanupMarkdown).toContain("do not fall back to manual git worktree remove");
     expect(createMarkdown).toContain("name: prs:create");
-    expect(createMarkdown).toContain("Draft a GitHub issue from a rough idea");
+    expect(createMarkdown).toContain(
+      "Draft a GitHub issue from a rough idea or import DSM observability findings"
+    );
     expect(createMarkdown).toContain("If the supplied idea is exactly `observability`");
     expect(createMarkdown).toContain("If the first command topic is `observability`");
     expect(createMarkdown).toContain("Do not turn pasted notes, attachments, logs, or prior draft text into the issue source");
