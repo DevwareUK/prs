@@ -195,6 +195,18 @@ describe("CLI command surface", () => {
       action: "draft",
       mode: "runtime",
     });
+    expect(
+      parseIssueCommandArgs([
+        "issue",
+        "draft",
+        "--observability-findings",
+        "dsm-findings.json",
+      ])
+    ).toEqual({
+      action: "draft",
+      mode: "observability-import",
+      observabilityFindingsFilePath: "dsm-findings.json",
+    });
   });
 
   it("parses issue plan as a dedicated issue subcommand", async () => {

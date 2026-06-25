@@ -24,6 +24,9 @@ type CreatedIssueRecord,
 type RepositoryForge
 } from "../../forge";
 import {
+listOpenGitHubIssuesForRepoRoot
+} from "../../github";
+import {
 openFileInEditor,
 printGeneratedTextPreview,
 reviewGeneratedText
@@ -76,6 +79,10 @@ import {
 } from "./publication";
 import { ensurePrsManagedIssueBody } from "./refinement";
 import { parseCreatedIssueUrl } from "./session";
+import {
+  resolveActiveGitHubRepo,
+  writeObservabilityImportWorkspaceFiles,
+} from "./observability-import";
 
 export {
   buildIssueSummaryBodyFromDraftBody,
@@ -797,10 +804,36 @@ export async function runIssueDraftCommand(
 
   const repoRoot = getDefaultRepoRoot();
   const workspace = createIssueDraftWorkspace(repoRoot);
-  const shouldPublishSuperpowersSpec = Boolean(options.superpowersSpecFilePath);
-  const shouldPublishSuperpowersPlan = Boolean(options.superpowersPlanFilePath);
+  const shouldPublishSuperpowersSpec =
+    options.mode === "caller"
+      ? Boolean(options.superpowersSpecFilePath)
+      : options.mode === "observability-import";
+  const shouldPublishSuperpowersPlan =
+    options.mode === "caller"
+      ? Boolean(options.superpowersPlanFilePath)
+      : options.mode === "observability-import";
 
-  writeCallerIssueDraftWorkspaceFiles(repoRoot, options, workspace);
+  if (options.mode === "observability-import") {
+    const activeRepo = resolveActiveGitHubRepo(repoRoot);
+    if (!activeRepo) {
+      throw new Error(
+        "Could not determine the active GitHub repository from the origin remote."
+      );
+    }
+    const forge = getRepositoryForge(repoRoot);
+    const existingIssues = forge.type === "github" && forge.isAuthenticated()
+      ? await listOpenGitHubIssuesForRepoRoot(repoRoot)
+      : [];
+    writeObservabilityImportWorkspaceFiles({
+      repoRoot,
+      workspace,
+      artifactFilePath: options.observabilityFindingsFilePath,
+      activeRepo,
+      existingIssues,
+    });
+  } else {
+    writeCallerIssueDraftWorkspaceFiles(repoRoot, options, workspace);
+  }
 
   const issueSet = existsSync(workspace.issueSetFilePath)
     ? loadIssueDraftSet({

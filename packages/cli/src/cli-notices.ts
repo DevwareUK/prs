@@ -39,6 +39,7 @@ export const TOP_LEVEL_HELP = [
   "  prs review tests [--top <count>]",
   "",
   "Advanced:",
+  "  prs issue draft --observability-findings <path>",
   "  prs issue draft --draft-file <path> [--media-manifest <path>]",
   "  prs issue refine <number>",
   "  prs issue plan <number> [--refresh]",
