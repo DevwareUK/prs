@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
@@ -187,5 +187,60 @@ describe("DSM observability findings import", () => {
     expect(readFileSync(workspace.metadataFilePath, "utf8")).toContain(
       "\"flow\": \"observability-import\""
     );
+  });
+
+  it("writes issue-set artifacts for multiple selected findings without a shared spec path", () => {
+    const repoRoot = createRepoRoot();
+    const workspace = createIssueDraftWorkspace(repoRoot);
+    const artifactPath = resolve(repoRoot, "dsm-observability-findings.json");
+    writeFileSync(
+      artifactPath,
+      `${JSON.stringify(
+        createArtifact({
+          findings: [
+            ...(createArtifact().findings as unknown[]),
+            {
+              id: "obs-cfp-checkout-errors",
+              title: "Checkout errors increased on CFP production",
+              severity: "medium",
+              actionable: true,
+              owningRepo: "DevwareUK/CF8",
+              service: "cfp-checkout",
+              count: 12,
+              fingerprint: "cfp:checkout:errors",
+              query: "sum(rate(checkout_errors_total[5m])) > 0",
+              suggestedIssue: {
+                title: "Investigate checkout errors on CFP production",
+              },
+            },
+          ],
+        }),
+        null,
+        2
+      )}\n`
+    );
+
+    const result = writeObservabilityImportWorkspaceFiles({
+      repoRoot,
+      workspace,
+      artifactFilePath: artifactPath,
+      activeRepo: "DevwareUK/CF8",
+    });
+
+    expect(result.selected).toHaveLength(2);
+    expect(existsSync(workspace.issueSetFilePath)).toBe(true);
+    expect(existsSync(workspace.superpowersSpecFilePath)).toBe(false);
+    const issueSet = JSON.parse(readFileSync(workspace.issueSetFilePath, "utf8")) as {
+      mode: string;
+      issues: Array<{ id: string; draftFile: string }>;
+    };
+    expect(issueSet.mode).toBe("multiple");
+    expect(issueSet.issues.map((issue) => issue.id)).toEqual([
+      "obs-cfp-faro-errors",
+      "obs-cfp-checkout-errors",
+    ]);
+    for (const issue of issueSet.issues) {
+      expect(issue.draftFile).toContain(".prs/runs/");
+    }
   });
 });

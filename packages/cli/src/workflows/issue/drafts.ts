@@ -804,14 +804,14 @@ export async function runIssueDraftCommand(
 
   const repoRoot = getDefaultRepoRoot();
   const workspace = createIssueDraftWorkspace(repoRoot);
-  const shouldPublishSuperpowersSpec =
+  let shouldPublishSuperpowersSpec =
     options.mode === "caller"
       ? Boolean(options.superpowersSpecFilePath)
-      : options.mode === "observability-import";
-  const shouldPublishSuperpowersPlan =
+      : false;
+  let shouldPublishSuperpowersPlan =
     options.mode === "caller"
       ? Boolean(options.superpowersPlanFilePath)
-      : options.mode === "observability-import";
+      : false;
 
   if (options.mode === "observability-import") {
     const activeRepo = resolveActiveGitHubRepo(repoRoot);
@@ -824,13 +824,15 @@ export async function runIssueDraftCommand(
     const existingIssues = forge.type === "github" && forge.isAuthenticated()
       ? await listOpenGitHubIssuesForRepoRoot(repoRoot)
       : [];
-    writeObservabilityImportWorkspaceFiles({
+    const importResult = writeObservabilityImportWorkspaceFiles({
       repoRoot,
       workspace,
       artifactFilePath: options.observabilityFindingsFilePath,
       activeRepo,
       existingIssues,
     });
+    shouldPublishSuperpowersSpec = importResult.selected.length === 1;
+    shouldPublishSuperpowersPlan = importResult.selected.length === 1;
   } else {
     writeCallerIssueDraftWorkspaceFiles(repoRoot, options, workspace);
   }
