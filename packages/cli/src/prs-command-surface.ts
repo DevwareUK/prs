@@ -26,6 +26,7 @@ export type PrsPrAction =
 export type PrsCommandSurfaceAction =
   | { kind: "root"; mode: "interactive" }
   | { kind: "create"; target: "issue" }
+  | { kind: "create"; target: "observability"; passthroughArgs: string[] }
   | { kind: "cleanup"; mode: "direct"; target: "branches" | "worktrees" }
   | { kind: "review"; mode: "interactive" }
   | {
@@ -51,6 +52,7 @@ export type PrsCommandRoute = {
   interaction: "interactive" | "direct";
   skillName:
     | "prs"
+    | "prs:create"
     | "prs:review"
     | "prs:start-issue-work"
     | "prs:cleanup-branches"
@@ -62,7 +64,7 @@ export type PrsCommandRoute = {
   picker?: "actionable-issues" | "actionable-pull-requests" | "pr-actions";
   target?:
     | { type: "issue" | "pull-request"; number: number }
-    | { type: "create"; name: "issue" }
+    | { type: "create"; name: "issue" | "observability" }
     | { type: "review"; name: "diff" | "tests" | "features" };
   toolOnly?: boolean;
 };
@@ -99,6 +101,7 @@ export function renderPrsCommandSurfaceHelp(): string {
     "Usage:",
     "  /prs",
     "  /prs create [issue]",
+    "  /prs create observability [--site <site>] [--env <env>] [--since <duration>]",
     "  /prs cleanup branches",
     "  /prs cleanup worktrees",
     "  /prs review",
@@ -132,6 +135,16 @@ export function parsePrsCommandSurfaceArgs(args: string[]): PrsCommandSurfaceAct
       }
 
       return { kind: "create", target: "issue" };
+    }
+
+    if (second === "observability") {
+      return {
+        kind: "create",
+        target: "observability",
+        passthroughArgs: [third, ...rest].filter(
+          (value): value is string => value !== undefined
+        ),
+      };
     }
 
     throw new Error(renderPrsCommandSurfaceHelp());
@@ -252,6 +265,15 @@ export function routePrsCommandSurfaceAction(action: PrsCommandSurfaceAction): P
   }
 
   if (action.kind === "create") {
+    if (action.target === "observability") {
+      return {
+        interaction: "direct",
+        skillName: "prs:create",
+        cliArgs: ["create", "observability", ...action.passthroughArgs],
+        target: { type: "create", name: "observability" },
+      };
+    }
+
     return {
       interaction: "direct",
       skillName: "prs:start-issue-work",

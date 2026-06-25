@@ -63,6 +63,10 @@ const SHARED_WORKFLOW_CONTRACT = [
   "- Finish by verifying, committing, pushing, opening or updating a pull request, publishing final audit, and cleaning up only when safe.",
 ].join("\n");
 
+const OBSERVABILITY_CREATE_WORKFLOW = [
+  "- `/prs create observability`: reserved shortcut for DSM observability findings; do not treat `observability` as a rough idea. run `dsm grafana triage` first, then feed its JSON artifact to `prs issue draft --observability-findings <artifact>`. The defaults are `--env prod` and `--since 24h`; infer `--site` from the current repository, preferably `.dsm/site.json`, and ask for the site only if it cannot be inferred. Keep DSM and PRS loosely coupled through the JSON artifact file under `.prs/runs`; do not query Grafana, Prometheus, Loki, or Faro from PRS itself.",
+].join("\n");
+
 function renderPrPrepareReviewToolCommand(): string {
   const route = routePrsCommandSurfaceAction(
     parsePrsCommandSurfaceArgs(["pr", "123", "prepare-review"])
@@ -285,6 +289,7 @@ export const PRS_CODEX_SKILLS: ManagedCodexSkill[] = [
       "- `/prs:create`, `/prs:review`, `/prs:issue`, `/prs:pr`, `/prs:audit`, and `/prs:finish` are top-level alias skills for the matching `/prs ...` routes.",
       "- `/prs create`: start the guided route for creating new GitHub work items from a rough idea. Use a descriptive working title such as `Draft GitHub Issue: <short topic>` in Codex status/summary text. After draft artifacts are created, stop and ask the user to approve the draft before creating it in GitHub; after creating the GitHub issue, offer the next `/prs issue` step for that issue.",
       "- `/prs create issue`: create one implementation-ready GitHub issue or a linked issue set from a rough idea. This currently uses the existing `prs issue draft` implementation; after artifacts are drafted, ask for approval and offer to create the GitHub issue or issue set. After creating issue(s), offer the next `/prs issue` step for the created issue context.",
+      OBSERVABILITY_CREATE_WORKFLOW,
       "- `/prs review`: show review lanes for diff review, test coverage strategy, and feature/product backlog discovery.",
       `- \`/prs review tests\`: run \`${renderReviewCommand("tests")}\`; review repository-wide testing strategy and coverage, then offer to turn approved gaps into GitHub issues.`,
       `- \`/prs review features\`: run \`${renderReviewCommand("features")}\`; review repository-wide feature/product opportunities, then offer to turn approved opportunities into GitHub issues.`,
@@ -448,6 +453,9 @@ export const PRS_CODEX_SKILLS: ManagedCodexSkill[] = [
       "## Create Work Item",
       "",
       "Use this alias exactly like `/prs create` or `/prs create issue`.",
+      "If the supplied idea is exactly `observability`, treat it as the reserved DSM observability shortcut, not as a rough idea.",
+      "For observability create runs, infer the site from the current repository, preferably `.dsm/site.json`; default to `--env prod` and `--since 24h`; create a run directory under `.prs/runs`; run `dsm grafana triage` with `--output <runDir>/observability-findings.json` and `--markdown <runDir>/observability-findings.md`; then run `prs issue draft --observability-findings <runDir>/observability-findings.json` and stop at the normal approve/modify/cancel gate.",
+      "Do not inspect old observability drafts, old branches, or memory as part of the happy path. Only inspect prior local context if the DSM triage command fails and you are debugging that failure.",
       "If the user has not provided the rough idea yet, ask for it in one concise sentence.",
       "When the idea is present, use a descriptive working title such as `Draft GitHub Issue: <short topic>` in Codex status/summary text.",
       "When a create run starts in an active Codex app session and goal tools are available, call `create_goal` with an objective like `Draft GitHub Issue: <short topic>` before drafting. Then call `get_goal` and confirm an active goal is visible before continuing. If a goal already exists, keep using it and record that fact in the run notes. If no goal is visible after the create/reuse attempt, say so before drafting and record token telemetry as unavailable because no active goal was available, not because model metadata was unavailable.",

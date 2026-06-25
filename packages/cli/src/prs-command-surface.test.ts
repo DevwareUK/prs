@@ -27,6 +27,27 @@ describe("prs command surface", () => {
       kind: "create",
       target: "issue",
     });
+    expect(parsePrsCommandSurfaceArgs(["create", "observability"])).toEqual({
+      kind: "create",
+      target: "observability",
+      passthroughArgs: [],
+    });
+    expect(
+      parsePrsCommandSurfaceArgs([
+        "create",
+        "observability",
+        "--site",
+        "cfp",
+        "--env",
+        "stg",
+        "--since",
+        "6h",
+      ])
+    ).toEqual({
+      kind: "create",
+      target: "observability",
+      passthroughArgs: ["--site", "cfp", "--env", "stg", "--since", "6h"],
+    });
   });
 
   it("parses review routes for repo health and diff review", () => {
@@ -292,6 +313,18 @@ describe("prs command surface routing", () => {
       skillName: "prs:start-issue-work",
       cliArgs: ["issue", "draft"],
       target: { type: "create", name: "issue" },
+    });
+    expect(
+      routePrsCommandSurfaceAction({
+        kind: "create",
+        target: "observability",
+        passthroughArgs: ["--site", "cfp"],
+      })
+    ).toEqual({
+      interaction: "direct",
+      skillName: "prs:create",
+      cliArgs: ["create", "observability", "--site", "cfp"],
+      target: { type: "create", name: "observability" },
     });
   });
 
