@@ -220,6 +220,8 @@ describe("managed prs Codex skills", () => {
     expect(createMarkdown).toContain("name: prs:create");
     expect(createMarkdown).toContain("Draft a GitHub issue from a rough idea");
     expect(createMarkdown).toContain("If the supplied idea is exactly `observability`");
+    expect(createMarkdown).toContain("If the first command topic is `observability`");
+    expect(createMarkdown).toContain("Do not turn pasted notes, attachments, logs, or prior draft text into the issue source");
     expect(createMarkdown).toContain("infer the site from the current repository");
     expect(createMarkdown).toContain("default to `--env prod` and `--since 24h`");
     expect(createMarkdown).toContain("run `dsm grafana triage`");

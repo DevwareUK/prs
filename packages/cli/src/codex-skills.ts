@@ -454,6 +454,7 @@ export const PRS_CODEX_SKILLS: ManagedCodexSkill[] = [
       "",
       "Use this alias exactly like `/prs create` or `/prs create issue`.",
       "If the supplied idea is exactly `observability`, treat it as the reserved DSM observability shortcut, not as a rough idea.",
+      "If the first command topic is `observability`, keep using the reserved shortcut even when the user includes pasted notes, attachments, log excerpts, or old draft text. Do not turn pasted notes, attachments, logs, or prior draft text into the issue source for this shortcut.",
       "For observability create runs, infer the site from the current repository, preferably `.dsm/site.json`; default to `--env prod` and `--since 24h`; create a run directory under `.prs/runs`; run `dsm grafana triage` with `--output <runDir>/observability-findings.json` and `--markdown <runDir>/observability-findings.md`; then run `prs issue draft --observability-findings <runDir>/observability-findings.json` and stop at the normal approve/modify/cancel gate.",
       "Do not inspect old observability drafts, old branches, or memory as part of the happy path. Only inspect prior local context if the DSM triage command fails and you are debugging that failure.",
       "If the user has not provided the rough idea yet, ask for it in one concise sentence.",
