@@ -43,6 +43,13 @@ type PublishPullRequestLocalReviewResult = {
   inlineReviewUrl?: string;
   reviewStatus: PullRequestReviewStatus;
   reviewEvent: PullRequestReviewEvent;
+  requestedReviewStatus?: PullRequestReviewStatus;
+  requestedReviewEvent?: PullRequestReviewEvent;
+  reviewFallback?: {
+    fromEvent: PullRequestReviewEvent;
+    toEvent: PullRequestReviewEvent;
+    reason: string;
+  };
   inlineCommentsPublished: number;
   skipped: {
     invalid: number;
@@ -191,6 +198,30 @@ function formatReviewBody(
     } on changed lines.`,
     outputMode
   );
+}
+
+function formatApproveFallbackReviewBody(
+  inlineCommentCount: number,
+  outputMode?: GitHubOutputMode
+): string {
+  const commentSummary =
+    inlineCommentCount === 0
+      ? "No high-confidence inline comments were generated."
+      : `The review includes ${inlineCommentCount} high-confidence inline comment${
+          inlineCommentCount === 1 ? "" : "s"
+        } on changed lines.`;
+  return applyGitHubOutputFraming(
+    [
+      "Local Codex PR review approved this pull request, but GitHub rejected the APPROVE review event with 422.",
+      "Publishing this result as a COMMENT review instead because the authenticated account likely cannot approve its own PR.",
+      commentSummary,
+    ].join("\n\n"),
+    outputMode
+  );
+}
+
+function isGitHubReviewValidationError(error: unknown): boolean {
+  return error instanceof Error && /\b422\b/.test(error.message);
 }
 
 function formatInlineCommentBody(
@@ -375,20 +406,46 @@ export async function publishPullRequestLocalReview(
     outputMode: options.outputMode,
   });
 
-  const reviewStatus = inferReviewStatus(options.reviewStatus, inlineComments.length);
-  const reviewEvent = reviewEventForStatus(reviewStatus);
+  const requestedReviewStatus = inferReviewStatus(options.reviewStatus, inlineComments.length);
+  const requestedReviewEvent = reviewEventForStatus(requestedReviewStatus);
+  let reviewStatus = requestedReviewStatus;
+  let reviewEvent = requestedReviewEvent;
+  let reviewFallback: PublishPullRequestLocalReviewResult["reviewFallback"];
   let inlineReviewUrl: string | undefined;
   if (inlineComments.length > 0 || options.reviewStatus) {
     if (!options.forge.createPullRequestReview) {
       throw new Error("Repository forge does not support creating pull request reviews.");
     }
-    const review = await options.forge.createPullRequestReview({
-      prNumber: options.prNumber,
-      commitSha: pullRequest.headSha,
-      event: reviewEvent,
-      body: formatReviewBody(reviewStatus, inlineComments.length, options.outputMode),
-      comments: inlineComments,
-    });
+    let review;
+    try {
+      review = await options.forge.createPullRequestReview({
+        prNumber: options.prNumber,
+        commitSha: pullRequest.headSha,
+        event: reviewEvent,
+        body: formatReviewBody(reviewStatus, inlineComments.length, options.outputMode),
+        comments: inlineComments,
+      });
+    } catch (error) {
+      if (requestedReviewEvent !== "APPROVE" || !isGitHubReviewValidationError(error)) {
+        throw error;
+      }
+
+      reviewStatus = "comment";
+      reviewEvent = "COMMENT";
+      reviewFallback = {
+        fromEvent: requestedReviewEvent,
+        toEvent: reviewEvent,
+        reason:
+          "GitHub rejected the APPROVE review event with 422; this usually means the authenticated account cannot approve its own pull request.",
+      };
+      review = await options.forge.createPullRequestReview({
+        prNumber: options.prNumber,
+        commitSha: pullRequest.headSha,
+        event: reviewEvent,
+        body: formatApproveFallbackReviewBody(inlineComments.length, options.outputMode),
+        comments: inlineComments,
+      });
+    }
     inlineReviewUrl = review.url;
   }
 
@@ -399,6 +456,9 @@ export async function publishPullRequestLocalReview(
     inlineReviewUrl,
     reviewStatus,
     reviewEvent,
+    requestedReviewStatus: reviewFallback ? requestedReviewStatus : undefined,
+    requestedReviewEvent: reviewFallback ? requestedReviewEvent : undefined,
+    reviewFallback,
     inlineCommentsPublished: inlineComments.length,
     skipped,
   };
