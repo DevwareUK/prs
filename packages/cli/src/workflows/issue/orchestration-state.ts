@@ -13,6 +13,7 @@ export const ISSUE_ORCHESTRATION_STAGES = [
   "wait-ci",
   "fix-ci",
   "final-audit",
+  "ready-for-review",
 ] as const;
 
 export type IssueOrchestrationStageName = (typeof ISSUE_ORCHESTRATION_STAGES)[number];

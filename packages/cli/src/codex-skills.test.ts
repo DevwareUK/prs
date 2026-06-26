@@ -139,13 +139,13 @@ describe("managed prs Codex skills", () => {
     expect(markdown).toContain("write inline review candidates to the returned `commentsFilePath`");
     expect(markdown).toContain("present a concise approval summary");
     expect(markdown).toContain(
-      "run `prs tool pr publish-review <number> --report <reportFilePath> --comments <commentsFilePath> --json` only after the user approves posting to GitHub"
+      "run `prs tool pr publish-review <number> --report <reportFilePath> --comments <commentsFilePath> --review-status <request-changes|comment|approve> --json` only after the user approves posting to GitHub"
     );
     expect(markdown).toContain(
       "/prs pr <number> review --unattended` (aliases: `--auto`, `--jdi`): run `prs tool pr review <number> --unattended --json`"
     );
     expect(markdown).toContain(
-      "publish with `prs tool pr publish-review <number> --report <reportFilePath> --comments <commentsFilePath> --unattended --json`"
+      "publish with `prs tool pr publish-review <number> --report <reportFilePath> --comments <commentsFilePath> --review-status <request-changes|comment|approve> --unattended --json`"
     );
     expect(markdown).toContain("read the returned `snapshotFilePath`");
     expect(markdown).toContain("does not generate `review-brief.md`");
@@ -298,6 +298,7 @@ describe("managed prs Codex skills", () => {
     expect(issueMarkdown).toContain("issue-orchestration-state.json");
     expect(issueMarkdown).toContain("wait for bounded CI/check completion");
     expect(issueMarkdown).toContain("fix failing CI with the PR fix-tests workflow");
+    expect(issueMarkdown).toContain("ready-for-review");
     expect(issueMarkdown).toContain("create_goal");
     expect(issueMarkdown).toContain("Complete PRS issue #<number>");
     expect(issueMarkdown).toContain("codex-token-usage.json");
@@ -322,11 +323,11 @@ describe("managed prs Codex skills", () => {
     expect(prMarkdown).toContain("write inline review candidates to the returned `commentsFilePath`");
     expect(prMarkdown).toContain("present a concise approval summary");
     expect(prMarkdown).toContain(
-      "run `prs tool pr publish-review <number> --report <reportFilePath> --comments <commentsFilePath> --json` only after the user approves posting to GitHub"
+      "run `prs tool pr publish-review <number> --report <reportFilePath> --comments <commentsFilePath> --review-status <request-changes|comment|approve> --json` only after the user approves posting to GitHub"
     );
     expect(prMarkdown).toContain("/prs:pr <number> review --unattended");
     expect(prMarkdown).toContain(
-      "publish with `prs tool pr publish-review <number> --report <reportFilePath> --comments <commentsFilePath> --unattended --json`"
+      "publish with `prs tool pr publish-review <number> --report <reportFilePath> --comments <commentsFilePath> --review-status <request-changes|comment|approve> --unattended --json`"
     );
     expect(prMarkdown).toContain("When a PR tool result or metadata includes `tokenUsage`");
     expect(prMarkdown).toContain("codex-token-usage.json");
@@ -431,7 +432,12 @@ describe("managed prs Codex skills", () => {
     ).join("\n");
     const documentedToolCommands = [
       ...markdown.matchAll(/prs tool ([^`.\n]+)/g),
-    ].map((match) => match[1]?.trim().replace(/<pr-number>|<number>/g, "123"));
+    ].map((match) =>
+      match[1]
+        ?.trim()
+        .replace(/<pr-number>|<number>/g, "123")
+        .replace(/<request-changes\|comment\|approve>/g, "approve")
+    );
 
     expect(documentedToolCommands).toContain("issue list --actionable --json");
     for (const documentedCommand of documentedToolCommands) {

@@ -49,6 +49,10 @@ describe("runIssueOrchestratedPipeline", () => {
           calls.push(`audit:${prNumber}`);
           return { status: "complete", summary: "Final audit published." };
         },
+        readyForReview: async (prNumber) => {
+          calls.push(`ready-for-review:${prNumber}`);
+          return { status: "complete", summary: "Marked draft PR ready for review." };
+        },
       },
     });
 
@@ -59,6 +63,7 @@ describe("runIssueOrchestratedPipeline", () => {
       "comments:411",
       "wait-ci:411",
       "audit:411",
+      "ready-for-review:411",
     ]);
     expect(result).toMatchObject({ status: "complete", prNumber: 411 });
     const state = loadIssueOrchestrationState(runDir);
@@ -74,6 +79,7 @@ describe("runIssueOrchestratedPipeline", () => {
       ["wait-ci", "complete"],
       ["fix-ci", "skipped"],
       ["final-audit", "complete"],
+      ["ready-for-review", "complete"],
     ]);
     expect(getNextIssueOrchestrationStage(state)).toBeUndefined();
   });
@@ -115,6 +121,9 @@ describe("runIssueOrchestratedPipeline", () => {
         },
         finalAudit: async () => {
           throw new Error("audit should not run when readiness is blocked");
+        },
+        readyForReview: async () => {
+          throw new Error("draft promotion should not run when readiness is blocked");
         },
       },
     });
@@ -163,6 +172,9 @@ describe("runIssueOrchestratedPipeline", () => {
         },
         finalAudit: async () => {
           throw new Error("audit should not run without a PR");
+        },
+        readyForReview: async () => {
+          throw new Error("draft promotion should not run without a PR");
         },
       },
     });
@@ -216,11 +228,15 @@ describe("runIssueOrchestratedPipeline", () => {
           calls.push("audit");
           return { status: "complete", summary: "Final audit published." };
         },
+        readyForReview: async () => {
+          calls.push("ready-for-review");
+          return { status: "complete", summary: "Marked draft PR ready for review." };
+        },
       },
     });
 
     expect(result).toMatchObject({ status: "complete", prNumber: 411 });
-    expect(calls).toEqual(["wait:1", "fix-ci", "wait:2", "audit"]);
+    expect(calls).toEqual(["wait:1", "fix-ci", "wait:2", "audit", "ready-for-review"]);
     expect(loadIssueOrchestrationState(runDir).stages.find((stage) => stage.name === "fix-ci")).toMatchObject({
       status: "complete",
       summary: "Pushed CI fix.",
@@ -253,6 +269,9 @@ describe("runIssueOrchestratedPipeline", () => {
           summary: "GitHub audit publication failed.",
           retryCommand: "prs audit publish --issue 311 --file .prs/runs/final.md --section completion",
         }),
+        readyForReview: async () => {
+          throw new Error("draft promotion should not run when final audit is blocked");
+        },
       },
     });
 
@@ -265,6 +284,84 @@ describe("runIssueOrchestratedPipeline", () => {
     expect(getNextIssueOrchestrationStage(loadIssueOrchestrationState(runDir))).toMatchObject({
       name: "final-audit",
       status: "blocked",
+    });
+  });
+
+  it("skips draft promotion when final audit is skipped", async () => {
+    const runDir = mkdtempSync(resolve(tmpdir(), "prs-issue-orchestrated-pipeline-"));
+
+    const result = await runIssueOrchestratedPipeline({
+      runDir,
+      issueNumber: 311,
+      branchName: "codex/issue-311",
+      committed: true,
+      pullRequest: {
+        status: "created",
+        title: "Make /prs issue --jdi orchestrated",
+        url: "https://github.com/DevwareUK/prs/pull/411",
+      },
+      now: "2026-06-19T10:00:00.000Z",
+      hooks: {
+        readyPullRequest: async () => ({ status: "ready", summary: "Ready." }),
+        reviewPullRequest: async () => ({ status: "complete", summary: "Reviewed." }),
+        publishReview: async () => ({ status: "complete", summary: "Published." }),
+        addressComments: async () => ({ status: "skipped", summary: "No comments." }),
+        waitForCi: async () => ({ status: "success", summary: "CI passed." }),
+        fixCi: async () => ({ status: "skipped", summary: "CI fix was not needed." }),
+        finalAudit: async () => ({ status: "skipped", summary: "Audit handled manually." }),
+        readyForReview: async () => {
+          throw new Error("draft promotion should not run when final audit is skipped");
+        },
+      },
+    });
+
+    expect(result).toMatchObject({ status: "complete", prNumber: 411 });
+    expect(loadIssueOrchestrationState(runDir).stages.find((stage) => stage.name === "ready-for-review")).toMatchObject({
+      status: "skipped",
+      summary: "Draft promotion was skipped because final audit did not complete.",
+    });
+  });
+
+  it("blocks with retry guidance when draft promotion fails after final audit", async () => {
+    const runDir = mkdtempSync(resolve(tmpdir(), "prs-issue-orchestrated-pipeline-"));
+
+    const result = await runIssueOrchestratedPipeline({
+      runDir,
+      issueNumber: 311,
+      branchName: "codex/issue-311",
+      committed: true,
+      pullRequest: {
+        status: "created",
+        title: "Make /prs issue --jdi orchestrated",
+        url: "https://github.com/DevwareUK/prs/pull/411",
+      },
+      now: "2026-06-19T10:00:00.000Z",
+      hooks: {
+        readyPullRequest: async () => ({ status: "ready", summary: "Ready." }),
+        reviewPullRequest: async () => ({ status: "complete", summary: "Reviewed." }),
+        publishReview: async () => ({ status: "complete", summary: "Published." }),
+        addressComments: async () => ({ status: "skipped", summary: "No comments." }),
+        waitForCi: async () => ({ status: "success", summary: "CI passed." }),
+        fixCi: async () => ({ status: "skipped", summary: "CI fix was not needed." }),
+        finalAudit: async () => ({ status: "complete", summary: "Final audit published." }),
+        readyForReview: async () => ({
+          status: "blocked",
+          summary: "GitHub rejected draft promotion.",
+          retryCommand: "gh pr ready 411",
+        }),
+      },
+    });
+
+    expect(result).toEqual({
+      status: "blocked",
+      stage: "ready-for-review",
+      prNumber: 411,
+      retryCommand: "gh pr ready 411",
+    });
+    expect(getNextIssueOrchestrationStage(loadIssueOrchestrationState(runDir))).toMatchObject({
+      name: "ready-for-review",
+      status: "blocked",
+      retryCommand: "gh pr ready 411",
     });
   });
 });

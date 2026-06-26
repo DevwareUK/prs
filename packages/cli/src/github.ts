@@ -1293,7 +1293,7 @@ class GitHubRepositoryForge implements RepositoryForge {
         },
         body: JSON.stringify({
           commit_id: input.commitSha,
-          event: "COMMENT",
+          event: input.event,
           body: input.body,
           comments: input.comments,
         }),
@@ -1315,6 +1315,61 @@ class GitHubRepositoryForge implements RepositoryForge {
       id: payload.id,
       url: payload.html_url,
     };
+  }
+
+  async markPullRequestReadyForReview(prNumber: number): Promise<void> {
+    const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
+    const token = getGitHubApiToken(
+      "Marking a pull request ready for review requires GH_TOKEN or GITHUB_TOKEN to be set, or gh to be installed and authenticated.",
+      this.repoRoot
+    );
+    const response = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}`,
+      {
+        headers: {
+          Accept: "application/vnd.github+json",
+          Authorization: `Bearer ${token}`,
+          "User-Agent": "prs-cli",
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch GitHub pull request #${prNumber} before marking it ready for review (${response.status} ${response.statusText}).`
+      );
+    }
+
+    const payload = (await response.json()) as {
+      draft?: boolean;
+      node_id?: string;
+    };
+    if (payload.draft === false) {
+      return;
+    }
+    if (!payload.node_id) {
+      throw new Error(
+        `GitHub pull request #${prNumber} did not return a node id required for draft promotion.`
+      );
+    }
+
+    await postGitHubGraphQL(
+      this.repoRoot,
+      `
+        mutation($pullRequestId: ID!) {
+          markPullRequestReadyForReview(input: { pullRequestId: $pullRequestId }) {
+            pullRequest {
+              id
+              isDraft
+            }
+          }
+        }
+      `,
+      {
+        pullRequestId: payload.node_id,
+      },
+      `Failed to mark GitHub pull request #${prNumber} ready for review.`
+    );
   }
 
   async createIssuePlanComment(

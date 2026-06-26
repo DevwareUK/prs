@@ -81,7 +81,7 @@ describe("pull request local review workspace", () => {
       "After saving the report and comments JSON, do not publish to GitHub yet."
     );
     expect(readFileSync(workspace.promptFilePath, "utf8")).toContain(
-      `Only after approval, publish them with \`prs tool pr publish-review 224 --report ${workspace.reportFilePath} --comments ${workspace.commentsFilePath} --json\`.`
+      `Only after approval, publish them with \`prs tool pr publish-review 224 --report ${workspace.reportFilePath} --comments ${workspace.commentsFilePath} --review-status <request-changes|comment|approve> --json\`.`
     );
     expect(readFileSync(workspace.promptFilePath, "utf8")).not.toContain(
       "When the report is saved and published, stop."
@@ -138,7 +138,7 @@ describe("pull request local review workspace", () => {
     });
 
     expect(readFileSync(workspace.promptFilePath, "utf8")).toContain(
-      `After saving the report and comments JSON, publish them with \`prs tool pr publish-review 224 --report ${workspace.reportFilePath} --comments ${workspace.commentsFilePath} --unattended --json\`.`
+      `After saving the report and comments JSON, publish them with \`prs tool pr publish-review 224 --report ${workspace.reportFilePath} --comments ${workspace.commentsFilePath} --review-status <request-changes|comment|approve> --unattended --json\`.`
     );
     expect(readFileSync(workspace.promptFilePath, "utf8")).toContain(
       "This is unattended output and must keep visible automation framing."

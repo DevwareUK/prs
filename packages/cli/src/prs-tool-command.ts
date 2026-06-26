@@ -1,4 +1,5 @@
 import { normalizePrLifecycleAction } from "./workflows/pr-lifecycle/actions";
+import type { PullRequestReviewStatus } from "./workflows/pr-local-review/publish";
 
 export type PrsToolCommand =
   | {
@@ -36,6 +37,7 @@ export type PrsToolCommand =
       prNumber: number;
       reportFilePath: string;
       commentsFilePath: string;
+      reviewStatus?: PullRequestReviewStatus;
       unattended: boolean;
       json: boolean;
     }
@@ -66,7 +68,7 @@ export function renderPrsToolCommandHelp(): string {
     "                        [--force-prs-managed]",
     "  prs tool pr list [--actionable] --json",
     "  prs tool pr review <pr-number> [--unattended|--auto|--jdi] --json",
-    "  prs tool pr publish-review <pr-number> --report <path> --comments <path> [--unattended|--auto|--jdi] --json",
+    "  prs tool pr publish-review <pr-number> --report <path> --comments <path> [--review-status <request-changes|comment|approve>] [--unattended|--auto|--jdi] --json",
     "  prs tool pr prepare-review <pr-number> --json",
     "  prs tool pr push-reviewed <pr-number> --json",
     "  prs tool pr address-comments <pr-number> [--selection <value>] --json",
@@ -108,6 +110,19 @@ function parseCommaSeparatedLabels(value: string | undefined): string[] {
 
 function isUnattendedAlias(rawArg: string | undefined): boolean {
   return rawArg === "--unattended" || rawArg === "--auto" || rawArg === "--jdi";
+}
+
+function parseReviewStatus(rawValue: string | undefined): PullRequestReviewStatus {
+  if (
+    rawValue === "request-changes" ||
+    rawValue === "comment" ||
+    rawValue === "approve"
+  ) {
+    return rawValue;
+  }
+  throw new Error(
+    `Invalid review status "${rawValue ?? ""}". Expected request-changes, comment, or approve.`
+  );
 }
 
 export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
@@ -604,6 +619,7 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
     );
     let reportFilePath: string | undefined;
     let commentsFilePath: string | undefined;
+    let reviewStatus: PullRequestReviewStatus | undefined;
     let json = false;
     let unattended = false;
 
@@ -648,6 +664,22 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
         continue;
       }
 
+      if (rawArg === "--review-status" || rawArg === "--status") {
+        reviewStatus = parseReviewStatus(optionArgs[index + 1]);
+        index += 1;
+        continue;
+      }
+
+      if (rawArg.startsWith("--review-status=")) {
+        reviewStatus = parseReviewStatus(rawArg.slice("--review-status=".length));
+        continue;
+      }
+
+      if (rawArg.startsWith("--status=")) {
+        reviewStatus = parseReviewStatus(rawArg.slice("--status=".length));
+        continue;
+      }
+
       throw new Error(`Unknown tool option "${rawArg}". ${renderPrsToolCommandHelp()}`);
     }
 
@@ -666,6 +698,7 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
       prNumber,
       reportFilePath,
       commentsFilePath,
+      reviewStatus,
       unattended,
       json: true,
     };
