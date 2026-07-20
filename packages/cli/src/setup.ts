@@ -165,7 +165,9 @@ function loadSetupRepositoryConfig(repoRoot: string): RepositoryConfigType | und
 
   const ai = parsed.ai;
   if (ai && typeof ai === "object" && !Array.isArray(ai)) {
-    const { profiles: _profiles, roles: _roles, ...supportedAi } = ai as Record<string, unknown>;
+    const supportedAi = { ...(ai as Record<string, unknown>) };
+    delete supportedAi.profiles;
+    delete supportedAi.roles;
     parsed.ai = supportedAi;
   }
 

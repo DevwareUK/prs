@@ -1,4 +1,4 @@
-import type { RepositoryAiWorkflowRole,ResolvedRepositoryConfigType } from "@prs/contracts";
+import type { ResolvedRepositoryConfigType } from "@prs/contracts";
 import {
 applyGitHubOutputFraming,
 ISSUE_PLAN_COMMENT_MARKER,
@@ -870,15 +870,10 @@ export async function createStructuredIssuePlanComment(options: {
   issue: IssueDetails;
   existingPlanComment?: IssuePlanComment;
   mode: IssuePlanResolutionMode;
-  workflowRole?: RepositoryAiWorkflowRole;
   comments?: RepositoryComment[];
   specAlreadyEnsured?: boolean;
   outputMode?: GitHubOutputMode;
 }): Promise<IssuePlanComment> {
-  const workflowRole =
-    options.workflowRole ??
-    (options.mode === "execution-preflight" ? "implementer" : "planner");
-
   if (
     options.mode === "execution-preflight" &&
     !options.existingPlanComment &&
