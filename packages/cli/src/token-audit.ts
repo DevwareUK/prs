@@ -5,7 +5,6 @@ import {
   DEFAULT_ISSUE_ESTIMATE_FALLBACK_MODEL_RATE_USD_PER_MILLION,
   type IssueEstimateCostSettings,
 } from "@prs/core";
-import type { ResolvedRepositoryConfigType } from "@prs/contracts";
 import type { CodexSessionModelMetadata } from "./codex-session-metadata";
 import type { AuditTarget } from "./forge";
 
@@ -687,88 +686,6 @@ export function parseTokenUsageLedgerRowsFromContent(
   }
 
   return parseTokenUsageLedgerRowsFromJsonValue(parsed);
-}
-
-const CONFIGURABLE_WORKFLOW_ROLES = [
-  "planner",
-  "implementer",
-  "reviewer",
-  "tester",
-] as const;
-
-type ConfigurableWorkflowRole = (typeof CONFIGURABLE_WORKFLOW_ROLES)[number];
-
-function isConfigurableWorkflowRole(
-  role: string | undefined
-): role is ConfigurableWorkflowRole {
-  return CONFIGURABLE_WORKFLOW_ROLES.includes(role as ConfigurableWorkflowRole);
-}
-
-function configuredFallbackForRole(
-  role: string | undefined,
-  config: ResolvedRepositoryConfigType
-):
-  | {
-      role: string;
-      profileName: string;
-      model: string;
-      thinking: string;
-    }
-  | undefined {
-  if (!isConfigurableWorkflowRole(role)) {
-    return undefined;
-  }
-
-  const profileName = config.ai.roles[role];
-  if (!profileName) {
-    return undefined;
-  }
-
-  const profile = config.ai.profiles[profileName];
-  if (!profile) {
-    return undefined;
-  }
-
-  return {
-    role,
-    profileName,
-    model: profile.model,
-    thinking: profile.thinking,
-  };
-}
-
-export function enrichTokenUsageLedgerRowsWithConfiguredModelFallbacks(
-  rows: TokenUsageLedgerRow[],
-  config: ResolvedRepositoryConfigType
-): TokenUsageLedgerRow[] {
-  return rows.map((row) => {
-    if (row.kind === "estimate") {
-      return row;
-    }
-
-    const fallback = configuredFallbackForRole(row.role, config);
-    if (!fallback) {
-      return row;
-    }
-
-    const mayUseConfiguredModel =
-      !row.model &&
-      (row.modelSource === undefined ||
-        row.modelSource === "unavailable" ||
-        row.modelSource === "configured-fallback");
-
-    return {
-      ...row,
-      ...(mayUseConfiguredModel ? { model: fallback.model } : {}),
-      modelSource: mayUseConfiguredModel
-        ? "configured-fallback"
-        : row.modelSource ?? "configured-fallback",
-      configuredProfile: row.configuredProfile ?? fallback.profileName,
-      configuredRole: row.configuredRole ?? fallback.role,
-      configuredModel: row.configuredModel ?? fallback.model,
-      configuredThinking: row.configuredThinking ?? fallback.thinking,
-    };
-  });
 }
 
 export function enrichTokenUsageLedgerRowsWithCodexSessionModel(

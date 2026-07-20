@@ -1,9 +1,7 @@
 import {
   RepositoryConfig,
   type RepositoryConfigType,
-  type RepositoryAiProfilesConfigType,
   type RepositoryAiCostEstimatesConfigType,
-  type RepositoryAiWorkflowRole,
   ResolvedRepositoryConfig,
   type ResolvedRepositoryConfigType,
 } from "@prs/contracts";
@@ -16,22 +14,6 @@ export const DEFAULT_REPOSITORY_AI_RUNTIME_TYPE = "codex" as const;
 export const DEFAULT_REPOSITORY_AI_PROVIDER_TYPE = "openai" as const;
 export const DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS = true;
 export const DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS = false;
-export const DEFAULT_REPOSITORY_AI_PROFILES = {
-  premium: {
-    model: "gpt-5.5",
-    thinking: "high",
-  },
-  standard: {
-    model: "gpt-5.4-mini",
-    thinking: "medium",
-  },
-} satisfies RepositoryAiProfilesConfigType;
-export const DEFAULT_REPOSITORY_AI_ROLE_PROFILES = {
-  planner: "premium",
-  implementer: "standard",
-  reviewer: "premium",
-  tester: "standard",
-} satisfies Record<RepositoryAiWorkflowRole, keyof typeof DEFAULT_REPOSITORY_AI_PROFILES>;
 export const DEFAULT_REPOSITORY_AI_COST_ESTIMATES = {
   ...DEFAULT_ISSUE_ESTIMATE_COST_SETTINGS,
   modelRates: {
@@ -54,14 +36,6 @@ export function resolveRepositoryConfig(
   config?: RepositoryConfigType
 ): ResolvedRepositoryConfigType {
   const parsedConfig = RepositoryConfig.parse(config ?? {});
-  const profiles = {
-    ...DEFAULT_REPOSITORY_AI_PROFILES,
-    ...(parsedConfig.ai?.profiles ?? {}),
-  };
-  const roles = {
-    ...DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
-    ...(parsedConfig.ai?.roles ?? {}),
-  };
   const costEstimates = {
     ...DEFAULT_REPOSITORY_AI_COST_ESTIMATES,
     ...(parsedConfig.ai?.costEstimates ?? {}),
@@ -90,8 +64,6 @@ export function resolveRepositoryConfig(
         useCodexSuperpowers,
       },
       costEstimates,
-      profiles,
-      roles,
       runtime: parsedConfig.ai?.runtime ?? {
         type: DEFAULT_REPOSITORY_AI_RUNTIME_TYPE,
       },

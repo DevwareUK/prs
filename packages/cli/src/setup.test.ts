@@ -22,23 +22,6 @@ import { parseSetupCommandArgs, runSetupCommand } from "./setup";
 const cleanupTargets = new Set<string>();
 const execFileSyncMock = vi.mocked(execFileSync);
 const spawnSyncMock = vi.mocked(spawnSync);
-const DEFAULT_SETUP_PROFILES = {
-  premium: {
-    model: "gpt-5.5",
-    thinking: "high",
-  },
-  standard: {
-    model: "gpt-5.4-mini",
-    thinking: "medium",
-  },
-};
-const DEFAULT_SETUP_ROLES = {
-  planner: "premium",
-  implementer: "standard",
-  reviewer: "premium",
-  tester: "standard",
-};
-
 function createRepo(prefix: string): string {
   const repoRoot = mkdtempSync(resolve(tmpdir(), prefix));
   cleanupTargets.add(repoRoot);
@@ -212,8 +195,6 @@ describe("setup command", () => {
         issue: {
           useCodexSuperpowers: false,
         },
-        profiles: DEFAULT_SETUP_PROFILES,
-        roles: DEFAULT_SETUP_ROLES,
         runtime: {
           type: "codex",
         },
@@ -380,6 +361,56 @@ describe("setup command", () => {
     expect(messages.join("\n")).toContain(
       "Configured GitHub Actions: enabled PR review, test suggestions; disabled PR assistant"
     );
+  });
+
+  it("removes obsolete model profiles and role routing when setup is rerun", async () => {
+    const repoRoot = createRepo("prs-setup-remove-model-defaults-");
+    createCodexHome("prs-setup-codex-home-");
+    writeFileSync(
+      resolve(repoRoot, "package.json"),
+      JSON.stringify({ name: "fixture-node-repo", scripts: { build: "tsup" } }, null, 2)
+    );
+    writeFileSync(resolve(repoRoot, "pnpm-lock.yaml"), "");
+    mkdirSync(resolve(repoRoot, ".prs"), { recursive: true });
+    writeFileSync(
+      resolve(repoRoot, ".prs", "config.json"),
+      JSON.stringify(
+        {
+          ai: {
+            codex: { preferSubagents: false },
+            profiles: {
+              premium: { model: "gpt-5.5", thinking: "high" },
+            },
+            roles: { implementer: "premium" },
+            provider: { type: "openai", model: "gpt-5-mini" },
+          },
+          baseBranch: "main",
+          buildCommand: ["pnpm", "build"],
+          forge: { type: "none" },
+        },
+        null,
+        2
+      )
+    );
+
+    mockChildProcess(repoRoot, {
+      "rev-parse --show-toplevel": `${repoRoot}\n`,
+      "symbolic-ref refs/remotes/origin/HEAD": "refs/remotes/origin/main\n",
+      "remote get-url origin": "git@gitlab.com:acme/fixture-node-repo.git\n",
+    });
+
+    await runSetupCommand({
+      promptForLine: createPrompt(["", ""]),
+      repoRoot,
+    });
+
+    const writtenConfig = JSON.parse(
+      readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8")
+    );
+    expect(writtenConfig.ai).not.toHaveProperty("profiles");
+    expect(writtenConfig.ai).not.toHaveProperty("roles");
+    expect(writtenConfig.ai.provider).toEqual({ type: "openai", model: "gpt-5-mini" });
+    expect(writtenConfig.ai.codex).toEqual({ preferSubagents: false });
   });
 
   it("allows custom setup to disable the Codex subagent preference", async () => {
@@ -635,8 +666,6 @@ describe("setup command", () => {
         issue: {
           useCodexSuperpowers: false,
         },
-        profiles: DEFAULT_SETUP_PROFILES,
-        roles: DEFAULT_SETUP_ROLES,
         runtime: {
           type: "codex",
         },
@@ -1072,8 +1101,6 @@ describe("setup command", () => {
         issue: {
           useCodexSuperpowers: false,
         },
-        profiles: DEFAULT_SETUP_PROFILES,
-        roles: DEFAULT_SETUP_ROLES,
         runtime: {
           type: "codex",
         },
@@ -1135,12 +1162,10 @@ describe("setup command", () => {
         issue: {
           useCodexSuperpowers: false,
         },
-        profiles: DEFAULT_SETUP_PROFILES,
         provider: {
           model: "gpt-5-mini",
           type: "openai",
         },
-        roles: DEFAULT_SETUP_ROLES,
         runtime: {
           type: "claude-code",
         },

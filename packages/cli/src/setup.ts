@@ -11,6 +11,7 @@ import {
 import { delimiter, isAbsolute, resolve } from "node:path";
 import {
   GENERATED_BY_SETUP_HEADER,
+  RepositoryConfig,
   SETUP_SECTION_END,
   SETUP_SECTION_START,
   type RepositoryLocalRuntimeConfigType,
@@ -20,8 +21,6 @@ import {
 import {
   DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS,
   DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS,
-  DEFAULT_REPOSITORY_AI_PROFILES,
-  DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
   DEFAULT_REPOSITORY_AI_RUNTIME_TYPE,
   DEFAULT_REPOSITORY_BASE_BRANCH,
   DEFAULT_REPOSITORY_BUILD_COMMAND,
@@ -29,7 +28,6 @@ import {
 import {
   formatCommandForDisplay,
   getRepositoryConfigPath,
-  loadRepositoryConfig,
 } from "./config";
 import {
   installManagedCodexSkills,
@@ -156,6 +154,22 @@ function readJsonFile<T>(filePath: string): T | undefined {
   } catch {
     return undefined;
   }
+}
+
+function loadSetupRepositoryConfig(repoRoot: string): RepositoryConfigType | undefined {
+  const configPath = getRepositoryConfigPath(repoRoot);
+  const parsed = readJsonFile<Record<string, unknown>>(configPath);
+  if (!parsed) {
+    return undefined;
+  }
+
+  const ai = parsed.ai;
+  if (ai && typeof ai === "object" && !Array.isArray(ai)) {
+    const { profiles: _profiles, roles: _roles, ...supportedAi } = ai as Record<string, unknown>;
+    parsed.ai = supportedAi;
+  }
+
+  return RepositoryConfig.parse(parsed);
 }
 
 function fileExists(repoRoot: string, relativePath: string): boolean {
@@ -2037,8 +2051,6 @@ function buildRepositoryConfig(
     issue: {
       useCodexSuperpowers: answers.issueUseCodexSuperpowers,
     },
-    profiles: existingConfig?.ai?.profiles ?? DEFAULT_REPOSITORY_AI_PROFILES,
-    roles: existingConfig?.ai?.roles ?? DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
     runtime: {
       type: answers.runtimeType,
     },
@@ -2399,7 +2411,7 @@ export async function runSetupCommand(options: {
 }): Promise<void> {
   ensureGitRepository(options.repoRoot);
 
-  const existingConfig = loadRepositoryConfig(options.repoRoot);
+  const existingConfig = loadSetupRepositoryConfig(options.repoRoot);
   const inspection = inspectRepository(options.repoRoot, existingConfig);
   const agentsPath = resolve(options.repoRoot, "AGENTS.md");
 

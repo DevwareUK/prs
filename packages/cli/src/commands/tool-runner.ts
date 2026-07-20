@@ -15,7 +15,6 @@ import { promptForLine } from "../cli-prompts";
 import { loadCodexSessionModelMetadata } from "../codex-session-metadata";
 import {
 enrichTokenUsageLedgerRowsWithCodexSessionModel,
-enrichTokenUsageLedgerRowsWithConfiguredModelFallbacks,
 getTokenUsageArtifactFilePath,
 parseTokenUsageLedgerRowsFromContent
 } from "../token-audit";
@@ -76,12 +75,9 @@ async function publishIssueTokenUsageCommentsFromRun(input: {
     return [];
   }
 
-  const rows = enrichTokenUsageLedgerRowsWithConfiguredModelFallbacks(
-    enrichTokenUsageLedgerRowsWithCodexSessionModel(
-      parseTokenUsageLedgerRowsFromContent(readFileSync(artifactPath, "utf8").trim()),
-      loadCodexSessionModelMetadata()
-    ),
-    getRepositoryConfig(input.repoRoot)
+  const rows = enrichTokenUsageLedgerRowsWithCodexSessionModel(
+    parseTokenUsageLedgerRowsFromContent(readFileSync(artifactPath, "utf8").trim()),
+    loadCodexSessionModelMetadata()
   );
   if (rows.length === 0) {
     throw new Error(
@@ -119,12 +115,9 @@ export async function runToolCommand(): Promise<void> {
       ? toolCommand.filePath
       : resolve(repoRoot, toolCommand.filePath);
     const content = readFileSync(artifactPath, "utf8").trim();
-    const rows = enrichTokenUsageLedgerRowsWithConfiguredModelFallbacks(
-      enrichTokenUsageLedgerRowsWithCodexSessionModel(
-        parseTokenUsageLedgerRowsFromContent(content),
-        loadCodexSessionModelMetadata()
-      ),
-      repositoryConfig
+    const rows = enrichTokenUsageLedgerRowsWithCodexSessionModel(
+      parseTokenUsageLedgerRowsFromContent(content),
+      loadCodexSessionModelMetadata()
     );
     if (rows.length === 0) {
       throw new Error(
@@ -445,7 +438,7 @@ export async function runToolCommand(): Promise<void> {
         commitGeneratedChanges,
         readDiff: readIssueWorkflowDiff,
         createProvider: async (providerRepoRoot) =>
-          createProvider(providerRepoRoot, "reviewer"),
+          createProvider(providerRepoRoot),
       });
     } finally {
       console.log = originalConsoleLog;

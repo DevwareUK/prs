@@ -1,13 +1,12 @@
 import { existsSync,readFileSync } from "node:fs";
 import { dirname,isAbsolute,resolve } from "node:path";
 import { publishAuditArtifact } from "../audit-artifacts";
-import { getCliArgs,getDefaultRepoRoot,getRepositoryConfig,getRepositoryForge } from "../cli-context";
+import { getCliArgs,getDefaultRepoRoot,getRepositoryForge } from "../cli-context";
 import { loadMediaEvidenceForPublication } from "../cli-git";
 import { loadCodexSessionModelMetadata } from "../codex-session-metadata";
 import { appendMediaEvidenceSection } from "../media-evidence";
 import {
 enrichTokenUsageLedgerRowsWithCodexSessionModel,
-enrichTokenUsageLedgerRowsWithConfiguredModelFallbacks,
 getTokenUsageArtifactFilePath,
 parseTokenUsageLedgerRowsFromContent
 } from "../token-audit";
@@ -16,14 +15,10 @@ import { parseAuditCommandArgs } from "./audit";
 
 function parseTokenUsageRowsForPublication(input: {
   content: string;
-  repoRoot: string;
 }) {
-  return enrichTokenUsageLedgerRowsWithConfiguredModelFallbacks(
-    enrichTokenUsageLedgerRowsWithCodexSessionModel(
-      parseTokenUsageLedgerRowsFromContent(input.content),
-      loadCodexSessionModelMetadata()
-    ),
-    getRepositoryConfig(input.repoRoot)
+  return enrichTokenUsageLedgerRowsWithCodexSessionModel(
+    parseTokenUsageLedgerRowsFromContent(input.content),
+    loadCodexSessionModelMetadata()
   );
 }
 
@@ -44,7 +39,6 @@ async function publishRunTokenUsageArtifact(input: {
 
   const rows = parseTokenUsageRowsForPublication({
     content: readFileSync(tokenUsageArtifactPath, "utf8").trim(),
-    repoRoot: input.repoRoot,
   });
   if (rows.length === 0) {
     throw new Error(

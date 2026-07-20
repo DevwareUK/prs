@@ -1250,7 +1250,7 @@ export async function createStructuredIssuePlanComment(options: {
     });
   }
 
-  const { provider } = await createProvider(options.repoRoot, workflowRole);
+  const { provider } = await createProvider(options.repoRoot);
   const plan = await generateIssueResolutionPlan(provider, {
     issueNumber: options.issueNumber,
     issueTitle: options.issue.title,
