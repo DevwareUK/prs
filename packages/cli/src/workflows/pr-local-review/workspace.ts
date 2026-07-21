@@ -204,6 +204,8 @@ function buildPullRequestLocalReviewPrompt(
     workspace.reportFilePath,
     "--comments",
     workspace.commentsFilePath,
+    "--review-status",
+    "<request-changes|comment|approve>",
     ...(options.outputMode === "unattended" ? ["--unattended"] : []),
     "--json",
   ]);
@@ -223,11 +225,13 @@ function buildPullRequestLocalReviewPrompt(
     options.outputMode === "unattended"
       ? [
           `After saving the report and comments JSON, publish them with \`${publishCommand}\`.`,
+          "Choose `request-changes` for blocking findings, `comment` for non-blocking review notes, or `approve` when the PR is ready.",
           "This is unattended output and must keep visible automation framing.",
           "When the report is saved and published, stop.",
         ]
       : [
           "After saving the report and comments JSON, do not publish to GitHub yet.",
+          "Choose a review status for the publish command: `request-changes`, `comment`, or `approve`.",
           "Present a concise approval summary with the report path, comments path, inline candidate count, and exact publish command.",
           `Only after approval, publish them with \`${publishCommand}\`.`,
           `If the publish-review command is unavailable after approval, publish only the audit report with \`${legacyAuditCommand}\` and report that inline comments were not posted.`,
