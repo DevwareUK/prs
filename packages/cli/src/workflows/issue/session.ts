@@ -1808,7 +1808,7 @@ export async function runUnattendedIssueCommand(
     branchName: context.branchName,
     committed: true,
     pullRequest: outcome.pullRequest,
-    hooks: createDefaultIssueOrchestrationHooks(context.issueNumber),
+    hooks: createDefaultIssueOrchestrationHooks(context.issueNumber, forge),
   });
   printIssueRunOutcomeSummary(outcome);
 
@@ -1820,7 +1820,10 @@ export async function runUnattendedIssueCommand(
   };
 }
 
-function createDefaultIssueOrchestrationHooks(issueNumber: number) {
+function createDefaultIssueOrchestrationHooks(
+  issueNumber: number,
+  forge: RepositoryForge
+) {
   return {
     readyPullRequest: async (prNumber: number) => ({
       status: "ready" as const,
@@ -1850,5 +1853,26 @@ function createDefaultIssueOrchestrationHooks(issueNumber: number) {
       status: "skipped" as const,
       summary: `Run \`prs audit publish --issue ${issueNumber} --file <path> --section completion\` after PR #${prNumber} is ready.`,
     }),
+    readyForReview: async (prNumber: number) => {
+      const pullRequest = await forge.fetchPullRequestDetails(prNumber);
+      if (pullRequest.isDraft === false) {
+        return {
+          status: "skipped" as const,
+          summary: `Pull request #${prNumber} is already ready for review.`,
+        };
+      }
+      if (!forge.markPullRequestReadyForReview) {
+        return {
+          status: "blocked" as const,
+          summary: `Repository forge does not support marking PR #${prNumber} ready for review.`,
+          retryCommand: `gh pr ready ${prNumber}`,
+        };
+      }
+      await forge.markPullRequestReadyForReview(prNumber);
+      return {
+        status: "complete" as const,
+        summary: `Marked pull request #${prNumber} ready for review.`,
+      };
+    },
   };
 }

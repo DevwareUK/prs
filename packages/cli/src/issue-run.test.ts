@@ -1753,6 +1753,7 @@ describe("Full issue run workflow", () => {
       ["wait-ci", "skipped"],
       ["fix-ci", "skipped"],
       ["final-audit", "skipped"],
+      ["ready-for-review", "skipped"],
     ]);
   });
 

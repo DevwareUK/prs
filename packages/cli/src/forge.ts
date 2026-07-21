@@ -93,9 +93,12 @@ export type PullRequestInlineReviewCommentInput = {
   body: string;
 };
 
+export type PullRequestReviewEvent = "APPROVE" | "COMMENT" | "REQUEST_CHANGES";
+
 export type CreatePullRequestReviewInput = {
   prNumber: number;
   commitSha?: string;
+  event: PullRequestReviewEvent;
   body: string;
   comments: PullRequestInlineReviewCommentInput[];
 };
@@ -145,6 +148,7 @@ export interface RepositoryForge {
   createPullRequestReview?(
     input: CreatePullRequestReviewInput
   ): Promise<CreatedPullRequestReviewRecord>;
+  markPullRequestReadyForReview?(prNumber: number): Promise<void>;
   createIssuePlanComment(issueNumber: number, body: string): Promise<IssuePlanComment>;
   createAuditComment(target: AuditTarget, body: string): Promise<RepositoryComment>;
   updateIssuePlanComment(commentId: number, body: string): Promise<IssuePlanComment>;

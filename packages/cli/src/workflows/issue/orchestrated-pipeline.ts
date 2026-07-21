@@ -44,6 +44,7 @@ export type IssueOrchestratedPipelineHooks = {
   waitForCi(prNumber: number): Promise<IssuePipelineCiHookResult>;
   fixCi(prNumber: number): Promise<IssuePipelineStageHookResult>;
   finalAudit(prNumber: number): Promise<IssuePipelineStageHookResult>;
+  readyForReview(prNumber: number): Promise<IssuePipelineStageHookResult>;
 };
 
 export type IssueOrchestratedPipelineInput = {
@@ -150,14 +151,31 @@ export async function runIssueOrchestratedPipeline(
     return ciResult;
   }
 
-  const auditResult = applyStageHookResult(
-    input,
-    "final-audit",
-    await input.hooks.finalAudit(prNumber),
-    prNumber
-  );
+  const finalAudit = await input.hooks.finalAudit(prNumber);
+  const auditResult = applyStageHookResult(input, "final-audit", finalAudit, prNumber);
   if (auditResult) {
     return auditResult;
+  }
+
+  if (finalAudit.status === "skipped") {
+    updateIssueOrchestrationStage({
+      runDir: input.runDir,
+      stage: "ready-for-review",
+      status: "skipped",
+      summary: "Draft promotion was skipped because final audit did not complete.",
+      now: input.now,
+    });
+    return { status: "complete", prNumber };
+  }
+
+  const readyForReviewResult = applyStageHookResult(
+    input,
+    "ready-for-review",
+    await input.hooks.readyForReview(prNumber),
+    prNumber
+  );
+  if (readyForReviewResult) {
+    return readyForReviewResult;
   }
 
   return { status: "complete", prNumber };

@@ -202,6 +202,7 @@ describe("prs tool command parser", () => {
       prNumber: 115,
       reportFilePath: ".prs/runs/review/codex-pr-review.md",
       commentsFilePath: ".prs/runs/review/codex-pr-review-comments.json",
+      reviewStatus: undefined,
       unattended: false,
       json: true,
     });
@@ -222,7 +223,33 @@ describe("prs tool command parser", () => {
       prNumber: 115,
       reportFilePath: ".prs/runs/review/codex-pr-review.md",
       commentsFilePath: ".prs/runs/review/codex-pr-review-comments.json",
+      reviewStatus: undefined,
       unattended: true,
+      json: true,
+    });
+  });
+
+  it("parses PR local Codex review publish status", () => {
+    expect(
+      parsePrsToolCommandArgs([
+        "pr",
+        "publish-review",
+        "115",
+        "--report",
+        ".prs/runs/review/codex-pr-review.md",
+        "--comments",
+        ".prs/runs/review/codex-pr-review-comments.json",
+        "--review-status",
+        "request-changes",
+        "--json",
+      ])
+    ).toEqual({
+      kind: "pr-publish-review",
+      prNumber: 115,
+      reportFilePath: ".prs/runs/review/codex-pr-review.md",
+      commentsFilePath: ".prs/runs/review/codex-pr-review-comments.json",
+      reviewStatus: "request-changes",
+      unattended: false,
       json: true,
     });
   });

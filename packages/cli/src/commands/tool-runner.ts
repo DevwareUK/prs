@@ -462,6 +462,7 @@ export async function runToolCommand(): Promise<void> {
       commentsFilePath,
       forge: getRepositoryForge(repoRoot),
       outputMode: toolCommand.unattended ? "unattended" : "manual",
+      reviewStatus: toolCommand.reviewStatus,
     });
 
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

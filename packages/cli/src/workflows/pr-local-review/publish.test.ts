@@ -164,6 +164,7 @@ describe("publishPullRequestLocalReview", () => {
     expect(forge.createPullRequestReview).toHaveBeenCalledWith({
       prNumber: 224,
       commitSha: "abc123head",
+      event: "REQUEST_CHANGES",
       body: expect.stringContaining(
         "Local Codex PR review generated 1 high-confidence inline comment on changed lines."
       ),
@@ -181,6 +182,8 @@ describe("publishPullRequestLocalReview", () => {
       prNumber: 224,
       auditCommentUrl: "https://github.com/DevwareUK/prs/pull/224#issuecomment-100",
       inlineReviewUrl: "https://github.com/DevwareUK/prs/pull/224#pullrequestreview-200",
+      reviewStatus: "request-changes",
+      reviewEvent: "REQUEST_CHANGES",
       inlineCommentsPublished: 1,
       skipped: {
         nonHighConfidence: 1,
@@ -254,5 +257,131 @@ describe("publishPullRequestLocalReview", () => {
     expect(
       vi.mocked(forge.createPullRequestReview).mock.calls[0]?.[0].comments[0]?.body
     ).toContain(UNATTENDED_GITHUB_OUTPUT_NOTE);
+  });
+
+  it("publishes an approving pull request review with no inline comments", async () => {
+    const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-pr-local-review-publish-"));
+    cleanupTargets.add(repoRoot);
+    const runDir = resolve(repoRoot, ".prs/runs/20260521T100000000Z-pr-224-review");
+    mkdirSync(runDir, { recursive: true });
+    const reportFilePath = resolve(runDir, "codex-pr-review.md");
+    const commentsFilePath = resolve(runDir, "codex-pr-review-comments.json");
+    writeFileSync(
+      resolve(runDir, "pr-review-context.md"),
+      [
+        "## Diff",
+        "",
+        "```diff",
+        "diff --git a/src/filter.ts b/src/filter.ts",
+        "+++ b/src/filter.ts",
+        "@@ -10,2 +10,3 @@",
+        " context();",
+        "+applyFilter();",
+        "```",
+        "",
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(reportFilePath, "# Codex PR Review\n\nNo reviewer-ready risks identified.\n", "utf8");
+    writeFileSync(commentsFilePath, "[]\n", "utf8");
+
+    const forge = createForge();
+    const result = await publishPullRequestLocalReview({
+      repoRoot,
+      prNumber: 224,
+      reportFilePath,
+      commentsFilePath,
+      forge,
+      reviewStatus: "approve",
+    });
+
+    expect(forge.createPullRequestReview).toHaveBeenCalledWith({
+      prNumber: 224,
+      commitSha: "abc123head",
+      event: "APPROVE",
+      body: expect.stringContaining("Local Codex PR review approved this pull request."),
+      comments: [],
+    });
+    expect(result).toMatchObject({
+      status: "published",
+      reviewStatus: "approve",
+      reviewEvent: "APPROVE",
+      inlineCommentsPublished: 0,
+    });
+  });
+
+  it("falls back to a comment review when GitHub rejects self-approval", async () => {
+    const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-pr-local-review-publish-"));
+    cleanupTargets.add(repoRoot);
+    const runDir = resolve(repoRoot, ".prs/runs/20260521T100000000Z-pr-224-review");
+    mkdirSync(runDir, { recursive: true });
+    const reportFilePath = resolve(runDir, "codex-pr-review.md");
+    const commentsFilePath = resolve(runDir, "codex-pr-review-comments.json");
+    writeFileSync(
+      resolve(runDir, "pr-review-context.md"),
+      [
+        "## Diff",
+        "",
+        "```diff",
+        "diff --git a/src/filter.ts b/src/filter.ts",
+        "+++ b/src/filter.ts",
+        "@@ -10,2 +10,3 @@",
+        " context();",
+        "+applyFilter();",
+        "```",
+        "",
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(reportFilePath, "# Codex PR Review\n\nNo reviewer-ready risks identified.\n", "utf8");
+    writeFileSync(commentsFilePath, "[]\n", "utf8");
+
+    const forge = createForge();
+    vi.mocked(forge.createPullRequestReview)
+      .mockRejectedValueOnce(
+        new Error("Failed to create GitHub pull request review for #224 (422 Unprocessable Entity).")
+      )
+      .mockResolvedValueOnce({
+        id: 201,
+        url: "https://github.com/DevwareUK/prs/pull/224#pullrequestreview-201",
+      });
+
+    const result = await publishPullRequestLocalReview({
+      repoRoot,
+      prNumber: 224,
+      reportFilePath,
+      commentsFilePath,
+      forge,
+      reviewStatus: "approve",
+    });
+
+    expect(forge.createPullRequestReview).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        event: "APPROVE",
+        comments: [],
+      })
+    );
+    expect(forge.createPullRequestReview).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        event: "COMMENT",
+        body: expect.stringContaining("GitHub rejected the APPROVE review event with 422"),
+        comments: [],
+      })
+    );
+    expect(result).toMatchObject({
+      status: "published",
+      inlineReviewUrl: "https://github.com/DevwareUK/prs/pull/224#pullrequestreview-201",
+      reviewStatus: "comment",
+      reviewEvent: "COMMENT",
+      requestedReviewStatus: "approve",
+      requestedReviewEvent: "APPROVE",
+      reviewFallback: {
+        fromEvent: "APPROVE",
+        toEvent: "COMMENT",
+      },
+      inlineCommentsPublished: 0,
+    });
   });
 });
