@@ -103,6 +103,22 @@ export const DEFAULT_ISSUE_ESTIMATE_INPUT_TOKEN_RATIO = 0.8;
 export const DEFAULT_ISSUE_ESTIMATE_OUTPUT_TOKEN_RATIO = 0.2;
 
 export const DEFAULT_ISSUE_ESTIMATE_MODEL_RATES_USD_PER_MILLION = {
+  "gpt-5.6": {
+    inputPerMillionTokens: 5,
+    outputPerMillionTokens: 30,
+  },
+  "gpt-5.6-sol": {
+    inputPerMillionTokens: 5,
+    outputPerMillionTokens: 30,
+  },
+  "gpt-5.6-terra": {
+    inputPerMillionTokens: 2.5,
+    outputPerMillionTokens: 15,
+  },
+  "gpt-5.6-luna": {
+    inputPerMillionTokens: 1,
+    outputPerMillionTokens: 6,
+  },
   "gpt-5.5": {
     inputPerMillionTokens: 5,
     outputPerMillionTokens: 30,

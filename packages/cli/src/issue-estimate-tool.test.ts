@@ -401,6 +401,87 @@ describe("issue estimate tool", () => {
     );
   });
 
+  it("publishes Codex-authored GPT-5.6 estimates with model-specific blended costs", async () => {
+    const createdComment = {
+      id: 4102,
+      body: "<!-- prs:token-usage -->\n# Issue #319 token telemetry\n",
+      url: "https://github.com/DevwareUK/prs/issues/319#issuecomment-4102",
+      createdAt: "2026-07-24T09:00:00Z",
+      updatedAt: "2026-07-24T09:00:00Z",
+      author: "prs-bot",
+      isBot: true,
+    };
+    const forge = {
+      isAuthenticated: vi.fn(() => true),
+      fetchIssueComments: vi.fn().mockResolvedValue([]),
+      fetchPullRequestIssueComments: vi.fn(),
+      createAuditComment: vi.fn().mockResolvedValue(createdComment),
+      updateIssueComment: vi.fn(),
+    };
+
+    await publishIssueEstimateAudit(forge, {
+      status: "estimated",
+      issueNumber: 319,
+      planSource: {
+        type: "managed-comment",
+        url: "https://github.com/DevwareUK/prs/issues/319#issuecomment-20",
+        updatedAt: "2026-07-24T08:57:06Z",
+      },
+      confidence: "high",
+      profiles: [
+        {
+          name: "sol-alias",
+          model: "gpt-5.6",
+          thinking: "high",
+          range: { low: 30000, high: 54000 },
+          confidence: "high",
+          notes: [],
+        },
+        {
+          name: "sol",
+          model: "gpt-5.6-sol",
+          thinking: "high",
+          range: { low: 30000, high: 54000 },
+          confidence: "high",
+          notes: [],
+        },
+        {
+          name: "terra",
+          model: "gpt-5.6-terra",
+          thinking: "medium",
+          range: { low: 30000, high: 54000 },
+          confidence: "high",
+          notes: [],
+        },
+        {
+          name: "luna",
+          model: "gpt-5.6-luna",
+          thinking: "medium",
+          range: { low: 30000, high: 54000 },
+          confidence: "high",
+          notes: [],
+        },
+      ],
+      recommendation: "Select the tier that matches the workload.",
+      drivers: ["Plan has explicit implementation tasks."],
+      warnings: [],
+    });
+
+    const body = forge.createAuditComment.mock.calls[0][1];
+    expect(body).toContain(
+      "| sol-alias |  | gpt-5.6 | high | high | 30,000-54,000 | $0.30-$0.54 |"
+    );
+    expect(body).toContain(
+      "| sol |  | gpt-5.6-sol | high | high | 30,000-54,000 | $0.30-$0.54 |"
+    );
+    expect(body).toContain(
+      "| terra |  | gpt-5.6-terra | medium | high | 30,000-54,000 | $0.15-$0.27 |"
+    );
+    expect(body).toContain(
+      "| luna |  | gpt-5.6-luna | medium | high | 30,000-54,000 | $0.06-$0.11 |"
+    );
+  });
+
   it("skips direct publication when the estimate is blocked", async () => {
     const forge = {
       isAuthenticated: vi.fn(() => true),
