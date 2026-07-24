@@ -223,48 +223,24 @@ describe("repository config schema", () => {
     ).toThrow();
   });
 
-  it("accepts ai profiles and role profile routing", () => {
-    expect(
+  it("rejects removed ai profiles and role routing", () => {
+    expect(() =>
       RepositoryConfig.parse({
         ai: {
           profiles: {
-            premium: {
-              model: "gpt-5.5",
-              thinking: "high",
-            },
-            standard: {
-              model: "gpt-5.4-mini",
-              thinking: "medium",
-            },
-          },
-          roles: {
-            planner: "premium",
-            implementer: "standard",
-            reviewer: "premium",
-            tester: "standard",
+            standard: { model: "gpt-5.4-mini", thinking: "medium" },
           },
         },
       })
-    ).toEqual({
-      ai: {
-        profiles: {
-          premium: {
-            model: "gpt-5.5",
-            thinking: "high",
-          },
-          standard: {
-            model: "gpt-5.4-mini",
-            thinking: "medium",
-          },
+    ).toThrow();
+
+    expect(() =>
+      RepositoryConfig.parse({
+        ai: {
+          roles: { implementer: "standard" },
         },
-        roles: {
-          planner: "premium",
-          implementer: "standard",
-          reviewer: "premium",
-          tester: "standard",
-        },
-      },
-    });
+      })
+    ).toThrow();
   });
 
   it("accepts ai cost estimate overrides", () => {
@@ -308,24 +284,6 @@ describe("repository config schema", () => {
           costEstimates: {
             inputTokenRatio: 0.8,
             outputTokenRatio: 0.3,
-          },
-        },
-      })
-    ).toThrow();
-  });
-
-  it("requires ai role profile references to exist", () => {
-    expect(() =>
-      RepositoryConfig.parse({
-        ai: {
-          profiles: {
-            standard: {
-              model: "gpt-5.4-mini",
-              thinking: "medium",
-            },
-          },
-          roles: {
-            planner: "premium",
           },
         },
       })

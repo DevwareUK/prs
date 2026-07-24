@@ -1769,7 +1769,7 @@ describe("CLI command surface", () => {
     const tokenUsageBody = JSON.parse(String(fetchMock.mock.calls[6]?.[1]?.body)).body as string;
     expect(tokenUsageBody).toContain("Codex token telemetry ledger for issue #274.");
     expect(tokenUsageBody).toContain(
-      "| issue-implementation | implementer | gpt-5.4-mini | configured-fallback | tracked | 172,632 | $0.26 | 10m 46s | 2026-06-17T11:29:00Z |"
+      "| issue-implementation | implementer |  | unavailable | tracked | 172,632 |  | 10m 46s | 2026-06-17T11:29:00Z |"
     );
   });
 
@@ -2167,7 +2167,7 @@ describe("CLI command surface", () => {
     expect(body).not.toContain("<!-- prs:audit -->");
     expect(body).toContain("Codex token telemetry ledger for issue #139.");
     expect(body).toContain(
-      "| issue-draft | planner | gpt-5.5 | configured-fallback | tracked | 188,585 | $1.89 |"
+      "| issue-draft | planner |  | unavailable | tracked | 188,585 |  |"
     );
     expect(body).toContain("3m 47s | unavailable |");
     expect(body).not.toContain('"status": "complete"');
@@ -2262,7 +2262,7 @@ describe("CLI command surface", () => {
     expect(body).not.toContain("<!-- prs:audit -->");
     expect(body).toContain("Codex token telemetry ledger for issue #66.");
     expect(body).toContain(
-      "| issue-create | planner | gpt-5.5 | configured-fallback | tracked | 136,118 | $1.36 |"
+      "| issue-create | planner |  | unavailable | tracked | 136,118 |  |"
     );
     expect(body).toContain("3m 11s | 2026-06-15 |");
     expect(body).not.toContain('"status": "captured"');
@@ -2352,7 +2352,7 @@ describe("CLI command surface", () => {
     expect(body).not.toContain("<!-- prs:audit -->");
     expect(body).toContain("Codex token telemetry ledger for issue #68.");
     expect(body).toContain(
-      "| issue-create | planner | gpt-5.5 | configured-fallback | partial | 97,100 | $0.97 |"
+      "| issue-create | planner |  | unavailable | partial | 97,100 |  |"
     );
     expect(body).toContain("2026-06-15T12:24:57+01:00 |");
     expect(body).toContain("<!-- prs:token-usage-data");
@@ -2380,9 +2380,6 @@ describe("CLI command surface", () => {
           tokensUsed: 172632,
           timeUsedSeconds: 646,
           workflowRole: "implementer",
-          configuredProfile: "standard (gpt-5.4-mini, medium thinking)",
-          configuredProfileSource:
-            ".prs/config.json ai.roles.implementer -> ai.profiles.standard",
           actualSessionModel: "gpt-5",
           notes:
             "Usage captured from the active Codex app goal after implementation, verification, push, and PR creation.",

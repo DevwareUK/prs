@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import type { ResolvedRepositoryConfigType, RepositoryAiWorkflowRole } from "@prs/contracts";
+import type { ResolvedRepositoryConfigType } from "@prs/contracts";
 import {
   createProviderFromConfig,
   type AIProvider,
@@ -31,8 +31,7 @@ export function getRepositoryForge(repoRoot = getDefaultRepoRoot()): RepositoryF
 }
 
 export async function createProvider(
-  repoRoot = getDefaultRepoRoot(),
-  workflowRole: RepositoryAiWorkflowRole = "implementer"
+  repoRoot = getDefaultRepoRoot()
 ): Promise<{
   provider: AIProvider;
   providerType: ResolvedRepositoryConfigType["ai"]["provider"]["type"];
@@ -44,17 +43,9 @@ export async function createProvider(
     type: "openai" as const,
   };
   const environment = readProviderEnvironment();
-  const workflowProfileName = repositoryConfig.ai.roles[workflowRole];
-  const workflowModel =
-    workflowProfileName !== undefined
-      ? repositoryConfig.ai.profiles[workflowProfileName]?.model
-      : undefined;
-
   try {
     return {
-      provider: await createProviderFromConfig(configuredProvider, environment, {
-        modelOverride: workflowModel,
-      }),
+      provider: await createProviderFromConfig(configuredProvider, environment),
       providerType: configuredProvider.type,
     };
   } catch (error: unknown) {
@@ -82,4 +73,3 @@ export async function createProvider(
     }
   }
 }
-

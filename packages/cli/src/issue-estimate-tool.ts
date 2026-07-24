@@ -55,7 +55,7 @@ export type IssueEstimateContextResult =
         model: string;
         thinking: string;
       }>;
-      implementerProfileName: string;
+      implementerProfileName?: string;
       verificationCommands: string[][];
       estimateInstructions: string;
       outputSchema: {
@@ -136,52 +136,8 @@ export type IssueEstimateAuditPublication =
     };
 
 const MAX_CONTEXT_FILES = 12;
-const DEFAULT_ESTIMATE_PROFILES = {
-  premium: {
-    model: "gpt-5.5",
-    thinking: "high" as const,
-  },
-  standard: {
-    model: "gpt-5.4-mini",
-    thinking: "medium" as const,
-  },
-};
-const DEFAULT_ESTIMATE_ROLES = {
-  planner: "premium",
-  implementer: "standard",
-  reviewer: "premium",
-  tester: "standard",
-};
-
-function rolesByProfileName(
-  roles: ResolvedRepositoryConfigType["ai"]["roles"] | undefined
-): Map<string, string[]> {
-  const result = new Map<string, string[]>();
-  for (const [role, profileName] of Object.entries(roles ?? {})) {
-    if (!profileName) {
-      continue;
-    }
-    result.set(profileName, [...(result.get(profileName) ?? []), role]);
-  }
-  return result;
-}
-
-function createEstimateProfiles(config: ResolvedRepositoryConfigType) {
-  const aiConfig = config.ai as ResolvedRepositoryConfigType["ai"] & {
-    profiles?: typeof DEFAULT_ESTIMATE_PROFILES;
-    roles?: typeof DEFAULT_ESTIMATE_ROLES;
-  };
-  const profiles =
-    aiConfig.profiles && Object.keys(aiConfig.profiles).length > 0
-      ? aiConfig.profiles
-      : DEFAULT_ESTIMATE_PROFILES;
-  const roleMap = rolesByProfileName(aiConfig.roles ?? DEFAULT_ESTIMATE_ROLES);
-  return Object.entries(profiles).map(([name, profile]) => ({
-    name,
-    role: roleMap.get(name)?.join(", "),
-    model: profile.model,
-    thinking: profile.thinking,
-  }));
+function createEstimateProfiles() {
+  return [];
 }
 
 function countLinesWithinBudget(filePath: string): number {
@@ -239,13 +195,6 @@ function createVerificationCommands(config: ResolvedRepositoryConfigType): strin
   ];
 }
 
-function getImplementerProfileName(config: ResolvedRepositoryConfigType): string {
-  return (
-    ((config.ai as { roles?: { implementer?: string } }).roles ?? DEFAULT_ESTIMATE_ROLES)
-      .implementer ?? DEFAULT_ESTIMATE_ROLES.implementer
-  );
-}
-
 function createBlockedResult(issueNumber: number): IssueEstimateToolResult {
   return {
     status: "blocked",
@@ -269,10 +218,7 @@ function createEstimateResult(
   );
   const estimate = estimateIssueImplementationTokens({
     planBody: planComment.body,
-    profiles: createEstimateProfiles(config),
-    implementerProfileName:
-      ((config.ai as { roles?: { implementer?: string } }).roles ??
-        DEFAULT_ESTIMATE_ROLES).implementer,
+    profiles: createEstimateProfiles(),
     costEstimates: config.ai.costEstimates,
     context: {
       likelyFiles: context.files,
@@ -328,13 +274,12 @@ export async function createIssueEstimateContext(
       url: planComment.url,
       updatedAt: planComment.updatedAt,
     },
-    profiles: createEstimateProfiles(options.repositoryConfig),
-    implementerProfileName: getImplementerProfileName(options.repositoryConfig),
+    profiles: createEstimateProfiles(),
     verificationCommands: createVerificationCommands(options.repositoryConfig),
     estimateInstructions: [
       "Use the managed issue plan as the source of truth for the implementation estimate.",
       "Do not scan the repository or require local file existence to determine confidence.",
-      "Estimate implementation-session token usage for each configured profile.",
+      "Estimate implementation-session token usage without assuming a PRS-configured model profile.",
       "Base confidence on plan clarity, scope, verification breadth, unresolved questions, and explicit risk signals.",
       "Return only JSON matching the requested estimate artifact shape.",
     ].join(" "),

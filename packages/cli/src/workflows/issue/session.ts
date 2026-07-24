@@ -1,4 +1,3 @@
-import type { RepositoryAiWorkflowRole } from "@prs/contracts";
 import {
 type GitHubOutputMode
 } from "@prs/contracts";
@@ -1226,15 +1225,10 @@ export async function createStructuredIssuePlanComment(options: {
   issue: IssueDetails;
   existingPlanComment?: IssuePlanComment;
   mode: IssuePlanResolutionMode;
-  workflowRole?: RepositoryAiWorkflowRole;
   comments?: RepositoryComment[];
   specAlreadyEnsured?: boolean;
   outputMode?: GitHubOutputMode;
 }): Promise<IssuePlanComment> {
-  const workflowRole =
-    options.workflowRole ??
-    (options.mode === "execution-preflight" ? "implementer" : "planner");
-
   if (
     options.mode === "execution-preflight" &&
     !options.existingPlanComment &&
@@ -1250,7 +1244,7 @@ export async function createStructuredIssuePlanComment(options: {
     });
   }
 
-  const { provider } = await createProvider(options.repoRoot, workflowRole);
+  const { provider } = await createProvider(options.repoRoot);
   const plan = await generateIssueResolutionPlan(provider, {
     issueNumber: options.issueNumber,
     issueTitle: options.issue.title,

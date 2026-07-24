@@ -655,8 +655,7 @@ describe("Issue refine workflow", () => {
       commentBodies.some(
         (body) =>
           body.includes("<!-- prs:token-usage -->") &&
-          body.includes("Codex token telemetry ledger") &&
-          body.includes("issue-estimate")
+          body.includes("Codex token telemetry ledger")
       )
     ).toBe(true);
     expect(commentBodies).toContain(

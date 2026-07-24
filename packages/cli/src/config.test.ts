@@ -6,8 +6,6 @@ import {
   DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS,
   DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS,
   DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
-  DEFAULT_REPOSITORY_AI_PROFILES,
-  DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
   DEFAULT_REPOSITORY_AI_PROVIDER_TYPE,
   DEFAULT_REPOSITORY_AI_RUNTIME_TYPE,
   DEFAULT_REPOSITORY_AI_COST_ESTIMATES,
@@ -117,8 +115,6 @@ describe("config helpers", () => {
         issueDraft: {
           useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
         },
-        profiles: DEFAULT_REPOSITORY_AI_PROFILES,
-        roles: DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
         costEstimates: DEFAULT_REPOSITORY_AI_COST_ESTIMATES,
         runtime: {
           type: DEFAULT_REPOSITORY_AI_RUNTIME_TYPE,
@@ -180,8 +176,6 @@ describe("config helpers", () => {
         issueDraft: {
           useCodexSuperpowers: true,
         },
-        profiles: DEFAULT_REPOSITORY_AI_PROFILES,
-        roles: DEFAULT_REPOSITORY_AI_ROLE_PROFILES,
         costEstimates: DEFAULT_REPOSITORY_AI_COST_ESTIMATES,
         runtime: {
           type: "claude-code",

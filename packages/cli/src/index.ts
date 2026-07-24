@@ -96,7 +96,7 @@ export async function run(): Promise<void> {
 
   if (command === "commit") {
     const diff = readStagedDiff();
-    const { provider } = await createProvider(undefined, "implementer");
+    const { provider } = await createProvider();
     const result = await generateCommitMessage(provider, diff);
     process.stdout.write(formatCommitMessage(result.title, result.body));
     return;
@@ -157,7 +157,7 @@ export async function run(): Promise<void> {
   }
 
   const diff = readHeadDiff();
-  const { provider } = await createProvider(undefined, "implementer");
+  const { provider } = await createProvider();
   const result = await generateDiffSummary(provider, { diff });
   process.stdout.write(formatDiffSummary(result));
 }

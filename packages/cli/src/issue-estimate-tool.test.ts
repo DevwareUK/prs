@@ -45,10 +45,7 @@ describe("issue estimate tool", () => {
       expect(context.planSource.url).toBe(
         "https://github.com/DevwareUK/prs/issues/267#issuecomment-10"
       );
-      expect(context.profiles.map((profile) => profile.name)).toEqual([
-        "premium",
-        "standard",
-      ]);
+      expect(context.profiles).toEqual([]);
       expect(context.estimateInstructions).toContain("Use the managed issue plan");
       expect(JSON.stringify(context)).not.toContain("scanBudget");
       expect(JSON.stringify(context)).not.toContain("likelyFiles");
@@ -137,7 +134,7 @@ describe("issue estimate tool", () => {
     ]);
   });
 
-  it("uses default comparison profiles when repository config has no explicit profiles", async () => {
+  it("does not invent comparison profiles when repository config has none", async () => {
     const repoRoot = mkdtempSync(resolve(tmpdir(), "prs-issue-estimate-"));
     writeFileSync(resolve(repoRoot, "README.md"), "# Test repository\n", "utf8");
     const forge = {
@@ -172,15 +169,7 @@ describe("issue estimate tool", () => {
         inputTokenRatio: 0.8,
         outputTokenRatio: 0.2,
       });
-      expect(result.profiles[0]).toHaveProperty("costBasis");
-      expect(result.profiles[0]).toHaveProperty("costRange");
-      expect(result.profiles.map((profile) => profile.name)).toEqual([
-        "premium",
-        "standard",
-      ]);
-      expect(result.profiles.find((profile) => profile.name === "standard")?.notes).toContain(
-        "Configured implementer profile."
-      );
+      expect(result.profiles).toEqual([]);
     }
   });
 
@@ -259,10 +248,8 @@ describe("issue estimate tool", () => {
       expect(rendered).toContain(
         "| Phase | Role | Model | Model source | Status | Total tokens | Estimated cost | Elapsed | Captured |"
       );
-      expect(rendered).toContain(
-        "| standard | implementer, tester | gpt-5.4-mini | configured |"
-      );
-      expect(rendered).toContain("$");
+      expect(rendered).not.toContain("gpt-5.4-mini");
+      expect(rendered).not.toContain("$");
       expect(rendered).toContain("Costs are rough planning estimates, not exact billing.");
       expect(rendered).not.toContain("Model/profile estimates:");
       expect(rendered).not.toContain("Per-model blended rates come from PRS defaults");
@@ -361,11 +348,8 @@ describe("issue estimate tool", () => {
     expect(body).toContain("Codex token telemetry ledger for issue #267.");
     expect(body).not.toContain("<!-- prs:audit -->");
     const visibleBody = body.split("<!-- prs:token-usage-data")[0] ?? body;
-    expect(visibleBody).toContain("## Estimates");
+    expect(visibleBody).not.toContain("## Estimates");
     expect(visibleBody).not.toContain("Estimate notes:");
-    expect(body).toContain(
-      "Plan source: https://github.com/DevwareUK/prs/issues/267#issuecomment-3"
-    );
   });
 
   it("publishes Codex-authored estimate artifacts with fallback cost ranges", async () => {

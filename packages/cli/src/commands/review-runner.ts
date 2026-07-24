@@ -20,7 +20,7 @@ export async function runReviewCommand(args = getCliArgs()): Promise<void> {
 
   const options = parseReviewCommandArgs(args);
   const diff = readReviewDiff(options.base, options.head);
-  const { provider } = await createProvider(undefined, "reviewer");
+  const { provider } = await createProvider();
   const issue =
     options.issueNumber !== undefined
       ? await getRepositoryForge().fetchIssueDetails(options.issueNumber)
@@ -56,4 +56,3 @@ export async function runReviewCommand(args = getCliArgs()): Promise<void> {
     })}\n`
   );
 }
-

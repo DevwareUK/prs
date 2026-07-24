@@ -53,11 +53,8 @@ describe("managed prs Codex skills", () => {
     expect(markdown).toContain("Use Superpowers for brainstorming, planning, worktrees, agents, and verification.");
     expect(markdown).toContain("Publish specs, plans, decisions, and completion notes to GitHub through `prs audit publish`.");
     expect(markdown).toContain("Never commit generated Superpowers specs or plans to `docs/superpowers`.");
-    expect(markdown).toContain("ai.roles");
-    expect(markdown).toContain("ai.profiles");
     expect(markdown).toContain("planner, implementer, reviewer, and tester");
     expect(markdown).toContain("planner role for `prs:create`");
-    expect(markdown).toContain("report the blocker instead of silently using the current Codex app window model");
   });
 
   it("renders the unified prs command router skill", () => {
@@ -249,10 +246,7 @@ describe("managed prs Codex skills", () => {
       "the goal `threadId` as `sessionId` or `goal.threadId`"
     );
     expect(createMarkdown).toContain(
-      "publisher will enrich the current Codex session model from local Codex thread state"
-    );
-    expect(createMarkdown).toContain(
-      "include the configured planner role profile/model/thinking from `.prs/config.json`"
+      "The publisher enriches actual Codex session model metadata when available"
     );
     expect(createMarkdown).toContain("Use `status: \"tracked\"` when token totals are present");
     expect(createMarkdown).toContain(
@@ -304,8 +298,6 @@ describe("managed prs Codex skills", () => {
     expect(issueMarkdown).toContain("codex-token-usage.json");
     expect(issueMarkdown).toContain("stable `id`");
     expect(issueMarkdown).toContain("`token-usage-ledger` with an `entries` array");
-    expect(issueMarkdown).toContain("profile/tier name");
-    expect(issueMarkdown).toContain("<profile> (<model>, <thinking> thinking)");
     expect(issueMarkdown).toContain(
       "Treat Codex goals as telemetry sources, not as the lifecycle authority for audit publication."
     );
@@ -349,12 +341,12 @@ describe("managed prs Codex skills", () => {
     expect(finishWorkMarkdown).toContain(
       "the audit publisher also updates the managed `token-usage` ledger"
     );
-    expect(finishWorkMarkdown).toContain("Prefer the actual active Codex session model");
+    expect(finishWorkMarkdown).toContain(
+      "Prefer actual active Codex session model metadata when available"
+    );
     expect(finishWorkMarkdown).toContain(
       "prs audit publish --issue <number> --file <path> --section <name>"
     );
-    expect(finishWorkMarkdown).toContain("standard (gpt-5.4-mini, medium thinking)");
-    expect(finishWorkMarkdown).toContain("premium (gpt-5.5, high thinking)");
     expect(finishWorkMarkdown).toContain(
       "Publish the final issue audit before marking any Codex goal complete or reporting the managed skill run complete."
     );
@@ -374,12 +366,12 @@ describe("managed prs Codex skills", () => {
     expect(finishMarkdown).toContain(
       "the audit publisher also updates the managed `token-usage` ledger"
     );
-    expect(finishMarkdown).toContain("Prefer the actual active Codex session model");
+    expect(finishMarkdown).toContain(
+      "Prefer actual active Codex session model metadata when available"
+    );
     expect(finishMarkdown).toContain(
       "prs audit publish --issue <number> --file <path> --section <name>"
     );
-    expect(finishMarkdown).toContain("standard (gpt-5.4-mini, medium thinking)");
-    expect(finishMarkdown).toContain("premium (gpt-5.5, high thinking)");
     expect(finishMarkdown).toContain(
       "Publish the final issue audit before marking any Codex goal complete or reporting the managed skill run complete."
     );
