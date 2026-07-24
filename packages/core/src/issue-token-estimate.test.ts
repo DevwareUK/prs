@@ -301,6 +301,50 @@ describe("issue implementation token estimates", () => {
     });
   });
 
+  it.each([
+    ["gpt-5.6", 5, 30, 10],
+    ["gpt-5.6-sol", 5, 30, 10],
+    ["gpt-5.6-terra", 2.5, 15, 5],
+    ["gpt-5.6-luna", 1, 6, 2],
+  ])(
+    "uses the default blended estimation rate for %s",
+    (model, inputRate, outputRate, blendedRate) => {
+      const estimate = estimateIssueImplementationTokens({
+        planBody: [
+          "## Likely Files",
+          "",
+          "- `packages/core/src/issue-token-estimate.ts`",
+          "",
+          "## Steps",
+          "",
+          "1. Update model rates.",
+        ].join("\n"),
+        profiles: [
+          {
+            name: "implementation",
+            model,
+            thinking: "medium",
+          },
+        ],
+      });
+
+      expect(estimate.profiles[0].costBasis).toMatchObject({
+        inputPerMillionTokens: inputRate,
+        outputPerMillionTokens: outputRate,
+        blendedRatePerMillionTokens: blendedRate,
+        source: `model-rate:${model}`,
+      });
+      expect(estimate.profiles[0].costRange.low).toBeCloseTo(
+        (estimate.profiles[0].range.low / 1_000_000) * blendedRate,
+        2
+      );
+      expect(estimate.profiles[0].costRange.high).toBeCloseTo(
+        (estimate.profiles[0].range.high / 1_000_000) * blendedRate,
+        2
+      );
+    }
+  );
+
   it("marks plans without likely files or implementation steps as low confidence", () => {
     const estimate = estimateIssueImplementationTokens({
       planBody: [

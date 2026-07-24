@@ -259,6 +259,24 @@ describe("resolveRepositoryConfig", () => {
     expect(resolveRepositoryConfig().ai.costEstimates).toEqual(
       DEFAULT_REPOSITORY_AI_COST_ESTIMATES
     );
+    expect(resolveRepositoryConfig().ai.costEstimates.modelRates).toMatchObject({
+      "gpt-5.6": {
+        inputPerMillionTokens: 5,
+        outputPerMillionTokens: 30,
+      },
+      "gpt-5.6-sol": {
+        inputPerMillionTokens: 5,
+        outputPerMillionTokens: 30,
+      },
+      "gpt-5.6-terra": {
+        inputPerMillionTokens: 2.5,
+        outputPerMillionTokens: 15,
+      },
+      "gpt-5.6-luna": {
+        inputPerMillionTokens: 1,
+        outputPerMillionTokens: 6,
+      },
+    });
 
     expect(
       resolveRepositoryConfig({
