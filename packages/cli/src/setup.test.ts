@@ -190,7 +190,7 @@ describe("setup command", () => {
     ).toEqual({
       ai: {
         codex: {
-          preferSubagents: true,
+          preferSubagents: false,
         },
         issue: {
           useCodexSuperpowers: false,
@@ -285,7 +285,7 @@ describe("setup command", () => {
     expect(messages.join("\n")).toContain(
       "Superpowers worktrees and agents handle execution isolation."
     );
-    expect(messages.join("\n")).toContain("Configured Codex subagent preference: enabled");
+    expect(messages.join("\n")).toContain("Configured Codex subagent preference: disabled");
     expect(messages.join("\n")).toContain(
       "prs GitHub Actions are OpenAI-only today, and unattended issue runs remain Codex-specific."
     );
@@ -413,8 +413,8 @@ describe("setup command", () => {
     expect(writtenConfig.ai.codex).toEqual({ preferSubagents: false });
   });
 
-  it("allows custom setup to disable the Codex subagent preference", async () => {
-    const repoRoot = createRepo("prs-setup-subagents-disabled-");
+  it("allows custom setup to enable the Codex subagent preference", async () => {
+    const repoRoot = createRepo("prs-setup-subagents-enabled-");
     createCodexHome("prs-setup-codex-home-");
     writeFileSync(
       resolve(repoRoot, "package.json"),
@@ -444,7 +444,7 @@ describe("setup command", () => {
         "",
         "",
         "",
-        "n",
+        "y",
         "",
         "",
       ]),
@@ -455,7 +455,7 @@ describe("setup command", () => {
       JSON.parse(readFileSync(resolve(repoRoot, ".prs", "config.json"), "utf8"))
         .ai.codex
     ).toEqual({
-      preferSubagents: false,
+      preferSubagents: true,
     });
   });
 
@@ -661,7 +661,7 @@ describe("setup command", () => {
     ).toEqual({
       ai: {
         codex: {
-          preferSubagents: true,
+          preferSubagents: false,
         },
         issue: {
           useCodexSuperpowers: false,
@@ -1096,7 +1096,7 @@ describe("setup command", () => {
     ).toEqual({
       ai: {
         codex: {
-          preferSubagents: true,
+          preferSubagents: false,
         },
         issue: {
           useCodexSuperpowers: false,
@@ -1113,7 +1113,7 @@ describe("setup command", () => {
     });
   });
 
-  it("preserves existing ai provider settings when setup rewrites the repository config", async () => {
+  it("preserves existing ai provider settings and explicit subagent opt-in on setup rerun", async () => {
     const repoRoot = createRepo("prs-setup-preserve-ai-");
     createCodexHome("prs-setup-codex-home-");
     mkdirSync(resolve(repoRoot, ".prs"), { recursive: true });
@@ -1122,6 +1122,9 @@ describe("setup command", () => {
       JSON.stringify(
         {
           ai: {
+            codex: {
+              preferSubagents: true,
+            },
             provider: {
               type: "openai",
               model: "gpt-5-mini",

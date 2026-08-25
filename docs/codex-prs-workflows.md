@@ -8,7 +8,7 @@ The recommended launch path remains GitHub forge, OpenAI provider, and Codex run
 
 Codex is the default interactive runtime when `ai.runtime.type` is unset.
 
-Managed `/prs` Codex skills also read `ai.codex.preferSubagents` from the active repository `.prs/config.json`. The setting defaults to `true`; when it is enabled or omitted, that repository config is treated as the user's standing request to delegate suitable independent tasks to subagents when the subagent tool is available. Setting it to `false` opts the repository out. Subagents are for independent exploration, implementation, review, or verification work; approval gates, sandbox/network restrictions, final coordination, and final verification stay in the main Codex session.
+Managed `/prs` Codex skills also read `ai.codex.preferSubagents` from the active repository `.prs/config.json`. The setting defaults to `false`; only an explicit `true` setting is treated as the user's standing request to delegate suitable independent tasks to subagents when the subagent tool is available. When the setting is disabled or omitted, managed skills have no standing subagent delegation consent. Subagents are for independent exploration, implementation, review, or verification work; approval gates, sandbox/network restrictions, final coordination, and final verification stay in the main Codex session.
 
 Managed `/prs` skills use internal workflow labels such as `planner`, `implementer`, `reviewer`, and `tester`, while `ai.codex.preferSubagents` controls whether suitable independent work may be delegated. Model selection belongs to the active Codex or subagent session; repository setup no longer defines PRS-owned role-to-model mappings.
 

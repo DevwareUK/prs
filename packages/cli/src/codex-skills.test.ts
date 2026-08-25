@@ -172,7 +172,13 @@ describe("managed prs Codex skills", () => {
     expect(markdown).toContain("Read `.prs/config.json` before starting prs workflow work.");
     expect(markdown).toContain("ai.codex.preferSubagents");
     expect(markdown).toContain(
-      "standing request to delegate suitable independent tasks to subagents"
+      "explicitly enabled, treat it as the repository's standing request to delegate suitable independent tasks to subagents"
+    );
+    expect(markdown).toContain(
+      "disabled or omitted, do not treat the repository as having standing subagent delegation consent"
+    );
+    expect(markdown).not.toContain(
+      "omitted and therefore resolved to the default enabled value"
     );
   });
 
