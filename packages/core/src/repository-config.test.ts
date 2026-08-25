@@ -187,21 +187,21 @@ describe("resolveRepositoryConfig", () => {
     });
   });
 
-  it("defaults and preserves ai.codex.preferSubagents", () => {
+  it("defaults ai.codex.preferSubagents off while preserving explicit opt-in", () => {
     expect(resolveRepositoryConfig().ai.codex).toEqual({
-      preferSubagents: DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS,
+      preferSubagents: false,
     });
 
     expect(
       resolveRepositoryConfig({
         ai: {
           codex: {
-            preferSubagents: false,
+            preferSubagents: true,
           },
         },
       }).ai.codex
     ).toEqual({
-      preferSubagents: false,
+      preferSubagents: true,
     });
   });
 

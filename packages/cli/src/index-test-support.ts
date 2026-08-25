@@ -1441,7 +1441,7 @@ async function loadCli(options: {
       issueTokenEstimate.DEFAULT_ISSUE_ESTIMATE_COST_SETTINGS,
     DEFAULT_ISSUE_ESTIMATE_FALLBACK_MODEL_RATE_USD_PER_MILLION:
       issueTokenEstimate.DEFAULT_ISSUE_ESTIMATE_FALLBACK_MODEL_RATE_USD_PER_MILLION,
-    DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS: true,
+    DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS: false,
     DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS,
     DEFAULT_REPOSITORY_BASE_BRANCH: "main",
     DEFAULT_REPOSITORY_BUILD_COMMAND: ["pnpm", "build"],
@@ -1483,7 +1483,7 @@ async function loadCli(options: {
     }) => ({
       ai: {
         codex: {
-          preferSubagents: config?.ai?.codex?.preferSubagents ?? true,
+          preferSubagents: config?.ai?.codex?.preferSubagents ?? false,
         },
         issue: {
           useCodexSuperpowers:
