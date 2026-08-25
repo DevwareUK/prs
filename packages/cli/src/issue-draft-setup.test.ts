@@ -85,7 +85,7 @@ describe("Issue draft and setup workflows", () => {
     ).toEqual({
       ai: {
         codex: {
-          preferSubagents: true,
+          preferSubagents: false,
         },
         issue: {
           useCodexSuperpowers: false,
@@ -207,7 +207,7 @@ describe("Issue draft and setup workflows", () => {
     ).toEqual({
       ai: {
         codex: {
-          preferSubagents: true,
+          preferSubagents: false,
         },
         issue: {
           useCodexSuperpowers: false,
