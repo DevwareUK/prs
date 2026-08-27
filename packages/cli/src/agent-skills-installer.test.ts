@@ -61,6 +61,23 @@ describe("Codex Agent Skills installer", () => {
     expect(readFileSync(managedFile, "utf8")).toContain("custom note");
   });
 
+  it("accepts the original Codex-only state ledger format", () => {
+    const { home, sourceRoot } = fixture();
+    const first = installAgentSkills({ host: "codex", home, sourceRoot });
+    const stateFile = join(first.targetRoot, ".prs-managed-skills.json");
+    const state = JSON.parse(readFileSync(stateFile, "utf8")) as {
+      version: 1;
+      hosts: string[];
+      skills: Record<string, unknown>;
+    };
+    writeFileSync(
+      stateFile,
+      `${JSON.stringify({ version: 1, host: "codex", skills: state.skills }, null, 2)}\n`
+    );
+
+    expect(installAgentSkills({ host: "codex", home, sourceRoot }).unchanged).toHaveLength(5);
+  });
+
   it("protects an untracked custom collision", () => {
     const { home, sourceRoot } = fixture();
     const customFile = join(home, ".agents", "skills", "prs", "SKILL.md");
@@ -95,5 +112,37 @@ describe("Codex Agent Skills installer", () => {
     expect(existsSync(`${managedLegacy}.prs-retired`)).toBe(true);
     expect(readFileSync(customLegacy, "utf8")).toBe("custom legacy skill\n");
     expect(result.legacySkipped).toEqual([customLegacy]);
+  });
+});
+
+describe("Claude Code Agent Skills installer", () => {
+  it("installs the same canonical files unchanged under the Claude skills root", () => {
+    const { home, sourceRoot } = fixture();
+
+    const result = installAgentSkills({ host: "claude-code", home, sourceRoot });
+
+    expect(result.host).toBe("claude-code");
+    expect(result.targetRoot).toBe(join(home, ".claude", "skills"));
+    expect(result.installed).toHaveLength(5);
+    for (const name of ["prs", "prs-create", "prs-issue", "prs-finish", "prs-orchestrate"]) {
+      expect(readFileSync(join(result.targetRoot, name, "SKILL.md"), "utf8")).toBe(
+        readFileSync(join(sourceRoot, "skills", name, "SKILL.md"), "utf8")
+      );
+    }
+  });
+
+  it("uses the same managed-hash protection for Claude custom files", () => {
+    const { home, sourceRoot } = fixture();
+    const first = installAgentSkills({ host: "claude-code", home, sourceRoot });
+    const customFile = join(first.targetRoot, "prs", "SKILL.md");
+    writeFileSync(customFile, "custom Claude skill\n");
+
+    const second = installAgentSkills({ host: "claude-code", home, sourceRoot });
+
+    expect(second.skipped).toEqual([
+      expect.objectContaining({ name: "prs", reason: "custom-file" }),
+    ]);
+    expect(readFileSync(customFile, "utf8")).toBe("custom Claude skill\n");
+    expect(second.retiredLegacy).toEqual([]);
   });
 });

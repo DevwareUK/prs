@@ -9,10 +9,12 @@
 ## Install agent skills
 
 ```text
-prs skills install codex [--json]
+prs skills install <codex|claude-code> [--json]
 ```
 
 The Codex adapter copies the canonical skill files unchanged to `~/.agents/skills`. A sidecar hash ledger lets later runs update only files that still match their last managed content. Custom collisions are reported and left untouched. Marked PRS-managed files in the legacy `~/.codex/skills` location are renamed with a `.prs-retired` suffix so they no longer load but remain recoverable.
+
+The Claude Code adapter applies the same copy and hash-protection behavior under `~/.claude/skills`. It does not add Claude-specific frontmatter or rewrite the shared skill bodies.
 
 ## Issue tools
 

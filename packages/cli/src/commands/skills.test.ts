@@ -10,12 +10,20 @@ describe("skills command", () => {
     });
   });
 
+  it("parses the Claude Code installer", () => {
+    expect(parseSkillsCommandArgs(["skills", "install", "claude-code", "--json"])).toEqual({
+      action: "install",
+      host: "claude-code",
+      json: true,
+    });
+  });
+
   it("rejects unsupported or incomplete forms", () => {
-    expect(() => parseSkillsCommandArgs(["skills", "install", "claude-code"])).toThrow(
-      "Usage: prs skills install codex [--json]"
+    expect(() => parseSkillsCommandArgs(["skills", "install", "copilot"])).toThrow(
+      "Usage: prs skills install <codex|claude-code> [--json]"
     );
     expect(() => parseSkillsCommandArgs(["skills", "codex"])).toThrow(
-      "Usage: prs skills install codex [--json]"
+      "Usage: prs skills install <codex|claude-code> [--json]"
     );
   });
 });
