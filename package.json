@@ -7,7 +7,8 @@
     "build": "pnpm -r build",
     "dev": "pnpm -r dev",
     "lint": "eslint .",
-    "test": "vitest run --coverage"
+    "test": "vitest run --coverage",
+    "test:parity": "pnpm --filter @prs/contracts build && vitest run packages/cli/src/agent-parity.test.ts packages/contracts/src/agent-parity.test.ts packages/cli/src/commands/skills.test.ts"
   },
   "keywords": [],
   "author": "",
