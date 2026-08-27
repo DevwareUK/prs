@@ -28,6 +28,8 @@ estimateIssueTool,
 publishIssueEstimateFile,
 } from "../issue-estimate-tool";
 import { listIssuesTool } from "../issue-list-tool";
+import { contextIssueTool } from "../issue-context-tool";
+import { publishIssueArtifactsTool } from "../issue-publish-artifacts-tool";
 import { readyIssueTool } from "../issue-ready-tool";
 import { appendMediaEvidenceSection } from "../media-evidence";
 import { listPullRequestsTool } from "../pr-list-tool";
@@ -166,6 +168,27 @@ export async function runToolCommand(): Promise<void> {
       unattended: toolCommand.unattended,
       issueNumber: toolCommand.issueNumber,
       repoRoot,
+      forge: getRepositoryForge(repoRoot),
+    });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (toolCommand.kind === "issue-context") {
+    const result = await contextIssueTool({
+      issueNumber: toolCommand.issueNumber,
+      forge: getRepositoryForge(repoRoot),
+    });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
+
+  if (toolCommand.kind === "issue-publish-artifacts") {
+    const result = await publishIssueArtifactsTool({
+      issueNumber: toolCommand.issueNumber,
+      repoRoot,
+      specFilePath: toolCommand.specFilePath,
+      planFilePath: toolCommand.planFilePath,
       forge: getRepositoryForge(repoRoot),
     });
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

@@ -37,6 +37,48 @@ describe("prs tool command parser", () => {
     });
   });
 
+  it("parses deterministic issue context JSON command", () => {
+    expect(parsePrsToolCommandArgs(["issue", "context", "151", "--json"])).toEqual({
+      kind: "issue-context",
+      issueNumber: 151,
+      json: true,
+    });
+    expect(() => parsePrsToolCommandArgs(["issue", "context", "151"])).toThrow(
+      "Usage:"
+    );
+  });
+
+  it("parses approved issue artifact publication JSON command", () => {
+    expect(
+      parsePrsToolCommandArgs([
+        "issue",
+        "publish-artifacts",
+        "151",
+        "--spec-file",
+        ".prs/runs/refine/spec.md",
+        "--plan-file=.prs/runs/refine/plan.md",
+        "--json",
+      ])
+    ).toEqual({
+      kind: "issue-publish-artifacts",
+      issueNumber: 151,
+      specFilePath: ".prs/runs/refine/spec.md",
+      planFilePath: ".prs/runs/refine/plan.md",
+      json: true,
+    });
+
+    expect(() =>
+      parsePrsToolCommandArgs([
+        "issue",
+        "publish-artifacts",
+        "151",
+        "--spec-file",
+        "spec.md",
+        "--json",
+      ])
+    ).toThrow("Missing required --plan-file");
+  });
+
   it("parses issue estimate JSON command", () => {
     expect(parsePrsToolCommandArgs(["issue", "estimate", "151", "--json"])).toEqual({
       kind: "issue-estimate",

@@ -142,10 +142,12 @@ Supporting commands:
 - `prs audit publish (--issue <number>|--pr <number>) --file <path> --section <name> [--local-run <path>] [--media-manifest <path>]`
 - `prs tool token-usage publish (--issue <number>|--pr <number>) --file <path> --json`
 - `prs tool issue list [--actionable] --json`
+- `prs tool issue context <issue-number> --json`
 - `prs tool issue ready <issue-number> [--unattended|--auto|--jdi] --json`
 - `prs tool issue estimate <issue-number> --json`
 - `prs tool issue estimate-context <issue-number> --json`
 - `prs tool issue publish-estimate <issue-number> --file <path> --json`
+- `prs tool issue publish-artifacts <issue-number> --spec-file <path> --plan-file <path> --json`
 - `prs tool issue create (--draft-file <path>|--issue-set <path>) --json [--run-dir <path>] [--spec-file <path>] [--plan-file <path>] [--media-manifest <path>]`
 - `prs tool pr list [--actionable] --json`
 - `prs tool pr ready <pr-number> [--unattended|--auto|--jdi] --json`
@@ -165,6 +167,8 @@ Legacy issue support commands such as the batch alias, runtime-launched drafting
 The old `prs codex ...` nested launcher group has been retired. To start an agentic `/prs` workflow from a shell, run Codex directly in the repository, for example `codex -C <repo> "/prs issue <number> refine"` or `codex exec -C <repo> "/prs pr <number> review"`. Inside an active Codex session, use the deterministic `prs tool ... --json` commands for handoff data. Legacy runtime-launching commands that would start a child Codex process are blocked when Codex session markers are present; for unattended issue work, use `prs tool issue ready <issue-number> --unattended --json` and continue in the active session.
 
 `prs tool issue list [--actionable] --json` and `prs tool pr list [--actionable] --json` include a `url` field for every returned issue or pull request. Issue list PRS plan status recognizes direct managed `<!-- prs:issue-plan -->` comments; audit trail comments published by `prs audit publish` do not count as source-of-truth plan comments. The interactive `/prs issue` and `/prs pr` entrypoints use those list tools and should show each returned item with its number, title, and GitHub URL before offering follow-up actions.
+
+`prs tool issue context <issue-number> --json` is the read-only handoff for issue refinement and planning in an already-running coding agent. It returns repository identity, the issue body and comments, managed spec/plan presence, and linked pull requests without changing GitHub or git state. After the user approves local Markdown, `prs tool issue publish-artifacts <issue-number> --spec-file <path> --plan-file <path> --json` validates both files are non-empty and creates or updates the marker-based managed comments without generating or rewriting their content.
 
 `/prs cleanup branches` uses `prs tool branches cleanup --json` to dry-run local branch cleanup. It reports local branches that are already merged into the configured `.prs/config.json` `baseBranch`, plus skipped branches such as the current branch, protected branch names, unmerged branches, and branches checked out by any worktree. Apply mode is explicit: `prs tool branches cleanup --apply --json` recomputes the safe candidates and deletes them with normal safe local branch deletion. It does not force-delete branches, delete remote branches, prune remotes, or clean stale upstream branches.
 
