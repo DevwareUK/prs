@@ -150,7 +150,7 @@ export const AGENT_WORKFLOW_CONTRACT = AgentWorkflowContract.parse({
       name: "issue-finalize",
       invocation: "prs issue finalize <number>",
       json: false,
-      mutatesRemote: true,
+      mutatesRemote: false,
       approval: "explicit",
     },
     {

@@ -8,7 +8,6 @@
   },
   "dependencies": {
     "@prs/contracts": "workspace:*",
-    "@prs/providers": "workspace:*",
     "zod": "^4.3.6"
   },
   "devDependencies": {

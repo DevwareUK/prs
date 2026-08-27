@@ -5,13 +5,7 @@ import type {
   RepositoryLocalRuntimeConfigType,
   RepositoryPrReadinessConfigType,
 } from "@prs/contracts";
-import { TEST_SUGGESTIONS_COMMENT_MARKER } from "@prs/contracts";
 import { formatRunTimestamp, toRepoRelativePath } from "./run-artifacts";
-import {
-  buildPullRequestTokenUsageMetadata,
-  getTokenUsageArtifactFilePath,
-  type PullRequestTokenUsageMetadata,
-} from "./token-audit";
 import type {
   PullRequestCheckSignal,
   PullRequestDetails,
@@ -24,10 +18,6 @@ import {
   filterActionablePullRequestReviewThreads,
   formatReviewCommentLineRange,
 } from "./workflows/pr-fix-comments/selection";
-import {
-  findManagedTestSuggestionsComment,
-  parseManagedTestSuggestionsComment,
-} from "./workflows/pr-fix-tests/selection";
 
 export type PrReadyRunCommandResult = {
   status: number;
@@ -81,7 +71,7 @@ export type PrReadyCommentSummaryCategory =
   | "general";
 
 export type PrReadyCommentSummaryItem = {
-  kind: "issue-comment" | "review-thread" | "managed-test-suggestions";
+  kind: "issue-comment" | "review-thread";
   summary: string;
   url: string;
   author: string;
@@ -109,23 +99,6 @@ export type PrReadyPullRequestContext = {
         totalCount: number;
         failed: Array<{ name: string; conclusion?: string; url?: string }>;
         pending: Array<{ name: string; status: string; url?: string }>;
-      }
-    | {
-        status: "unavailable";
-        warning: string;
-      };
-  testSuggestions:
-    | {
-        status: "available";
-        commentUrl: string;
-        totalCount: number;
-        openCount: number;
-        addressedCount: number;
-        topOpenSuggestions: string[];
-      }
-    | {
-        status: "not-found";
-        markers: readonly string[];
       }
     | {
         status: "unavailable";
@@ -207,7 +180,6 @@ export type PrReadyToolResult =
       runtime: PrReadyRuntime;
       localReadiness: PrReadyLocalReadiness;
       prContext: PrReadyPullRequestContext;
-      tokenUsage: PullRequestTokenUsageMetadata;
       nextAction: "browse-local-app";
     }
   | {
@@ -222,7 +194,6 @@ export type PrReadyToolResult =
       runtime: PrReadyRuntime;
       localReadiness: PrReadyLocalReadiness;
       prContext: PrReadyPullRequestContext;
-      tokenUsage: PullRequestTokenUsageMetadata;
       nextAction: "start-runtime";
     }
   | {
@@ -238,7 +209,6 @@ export type PrReadyToolResult =
       runtime: PrReadyRuntime;
       localReadiness: PrReadyLocalReadiness;
       prContext: PrReadyPullRequestContext;
-      tokenUsage: PullRequestTokenUsageMetadata;
       nextAction:
         | "resolve-conflicts"
         | "start-runtime-manually"
@@ -698,30 +668,8 @@ function createGroupTitle(category: PrReadyCommentSummaryCategory): string {
   }
 }
 
-function hasManagedTestSuggestionsMarker(comment: RepositoryComment): boolean {
-  return comment.body.includes(TEST_SUGGESTIONS_COMMENT_MARKER);
-}
-
-function buildManagedTestSuggestionsSummary(
-  comment: RepositoryComment,
-  topOpenSuggestions: string[]
-): PrReadyCommentSummaryItem {
-  return {
-    kind: "managed-test-suggestions",
-    summary:
-      topOpenSuggestions.length > 0
-        ? `Open suggestions: ${topOpenSuggestions.join(", ")}`
-        : "All managed AI test suggestions addressed.",
-    url: comment.url,
-    author: comment.author,
-    updatedAt: comment.updatedAt,
-  };
-}
-
 function buildPullRequestCommentSummary(input: {
   issueComments?: RepositoryComment[];
-  managedTestSuggestionsComment?: RepositoryComment;
-  topOpenTestSuggestions: string[];
   reviewThreads?: ReturnType<typeof buildPullRequestReviewThreads>;
 }): PrReadyPullRequestContext["commentSummary"] {
   if (input.issueComments === undefined && input.reviewThreads === undefined) {
@@ -744,24 +692,7 @@ function buildPullRequestCommentSummary(input: {
     }
   };
 
-  if (input.managedTestSuggestionsComment) {
-    addItem(
-      "test-coverage",
-      buildManagedTestSuggestionsSummary(
-        input.managedTestSuggestionsComment,
-        input.topOpenTestSuggestions
-      )
-    );
-  }
-
   for (const comment of input.issueComments ?? []) {
-    if (
-      input.managedTestSuggestionsComment?.id === comment.id ||
-      hasManagedTestSuggestionsMarker(comment)
-    ) {
-      continue;
-    }
-
     addItem(classifyIssueComment(comment.body), {
       kind: "issue-comment",
       summary: summarizeCommentBody(comment.body),
@@ -815,8 +746,6 @@ async function collectPullRequestContext(
 ): Promise<PrReadyPullRequestContext> {
   const warnings: string[] = [];
   let issueCommentsForSummary: RepositoryComment[] | undefined;
-  let managedTestSuggestionsComment: RepositoryComment | undefined;
-  let topOpenTestSuggestions: string[] = [];
   let reviewThreadsForSummary:
     | ReturnType<typeof buildPullRequestReviewThreads>
     | undefined;
@@ -829,10 +758,6 @@ async function collectPullRequestContext(
     checks: {
       status: "unavailable",
       warning: "GitHub check context has not been fetched yet.",
-    },
-    testSuggestions: {
-      status: "unavailable",
-      warning: "Managed AI test suggestion context has not been fetched yet.",
     },
     reviewComments: {
       status: "unavailable",
@@ -877,37 +802,9 @@ async function collectPullRequestContext(
   try {
     const comments = await forge.fetchPullRequestIssueComments(pullRequest.number);
     issueCommentsForSummary = comments;
-    const comment = findManagedTestSuggestionsComment(comments);
-    if (!comment) {
-      context.testSuggestions = {
-        status: "not-found",
-        markers: [TEST_SUGGESTIONS_COMMENT_MARKER],
-      };
-    } else {
-      const suggestionsComment = parseManagedTestSuggestionsComment(comment);
-      const openSuggestions = suggestionsComment.suggestions.filter(
-        (suggestion) => !suggestion.addressed
-      );
-      topOpenTestSuggestions = openSuggestions
-        .slice(0, 3)
-        .map((suggestion) => suggestion.area);
-      managedTestSuggestionsComment = comment;
-      context.testSuggestions = {
-        status: "available",
-        commentUrl: comment.url,
-        totalCount: suggestionsComment.suggestions.length,
-        openCount: openSuggestions.length,
-        addressedCount: suggestionsComment.suggestions.length - openSuggestions.length,
-        topOpenSuggestions: topOpenTestSuggestions,
-      };
-    }
   } catch (error) {
-    const warning = `Managed AI test suggestions unavailable: ${getErrorMessage(error)}`;
+    const warning = `Pull request comments unavailable: ${getErrorMessage(error)}`;
     warnings.push(warning);
-    context.testSuggestions = {
-      status: "unavailable",
-      warning,
-    };
   }
 
   try {
@@ -955,8 +852,6 @@ async function collectPullRequestContext(
 
   context.commentSummary = buildPullRequestCommentSummary({
     issueComments: issueCommentsForSummary,
-    managedTestSuggestionsComment,
-    topOpenTestSuggestions,
     reviewThreads: reviewThreadsForSummary,
   });
 
@@ -968,18 +863,6 @@ function writeMetadata(
   metadataFilePath: string,
   result: PrReadyToolResult
 ): void {
-  const tokenUsage = buildPullRequestTokenUsageMetadata({
-    artifactFile: toRepoRelativePath(
-      repoRoot,
-      getTokenUsageArtifactFilePath(result.runDir)
-    ),
-    workflowName: result.tokenUsage.workflow.name,
-    role: result.tokenUsage.workflow.role,
-    prNumber: result.prNumber,
-    runDir: toRepoRelativePath(repoRoot, result.runDir),
-    publishWhen: result.tokenUsage.auditPublication.publishWhen,
-  });
-
   writeFileSync(
     metadataFilePath,
     `${JSON.stringify(
@@ -987,7 +870,6 @@ function writeMetadata(
         ...result,
         runDir: toRepoRelativePath(repoRoot, result.runDir),
         metadataFilePath: toRepoRelativePath(repoRoot, result.metadataFilePath),
-        tokenUsage,
       },
       null,
       2
@@ -1016,14 +898,6 @@ export async function readyPullRequestTool(
   const pullRequest = await options.forge.fetchPullRequestDetails(options.prNumber);
   const runDir = createRunDir(options.repoRoot, pullRequest.number);
   const metadataFilePath = resolve(runDir, "metadata.json");
-  const tokenUsage = buildPullRequestTokenUsageMetadata({
-    artifactFile: getTokenUsageArtifactFilePath(runDir),
-    workflowName: "pr-ready",
-    role: "reviewer",
-    prNumber: pullRequest.number,
-    runDir,
-    publishWhen: ["readiness-prepared"],
-  });
   const branchName = checkoutPullRequestBranch(runCommand, options.repoRoot, pullRequest);
   const runtime = detectRuntime(options.localRuntime);
   const baseSync = fetchBaseState(
@@ -1056,7 +930,6 @@ export async function readyPullRequestTool(
           ? skippedReadiness
           : noConfiguredLocalReadiness(),
       prContext,
-      tokenUsage,
       nextAction: "resolve-conflicts",
     };
     writeMetadata(options.repoRoot, metadataFilePath, result);
@@ -1084,7 +957,6 @@ export async function readyPullRequestTool(
         runtime.kind === "command" ? { ...runtime, status: "not-started" } : runtime,
       localReadiness,
       prContext,
-      tokenUsage,
       nextAction: "inspect-local-readiness",
     };
     writeMetadata(options.repoRoot, metadataFilePath, result);
@@ -1107,7 +979,6 @@ export async function readyPullRequestTool(
       runtime: startedRuntime,
       localReadiness,
       prContext,
-      tokenUsage,
       nextAction: "start-runtime-manually",
     };
     writeMetadata(options.repoRoot, metadataFilePath, result);
@@ -1127,7 +998,6 @@ export async function readyPullRequestTool(
       runtime: startedRuntime,
       localReadiness,
       prContext,
-      tokenUsage,
       nextAction: "start-runtime",
     };
     writeMetadata(options.repoRoot, metadataFilePath, result);
@@ -1146,7 +1016,6 @@ export async function readyPullRequestTool(
     runtime: startedRuntime,
     localReadiness,
     prContext,
-    tokenUsage,
     nextAction: "browse-local-app",
   };
   writeMetadata(options.repoRoot, metadataFilePath, result);

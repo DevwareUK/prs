@@ -6,7 +6,7 @@ import {
   formatSuperpowersPlanArtifactComment,
   formatSuperpowersSpecArtifactComment,
   type ManagedCommentPublication,
-} from "./workflows/issue/publication";
+} from "./workflows/issue/artifacts";
 
 type IssueArtifactForge = Pick<
   RepositoryForge,

@@ -83,6 +83,9 @@ describe("agent workflow contract", () => {
     expect(
       AGENT_WORKFLOW_CONTRACT.commands.find((command) => command.name === "issue-context")
     ).toMatchObject({ json: true, mutatesRemote: false, approval: "none" });
+    expect(
+      AGENT_WORKFLOW_CONTRACT.commands.find((command) => command.name === "issue-finalize")
+    ).toMatchObject({ json: false, mutatesRemote: false, approval: "explicit" });
   });
 
   it.each([

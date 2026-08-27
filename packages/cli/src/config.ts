@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   REPOSITORY_CONFIG_RELATIVE_PATH,
-  RepositoryConfig,
+  migrateRepositoryConfigToAgentWorkflow,
   type RepositoryConfigType,
   type ResolvedRepositoryConfigType,
 } from "@prs/contracts";
@@ -29,7 +29,11 @@ export function loadRepositoryConfig(repoRoot: string): RepositoryConfigType | u
   }
 
   try {
-    return RepositoryConfig.parse(parsedJson);
+    const migration = migrateRepositoryConfigToAgentWorkflow(parsedJson);
+    for (const notice of migration.notices) {
+      console.error(`prs configuration migration: ${notice}`);
+    }
+    return migration.config;
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Invalid ${REPOSITORY_CONFIG_RELATIVE_PATH}: ${message}`);
