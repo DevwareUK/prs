@@ -4,7 +4,7 @@ import {
   type InstallableAgentHost,
 } from "../agent-skills-installer";
 
-const USAGE = "Usage: prs skills install <codex|claude-code> [--json]";
+const USAGE = "Usage: prs skills install <codex|claude-code|copilot> [--json]";
 
 export type SkillsCommand = {
   action: "install";
@@ -17,7 +17,7 @@ export function parseSkillsCommandArgs(args: string[]): SkillsCommand {
   const [action, host, ...flags] = commandArgs;
   if (
     action !== "install" ||
-    (host !== "codex" && host !== "claude-code") ||
+    (host !== "codex" && host !== "claude-code" && host !== "copilot") ||
     flags.some((flag) => flag !== "--json") ||
     flags.filter((flag) => flag === "--json").length > 1
   ) {

@@ -22,7 +22,7 @@ type ManagedSkillsState = {
   skills: Record<string, InstalledSkillRecord>;
 };
 
-export type InstallableAgentHost = "codex" | "claude-code";
+export type InstallableAgentHost = "codex" | "claude-code" | "copilot";
 
 export type InstallAgentSkillsOptions = {
   host: InstallableAgentHost;
@@ -105,9 +105,9 @@ export function installAgentSkills(options: InstallAgentSkillsOptions): InstallA
     JSON.parse(readFileSync(join(sourceRoot, "skills", "manifest.json"), "utf8"))
   );
   const targetRoot =
-    options.host === "codex"
-      ? join(home, ".agents", "skills")
-      : join(home, ".claude", "skills");
+    options.host === "claude-code"
+      ? join(home, ".claude", "skills")
+      : join(home, ".agents", "skills");
   const stateFile = join(targetRoot, STATE_FILE);
   const previousState = readState(stateFile);
   const nextState: ManagedSkillsState = {

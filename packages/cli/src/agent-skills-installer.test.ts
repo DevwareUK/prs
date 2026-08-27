@@ -146,3 +146,35 @@ describe("Claude Code Agent Skills installer", () => {
     expect(second.retiredLegacy).toEqual([]);
   });
 });
+
+describe("GitHub Copilot Agent Skills installer", () => {
+  it("shares the Codex installation without duplicate managed copies", () => {
+    const { home, sourceRoot } = fixture();
+    const codex = installAgentSkills({ host: "codex", home, sourceRoot });
+
+    const copilot = installAgentSkills({ host: "copilot", home, sourceRoot });
+
+    expect(copilot.host).toBe("copilot");
+    expect(copilot.targetRoot).toBe(codex.targetRoot);
+    expect(copilot.installed).toEqual([]);
+    expect(copilot.unchanged).toHaveLength(5);
+    const state = JSON.parse(
+      readFileSync(join(copilot.targetRoot, ".prs-managed-skills.json"), "utf8")
+    ) as { hosts: string[] };
+    expect(state.hosts).toEqual(["codex", "copilot"]);
+  });
+
+  it("protects shared custom collisions when Copilot installs first", () => {
+    const { home, sourceRoot } = fixture();
+    const customFile = join(home, ".agents", "skills", "prs", "SKILL.md");
+    mkdirSync(join(customFile, ".."), { recursive: true });
+    writeFileSync(customFile, "custom shared skill\n");
+
+    const result = installAgentSkills({ host: "copilot", home, sourceRoot });
+
+    expect(result.skipped).toEqual([
+      expect.objectContaining({ name: "prs", reason: "custom-file" }),
+    ]);
+    expect(readFileSync(customFile, "utf8")).toBe("custom shared skill\n");
+  });
+});

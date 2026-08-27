@@ -18,12 +18,20 @@ describe("skills command", () => {
     });
   });
 
+  it("parses the GitHub Copilot installer", () => {
+    expect(parseSkillsCommandArgs(["skills", "install", "copilot", "--json"])).toEqual({
+      action: "install",
+      host: "copilot",
+      json: true,
+    });
+  });
+
   it("rejects unsupported or incomplete forms", () => {
-    expect(() => parseSkillsCommandArgs(["skills", "install", "copilot"])).toThrow(
-      "Usage: prs skills install <codex|claude-code> [--json]"
+    expect(() => parseSkillsCommandArgs(["skills", "install", "cursor"])).toThrow(
+      "Usage: prs skills install <codex|claude-code|copilot> [--json]"
     );
     expect(() => parseSkillsCommandArgs(["skills", "codex"])).toThrow(
-      "Usage: prs skills install <codex|claude-code> [--json]"
+      "Usage: prs skills install <codex|claude-code|copilot> [--json]"
     );
   });
 });
