@@ -58,7 +58,7 @@ describe("issue ready tool", () => {
       comments: {
         count: 1,
       },
-      suggestedBranchName: "codex/issue-151-tighten-create-route",
+      suggestedBranchName: "prs/issue-151-tighten-create-route",
       runDir: ".prs/runs/20260512T093000000Z-issue-151-ready",
       nextAction: "start-superpowers-worktree",
     });
@@ -70,7 +70,7 @@ describe("issue ready tool", () => {
     expect(metadata).toMatchObject({
       flow: "issue-ready",
       issueNumber: 151,
-      suggestedBranchName: "codex/issue-151-tighten-create-route",
+      suggestedBranchName: "prs/issue-151-tighten-create-route",
       unattended: false,
     });
   });
