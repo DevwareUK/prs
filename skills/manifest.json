@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "skills": [
+    {
+      "name": "prs",
+      "source": "skills/prs/SKILL.md",
+      "phases": ["create", "refine", "plan", "implement", "verify", "open-pr", "validate"]
+    },
+    {
+      "name": "prs-create",
+      "source": "skills/prs-create/SKILL.md",
+      "phases": ["create", "refine", "plan"]
+    },
+    {
+      "name": "prs-issue",
+      "source": "skills/prs-issue/SKILL.md",
+      "phases": ["refine", "plan", "implement", "verify", "open-pr", "validate"]
+    },
+    {
+      "name": "prs-finish",
+      "source": "skills/prs-finish/SKILL.md",
+      "phases": ["verify", "open-pr", "validate"]
+    },
+    {
+      "name": "prs-orchestrate",
+      "source": "skills/prs-orchestrate/SKILL.md",
+      "phases": ["create", "refine", "plan", "implement", "verify", "open-pr", "validate"]
+    }
+  ]
+}
