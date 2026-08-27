@@ -6,8 +6,6 @@ export default defineConfig({
     include: [
       "packages/**/*.test.ts",
       "packages/**/*.spec.ts",
-      "actions/**/*.test.ts",
-      "actions/**/*.spec.ts",
     ],
     coverage: {
       provider: "v8",

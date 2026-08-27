@@ -8,17 +8,11 @@
     "prs": "dist/index.js"
   },
   "scripts": {
-    "build": "tsup src/index.ts --format cjs --dts --out-dir dist",
-    "commit": "pnpm --filter @prs/cli... build && node dist/index.js commit",
-    "diff": "pnpm --filter @prs/cli... build && node dist/index.js diff",
-    "feature-backlog": "pnpm --filter @prs/cli... build && node dist/index.js feature-backlog",
-    "issue": "pnpm --filter @prs/cli... build && node dist/index.js",
-    "review": "pnpm --filter @prs/cli... build && node dist/index.js review"
+    "build": "tsup src/index.ts --format cjs --dts --out-dir dist"
   },
   "dependencies": {
     "@prs/contracts": "workspace:*",
     "@prs/core": "workspace:*",
-    "@prs/providers": "workspace:*",
     "dotenv": "^17.2.3"
   },
   "devDependencies": {

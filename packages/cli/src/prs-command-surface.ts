@@ -4,68 +4,23 @@ import {
   type ActionableIssue,
   type ActionablePullRequest,
 } from "./actionable-github";
-import {
-  normalizePrLifecycleAction,
-  type PrLifecycleAction,
-} from "./workflows/pr-lifecycle/actions";
-
-export type PrsIssueAction = "work" | "refine" | "plan" | "finish";
-export type PrsReviewAction = "choose" | "diff" | "tests" | "features";
-export type PrsPrAction =
-  | "choose"
-  | Extract<
-      PrLifecycleAction,
-      | "review"
-      | "prepare-review"
-      | "resolve-conflicts"
-      | "address-comments"
-      | "fix-tests"
-      | "add-tests"
-    >;
 
 export type PrsCommandSurfaceAction =
   | { kind: "root"; mode: "interactive" }
-  | { kind: "create"; target: "issue" }
-  | { kind: "create"; target: "observability"; passthroughArgs: string[] }
-  | { kind: "cleanup"; mode: "direct"; target: "branches" | "worktrees" }
-  | { kind: "review"; mode: "interactive" }
-  | {
-      kind: "review";
-      mode: "direct";
-      action: Exclude<PrsReviewAction, "choose">;
-      passthroughArgs: string[];
-    }
+  | { kind: "create" }
   | { kind: "issue"; mode: "interactive" }
-  | {
-      kind: "issue";
-      mode: "direct";
-      issueNumber: number;
-      action: PrsIssueAction;
-      unattended?: boolean;
-    }
+  | { kind: "issue"; mode: "direct"; issueNumber: number; action: "work" | "refine" | "plan" | "finish"; unattended: boolean }
   | { kind: "pr"; mode: "interactive" }
-  | { kind: "pr"; mode: "direct"; prNumber: number; action: PrsPrAction; unattended?: boolean }
-  | { kind: "audit"; action: "publish"; passthroughArgs: string[] }
+  | { kind: "pr"; mode: "direct"; prNumber: number; unattended: boolean }
+  | { kind: "audit"; passthroughArgs: string[] }
   | { kind: "finish" };
 
 export type PrsCommandRoute = {
   interaction: "interactive" | "direct";
-  skillName:
-    | "prs"
-    | "prs:create"
-    | "prs:review"
-    | "prs:start-issue-work"
-    | "prs:cleanup-branches"
-    | "prs:cleanup-worktrees"
-    | "prs:parallel-batch"
-    | "prs:publish-audit"
-    | "prs:finish-work";
+  skillName: "prs" | "prs:create" | "prs:issue" | "prs:pr" | "prs:audit" | "prs:finish";
   cliArgs?: string[];
-  picker?: "actionable-issues" | "actionable-pull-requests" | "pr-actions";
-  target?:
-    | { type: "issue" | "pull-request"; number: number }
-    | { type: "create"; name: "issue" | "observability" }
-    | { type: "review"; name: "diff" | "tests" | "features" };
+  picker?: "actionable-issues" | "actionable-pull-requests";
+  target?: { type: "issue" | "pull-request"; number: number } | { type: "create" };
   toolOnly?: boolean;
 };
 
@@ -73,421 +28,121 @@ export type PrsInteractivePickerModel =
   | { kind: "issues"; items: ActionableIssue[] }
   | { kind: "pull-requests"; items: ActionablePullRequest[] };
 
-const ISSUE_ACTIONS = new Set(["refine", "plan", "finish"]);
-const PR_SURFACE_ACTIONS = new Set<PrsPrAction>([
-  "review",
-  "prepare-review",
-  "resolve-conflicts",
-  "address-comments",
-  "add-tests",
-  "fix-tests",
-]);
-
 function parsePositiveNumber(rawValue: string | undefined, label: string): number {
   if (!rawValue || !/^\d+$/.test(rawValue)) {
     throw new Error(`Invalid /prs ${label} number: "${rawValue ?? ""}".`);
   }
-
   const parsed = Number.parseInt(rawValue, 10);
   if (!Number.isSafeInteger(parsed) || parsed <= 0) {
     throw new Error(`Invalid /prs ${label} number: "${rawValue}".`);
   }
-
   return parsed;
+}
+
+function isUnattended(arg: string | undefined): boolean {
+  return arg === "--unattended" || arg === "--auto" || arg === "--jdi";
 }
 
 export function renderPrsCommandSurfaceHelp(): string {
   return [
     "Usage:",
     "  /prs",
-    "  /prs create [issue]",
-    "  /prs create observability [--site <site>] [--env <env>] [--since <duration>]",
-    "  /prs cleanup branches",
-    "  /prs cleanup worktrees",
-    "  /prs review",
-    "  /prs review diff [--base <git-ref>] [--head <git-ref>] [--format <markdown|json>]",
-    "  /prs review tests [--format <markdown|json>] [--top <count>] [--create-issues]",
-    "  /prs review features [repo-path] [--format <markdown|json>] [--top <count>] [--create-issues]",
+    "  /prs create",
     "  /prs issue",
     "  /prs issue <number> [--unattended|--auto|--jdi|refine|plan|finish]",
     "  /prs pr",
-    "  /prs pr <number> [--unattended|--auto|--jdi|review|prepare-review|resolve-conflicts|address-comments|fix-tests|add-tests]",
-    "  /prs audit publish [--issue <number>|--pr <number>] [--file <path>] [--section <name>] [--local-run <path>]",
+    "  /prs pr <number> [--unattended|--auto|--jdi]",
+    "  /prs audit publish (--issue <number>|--pr <number>) --file <path> --section <name>",
     "  /prs finish",
   ].join("\n");
 }
 
-function isUnattendedAlias(rawArg: string | undefined): boolean {
-  return rawArg === "--unattended" || rawArg === "--auto" || rawArg === "--jdi";
-}
-
 export function parsePrsCommandSurfaceArgs(args: string[]): PrsCommandSurfaceAction {
   const [first, second, third, ...rest] = args;
-
-  if (!first) {
-    return { kind: "root", mode: "interactive" };
-  }
-
-  if (first === "create") {
-    if (!second || second === "issue") {
-      if (third || rest.length > 0) {
-        throw new Error(renderPrsCommandSurfaceHelp());
-      }
-
-      return { kind: "create", target: "issue" };
-    }
-
-    if (second === "observability") {
-      return {
-        kind: "create",
-        target: "observability",
-        passthroughArgs: [third, ...rest].filter(
-          (value): value is string => value !== undefined
-        ),
-      };
-    }
-
-    throw new Error(renderPrsCommandSurfaceHelp());
-  }
-
-  if (first === "cleanup") {
-    if ((second === "branches" || second === "worktrees") && !third && rest.length === 0) {
-      return { kind: "cleanup", mode: "direct", target: second };
-    }
-
-    throw new Error(renderPrsCommandSurfaceHelp());
-  }
-
-  if (first === "review") {
-    if (!second) {
-      return { kind: "review", mode: "interactive" };
-    }
-
-    if (second === "diff" || second === "tests" || second === "features") {
-      return {
-        kind: "review",
-        mode: "direct",
-        action: second,
-        passthroughArgs: [third, ...rest].filter(
-          (value): value is string => value !== undefined
-        ),
-      };
-    }
-
-    throw new Error(renderPrsCommandSurfaceHelp());
-  }
-
+  if (!first) return { kind: "root", mode: "interactive" };
+  if (first === "create" && !second) return { kind: "create" };
   if (first === "issue") {
-    if (!second) {
-      return { kind: "issue", mode: "interactive" };
-    }
-    if (rest.length > 0) {
-      throw new Error(renderPrsCommandSurfaceHelp());
-    }
-
+    if (!second) return { kind: "issue", mode: "interactive" };
+    if (rest.length > 0) throw new Error(renderPrsCommandSurfaceHelp());
     const issueNumber = parsePositiveNumber(second, "issue");
-    if (isUnattendedAlias(third)) {
-      return { kind: "issue", mode: "direct", issueNumber, action: "work", unattended: true };
+    if (!third || isUnattended(third)) {
+      return { kind: "issue", mode: "direct", issueNumber, action: "work", unattended: isUnattended(third) };
     }
-    if (!third) {
-      return { kind: "issue", mode: "direct", issueNumber, action: "work", unattended: false };
+    if (third === "refine" || third === "plan" || third === "finish") {
+      return { kind: "issue", mode: "direct", issueNumber, action: third, unattended: false };
     }
-    if (!ISSUE_ACTIONS.has(third)) {
-      throw new Error(renderPrsCommandSurfaceHelp());
-    }
-
-    return {
-      kind: "issue",
-      mode: "direct",
-      issueNumber,
-      action: third as PrsIssueAction,
-    };
+    throw new Error(renderPrsCommandSurfaceHelp());
   }
-
   if (first === "pr") {
-    if (!second) {
-      return { kind: "pr", mode: "interactive" };
-    }
-    if (rest.length > 1) {
+    if (!second) return { kind: "pr", mode: "interactive" };
+    if (rest.length > 0 || (third && !isUnattended(third))) {
       throw new Error(renderPrsCommandSurfaceHelp());
     }
-    if (isPrSurfaceActionInput(second)) {
-      throw new Error(renderPrsCommandSurfaceHelp());
-    }
-
-    const prNumber = parsePositiveNumber(second, "pr");
-    if (isUnattendedAlias(third)) {
-      return { kind: "pr", mode: "direct", prNumber, action: "choose", unattended: true };
-    }
-    if (!third) {
-      return { kind: "pr", mode: "direct", prNumber, action: "choose", unattended: false };
-    }
-    const action = normalizePrSurfaceAction(third);
-    if (!action) {
-      throw new Error(renderPrsCommandSurfaceHelp());
-    }
-
-    if (rest[0] && (action !== "review" || !isUnattendedAlias(rest[0]))) {
-      throw new Error(renderPrsCommandSurfaceHelp());
-    }
-    if (action === "review") {
-      return {
-        kind: "pr",
-        mode: "direct",
-        prNumber,
-        action,
-        unattended: isUnattendedAlias(rest[0]),
-      };
-    }
-
     return {
       kind: "pr",
       mode: "direct",
-      prNumber,
-      action,
+      prNumber: parsePositiveNumber(second, "pr"),
+      unattended: isUnattended(third),
     };
   }
-
   if (first === "audit" && second === "publish") {
-    return { kind: "audit", action: "publish", passthroughArgs: args.slice(2) };
+    return { kind: "audit", passthroughArgs: args.slice(2) };
   }
-
-  if (first === "finish" && !second) {
-    return { kind: "finish" };
-  }
-
+  if (first === "finish" && !second) return { kind: "finish" };
   throw new Error(renderPrsCommandSurfaceHelp());
 }
 
 export function routePrsCommandSurfaceAction(action: PrsCommandSurfaceAction): PrsCommandRoute {
-  if (action.kind === "root") {
-    return { interaction: "interactive", skillName: "prs", cliArgs: undefined };
-  }
-
+  if (action.kind === "root") return { interaction: "interactive", skillName: "prs" };
   if (action.kind === "create") {
-    if (action.target === "observability") {
-      return {
-        interaction: "direct",
-        skillName: "prs:create",
-        cliArgs: ["create", "observability", ...action.passthroughArgs],
-        target: { type: "create", name: "observability" },
-      };
+    return { interaction: "direct", skillName: "prs:create", target: { type: "create" } };
+  }
+  if (action.kind === "issue") {
+    if (action.mode === "interactive") {
+      return { interaction: "interactive", skillName: "prs:issue", picker: "actionable-issues" };
     }
-
+    const issue = String(action.issueNumber);
+    const cliArgs = action.action === "work"
+      ? ["tool", "issue", "ready", issue, ...(action.unattended ? ["--unattended"] : []), "--json"]
+      : action.action === "finish"
+        ? ["issue", "finalize", issue]
+        : ["tool", "issue", "context", issue, "--json"];
     return {
       interaction: "direct",
-      skillName: "prs:start-issue-work",
-      cliArgs: ["issue", "draft"],
-      target: { type: "create", name: "issue" },
+      skillName: action.action === "finish" ? "prs:finish" : "prs:issue",
+      cliArgs,
+      target: { type: "issue", number: action.issueNumber },
+      toolOnly: action.action !== "finish",
     };
   }
-
-  if (action.kind === "cleanup") {
-    const cleanupTarget = action.target;
+  if (action.kind === "pr") {
+    if (action.mode === "interactive") {
+      return { interaction: "interactive", skillName: "prs:pr", picker: "actionable-pull-requests" };
+    }
     return {
       interaction: "direct",
-      skillName:
-        cleanupTarget === "branches" ? "prs:cleanup-branches" : "prs:cleanup-worktrees",
-      cliArgs: ["tool", cleanupTarget, "cleanup", "--json"],
+      skillName: "prs:pr",
+      cliArgs: ["tool", "pr", "ready", String(action.prNumber), ...(action.unattended ? ["--unattended"] : []), "--json"],
+      target: { type: "pull-request", number: action.prNumber },
       toolOnly: true,
     };
   }
-
-  if (action.kind === "review") {
-    if (action.mode === "interactive") {
-      return {
-        interaction: "interactive",
-        skillName: "prs:review",
-        cliArgs: undefined,
-        target: { type: "review", name: "tests" },
-      };
-    }
-
-    if (action.action === "tests") {
-      return {
-        interaction: "direct",
-        skillName: "prs:review",
-        cliArgs: ["test-backlog", ...action.passthroughArgs],
-        target: { type: "review", name: "tests" },
-      };
-    }
-
-    if (action.action === "features") {
-      return {
-        interaction: "direct",
-        skillName: "prs:review",
-        cliArgs: ["feature-backlog", ...action.passthroughArgs],
-        target: { type: "review", name: "features" },
-      };
-    }
-
-    return {
-      interaction: "direct",
-      skillName: "prs:review",
-      cliArgs: ["review", ...action.passthroughArgs],
-      target: { type: "review", name: "diff" },
-    };
-  }
-
-  if (action.kind === "issue") {
-    if (action.mode === "interactive") {
-      return {
-        interaction: "interactive",
-        skillName: "prs",
-        cliArgs: undefined,
-        picker: "actionable-issues",
-      };
-    }
-
-    if (action.action === "work") {
-      return {
-        interaction: "direct",
-        skillName: "prs",
-        cliArgs: action.unattended
-          ? ["tool", "issue", "ready", String(action.issueNumber), "--unattended", "--json"]
-          : ["tool", "issue", "ready", String(action.issueNumber), "--json"],
-        target: { type: "issue", number: action.issueNumber },
-        toolOnly: action.unattended ? undefined : true,
-      };
-    }
-
-    if (action.action === "refine") {
-      return {
-        interaction: "direct",
-        skillName: "prs:start-issue-work",
-        cliArgs: ["issue", "refine", String(action.issueNumber)],
-        target: { type: "issue", number: action.issueNumber },
-      };
-    }
-
-    if (action.action === "plan") {
-      return {
-        interaction: "direct",
-        skillName: "prs:start-issue-work",
-        cliArgs: ["issue", "plan", String(action.issueNumber)],
-        target: { type: "issue", number: action.issueNumber },
-      };
-    }
-
-    return {
-      interaction: "interactive",
-      skillName: "prs:finish-work",
-      cliArgs: undefined,
-      target: { type: "issue", number: action.issueNumber },
-    };
-  }
-
-  if (action.kind === "pr") {
-    if (action.mode === "interactive") {
-      return {
-        interaction: "interactive",
-        skillName: "prs",
-        cliArgs: undefined,
-        picker: "actionable-pull-requests",
-      };
-    }
-
-    if (action.action === "choose") {
-      return {
-        interaction: "direct",
-        skillName: "prs",
-        cliArgs: action.unattended
-          ? ["tool", "pr", "ready", String(action.prNumber), "--unattended", "--json"]
-          : ["tool", "pr", "ready", String(action.prNumber), "--json"],
-        target: { type: "pull-request", number: action.prNumber },
-        toolOnly: true,
-      };
-    }
-
-    if (action.action === "prepare-review") {
-      return {
-        interaction: "direct",
-        skillName: "prs",
-        cliArgs: ["tool", "pr", "prepare-review", String(action.prNumber), "--json"],
-        target: { type: "pull-request", number: action.prNumber },
-        toolOnly: true,
-      };
-    }
-
-    if (action.action === "review") {
-      return {
-        interaction: "direct",
-        skillName: "prs",
-        cliArgs: action.unattended
-          ? ["tool", "pr", "review", String(action.prNumber), "--unattended", "--json"]
-          : ["tool", "pr", "review", String(action.prNumber), "--json"],
-        target: { type: "pull-request", number: action.prNumber },
-        toolOnly: true,
-      };
-    }
-
-    if (
-      action.action === "address-comments" ||
-      action.action === "fix-tests" ||
-      action.action === "add-tests"
-    ) {
-      return {
-        interaction: "direct",
-        skillName: "prs",
-        cliArgs: ["tool", "pr", action.action, String(action.prNumber), "--json"],
-        target: { type: "pull-request", number: action.prNumber },
-        toolOnly: true,
-      };
-    }
-
-    return {
-      interaction: "direct",
-      skillName: "prs",
-      cliArgs: ["pr", action.action, String(action.prNumber)],
-      target: { type: "pull-request", number: action.prNumber },
-    };
-  }
-
   if (action.kind === "audit") {
-    return {
-      interaction: "direct",
-      skillName: "prs:publish-audit",
-      cliArgs: ["audit", "publish", ...action.passthroughArgs],
-    };
+    return { interaction: "direct", skillName: "prs:audit", cliArgs: ["audit", "publish", ...action.passthroughArgs] };
   }
-
-  return { interaction: "interactive", skillName: "prs:finish-work", cliArgs: undefined };
+  return { interaction: "direct", skillName: "prs:finish" };
 }
 
-function normalizePrSurfaceAction(rawAction: string | undefined): PrsPrAction | undefined {
-  const action = normalizePrLifecycleAction(rawAction);
-  if (action && PR_SURFACE_ACTIONS.has(action as PrsPrAction)) {
-    return action as PrsPrAction;
-  }
-
-  return undefined;
-}
-
-function isPrSurfaceActionInput(rawAction: string | undefined): boolean {
-  return normalizePrSurfaceAction(rawAction) !== undefined;
-}
-
-export function buildPrsInteractivePickerModel(
-  action: PrsCommandSurfaceAction,
-  input: {
-    currentUser: string;
-    issues?: ActionableIssue[];
-    pullRequests?: ActionablePullRequest[];
-  }
-): PrsInteractivePickerModel | undefined {
-  if (action.kind === "issue" && action.mode === "interactive") {
-    return {
-      kind: "issues",
-      items: filterActionableIssuesForUser(input.issues ?? [], input.currentUser),
-    };
-  }
-
-  if (action.kind === "pr" && action.mode === "interactive") {
-    return {
-      kind: "pull-requests",
-      items: filterActionablePullRequestsForUser(input.pullRequests ?? [], input.currentUser),
-    };
-  }
-
-  return undefined;
+export function buildPrsInteractivePickerModel(input: {
+  kind: "issues";
+  items: ActionableIssue[];
+  currentLogin?: string;
+} | {
+  kind: "pull-requests";
+  items: ActionablePullRequest[];
+  currentLogin?: string;
+}): PrsInteractivePickerModel {
+  return input.kind === "issues"
+    ? { kind: "issues", items: filterActionableIssuesForUser(input.items, input.currentLogin) }
+    : { kind: "pull-requests", items: filterActionablePullRequestsForUser(input.items, input.currentLogin) };
 }

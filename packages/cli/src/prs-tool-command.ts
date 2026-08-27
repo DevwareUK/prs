@@ -1,30 +1,13 @@
-import { normalizePrLifecycleAction } from "./workflows/pr-lifecycle/actions";
-import type { PullRequestReviewStatus } from "./workflows/pr-local-review/publish";
-
 export type PrsToolCommand =
-  | {
-      kind: "token-usage-publish";
-      target: { type: "issue" | "pull-request"; number: number };
-      filePath: string;
-      json: boolean;
-    }
-  | { kind: "issue-list"; actionable: boolean; json: boolean }
-  | { kind: "issue-context"; issueNumber: number; json: boolean }
-  | { kind: "issue-ready"; issueNumber: number; unattended: boolean; json: boolean }
-  | { kind: "issue-estimate"; issueNumber: number; json: boolean }
-  | { kind: "issue-estimate-context"; issueNumber: number; json: boolean }
-  | {
-      kind: "issue-publish-estimate";
-      issueNumber: number;
-      estimateFilePath: string;
-      json: boolean;
-    }
+  | { kind: "issue-list"; actionable: boolean; json: true }
+  | { kind: "issue-context"; issueNumber: number; json: true }
+  | { kind: "issue-ready"; issueNumber: number; unattended: boolean; json: true }
   | {
       kind: "issue-publish-artifacts";
       issueNumber: number;
       specFilePath: string;
       planFilePath: string;
-      json: boolean;
+      json: true;
     }
   | {
       kind: "issue-create";
@@ -36,899 +19,186 @@ export type PrsToolCommand =
       mediaManifestFilePath?: string;
       labels: string[];
       forcePrsManaged: boolean;
-      json: boolean;
+      json: true;
     }
-  | { kind: "pr-list"; actionable: boolean; json: boolean }
-  | { kind: "pr-review"; prNumber: number; unattended: boolean; json: boolean }
-  | {
-      kind: "pr-publish-review";
-      prNumber: number;
-      reportFilePath: string;
-      commentsFilePath: string;
-      reviewStatus?: PullRequestReviewStatus;
-      unattended: boolean;
-      json: boolean;
-    }
-  | { kind: "pr-prepare-review"; prNumber: number; json: boolean }
-  | { kind: "pr-push-reviewed"; prNumber: number; json: boolean }
-  | {
-      kind: "pr-address-comments" | "pr-fix-tests" | "pr-add-tests";
-      prNumber: number;
-      selection: string;
-      json: boolean;
-    }
-  | { kind: "pr-ready"; prNumber: number; unattended: boolean; json: boolean }
-  | { kind: "branches-cleanup"; apply: boolean; json: boolean }
-  | { kind: "worktrees-cleanup"; apply: boolean; json: boolean };
+  | { kind: "pr-list"; actionable: boolean; json: true }
+  | { kind: "pr-ready"; prNumber: number; unattended: boolean; json: true };
 
 export function renderPrsToolCommandHelp(): string {
   return [
     "Usage:",
-    "  prs tool token-usage publish (--issue <number>|--pr <number>) --file <path> --json",
     "  prs tool issue list [--actionable] --json",
     "  prs tool issue context <issue-number> --json",
     "  prs tool issue ready <issue-number> [--unattended|--auto|--jdi] --json",
-    "  prs tool issue estimate <issue-number> --json",
-    "  prs tool issue estimate-context <issue-number> --json",
-    "  prs tool issue publish-estimate <issue-number> --file <path> --json",
     "  prs tool issue publish-artifacts <issue-number> --spec-file <path> --plan-file <path> --json",
     "  prs tool issue create (--draft-file <path>|--issue-set <path>) --json",
     "                        [--run-dir <path>] [--spec-file <path>] [--plan-file <path>] [--media-manifest <path>]",
-    "                        [--label <name>] [--labels <a,b>]",
-    "                        [--force-prs-managed]",
+    "                        [--label <name>] [--labels <a,b>] [--force-prs-managed]",
     "  prs tool pr list [--actionable] --json",
-    "  prs tool pr review <pr-number> [--unattended|--auto|--jdi] --json",
-    "  prs tool pr publish-review <pr-number> --report <path> --comments <path> [--review-status <request-changes|comment|approve>] [--unattended|--auto|--jdi] --json",
-    "  prs tool pr prepare-review <pr-number> --json",
-    "  prs tool pr push-reviewed <pr-number> --json",
-    "  prs tool pr address-comments <pr-number> [--selection <value>] --json",
-    "  prs tool pr fix-tests <pr-number> --json",
-    "  prs tool pr add-tests <pr-number> [--selection <value>] --json",
     "  prs tool pr ready <pr-number> [--unattended|--auto|--jdi] --json",
-    "  prs tool branches cleanup [--apply] --json",
-    "  prs tool worktrees cleanup [--apply] --json",
-    "",
-    "Compatibility aliases:",
-    "  prs tool pr fix-comments <pr-number> [--selection <value>] --json      (use address-comments)",
-    "  prs tool pr fix-failing-tests <pr-number> --json                       (use fix-tests)",
   ].join("\n");
 }
 
-function parseToolNumber(rawValue: string | undefined, label: "issue" | "pr"): number {
+function parseNumber(rawValue: string | undefined, label: "issue" | "pr"): number {
   if (!rawValue || !/^\d+$/.test(rawValue)) {
     throw new Error(`Invalid prs tool ${label} number: "${rawValue ?? ""}".`);
   }
-
-  const parsed = Number.parseInt(rawValue, 10);
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+  const value = Number.parseInt(rawValue, 10);
+  if (!Number.isSafeInteger(value) || value <= 0) {
     throw new Error(`Invalid prs tool ${label} number: "${rawValue}".`);
   }
-
-  return parsed;
+  return value;
 }
 
-function parseCommaSeparatedLabels(value: string | undefined): string[] {
-  if (!value) {
-    throw new Error(`Missing value for --labels. ${renderPrsToolCommandHelp()}`);
-  }
-
-  return value
-    .split(",")
-    .map((label) => label.trim())
-    .filter(Boolean);
+function requireJson(args: string[]): string[] {
+  const jsonCount = args.filter((arg) => arg === "--json").length;
+  if (jsonCount !== 1) throw new Error(renderPrsToolCommandHelp());
+  return args.filter((arg) => arg !== "--json");
 }
 
-function isUnattendedAlias(rawArg: string | undefined): boolean {
-  return rawArg === "--unattended" || rawArg === "--auto" || rawArg === "--jdi";
+function takeValue(args: string[], index: number, name: string): [string, number] {
+  const value = args[index + 1];
+  if (!value || value.startsWith("--")) {
+    throw new Error(`Missing required ${name} value. ${renderPrsToolCommandHelp()}`);
+  }
+  return [value, index + 1];
 }
 
-function parseReviewStatus(rawValue: string | undefined): PullRequestReviewStatus {
-  if (
-    rawValue === "request-changes" ||
-    rawValue === "comment" ||
-    rawValue === "approve"
-  ) {
-    return rawValue;
+function parseReadyOptions(args: string[]): { unattended: boolean } {
+  let unattended = false;
+  for (const arg of requireJson(args)) {
+    if (arg === "--unattended" || arg === "--auto" || arg === "--jdi") {
+      unattended = true;
+      continue;
+    }
+    throw new Error(`Unknown tool option "${arg}". ${renderPrsToolCommandHelp()}`);
   }
-  throw new Error(
-    `Invalid review status "${rawValue ?? ""}". Expected request-changes, comment, or approve.`
-  );
+  return { unattended };
 }
 
-export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
-  const [scope, command, third, fourth, ...rest] = args;
-
-  if (
-    !command ||
-    (scope !== "token-usage" &&
-      scope !== "issue" &&
-      scope !== "pr" &&
-      scope !== "branches" &&
-      scope !== "worktrees")
-  ) {
-    throw new Error(renderPrsToolCommandHelp());
-  }
-
-  if (scope === "token-usage") {
-    if (command !== "publish") {
-      throw new Error(renderPrsToolCommandHelp());
-    }
-
-    const optionArgs = [third, fourth, ...rest].filter(
-      (arg): arg is string => arg !== undefined
-    );
-    let target: PrsToolCommand["target"] | undefined;
-    let filePath: string | undefined;
-    let json = false;
-
-    for (let index = 0; index < optionArgs.length; index += 1) {
-      const rawArg = optionArgs[index];
-
-      if (rawArg === "--json") {
-        json = true;
-        continue;
-      }
-
-      if (rawArg === "--issue" || rawArg === "--pr") {
-        if (target) {
-          throw new Error(
-            `prs tool token-usage publish requires exactly one of --issue or --pr. ${renderPrsToolCommandHelp()}`
-          );
-        }
-        const number = parseToolNumber(
-          optionArgs[index + 1],
-          rawArg === "--issue" ? "issue" : "pr"
-        );
-        target = {
-          type: rawArg === "--issue" ? "issue" : "pull-request",
-          number,
-        };
-        index += 1;
-        continue;
-      }
-
-      if (rawArg.startsWith("--issue=") || rawArg.startsWith("--pr=")) {
-        if (target) {
-          throw new Error(
-            `prs tool token-usage publish requires exactly one of --issue or --pr. ${renderPrsToolCommandHelp()}`
-          );
-        }
-        const isIssue = rawArg.startsWith("--issue=");
-        const number = parseToolNumber(
-          rawArg.slice(isIssue ? "--issue=".length : "--pr=".length),
-          isIssue ? "issue" : "pr"
-        );
-        target = {
-          type: isIssue ? "issue" : "pull-request",
-          number,
-        };
-        continue;
-      }
-
-      if (rawArg === "--file") {
-        filePath = optionArgs[index + 1];
-        if (!filePath) {
-          throw new Error(`Missing required --file value. ${renderPrsToolCommandHelp()}`);
-        }
-        index += 1;
-        continue;
-      }
-
-      if (rawArg.startsWith("--file=")) {
-        filePath = rawArg.slice("--file=".length);
-        continue;
-      }
-
-      throw new Error(`Unknown tool option "${rawArg}". ${renderPrsToolCommandHelp()}`);
-    }
-
-    if (!target) {
-      throw new Error(
-        `prs tool token-usage publish requires exactly one of --issue or --pr. ${renderPrsToolCommandHelp()}`
-      );
-    }
-    if (!filePath) {
-      throw new Error(`Missing required --file. ${renderPrsToolCommandHelp()}`);
-    }
-    if (!json) {
-      throw new Error(
-        `prs tool token-usage publish requires --json. ${renderPrsToolCommandHelp()}`
-      );
-    }
-
-    return {
-      kind: "token-usage-publish",
-      target,
-      filePath,
-      json: true,
-    };
-  }
-
-  if (scope === "issue") {
-    if (command === "list") {
-      if (rest.length > 0) {
-        throw new Error(renderPrsToolCommandHelp());
-      }
-      if (third === "--actionable" && fourth === "--json") {
-        return { kind: "issue-list", actionable: true, json: true };
-      }
-      if (third === "--json" && !fourth) {
-        return { kind: "issue-list", actionable: false, json: true };
-      }
-      throw new Error(renderPrsToolCommandHelp());
-    }
-
-    if (command === "ready") {
-      if (!third || third === "--json" || third === "--all") {
-        throw new Error(renderPrsToolCommandHelp());
-      }
-
-      const issueNumber = parseToolNumber(third, "issue");
-      if (fourth === "--json" && rest.length === 0) {
-        return { kind: "issue-ready", issueNumber, unattended: false, json: true };
-      }
-      if (isUnattendedAlias(fourth) && rest[0] === "--json" && rest.length === 1) {
-        return { kind: "issue-ready", issueNumber, unattended: true, json: true };
-      }
-      if (fourth === "--all") {
-        throw new Error(`Unknown tool option "--all". ${renderPrsToolCommandHelp()}`);
-      }
-      throw new Error(renderPrsToolCommandHelp());
-    }
-
-    if (command === "context") {
-      if (!third || third === "--json" || fourth !== "--json" || rest.length > 0) {
-        throw new Error(renderPrsToolCommandHelp());
-      }
-
-      return {
-        kind: "issue-context",
-        issueNumber: parseToolNumber(third, "issue"),
-        json: true,
-      };
-    }
-
-    if (command === "estimate") {
-      if (!third || third === "--json" || third === "--all") {
-        throw new Error(renderPrsToolCommandHelp());
-      }
-
-      const issueNumber = parseToolNumber(third, "issue");
-      if (fourth === "--json" && rest.length === 0) {
-        return { kind: "issue-estimate", issueNumber, json: true };
-      }
-      if (fourth === "--all") {
-        throw new Error(`Unknown tool option "--all". ${renderPrsToolCommandHelp()}`);
-      }
-      throw new Error(renderPrsToolCommandHelp());
-    }
-
-    if (command === "estimate-context") {
-      if (!third || third === "--json" || third === "--all") {
-        throw new Error(renderPrsToolCommandHelp());
-      }
-
-      const issueNumber = parseToolNumber(third, "issue");
-      if (fourth === "--json" && rest.length === 0) {
-        return { kind: "issue-estimate-context", issueNumber, json: true };
-      }
-      if (fourth === "--all") {
-        throw new Error(`Unknown tool option "--all". ${renderPrsToolCommandHelp()}`);
-      }
-      throw new Error(renderPrsToolCommandHelp());
-    }
-
-    if (command === "publish-estimate") {
-      if (!third || third === "--json" || third === "--all") {
-        throw new Error(renderPrsToolCommandHelp());
-      }
-
-      const issueNumber = parseToolNumber(third, "issue");
-      const optionArgs = [fourth, ...rest].filter((arg): arg is string => arg !== undefined);
-      let estimateFilePath: string | undefined;
-      let json = false;
-
-      for (let index = 0; index < optionArgs.length; index += 1) {
-        const rawArg = optionArgs[index];
-        if (rawArg === "--json") {
-          json = true;
-          continue;
-        }
-        if (rawArg === "--file") {
-          estimateFilePath = optionArgs[index + 1];
-          if (!estimateFilePath) {
-            throw new Error(`Missing required --file value. ${renderPrsToolCommandHelp()}`);
-          }
-          index += 1;
-          continue;
-        }
-        if (rawArg.startsWith("--file=")) {
-          estimateFilePath = rawArg.slice("--file=".length);
-          continue;
-        }
-        throw new Error(`Unknown tool option "${rawArg}". ${renderPrsToolCommandHelp()}`);
-      }
-
-      if (!estimateFilePath) {
-        throw new Error(`Missing required --file. ${renderPrsToolCommandHelp()}`);
-      }
-      if (!json) {
-        throw new Error(`prs tool issue publish-estimate requires --json. ${renderPrsToolCommandHelp()}`);
-      }
-
-      return {
-        kind: "issue-publish-estimate",
-        issueNumber,
-        estimateFilePath,
-        json: true,
-      };
-    }
-
-    if (command === "publish-artifacts") {
-      if (!third || third === "--json" || third === "--all") {
-        throw new Error(renderPrsToolCommandHelp());
-      }
-
-      const issueNumber = parseToolNumber(third, "issue");
-      const optionArgs = [fourth, ...rest].filter(
-        (arg): arg is string => arg !== undefined
-      );
-      let specFilePath: string | undefined;
-      let planFilePath: string | undefined;
-      let json = false;
-
-      for (let index = 0; index < optionArgs.length; index += 1) {
-        const rawArg = optionArgs[index];
-        if (rawArg === "--json") {
-          json = true;
-          continue;
-        }
-        if (rawArg === "--spec-file" || rawArg === "--plan-file") {
-          const value = optionArgs[index + 1];
-          if (!value) {
-            throw new Error(`Missing value for ${rawArg}. ${renderPrsToolCommandHelp()}`);
-          }
-          if (rawArg === "--spec-file") {
-            specFilePath = value;
-          } else {
-            planFilePath = value;
-          }
-          index += 1;
-          continue;
-        }
-        if (rawArg.startsWith("--spec-file=")) {
-          specFilePath = rawArg.slice("--spec-file=".length);
-          continue;
-        }
-        if (rawArg.startsWith("--plan-file=")) {
-          planFilePath = rawArg.slice("--plan-file=".length);
-          continue;
-        }
-        throw new Error(`Unknown tool option "${rawArg}". ${renderPrsToolCommandHelp()}`);
-      }
-
-      if (!specFilePath) {
-        throw new Error(`Missing required --spec-file. ${renderPrsToolCommandHelp()}`);
-      }
-      if (!planFilePath) {
-        throw new Error(`Missing required --plan-file. ${renderPrsToolCommandHelp()}`);
-      }
-      if (!json) {
-        throw new Error(
-          `prs tool issue publish-artifacts requires --json. ${renderPrsToolCommandHelp()}`
-        );
-      }
-
-      return {
-        kind: "issue-publish-artifacts",
-        issueNumber,
-        specFilePath,
-        planFilePath,
-        json: true,
-      };
-    }
-
-    if (command === "create") {
-      const optionArgs = [third, fourth, ...rest].filter(
-        (arg): arg is string => arg !== undefined
-      );
-      let draftFilePath: string | undefined;
-      let issueSetFilePath: string | undefined;
-      let runDir: string | undefined;
-      let specFilePath: string | undefined;
-      let planFilePath: string | undefined;
-      let mediaManifestFilePath: string | undefined;
-      const labels = new Set<string>();
-      let forcePrsManaged = false;
-      let json = false;
-
-      for (let index = 0; index < optionArgs.length; index += 1) {
-        const rawArg = optionArgs[index];
-
-        if (rawArg === "--json") {
-          json = true;
-          continue;
-        }
-
-        if (rawArg === "--force-prs-managed") {
-          forcePrsManaged = true;
-          continue;
-        }
-
-        if (rawArg === "--draft-file") {
-          draftFilePath = optionArgs[index + 1];
-          if (!draftFilePath) {
-            throw new Error(`Missing value for --draft-file. ${renderPrsToolCommandHelp()}`);
-          }
-          index += 1;
-          continue;
-        }
-
-        if (rawArg.startsWith("--draft-file=")) {
-          draftFilePath = rawArg.slice("--draft-file=".length);
-          continue;
-        }
-
-        if (rawArg === "--issue-set") {
-          issueSetFilePath = optionArgs[index + 1];
-          if (!issueSetFilePath) {
-            throw new Error(`Missing value for --issue-set. ${renderPrsToolCommandHelp()}`);
-          }
-          index += 1;
-          continue;
-        }
-
-        if (rawArg.startsWith("--issue-set=")) {
-          issueSetFilePath = rawArg.slice("--issue-set=".length);
-          continue;
-        }
-
-        if (rawArg === "--run-dir") {
-          runDir = optionArgs[index + 1];
-          if (!runDir) {
-            throw new Error(`Missing value for --run-dir. ${renderPrsToolCommandHelp()}`);
-          }
-          index += 1;
-          continue;
-        }
-
-        if (rawArg.startsWith("--run-dir=")) {
-          runDir = rawArg.slice("--run-dir=".length);
-          continue;
-        }
-
-        if (rawArg === "--spec-file") {
-          specFilePath = optionArgs[index + 1];
-          if (!specFilePath) {
-            throw new Error(`Missing value for --spec-file. ${renderPrsToolCommandHelp()}`);
-          }
-          index += 1;
-          continue;
-        }
-
-        if (rawArg.startsWith("--spec-file=")) {
-          specFilePath = rawArg.slice("--spec-file=".length);
-          continue;
-        }
-
-        if (rawArg === "--plan-file") {
-          planFilePath = optionArgs[index + 1];
-          if (!planFilePath) {
-            throw new Error(`Missing value for --plan-file. ${renderPrsToolCommandHelp()}`);
-          }
-          index += 1;
-          continue;
-        }
-
-        if (rawArg.startsWith("--plan-file=")) {
-          planFilePath = rawArg.slice("--plan-file=".length);
-          continue;
-        }
-
-        if (rawArg === "--media-manifest") {
-          mediaManifestFilePath = optionArgs[index + 1];
-          if (!mediaManifestFilePath) {
-            throw new Error(`Missing value for --media-manifest. ${renderPrsToolCommandHelp()}`);
-          }
-          index += 1;
-          continue;
-        }
-
-        if (rawArg.startsWith("--media-manifest=")) {
-          mediaManifestFilePath = rawArg.slice("--media-manifest=".length);
-          continue;
-        }
-
-        if (rawArg === "--label") {
-          const label = optionArgs[index + 1]?.trim();
-          if (!label) {
-            throw new Error(`Missing value for --label. ${renderPrsToolCommandHelp()}`);
-          }
-          labels.add(label);
-          index += 1;
-          continue;
-        }
-
-        if (rawArg.startsWith("--label=")) {
-          const label = rawArg.slice("--label=".length).trim();
-          if (!label) {
-            throw new Error(`Missing value for --label. ${renderPrsToolCommandHelp()}`);
-          }
-          labels.add(label);
-          continue;
-        }
-
-        if (rawArg === "--labels") {
-          for (const label of parseCommaSeparatedLabels(optionArgs[index + 1])) {
-            labels.add(label);
-          }
-          index += 1;
-          continue;
-        }
-
-        if (rawArg.startsWith("--labels=")) {
-          for (const label of parseCommaSeparatedLabels(rawArg.slice("--labels=".length))) {
-            labels.add(label);
-          }
-          continue;
-        }
-
-        throw new Error(`Unknown tool option "${rawArg}". ${renderPrsToolCommandHelp()}`);
-      }
-
-      if (!json) {
-        throw new Error(`prs tool issue create requires --json. ${renderPrsToolCommandHelp()}`);
-      }
-
-      if (Boolean(draftFilePath) === Boolean(issueSetFilePath)) {
-        throw new Error(
-          `Provide exactly one of --draft-file or --issue-set. ${renderPrsToolCommandHelp()}`
-        );
-      }
-
-      return {
-        kind: "issue-create",
-        draftFilePath,
-        issueSetFilePath,
-        runDir,
-        specFilePath,
-        planFilePath,
-        mediaManifestFilePath,
-        labels: [...labels],
-        forcePrsManaged,
-        json: true,
-      };
-    }
-
-    throw new Error(renderPrsToolCommandHelp());
-  }
-
-  if (scope === "branches") {
-    if (command !== "cleanup") {
-      throw new Error(renderPrsToolCommandHelp());
-    }
-
-    const optionArgs = [third, fourth, ...rest].filter(
-      (arg): arg is string => arg !== undefined
-    );
-    let apply = false;
-    let json = false;
-
-    for (const rawArg of optionArgs) {
-      if (rawArg === "--apply") {
-        apply = true;
-        continue;
-      }
-      if (rawArg === "--json") {
-        json = true;
-        continue;
-      }
-
-      throw new Error(`Unknown tool option "${rawArg}". ${renderPrsToolCommandHelp()}`);
-    }
-
-    if (!json) {
-      throw new Error(`prs tool branches cleanup requires --json. ${renderPrsToolCommandHelp()}`);
-    }
-
-    return { kind: "branches-cleanup", apply, json: true };
-  }
-
-  if (command === "list") {
-    if (rest.length > 0) {
-      throw new Error(renderPrsToolCommandHelp());
-    }
-    if (third === "--actionable" && fourth === "--json") {
-      return { kind: "pr-list", actionable: true, json: true };
-    }
-    if (third === "--json" && !fourth) {
-      return { kind: "pr-list", actionable: false, json: true };
-    }
-    throw new Error(renderPrsToolCommandHelp());
-  }
-
-  if (command === "review" || command === "prepare-review") {
-    if (!third || third === "--json") {
-      throw new Error(renderPrsToolCommandHelp());
-    }
-
-    const prNumber = parseToolNumber(third, "pr");
-    if (command === "prepare-review") {
-      if (fourth !== "--json" || rest.length > 0) {
-        throw new Error(renderPrsToolCommandHelp());
-      }
-
-      return {
-        kind: "pr-prepare-review",
-        prNumber,
-        json: true,
-      };
-    }
-
-    if (fourth === "--json" && rest.length === 0) {
-      return {
-        kind: "pr-review",
-        prNumber,
-        unattended: false,
-        json: true,
-      };
-    }
-    if (isUnattendedAlias(fourth) && rest[0] === "--json" && rest.length === 1) {
-      return {
-        kind: "pr-review",
-        prNumber,
-        unattended: true,
-        json: true,
-      };
-    }
-
-    if (fourth === "--all") {
-      throw new Error(`Unknown tool option "--all". ${renderPrsToolCommandHelp()}`);
-    }
-    if (fourth && !isUnattendedAlias(fourth) && fourth !== "--json") {
-      throw new Error(`Unknown tool option "${fourth}". ${renderPrsToolCommandHelp()}`);
-    }
-    if (rest[0] && rest[0] !== "--json") {
-      throw new Error(`Unknown tool option "${rest[0]}". ${renderPrsToolCommandHelp()}`);
-    }
-    throw new Error(renderPrsToolCommandHelp());
-  }
-
-  if (command === "publish-review") {
-    if (!third || third === "--json") {
-      throw new Error(renderPrsToolCommandHelp());
-    }
-
-    const prNumber = parseToolNumber(third, "pr");
-    const optionArgs = [fourth, ...rest].filter(
-      (arg): arg is string => arg !== undefined
-    );
-    let reportFilePath: string | undefined;
-    let commentsFilePath: string | undefined;
-    let reviewStatus: PullRequestReviewStatus | undefined;
-    let json = false;
-    let unattended = false;
-
-    for (let index = 0; index < optionArgs.length; index += 1) {
-      const rawArg = optionArgs[index];
-
-      if (rawArg === "--json") {
-        json = true;
-        continue;
-      }
-
-      if (isUnattendedAlias(rawArg)) {
-        unattended = true;
-        continue;
-      }
-
-      if (rawArg === "--report") {
-        reportFilePath = optionArgs[index + 1];
-        if (!reportFilePath) {
-          throw new Error(`Missing value for --report. ${renderPrsToolCommandHelp()}`);
-        }
-        index += 1;
-        continue;
-      }
-
-      if (rawArg.startsWith("--report=")) {
-        reportFilePath = rawArg.slice("--report=".length);
-        continue;
-      }
-
-      if (rawArg === "--comments") {
-        commentsFilePath = optionArgs[index + 1];
-        if (!commentsFilePath) {
-          throw new Error(`Missing value for --comments. ${renderPrsToolCommandHelp()}`);
-        }
-        index += 1;
-        continue;
-      }
-
-      if (rawArg.startsWith("--comments=")) {
-        commentsFilePath = rawArg.slice("--comments=".length);
-        continue;
-      }
-
-      if (rawArg === "--review-status" || rawArg === "--status") {
-        reviewStatus = parseReviewStatus(optionArgs[index + 1]);
-        index += 1;
-        continue;
-      }
-
-      if (rawArg.startsWith("--review-status=")) {
-        reviewStatus = parseReviewStatus(rawArg.slice("--review-status=".length));
-        continue;
-      }
-
-      if (rawArg.startsWith("--status=")) {
-        reviewStatus = parseReviewStatus(rawArg.slice("--status=".length));
-        continue;
-      }
-
-      throw new Error(`Unknown tool option "${rawArg}". ${renderPrsToolCommandHelp()}`);
-    }
-
-    if (!json) {
-      throw new Error(`prs tool pr publish-review requires --json. ${renderPrsToolCommandHelp()}`);
-    }
-
-    if (!reportFilePath || !commentsFilePath) {
-      throw new Error(
-        `prs tool pr publish-review requires --report and --comments. ${renderPrsToolCommandHelp()}`
-      );
-    }
-
-    return {
-      kind: "pr-publish-review",
-      prNumber,
-      reportFilePath,
-      commentsFilePath,
-      reviewStatus,
-      unattended,
-      json: true,
-    };
-  }
-
-  if (command === "push-reviewed") {
-    if (rest.length > 0) {
-      throw new Error(renderPrsToolCommandHelp());
-    }
-    if (!third || third === "--json") {
-      throw new Error(renderPrsToolCommandHelp());
-    }
-
-    const prNumber = parseToolNumber(third, "pr");
-    if (fourth !== "--json") {
-      throw new Error(renderPrsToolCommandHelp());
-    }
-
-    return { kind: "pr-push-reviewed", prNumber, json: true };
-  }
-
-  if (
-    command === "address-comments" ||
-    command === "add-tests" ||
-    command === "fix-comments" ||
-    command === "fix-failing-tests" ||
-    command === "fix-tests"
-  ) {
-    if (!third || third === "--json" || third === "--selection") {
-      throw new Error(renderPrsToolCommandHelp());
-    }
-
-    const prNumber = parseToolNumber(third, "pr");
-    const optionArgs = [fourth, ...rest].filter(
-      (arg): arg is string => arg !== undefined
-    );
-    let selection = "all";
-    let json = false;
-
-    const kind = normalizePrFixToolKind(command);
-    const acceptsSelection = kind === "pr-address-comments" || kind === "pr-add-tests";
-
-    for (let index = 0; index < optionArgs.length; index += 1) {
-      const rawArg = optionArgs[index];
-
-      if (rawArg === "--json") {
-        json = true;
-        continue;
-      }
-
-      if (rawArg === "--selection") {
-        if (!acceptsSelection) {
-          throw new Error(
-            "`prs tool pr fix-tests` now repairs failing tests and does not accept --selection. Use `prs tool pr add-tests <pr-number> --selection <value> --json` for managed AI test suggestions."
-          );
-        }
-        const value = optionArgs[index + 1];
-        if (!value) {
-          throw new Error(`Missing value for --selection. ${renderPrsToolCommandHelp()}`);
-        }
-        selection = value;
-        index += 1;
-        continue;
-      }
-
-      if (rawArg.startsWith("--selection=")) {
-        if (!acceptsSelection) {
-          throw new Error(
-            "`prs tool pr fix-tests` now repairs failing tests and does not accept --selection. Use `prs tool pr add-tests <pr-number> --selection <value> --json` for managed AI test suggestions."
-          );
-        }
-        selection = rawArg.slice("--selection=".length);
-        continue;
-      }
-
-      throw new Error(`Unknown tool option "${rawArg}". ${renderPrsToolCommandHelp()}`);
-    }
-
-    if (!json) {
-      throw new Error(`prs tool pr ${command} requires --json. ${renderPrsToolCommandHelp()}`);
-    }
-
-    return { kind, prNumber, selection, json: true };
-  }
-
-  if (command === "ready") {
-    if (!third || third === "--json" || third === "--all") {
-      throw new Error(renderPrsToolCommandHelp());
-    }
-
-    const prNumber = parseToolNumber(third, "pr");
-    if (fourth === "--json" && rest.length === 0) {
-      return { kind: "pr-ready", prNumber, unattended: false, json: true };
-    }
-    if (isUnattendedAlias(fourth) && rest[0] === "--json" && rest.length === 1) {
-      return { kind: "pr-ready", prNumber, unattended: true, json: true };
-    }
-    if (fourth === "--all") {
-      throw new Error(`Unknown tool option "--all". ${renderPrsToolCommandHelp()}`);
-    }
-    throw new Error(renderPrsToolCommandHelp());
-  }
-
-  if (scope === "worktrees" && command === "cleanup") {
-    const optionArgs = [third, fourth, ...rest].filter(
-      (arg): arg is string => arg !== undefined
-    );
-    let apply = false;
-    let json = false;
-
-    for (const rawArg of optionArgs) {
-      if (rawArg === "--apply") {
-        apply = true;
-        continue;
-      }
-
-      if (rawArg === "--json") {
-        json = true;
-        continue;
-      }
-
-      throw new Error(`Unknown tool option "${rawArg}". ${renderPrsToolCommandHelp()}`);
-    }
-
-    if (!json) {
-      throw new Error(`prs tool worktrees cleanup requires --json. ${renderPrsToolCommandHelp()}`);
-    }
-
-    return { kind: "worktrees-cleanup", apply, json: true };
-  }
-
+function parseListOptions(args: string[]): { actionable: boolean } {
+  const options = requireJson(args);
+  if (options.length === 0) return { actionable: false };
+  if (options.length === 1 && options[0] === "--actionable") return { actionable: true };
   throw new Error(renderPrsToolCommandHelp());
 }
 
-function normalizePrFixToolKind(
-  command: string
-): Extract<PrsToolCommand, { prNumber: number; selection: string }>["kind"] {
-  const action = normalizePrLifecycleAction(command);
-  if (action === "address-comments") {
-    return "pr-address-comments";
+export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
+  const [scope, command, numberOrOption, ...tail] = args;
+  const optionTail = [numberOrOption, ...tail].filter(
+    (arg): arg is string => arg !== undefined
+  );
+
+  if (scope === "issue" && command === "list") {
+    return { kind: "issue-list", ...parseListOptions(optionTail), json: true };
   }
-  if (action === "fix-tests") {
-    return "pr-fix-tests";
+  if (scope === "pr" && command === "list") {
+    return { kind: "pr-list", ...parseListOptions(optionTail), json: true };
+  }
+  if (scope === "issue" && command === "context") {
+    const issueNumber = parseNumber(numberOrOption, "issue");
+    if (requireJson(tail).length > 0) throw new Error(renderPrsToolCommandHelp());
+    return { kind: "issue-context", issueNumber, json: true };
+  }
+  if (scope === "issue" && command === "ready") {
+    return {
+      kind: "issue-ready",
+      issueNumber: parseNumber(numberOrOption, "issue"),
+      ...parseReadyOptions(tail),
+      json: true,
+    };
+  }
+  if (scope === "pr" && command === "ready") {
+    return {
+      kind: "pr-ready",
+      prNumber: parseNumber(numberOrOption, "pr"),
+      ...parseReadyOptions(tail),
+      json: true,
+    };
   }
 
-  return "pr-add-tests";
+  if (scope === "issue" && command === "publish-artifacts") {
+    const issueNumber = parseNumber(numberOrOption, "issue");
+    const options = requireJson(tail);
+    let specFilePath: string | undefined;
+    let planFilePath: string | undefined;
+    for (let index = 0; index < options.length; index += 1) {
+      const arg = options[index];
+      if (arg === "--spec-file" || arg === "--plan-file") {
+        const [value, nextIndex] = takeValue(options, index, arg);
+        if (arg === "--spec-file") specFilePath = value;
+        else planFilePath = value;
+        index = nextIndex;
+      } else if (arg.startsWith("--spec-file=")) {
+        specFilePath = arg.slice("--spec-file=".length);
+      } else if (arg.startsWith("--plan-file=")) {
+        planFilePath = arg.slice("--plan-file=".length);
+      } else {
+        throw new Error(`Unknown tool option "${arg}". ${renderPrsToolCommandHelp()}`);
+      }
+    }
+    if (!specFilePath) throw new Error(`Missing required --spec-file. ${renderPrsToolCommandHelp()}`);
+    if (!planFilePath) throw new Error(`Missing required --plan-file. ${renderPrsToolCommandHelp()}`);
+    return { kind: "issue-publish-artifacts", issueNumber, specFilePath, planFilePath, json: true };
+  }
+
+  if (scope === "issue" && command === "create") {
+    const options = requireJson(optionTail);
+    let draftFilePath: string | undefined;
+    let issueSetFilePath: string | undefined;
+    let runDir: string | undefined;
+    let specFilePath: string | undefined;
+    let planFilePath: string | undefined;
+    let mediaManifestFilePath: string | undefined;
+    let forcePrsManaged = false;
+    const labels: string[] = [];
+    const setters: Record<string, (value: string) => void> = {
+      "--draft-file": (value) => { draftFilePath = value; },
+      "--issue-set": (value) => { issueSetFilePath = value; },
+      "--run-dir": (value) => { runDir = value; },
+      "--spec-file": (value) => { specFilePath = value; },
+      "--plan-file": (value) => { planFilePath = value; },
+      "--media-manifest": (value) => { mediaManifestFilePath = value; },
+      "--label": (value) => { labels.push(value); },
+      "--labels": (value) => { labels.push(...value.split(",").map((label) => label.trim()).filter(Boolean)); },
+    };
+
+    for (let index = 0; index < options.length; index += 1) {
+      const arg = options[index];
+      if (arg === "--force-prs-managed") {
+        forcePrsManaged = true;
+        continue;
+      }
+      const equalsIndex = arg.indexOf("=");
+      const optionName = equalsIndex >= 0 ? arg.slice(0, equalsIndex) : arg;
+      const setter = setters[optionName];
+      if (!setter) throw new Error(`Unknown tool option "${arg}". ${renderPrsToolCommandHelp()}`);
+      if (equalsIndex >= 0) {
+        const value = arg.slice(equalsIndex + 1);
+        if (!value) throw new Error(`Missing required ${optionName} value. ${renderPrsToolCommandHelp()}`);
+        setter(value);
+      } else {
+        const [value, nextIndex] = takeValue(options, index, optionName);
+        setter(value);
+        index = nextIndex;
+      }
+    }
+    if (Boolean(draftFilePath) === Boolean(issueSetFilePath)) {
+      throw new Error(`Provide exactly one of --draft-file or --issue-set. ${renderPrsToolCommandHelp()}`);
+    }
+    return {
+      kind: "issue-create",
+      draftFilePath,
+      issueSetFilePath,
+      runDir,
+      specFilePath,
+      planFilePath,
+      mediaManifestFilePath,
+      labels,
+      forcePrsManaged,
+      json: true,
+    };
+  }
+
+  throw new Error(renderPrsToolCommandHelp());
 }

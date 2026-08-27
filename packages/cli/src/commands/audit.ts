@@ -1,5 +1,15 @@
 import type { AuditTarget } from "../forge";
-import { parseIssueNumber } from "./issue";
+
+function parseTargetNumber(rawValue: string | undefined): number {
+  if (!rawValue || !/^\d+$/.test(rawValue)) {
+    throw new Error(`Invalid issue or pull request number: "${rawValue ?? ""}".`);
+  }
+  const value = Number.parseInt(rawValue, 10);
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`Invalid issue or pull request number: "${rawValue}".`);
+  }
+  return value;
+}
 
 export type AuditCommandOptions = {
   action: "publish";
@@ -38,7 +48,7 @@ export function parseAuditCommandArgs(args: string[]): AuditCommandOptions {
 
       target = {
         type: rawArg === "--issue" ? "issue" : "pull-request",
-        number: parseIssueNumber(optionArgs[index + 1]),
+        number: parseTargetNumber(optionArgs[index + 1]),
       };
       index += 1;
       continue;

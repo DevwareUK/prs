@@ -1,309 +1,34 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS,
-  DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS,
-  DEFAULT_REPOSITORY_AI_COST_ESTIMATES,
-  DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
-  DEFAULT_REPOSITORY_AI_PROVIDER_TYPE,
-  DEFAULT_REPOSITORY_AI_RUNTIME_TYPE,
   resolveRepositoryConfig,
 } from "./repository-config";
 
 describe("resolveRepositoryConfig", () => {
-  it("adds default AI context exclusions and merges repository patterns", () => {
-    const resolved = resolveRepositoryConfig({
-      aiContext: {
-        excludePaths: ["web/themes/**/css/**", "*.map"],
-      },
+  it("provides provider-free defaults", () => {
+    expect(resolveRepositoryConfig()).toEqual({
+      aiContext: { excludePaths: [...DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS] },
+      baseBranch: "main",
+      buildCommand: ["pnpm", "build"],
+      forge: { type: "github" },
+      localRuntime: undefined,
+      prReadiness: { commands: [] },
+    });
+  });
+
+  it("merges deterministic repository overrides", () => {
+    expect(resolveRepositoryConfig({
+      aiContext: { excludePaths: ["fixtures/**", "fixtures/**"] },
       baseBranch: "develop",
-    });
-
-    expect(resolved.baseBranch).toBe("develop");
-    expect(resolved.ai).toEqual({
-      codex: {
-        preferSubagents: DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS,
-      },
-      issue: {
-        useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
-      },
-      issueDraft: {
-        useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
-      },
-      costEstimates: DEFAULT_REPOSITORY_AI_COST_ESTIMATES,
-      runtime: { type: DEFAULT_REPOSITORY_AI_RUNTIME_TYPE },
-      provider: { type: DEFAULT_REPOSITORY_AI_PROVIDER_TYPE },
-    });
-    expect(resolved.aiContext.excludePaths).toEqual([
-      ...DEFAULT_REPOSITORY_AI_CONTEXT_EXCLUDE_PATHS,
-      "web/themes/**/css/**",
-    ]);
-  });
-
-  it("preserves configured ai runtime and provider options", () => {
-    const resolved = resolveRepositoryConfig({
-      ai: {
-        runtime: {
-          type: "claude-code",
-        },
-        provider: {
-          type: "bedrock-claude",
-          model: "us.anthropic.claude-sonnet-4-20250514-v1:0",
-          region: "eu-west-1",
-        },
-      },
-    });
-
-    expect(resolved.ai).toEqual({
-      codex: {
-        preferSubagents: DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS,
-      },
-      issue: {
-        useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
-      },
-      issueDraft: {
-        useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
-      },
-      costEstimates: DEFAULT_REPOSITORY_AI_COST_ESTIMATES,
-      runtime: {
-        type: "claude-code",
-      },
-      provider: {
-        type: "bedrock-claude",
-        model: "us.anthropic.claude-sonnet-4-20250514-v1:0",
-        region: "eu-west-1",
-      },
-    });
-  });
-
-  it("preserves configured local runtime readiness commands", () => {
-    const resolved = resolveRepositoryConfig({
-      localRuntime: {
-        type: "command",
-        url: "https://bos.ddev.site",
-        statusCommand: ["/opt/homebrew/bin/ddev", "describe"],
-        startCommand: ["/opt/homebrew/bin/ddev", "start"],
-      },
-    });
-
-    expect(resolved.localRuntime).toEqual({
-      type: "command",
-      url: "https://bos.ddev.site",
-      statusCommand: ["/opt/homebrew/bin/ddev", "describe"],
-      startCommand: ["/opt/homebrew/bin/ddev", "start"],
-    });
-  });
-
-  it("defaults and preserves PR local readiness commands", () => {
-    expect(resolveRepositoryConfig().prReadiness).toEqual({
-      commands: [],
-    });
-
-    expect(
-      resolveRepositoryConfig({
-        prReadiness: {
-          commands: [
-            {
-              name: "Install dependencies",
-              command: ["pnpm", "install"],
-            },
-            {
-              name: "Build frontend",
-              command: ["pnpm", "build"],
-            },
-          ],
-        },
-      }).prReadiness
-    ).toEqual({
-      commands: [
-        {
-          name: "Install dependencies",
-          command: ["pnpm", "install"],
-        },
-        {
-          name: "Build frontend",
-          command: ["pnpm", "build"],
-        },
-      ],
-    });
-  });
-
-  it("defaults the missing ai selection while preserving the configured one", () => {
-    expect(
-      resolveRepositoryConfig({
-        ai: {
-          runtime: {
-            type: "claude-code",
-          },
-        },
-      }).ai
-    ).toEqual({
-      codex: {
-        preferSubagents: DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS,
-      },
-      issue: {
-        useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
-      },
-      issueDraft: {
-        useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
-      },
-      costEstimates: DEFAULT_REPOSITORY_AI_COST_ESTIMATES,
-      runtime: {
-        type: "claude-code",
-      },
-      provider: {
-        type: DEFAULT_REPOSITORY_AI_PROVIDER_TYPE,
-      },
-    });
-
-    expect(
-      resolveRepositoryConfig({
-        ai: {
-          provider: {
-            type: "openai",
-            model: "gpt-5-mini",
-            baseUrl: "https://example.test/v1",
-          },
-        },
-      }).ai
-    ).toEqual({
-      codex: {
-        preferSubagents: DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS,
-      },
-      issue: {
-        useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
-      },
-      issueDraft: {
-        useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
-      },
-      costEstimates: DEFAULT_REPOSITORY_AI_COST_ESTIMATES,
-      runtime: {
-        type: DEFAULT_REPOSITORY_AI_RUNTIME_TYPE,
-      },
-      provider: {
-        type: "openai",
-        model: "gpt-5-mini",
-        baseUrl: "https://example.test/v1",
-      },
-    });
-  });
-
-  it("defaults ai.codex.preferSubagents off while preserving explicit opt-in", () => {
-    expect(resolveRepositoryConfig().ai.codex).toEqual({
-      preferSubagents: false,
-    });
-
-    expect(
-      resolveRepositoryConfig({
-        ai: {
-          codex: {
-            preferSubagents: true,
-          },
-        },
-      }).ai.codex
-    ).toEqual({
-      preferSubagents: true,
-    });
-  });
-
-  it("defaults and preserves ai.issueDraft.useCodexSuperpowers", () => {
-    expect(resolveRepositoryConfig().ai.issue).toEqual({
-      useCodexSuperpowers: DEFAULT_REPOSITORY_AI_ISSUE_DRAFT_USE_CODEX_SUPERPOWERS,
-    });
-
-    expect(
-      resolveRepositoryConfig({
-        ai: {
-          issueDraft: {
-            useCodexSuperpowers: true,
-          },
-        },
-      }).ai.issue
-    ).toEqual({
-      useCodexSuperpowers: true,
-    });
-  });
-
-  it("prefers ai.issue.useCodexSuperpowers over the legacy draft-only setting", () => {
-    expect(
-      resolveRepositoryConfig({
-        ai: {
-          issue: {
-            useCodexSuperpowers: false,
-          },
-          issueDraft: {
-            useCodexSuperpowers: true,
-          },
-        },
-      }).ai
-    ).toEqual({
-      codex: {
-        preferSubagents: DEFAULT_REPOSITORY_AI_CODEX_PREFER_SUBAGENTS,
-      },
-      issue: {
-        useCodexSuperpowers: false,
-      },
-      issueDraft: {
-        useCodexSuperpowers: false,
-      },
-      costEstimates: DEFAULT_REPOSITORY_AI_COST_ESTIMATES,
-      runtime: {
-        type: DEFAULT_REPOSITORY_AI_RUNTIME_TYPE,
-      },
-      provider: {
-        type: DEFAULT_REPOSITORY_AI_PROVIDER_TYPE,
-      },
-    });
-  });
-
-  it("resolves default and overridden ai cost estimates", () => {
-    expect(resolveRepositoryConfig().ai.costEstimates).toEqual(
-      DEFAULT_REPOSITORY_AI_COST_ESTIMATES
-    );
-    expect(resolveRepositoryConfig().ai.costEstimates.modelRates).toMatchObject({
-      "gpt-5.6": {
-        inputPerMillionTokens: 5,
-        outputPerMillionTokens: 30,
-      },
-      "gpt-5.6-sol": {
-        inputPerMillionTokens: 5,
-        outputPerMillionTokens: 30,
-      },
-      "gpt-5.6-terra": {
-        inputPerMillionTokens: 2.5,
-        outputPerMillionTokens: 15,
-      },
-      "gpt-5.6-luna": {
-        inputPerMillionTokens: 1,
-        outputPerMillionTokens: 6,
-      },
-    });
-
-    expect(
-      resolveRepositoryConfig({
-        ai: {
-          costEstimates: {
-            inputTokenRatio: 0.7,
-            outputTokenRatio: 0.3,
-            modelRates: {
-              "gpt-5.4-mini": {
-                inputPerMillionTokens: 1,
-                outputPerMillionTokens: 5,
-              },
-            },
-          },
-        },
-      }).ai.costEstimates
-    ).toEqual({
-      ...DEFAULT_REPOSITORY_AI_COST_ESTIMATES,
-      inputTokenRatio: 0.7,
-      outputTokenRatio: 0.3,
-      modelRates: {
-        ...DEFAULT_REPOSITORY_AI_COST_ESTIMATES.modelRates,
-        "gpt-5.4-mini": {
-          inputPerMillionTokens: 1,
-          outputPerMillionTokens: 5,
-        },
-      },
+      buildCommand: ["make", "test"],
+      forge: { type: "none" },
+      prReadiness: { commands: [{ name: "smoke", command: ["make", "smoke"] }] },
+    })).toMatchObject({
+      aiContext: { excludePaths: expect.arrayContaining(["fixtures/**"]) },
+      baseBranch: "develop",
+      buildCommand: ["make", "test"],
+      forge: { type: "none" },
+      prReadiness: { commands: [{ name: "smoke", command: ["make", "smoke"] }] },
     });
   });
 });
