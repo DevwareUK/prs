@@ -18,19 +18,21 @@ type InstalledSkillRecord = {
 
 type ManagedSkillsState = {
   version: 1;
-  host: "codex";
+  hosts: InstallableAgentHost[];
   skills: Record<string, InstalledSkillRecord>;
 };
 
+export type InstallableAgentHost = "codex" | "claude-code";
+
 export type InstallAgentSkillsOptions = {
-  host: "codex";
+  host: InstallableAgentHost;
   home?: string;
   sourceRoot?: string;
   env?: { CODEX_HOME?: string };
 };
 
 export type InstallAgentSkillsResult = {
-  host: "codex";
+  host: InstallableAgentHost;
   targetRoot: string;
   installed: string[];
   updated: string[];
@@ -49,11 +51,14 @@ function hash(content: string): string {
 
 function readState(filePath: string): ManagedSkillsState | undefined {
   if (!existsSync(filePath)) return undefined;
-  const parsed = JSON.parse(readFileSync(filePath, "utf8")) as Partial<ManagedSkillsState>;
-  if (parsed.version !== 1 || parsed.host !== "codex" || !parsed.skills) {
+  const parsed = JSON.parse(readFileSync(filePath, "utf8")) as Partial<ManagedSkillsState> & {
+    host?: InstallableAgentHost;
+  };
+  const hosts = parsed.hosts ?? (parsed.host ? [parsed.host] : undefined);
+  if (parsed.version !== 1 || !hosts || !parsed.skills) {
     throw new Error(`Refusing to replace invalid managed skills state at ${filePath}.`);
   }
-  return parsed as ManagedSkillsState;
+  return { version: 1, hosts, skills: parsed.skills };
 }
 
 function writeState(filePath: string, state: ManagedSkillsState): void {
@@ -99,12 +104,19 @@ export function installAgentSkills(options: InstallAgentSkillsOptions): InstallA
   const manifest = AgentSkillManifest.parse(
     JSON.parse(readFileSync(join(sourceRoot, "skills", "manifest.json"), "utf8"))
   );
-  const targetRoot = join(home, ".agents", "skills");
+  const targetRoot =
+    options.host === "codex"
+      ? join(home, ".agents", "skills")
+      : join(home, ".claude", "skills");
   const stateFile = join(targetRoot, STATE_FILE);
   const previousState = readState(stateFile);
-  const nextState: ManagedSkillsState = { version: 1, host: "codex", skills: {} };
+  const nextState: ManagedSkillsState = {
+    version: 1,
+    hosts: Array.from(new Set([...(previousState?.hosts ?? []), options.host])),
+    skills: {},
+  };
   const result: InstallAgentSkillsResult = {
-    host: "codex",
+    host: options.host,
     targetRoot,
     installed: [],
     updated: [],
@@ -146,12 +158,14 @@ export function installAgentSkills(options: InstallAgentSkillsOptions): InstallA
 
   writeState(stateFile, nextState);
 
-  const codexHome = options.env?.CODEX_HOME?.trim() || join(home, ".codex");
-  const legacy = retireLegacySkills(
-    join(codexHome, "skills"),
-    new Set(manifest.skills.map((skill) => skill.name))
-  );
-  result.retiredLegacy = legacy.retiredLegacy;
-  result.legacySkipped = legacy.legacySkipped;
+  if (options.host === "codex") {
+    const codexHome = options.env?.CODEX_HOME?.trim() || join(home, ".codex");
+    const legacy = retireLegacySkills(
+      join(codexHome, "skills"),
+      new Set(manifest.skills.map((skill) => skill.name))
+    );
+    result.retiredLegacy = legacy.retiredLegacy;
+    result.legacySkipped = legacy.legacySkipped;
+  }
   return result;
 }

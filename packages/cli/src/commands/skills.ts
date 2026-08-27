@@ -1,10 +1,14 @@
-import { installAgentSkills, type InstallAgentSkillsResult } from "../agent-skills-installer";
+import {
+  installAgentSkills,
+  type InstallAgentSkillsResult,
+  type InstallableAgentHost,
+} from "../agent-skills-installer";
 
-const USAGE = "Usage: prs skills install codex [--json]";
+const USAGE = "Usage: prs skills install <codex|claude-code> [--json]";
 
 export type SkillsCommand = {
   action: "install";
-  host: "codex";
+  host: InstallableAgentHost;
   json: boolean;
 };
 
@@ -13,13 +17,13 @@ export function parseSkillsCommandArgs(args: string[]): SkillsCommand {
   const [action, host, ...flags] = commandArgs;
   if (
     action !== "install" ||
-    host !== "codex" ||
+    (host !== "codex" && host !== "claude-code") ||
     flags.some((flag) => flag !== "--json") ||
     flags.filter((flag) => flag === "--json").length > 1
   ) {
     throw new Error(USAGE);
   }
-  return { action: "install", host: "codex", json: flags.includes("--json") };
+  return { action: "install", host, json: flags.includes("--json") };
 }
 
 export function runSkillsCommand(args: string[]): InstallAgentSkillsResult {

@@ -29,6 +29,7 @@ In a target repository:
 ```bash
 prs setup
 prs skills install codex
+prs skills install claude-code
 ```
 
 Setup writes `.prs/config.json` and `.prs/.gitignore`. If an older configuration contains `ai` or `githubActions`, setup preserves supported settings, removes those retired sections, and prints a migration notice.
@@ -46,6 +47,8 @@ The canonical, host-neutral skill pack lives under `skills/` and is indexed by `
 These are the shared workflow bodies for Codex, Claude Code, and GitHub Copilot. Host installers may place them in different directories, but must not rewrite their instructions. Installation is introduced separately from this source pack.
 
 For Codex, `prs skills install codex` installs the pack under `~/.agents/skills`. Re-running it safely updates unchanged PRS-managed copies, preserves customized or colliding files, and moves marked legacy copies under `~/.codex/skills` to recoverable `.prs-retired` files. See [the Codex guide](docs/codex.md).
+
+For Claude Code, `prs skills install claude-code` installs the same files under `~/.claude/skills`. See [the Claude Code guide](docs/claude-code.md).
 
 ## Workflow
 
@@ -66,7 +69,7 @@ The implemented command surface is:
 
 ```text
 prs setup
-prs skills install codex [--json]
+prs skills install <codex|claude-code> [--json]
 
 prs tool issue list [--actionable] --json
 prs tool issue context <issue-number> --json
