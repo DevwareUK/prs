@@ -126,7 +126,8 @@ See [the CLI reference](docs/cli-reference.md), [setup configuration](docs/setup
 pnpm install --frozen-lockfile
 pnpm lint
 pnpm build
+pnpm test:parity
 pnpm test
 ```
 
-The sole repository workflow, `.github/workflows/test.yml`, runs those checks for pull requests. It is repository CI, not a distributed `prs` action.
+The focused parity command validates the identical Codex, Claude Code, and GitHub Copilot skill installations plus the lifecycle evidence contract. The sole repository workflow, `.github/workflows/test.yml`, runs all of these checks for pull requests. It is repository CI, not a distributed `prs` action.

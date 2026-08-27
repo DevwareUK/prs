@@ -42,5 +42,8 @@ jobs:
       - name: Build workspace
         run: pnpm build
 
+      - name: Validate agent parity
+        run: pnpm test:parity
+
       - name: Run tests with coverage
         run: pnpm test

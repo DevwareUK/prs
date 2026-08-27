@@ -19,4 +19,14 @@ describe("provider-free CLI command surface", () => {
     expect(entrypoint.split(/\r?\n/).length).toBeLessThan(160);
     expect(entrypoint).not.toMatch(/createProvider|generateCommitMessage|generateDiffSummary/);
   });
+
+  it("keeps the focused repository parity entrypoint wired", () => {
+    const packageJson = JSON.parse(readFileSync(resolve(process.cwd(), "package.json"), "utf8")) as {
+      scripts?: Record<string, string>;
+    };
+
+    expect(packageJson.scripts?.["test:parity"]).toBe(
+      "pnpm --filter @prs/contracts build && vitest run packages/cli/src/agent-parity.test.ts packages/contracts/src/agent-parity.test.ts packages/cli/src/commands/skills.test.ts"
+    );
+  });
 });
