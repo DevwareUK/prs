@@ -70,7 +70,7 @@ function slugifyIssueTitle(title: string): string {
 }
 
 function createIssueBranchName(issueNumber: number, issueTitle: string): string {
-  return `codex/issue-${issueNumber}-${slugifyIssueTitle(issueTitle)}`;
+  return `prs/issue-${issueNumber}-${slugifyIssueTitle(issueTitle)}`;
 }
 
 function toRepoRelativePath(repoRoot: string, filePath: string): string {
