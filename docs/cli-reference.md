@@ -6,6 +6,14 @@
 
 `prs setup` verifies the current directory is a Git repository, detects a default base branch and build command, then writes `.prs/config.json` and `.prs/.gitignore`. Existing `ai` and `githubActions` sections are removed with a visible migration notice.
 
+## Install agent skills
+
+```text
+prs skills install codex [--json]
+```
+
+The Codex adapter copies the canonical skill files unchanged to `~/.agents/skills`. A sidecar hash ledger lets later runs update only files that still match their last managed content. Custom collisions are reported and left untouched. Marked PRS-managed files in the legacy `~/.codex/skills` location are renamed with a `.prs-retired` suffix so they no longer load but remain recoverable.
+
 ## Issue tools
 
 | Command | Behaviour |
