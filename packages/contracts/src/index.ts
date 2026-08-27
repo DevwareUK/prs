@@ -1,3 +1,4 @@
+export * from "./agent-parity";
 export * from "./agent-workflow";
 export * from "./branding";
 export * from "./github-output-framing";

@@ -26,6 +26,13 @@ describe("skills command", () => {
     });
   });
 
+  it("parses isolated parity validation", () => {
+    expect(parseSkillsCommandArgs(["skills", "validate", "--json"])).toEqual({
+      action: "validate",
+      json: true,
+    });
+  });
+
   it("rejects unsupported or incomplete forms", () => {
     expect(() => parseSkillsCommandArgs(["skills", "install", "cursor"])).toThrow(
       "Usage: prs skills install <codex|claude-code|copilot> [--json]"
