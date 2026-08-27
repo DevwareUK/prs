@@ -5,16 +5,18 @@ import { TOP_LEVEL_HELP } from "./cli-notices";
 import { promptForLine } from "./cli-prompts";
 import { runAuditCommand } from "./commands/audit-runner";
 import { parseIssueCommandArgs } from "./commands/issue";
+import { runSkillsCommand } from "./commands/skills";
 import { runToolCommand } from "./commands/tool-runner";
 import { finalizeIssueChanges } from "./issue-finalize-tool";
 import { parseSetupCommandArgs, runSetupCommand } from "./setup";
 
 export { parseAuditCommandArgs } from "./commands/audit";
 export { parseIssueCommandArgs } from "./commands/issue";
+export { parseSkillsCommandArgs } from "./commands/skills";
 export { parsePrsToolCommandArgs } from "./prs-tool-command";
 export { parseSetupCommandArgs };
 
-const SUPPORTED_COMMANDS = new Set(["setup", "audit", "issue", "tool"]);
+const SUPPORTED_COMMANDS = new Set(["setup", "audit", "issue", "skills", "tool"]);
 
 export async function run(): Promise<void> {
   const args = getCliArgs();
@@ -33,6 +35,10 @@ export async function run(): Promise<void> {
   }
   if (command === "audit") {
     await runAuditCommand();
+    return;
+  }
+  if (command === "skills") {
+    runSkillsCommand(args);
     return;
   }
   if (command === "tool") {

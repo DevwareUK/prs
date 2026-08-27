@@ -4,7 +4,8 @@ import { describe, expect, it } from "vitest";
 import { TOP_LEVEL_HELP } from "./cli-notices";
 
 describe("provider-free CLI command surface", () => {
-  it("advertises only setup, deterministic tools, finalization, and audit", () => {
+  it("advertises only setup, skill installation, deterministic tools, finalization, and audit", () => {
+    expect(TOP_LEVEL_HELP).toContain("prs skills install codex");
     expect(TOP_LEVEL_HELP).toContain("prs tool issue context");
     expect(TOP_LEVEL_HELP).toContain("prs tool pr ready");
     expect(TOP_LEVEL_HELP).toContain("prs issue finalize");

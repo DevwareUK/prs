@@ -5,6 +5,7 @@ export const TOP_LEVEL_HELP = [
   "",
   "Setup:",
   "  prs setup",
+  "  prs skills install codex [--json]",
   "",
   "Issue tools:",
   "  prs tool issue list [--actionable] --json",
