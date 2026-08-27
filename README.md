@@ -30,6 +30,7 @@ In a target repository:
 prs setup
 prs skills install codex
 prs skills install claude-code
+prs skills install copilot
 ```
 
 Setup writes `.prs/config.json` and `.prs/.gitignore`. If an older configuration contains `ai` or `githubActions`, setup preserves supported settings, removes those retired sections, and prints a migration notice.
@@ -50,6 +51,8 @@ For Codex, `prs skills install codex` installs the pack under `~/.agents/skills`
 
 For Claude Code, `prs skills install claude-code` installs the same files under `~/.claude/skills`. See [the Claude Code guide](docs/claude-code.md).
 
+For GitHub Copilot, `prs skills install copilot` shares the Codex installation under `~/.agents/skills` without duplicating managed files. See [the Copilot guide](docs/github-copilot.md).
+
 ## Workflow
 
 A normal issue flow is:
@@ -69,7 +72,7 @@ The implemented command surface is:
 
 ```text
 prs setup
-prs skills install <codex|claude-code> [--json]
+prs skills install <codex|claude-code|copilot> [--json]
 
 prs tool issue list [--actionable] --json
 prs tool issue context <issue-number> --json
