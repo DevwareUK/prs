@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "repository": "https://github.com/OWNER/DISPOSABLE_REPOSITORY",
+  "recordedAt": "1970-01-01T00:00:00.000Z",
+  "hosts": [
+    {
+      "host": "codex",
+      "runner": "Replace with the Codex session identifier",
+      "phases": {
+        "create": { "status": "not-run", "evidence": "Record the created issue URL" },
+        "refine": { "status": "not-run", "evidence": "Record the approved specification URL" },
+        "plan": { "status": "not-run", "evidence": "Record the approved plan URL" },
+        "implement": { "status": "not-run", "evidence": "Record the implementation commit" },
+        "verify": { "status": "not-run", "evidence": "Record local verification output" },
+        "open-pr": { "status": "not-run", "evidence": "Record the pull request URL" },
+        "validate": { "status": "not-run", "evidence": "Record hosted checks and final audit URLs" }
+      }
+    },
+    {
+      "host": "claude-code",
+      "runner": "Replace with the Claude Code session identifier",
+      "phases": {
+        "create": { "status": "not-run", "evidence": "Record the created issue URL" },
+        "refine": { "status": "not-run", "evidence": "Record the approved specification URL" },
+        "plan": { "status": "not-run", "evidence": "Record the approved plan URL" },
+        "implement": { "status": "not-run", "evidence": "Record the implementation commit" },
+        "verify": { "status": "not-run", "evidence": "Record local verification output" },
+        "open-pr": { "status": "not-run", "evidence": "Record the pull request URL" },
+        "validate": { "status": "not-run", "evidence": "Record hosted checks and final audit URLs" }
+      }
+    },
+    {
+      "host": "copilot",
+      "runner": "Replace with the Copilot session identifier",
+      "phases": {
+        "create": { "status": "not-run", "evidence": "Record the created issue URL" },
+        "refine": { "status": "not-run", "evidence": "Record the approved specification URL" },
+        "plan": { "status": "not-run", "evidence": "Record the approved plan URL" },
+        "implement": { "status": "not-run", "evidence": "Record the implementation commit" },
+        "verify": { "status": "not-run", "evidence": "Record local verification output" },
+        "open-pr": { "status": "not-run", "evidence": "Record the pull request URL" },
+        "validate": { "status": "not-run", "evidence": "Record hosted checks and final audit URLs" }
+      }
+    }
+  ]
+}

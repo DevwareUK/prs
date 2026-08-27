@@ -24,6 +24,14 @@ The Claude Code adapter applies the same copy and hash-protection behavior under
 
 The GitHub Copilot adapter uses the same `~/.agents/skills` target and hash ledger as Codex. Installing for both hosts adopts the existing managed files and records both hosts without creating a second copy.
 
+## Validate agent parity
+
+```text
+prs skills validate [--json]
+```
+
+Parity validation installs all three host adapters into separate temporary homes, then compares each installed inventory, content hash, and retained operation reference with the canonical pack. The command reports static installation and instruction parity only. End-to-end native host results belong in the separate manual smoke matrix described in [the agent parity guide](agent-parity.md).
+
 ## Issue tools
 
 | Command | Behaviour |

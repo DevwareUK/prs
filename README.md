@@ -70,6 +70,7 @@ The implemented command surface is:
 ```text
 prs setup [--skills <none|codex|claude-code|copilot|all>]
 prs skills install <codex|claude-code|copilot> [--json]
+prs skills validate [--json]
 
 prs tool issue list [--actionable] --json
 prs tool issue context <issue-number> --json
@@ -117,7 +118,7 @@ Remote mutations—creating issues and publishing managed comments or audits—m
 }
 ```
 
-See [the CLI reference](docs/cli-reference.md), [setup configuration](docs/setup-configuration.md), [migration guide](docs/migration.md), and [development guide](docs/development.md).
+See [the CLI reference](docs/cli-reference.md), [setup configuration](docs/setup-configuration.md), [agent parity guide](docs/agent-parity.md), [migration guide](docs/migration.md), and [development guide](docs/development.md).
 
 ## Development
 
