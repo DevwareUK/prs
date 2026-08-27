@@ -29,8 +29,8 @@ export async function run(): Promise<void> {
     throw new Error(`Unknown command: ${command}.\n\n${TOP_LEVEL_HELP}`);
   }
   if (command === "setup") {
-    parseSetupCommandArgs(args);
-    await runSetupCommand({ repoRoot: getDefaultRepoRoot(), promptForLine });
+    const setup = parseSetupCommandArgs(args);
+    await runSetupCommand({ repoRoot: getDefaultRepoRoot(), promptForLine, ...setup });
     return;
   }
   if (command === "audit") {
