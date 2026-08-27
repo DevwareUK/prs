@@ -27,13 +27,10 @@ pnpm link --global
 In a target repository:
 
 ```bash
-prs setup
-prs skills install codex
-prs skills install claude-code
-prs skills install copilot
+prs setup --skills all
 ```
 
-Setup writes `.prs/config.json` and `.prs/.gitignore`. If an older configuration contains `ai` or `githubActions`, setup preserves supported settings, removes those retired sections, and prints a migration notice.
+Setup writes `.prs/config.json` and `.prs/.gitignore`, then installs the canonical skills for the selected host or all hosts. Run `prs setup` without `--skills` for an interactive choice; an empty answer skips personal skill installation. If an older configuration contains `ai` or `githubActions`, setup preserves supported settings, removes those retired sections, and prints a migration notice.
 
 ## Agent skills
 
@@ -45,7 +42,7 @@ The canonical, host-neutral skill pack lives under `skills/` and is indexed by `
 - `prs-finish` verifies completed work and prepares its pull request and audit trail;
 - `prs-orchestrate` coordinates a dependency-aware issue set as separate pull requests.
 
-These are the shared workflow bodies for Codex, Claude Code, and GitHub Copilot. Host installers may place them in different directories, but must not rewrite their instructions. Installation is introduced separately from this source pack.
+These are the shared workflow bodies for Codex, Claude Code, and GitHub Copilot. Host installers place them in supported personal directories without rewriting their instructions.
 
 For Codex, `prs skills install codex` installs the pack under `~/.agents/skills`. Re-running it safely updates unchanged PRS-managed copies, preserves customized or colliding files, and moves marked legacy copies under `~/.codex/skills` to recoverable `.prs-retired` files. See [the Codex guide](docs/codex.md).
 
@@ -71,7 +68,7 @@ For an existing pull request, `prs tool pr ready` checks out the actual head bra
 The implemented command surface is:
 
 ```text
-prs setup
+prs setup [--skills <none|codex|claude-code|copilot|all>]
 prs skills install <codex|claude-code|copilot> [--json]
 
 prs tool issue list [--actionable] --json
@@ -120,7 +117,7 @@ Remote mutations—creating issues and publishing managed comments or audits—m
 }
 ```
 
-See [the CLI reference](docs/cli-reference.md), [setup configuration](docs/setup-configuration.md), and [development guide](docs/development.md).
+See [the CLI reference](docs/cli-reference.md), [setup configuration](docs/setup-configuration.md), [migration guide](docs/migration.md), and [development guide](docs/development.md).
 
 ## Development
 

@@ -4,7 +4,7 @@ export const TOP_LEVEL_HELP = [
   "Deterministic local GitHub tools for Codex, Claude Code, and GitHub Copilot.",
   "",
   "Setup:",
-  "  prs setup",
+  "  prs setup [--skills <none|codex|claude-code|copilot|all>]",
   "  prs skills install <codex|claude-code|copilot> [--json]",
   "",
   "Issue tools:",

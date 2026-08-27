@@ -1,9 +1,17 @@
 # Setup and configuration
 
-Run `prs setup` from the root of a Git repository. It creates:
+Run setup from the root of a Git repository:
+
+```bash
+prs setup --skills all
+```
+
+Use `codex`, `claude-code`, `copilot`, or `none` instead of `all` when appropriate. Omit `--skills` for an interactive choice. Setup creates:
 
 - `.prs/config.json`, the committed repository workflow configuration
 - `.prs/.gitignore`, which ignores generated `runs/`, `state/`, and `worktrees/`
+
+Personal skill installation is intentionally machine-local. It is not recorded in `.prs/config.json`.
 
 ## Configuration keys
 
