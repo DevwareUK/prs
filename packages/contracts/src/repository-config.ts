@@ -220,6 +220,50 @@ export const RepositoryConfig = z.object({
 
 export type RepositoryConfigType = z.infer<typeof RepositoryConfig>;
 
+export const AgentRepositoryConfig = z
+  .object({
+    aiContext: RepositoryAiContextConfig.optional(),
+    baseBranch: z.string().trim().min(1, "baseBranch must be non-empty").optional(),
+    buildCommand: RepositoryConfigCommand.optional(),
+    forge: RepositoryForgeConfig.optional(),
+    localRuntime: RepositoryLocalRuntimeConfig.optional(),
+    prReadiness: RepositoryPrReadinessConfig.optional(),
+  })
+  .strict();
+
+export type AgentRepositoryConfigType = z.infer<typeof AgentRepositoryConfig>;
+
+export type AgentRepositoryConfigMigration = {
+  config: AgentRepositoryConfigType;
+  notices: string[];
+};
+
+export function migrateRepositoryConfigToAgentWorkflow(
+  input: unknown
+): AgentRepositoryConfigMigration {
+  const parsed = RepositoryConfig.parse(input ?? {});
+  const raw = typeof input === "object" && input !== null ? input as Record<string, unknown> : {};
+  const retiredKeys = ["ai", "githubActions"].filter((key) => key in raw);
+  const config = AgentRepositoryConfig.parse({
+    aiContext: parsed.aiContext,
+    baseBranch: parsed.baseBranch,
+    buildCommand: parsed.buildCommand,
+    forge: parsed.forge,
+    localRuntime: parsed.localRuntime,
+    prReadiness: parsed.prReadiness,
+  });
+
+  return {
+    config,
+    notices:
+      retiredKeys.length === 0
+        ? []
+        : [
+            `Removed retired prs configuration sections: ${retiredKeys.join(", ")}. Agent reasoning now stays in the active coding-agent session.`,
+          ],
+  };
+}
+
 export const ResolvedRepositoryConfig = z.object({
   ai: z.object({
     codex: z.object({

@@ -7,6 +7,7 @@ import type {
   CreatedPullRequestRecord,
   CreatedIssueRecord,
   IssueDetails,
+  IssueLinkedPullRequest,
   IssuePlanComment,
   OpenPullRequestChange,
   PullRequestCheckSignal,
@@ -1047,6 +1048,86 @@ async function listPullRequestReviewThreads(
   }
 }
 
+async function listIssueLinkedPullRequests(
+  owner: string,
+  repo: string,
+  issueNumber: number,
+  repoRoot?: string
+): Promise<IssueLinkedPullRequest[]> {
+  type TimelineEvent = {
+    event?: string;
+    source?: {
+      issue?: {
+        number?: number;
+        title?: string;
+        html_url?: string;
+        state?: "open" | "closed";
+        pull_request?: { merged_at?: string | null };
+      };
+    };
+  };
+  const token = tryResolveGitHubApiToken(repoRoot);
+  const headers: Record<string, string> = {
+    Accept: "application/vnd.github+json",
+    "User-Agent": "prs-cli",
+  };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  const linked = new Map<number, IssueLinkedPullRequest>();
+  let page = 1;
+
+  while (true) {
+    const pageParameter = page === 1 ? "" : `&page=${page}`;
+    const response = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}/timeline?per_page=100${pageParameter}`,
+      { headers }
+    );
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch pull requests linked to GitHub issue #${issueNumber} (${response.status} ${response.statusText}).`
+      );
+    }
+
+    const payload = (await response.json()) as TimelineEvent[];
+    for (const event of payload) {
+      const pullRequest = event.event === "cross-referenced" ? event.source?.issue : undefined;
+      if (
+        !pullRequest?.pull_request ||
+        !pullRequest.number ||
+        !pullRequest.title ||
+        !pullRequest.html_url
+      ) {
+        continue;
+      }
+      linked.set(pullRequest.number, {
+        number: pullRequest.number,
+        title: pullRequest.title,
+        url: pullRequest.html_url,
+        state: pullRequest.pull_request.merged_at
+          ? "merged"
+          : pullRequest.state === "open"
+            ? "open"
+            : "closed",
+      });
+    }
+
+    if (payload.length < 100) {
+      break;
+    }
+    page += 1;
+  }
+  return [...linked.values()].sort((left, right) => left.number - right.number);
+}
+
+export async function listIssueLinkedPullRequestsForRepoRoot(
+  repoRoot: string,
+  issueNumber: number
+): Promise<IssueLinkedPullRequest[]> {
+  const { owner, repo } = parseGitHubRepoFromRemote(repoRoot);
+  return listIssueLinkedPullRequests(owner, repo, issueNumber, repoRoot);
+}
+
 async function listOpenIssues(
   owner: string,
   repo: string,
@@ -1148,6 +1229,15 @@ class GitHubRepositoryForge implements RepositoryForge {
 
   constructor(private readonly repoRoot: string) {}
 
+  getRepositoryIdentity() {
+    const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
+    return {
+      owner,
+      name: repo,
+      url: `https://github.com/${owner}/${repo}`,
+    };
+  }
+
   isAuthenticated(): boolean {
     return canUseGitHub(this.repoRoot);
   }
@@ -1169,6 +1259,13 @@ class GitHubRepositoryForge implements RepositoryForge {
     return comments
       .filter((comment) => startsWithManagedMarker(comment.body, [ISSUE_PLAN_COMMENT_MARKER]))
       .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0];
+  }
+
+  async fetchIssueLinkedPullRequests(
+    issueNumber: number
+  ): Promise<IssueLinkedPullRequest[]> {
+    const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
+    return listIssueLinkedPullRequests(owner, repo, issueNumber, this.repoRoot);
   }
 
   async fetchAuditComment(target: AuditTarget): Promise<RepositoryComment | undefined> {

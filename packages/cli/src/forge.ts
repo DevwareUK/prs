@@ -7,6 +7,19 @@ export type IssueDetails = {
   url: string;
 };
 
+export type RepositoryIdentity = {
+  owner: string;
+  name: string;
+  url: string;
+};
+
+export type IssueLinkedPullRequest = {
+  number: number;
+  title: string;
+  url: string;
+  state: "open" | "closed" | "merged";
+};
+
 export type IssuePlanComment = {
   id: number;
   body: string;
@@ -130,10 +143,12 @@ export type CreatedPullRequestRecord = {
 
 export interface RepositoryForge {
   readonly type: "github" | "none";
+  getRepositoryIdentity(): RepositoryIdentity;
   isAuthenticated(): boolean;
   fetchIssueDetails(issueNumber: number): Promise<IssueDetails>;
   fetchIssueComments(issueNumber: number): Promise<RepositoryComment[]>;
   fetchIssuePlanComment(issueNumber: number): Promise<IssuePlanComment | undefined>;
+  fetchIssueLinkedPullRequests(issueNumber: number): Promise<IssueLinkedPullRequest[]>;
   fetchAuditComment(target: AuditTarget): Promise<RepositoryComment | undefined>;
   fetchPullRequestDetails(prNumber: number): Promise<PullRequestDetails>;
   fetchPullRequestChecks(prNumber: number): Promise<PullRequestCheckSignal[]>;
@@ -168,6 +183,18 @@ class NoopRepositoryForge implements RepositoryForge {
 
   isAuthenticated(): boolean {
     return false;
+  }
+
+  getRepositoryIdentity(): RepositoryIdentity {
+    throw new Error(
+      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
+    );
+  }
+
+  async fetchIssueLinkedPullRequests(): Promise<IssueLinkedPullRequest[]> {
+    throw new Error(
+      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
+    );
   }
 
   async fetchIssueDetails(): Promise<IssueDetails> {

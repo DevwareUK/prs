@@ -1,7 +1,88 @@
 import { describe, expect, it } from "vitest";
-import { RepositoryConfig, ResolvedRepositoryConfig } from "./repository-config";
+import {
+  AgentRepositoryConfig,
+  migrateRepositoryConfigToAgentWorkflow,
+  RepositoryConfig,
+  ResolvedRepositoryConfig,
+} from "./repository-config";
 
 describe("repository config schema", () => {
+  it("defines a provider-free repository configuration for agent workflows", () => {
+    expect(
+      AgentRepositoryConfig.parse({
+        baseBranch: "main",
+        buildCommand: ["pnpm", "build"],
+        forge: { type: "github" },
+        aiContext: { excludePaths: ["**/coverage/**"] },
+        localRuntime: {
+          type: "command",
+          statusCommand: ["ddev", "describe"],
+        },
+        prReadiness: {
+          commands: [{ name: "Build", command: ["pnpm", "build"] }],
+        },
+      })
+    ).toEqual({
+      baseBranch: "main",
+      buildCommand: ["pnpm", "build"],
+      forge: { type: "github" },
+      aiContext: { excludePaths: ["**/coverage/**"] },
+      localRuntime: {
+        type: "command",
+        statusCommand: ["ddev", "describe"],
+      },
+      prReadiness: {
+        commands: [{ name: "Build", command: ["pnpm", "build"] }],
+      },
+    });
+
+    expect(() =>
+      AgentRepositoryConfig.parse({
+        ai: { provider: { type: "openai" } },
+      })
+    ).toThrow();
+    expect(() =>
+      AgentRepositoryConfig.parse({
+        githubActions: { workflows: { "pr-review": { enabled: true } } },
+      })
+    ).toThrow();
+  });
+
+  it("migrates legacy AI and GitHub Action settings with one notice", () => {
+    const result = migrateRepositoryConfigToAgentWorkflow({
+      baseBranch: "develop",
+      buildCommand: ["pnpm", "build"],
+      forge: { type: "github", githubCliPath: "/opt/homebrew/bin/gh" },
+      aiContext: { excludePaths: ["generated/**"] },
+      prReadiness: {
+        commands: [{ name: "Build", command: ["pnpm", "build"] }],
+      },
+      ai: {
+        provider: { type: "openai", model: "gpt-5" },
+        runtime: { type: "codex" },
+      },
+      githubActions: {
+        workflows: { "pr-review": { enabled: true } },
+      },
+    });
+
+    expect(result.config).toEqual({
+      baseBranch: "develop",
+      buildCommand: ["pnpm", "build"],
+      forge: { type: "github", githubCliPath: "/opt/homebrew/bin/gh" },
+      aiContext: { excludePaths: ["generated/**"] },
+      prReadiness: {
+        commands: [{ name: "Build", command: ["pnpm", "build"] }],
+      },
+    });
+    expect(result.notices).toHaveLength(1);
+    expect(result.notices[0]).toContain("ai");
+    expect(result.notices[0]).toContain("githubActions");
+    expect(JSON.stringify(result.config)).not.toContain("gpt-5");
+  });
+});
+
+describe("legacy repository config schema", () => {
   it("accepts command-based local runtime readiness config", () => {
     expect(
       RepositoryConfig.parse({

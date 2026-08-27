@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/DevwareUK/prs/blob/main/skills/manifest.schema.json",
+  "title": "prs Agent Skill Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "skills"],
+  "properties": {
+    "version": { "const": 1 },
+    "skills": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "source", "phases"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "source": {
+            "type": "string",
+            "pattern": "^skills/[a-z0-9-]+/SKILL\\.md$"
+          },
+          "phases": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "enum": [
+                "create",
+                "refine",
+                "plan",
+                "implement",
+                "verify",
+                "open-pr",
+                "validate"
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -9,6 +9,7 @@ export type PrsToolCommand =
       json: boolean;
     }
   | { kind: "issue-list"; actionable: boolean; json: boolean }
+  | { kind: "issue-context"; issueNumber: number; json: boolean }
   | { kind: "issue-ready"; issueNumber: number; unattended: boolean; json: boolean }
   | { kind: "issue-estimate"; issueNumber: number; json: boolean }
   | { kind: "issue-estimate-context"; issueNumber: number; json: boolean }
@@ -16,6 +17,13 @@ export type PrsToolCommand =
       kind: "issue-publish-estimate";
       issueNumber: number;
       estimateFilePath: string;
+      json: boolean;
+    }
+  | {
+      kind: "issue-publish-artifacts";
+      issueNumber: number;
+      specFilePath: string;
+      planFilePath: string;
       json: boolean;
     }
   | {
@@ -58,10 +66,12 @@ export function renderPrsToolCommandHelp(): string {
     "Usage:",
     "  prs tool token-usage publish (--issue <number>|--pr <number>) --file <path> --json",
     "  prs tool issue list [--actionable] --json",
+    "  prs tool issue context <issue-number> --json",
     "  prs tool issue ready <issue-number> [--unattended|--auto|--jdi] --json",
     "  prs tool issue estimate <issue-number> --json",
     "  prs tool issue estimate-context <issue-number> --json",
     "  prs tool issue publish-estimate <issue-number> --file <path> --json",
+    "  prs tool issue publish-artifacts <issue-number> --spec-file <path> --plan-file <path> --json",
     "  prs tool issue create (--draft-file <path>|--issue-set <path>) --json",
     "                        [--run-dir <path>] [--spec-file <path>] [--plan-file <path>] [--media-manifest <path>]",
     "                        [--label <name>] [--labels <a,b>]",
@@ -266,6 +276,18 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
       throw new Error(renderPrsToolCommandHelp());
     }
 
+    if (command === "context") {
+      if (!third || third === "--json" || fourth !== "--json" || rest.length > 0) {
+        throw new Error(renderPrsToolCommandHelp());
+      }
+
+      return {
+        kind: "issue-context",
+        issueNumber: parseToolNumber(third, "issue"),
+        json: true,
+      };
+    }
+
     if (command === "estimate") {
       if (!third || third === "--json" || third === "--all") {
         throw new Error(renderPrsToolCommandHelp());
@@ -338,6 +360,70 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
         kind: "issue-publish-estimate",
         issueNumber,
         estimateFilePath,
+        json: true,
+      };
+    }
+
+    if (command === "publish-artifacts") {
+      if (!third || third === "--json" || third === "--all") {
+        throw new Error(renderPrsToolCommandHelp());
+      }
+
+      const issueNumber = parseToolNumber(third, "issue");
+      const optionArgs = [fourth, ...rest].filter(
+        (arg): arg is string => arg !== undefined
+      );
+      let specFilePath: string | undefined;
+      let planFilePath: string | undefined;
+      let json = false;
+
+      for (let index = 0; index < optionArgs.length; index += 1) {
+        const rawArg = optionArgs[index];
+        if (rawArg === "--json") {
+          json = true;
+          continue;
+        }
+        if (rawArg === "--spec-file" || rawArg === "--plan-file") {
+          const value = optionArgs[index + 1];
+          if (!value) {
+            throw new Error(`Missing value for ${rawArg}. ${renderPrsToolCommandHelp()}`);
+          }
+          if (rawArg === "--spec-file") {
+            specFilePath = value;
+          } else {
+            planFilePath = value;
+          }
+          index += 1;
+          continue;
+        }
+        if (rawArg.startsWith("--spec-file=")) {
+          specFilePath = rawArg.slice("--spec-file=".length);
+          continue;
+        }
+        if (rawArg.startsWith("--plan-file=")) {
+          planFilePath = rawArg.slice("--plan-file=".length);
+          continue;
+        }
+        throw new Error(`Unknown tool option "${rawArg}". ${renderPrsToolCommandHelp()}`);
+      }
+
+      if (!specFilePath) {
+        throw new Error(`Missing required --spec-file. ${renderPrsToolCommandHelp()}`);
+      }
+      if (!planFilePath) {
+        throw new Error(`Missing required --plan-file. ${renderPrsToolCommandHelp()}`);
+      }
+      if (!json) {
+        throw new Error(
+          `prs tool issue publish-artifacts requires --json. ${renderPrsToolCommandHelp()}`
+        );
+      }
+
+      return {
+        kind: "issue-publish-artifacts",
+        issueNumber,
+        specFilePath,
+        planFilePath,
         json: true,
       };
     }
