@@ -32,6 +32,18 @@ prs setup
 
 Setup writes `.prs/config.json` and `.prs/.gitignore`. If an older configuration contains `ai` or `githubActions`, setup preserves supported settings, removes those retired sections, and prints a migration notice.
 
+## Agent skills
+
+The canonical, host-neutral skill pack lives under `skills/` and is indexed by `skills/manifest.json`:
+
+- `prs` routes requests to the appropriate workflow;
+- `prs-create` drafts and creates approved issues or issue sets;
+- `prs-issue` carries one issue from context through implementation and validation;
+- `prs-finish` verifies completed work and prepares its pull request and audit trail;
+- `prs-orchestrate` coordinates a dependency-aware issue set as separate pull requests.
+
+These are the shared workflow bodies for Codex, Claude Code, and GitHub Copilot. Host installers may place them in different directories, but must not rewrite their instructions. Installation is introduced separately from this source pack.
+
 ## Workflow
 
 A normal issue flow is:
