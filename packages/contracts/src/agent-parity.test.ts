@@ -227,4 +227,24 @@ describe("agent lifecycle smoke evidence", () => {
     mutate(matrix);
     expect(() => AgentLifecycleSmokeMatrix.parse(matrix)).toThrow();
   });
+
+  it.each([
+    ["owner", "."],
+    ["owner", ".."],
+    ["repository", "."],
+    ["repository", ".."],
+  ])(
+    "rejects completed repository, issue, and pull request URLs with a %s segment of %s",
+    (segmentName, segment) => {
+      const matrix = completedMatrix();
+      const owner = segmentName === "owner" ? segment : "example";
+      const repository = segmentName === "repository" ? segment : "disposable-prs-smoke";
+      matrix.repository = `https://github.com/${owner}/${repository}`;
+      for (const [index, row] of matrix.hosts.entries()) {
+        row.issueUrl = `https://github.com/${owner}/${repository}/issues/${index + 1}`;
+        row.pullRequestUrl = `https://github.com/${owner}/${repository}/pull/${index + 11}`;
+      }
+      expect(() => AgentLifecycleSmokeMatrix.parse(matrix)).toThrow();
+    }
+  );
 });

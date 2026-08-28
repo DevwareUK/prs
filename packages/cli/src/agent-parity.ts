@@ -15,13 +15,36 @@ const REQUIRED_OPERATIONS = [
   "prs tool pr ready",
   "prs audit publish",
 ];
+const RAW_WORKFLOW_ARTIFACTS = /\braw workflow artifacts\b/i;
+const ARTIFACT_PROHIBITION = /\b(?:must not|never)\s+(?:stage|commit)(?:\s+(?:or|and)\s+(?:stage|commit))?\s+(?:raw workflow artifacts|them)\b/i;
+const UNSAFE_ARTIFACT_DIRECTIVE = /\b(?:always|must|should)\s+(?:stage|commit)(?:\s+(?:or|and)\s+(?:stage|commit))?\s+raw workflow artifacts\b/i;
+const FINALIZATION_PRESERVATION =
+  /(?:\bpreserve(?:s|d)?\s+(?:both\s+)?unstaged(?:\s+changes?)?\s+and\s+untracked(?:\s+files?)?\b|\bunstaged(?:\s+changes?)?\s+and\s+untracked(?:\s+files?)?\s+(?:untouched|unchanged|preserved)\b)/i;
+const DESTRUCTIVE_FINALIZATION_DIRECTIVE =
+  /\b(?:delete|deletes|deleted|deleting|remove|removes|removed|removing|clean|cleans|cleaned|cleaning)\s+(?:both\s+)?unstaged(?:\s+changes?)?\s+and\s+untracked(?:\s+files?)?\b/i;
+
+function semanticStatements(text: string): string[] {
+  return text
+    .split(/\r?\n|[.?!;](?=\s|$)/)
+    .map((statement) => statement.trim())
+    .filter(Boolean);
+}
+
 const ARTIFACT_LOCALITY_SAFEGUARD = {
   id: "artifact-locality",
-  matches: (text: string): boolean =>
-    text.includes(AGENT_WORKFLOW_CONTRACT.safety.artifactLocality.root) &&
-    text.split(/\r?\n/).some((line) =>
-      /\b(?:must not|never)\s+(?:stage|commit)\b/i.test(line)
-    ),
+  matches: (text: string): boolean => {
+    const statements = semanticStatements(text);
+    return (
+      text.includes(AGENT_WORKFLOW_CONTRACT.safety.artifactLocality.root) &&
+      !statements.some((statement) => UNSAFE_ARTIFACT_DIRECTIVE.test(statement)) &&
+      statements.some(
+        (statement, index) =>
+          ARTIFACT_PROHIBITION.test(statement) &&
+          (RAW_WORKFLOW_ARTIFACTS.test(statement) ||
+            (/\bthem\b/i.test(statement) && RAW_WORKFLOW_ARTIFACTS.test(statements[index - 1] ?? "")))
+      )
+    );
+  },
 } as const;
 const STAGED_ONLY_FINALIZATION_SAFEGUARD = {
   id: "staged-only-finalization",
@@ -30,10 +53,16 @@ const STAGED_ONLY_FINALIZATION_SAFEGUARD = {
       "-",
       "[\\s-]+"
     );
+    const finalizationSource = new RegExp(
+      `\\b(?:staged(?:[\\s-]+changes?)?|${existingIndex})\\b`,
+      "i"
+    );
+    const statements = semanticStatements(text);
     return (
-      new RegExp(`\\b(?:staged(?:[\\s-]+changes?)?|${existingIndex})\\b`, "i").test(text) &&
-      /(?:\bpreserve(?:s|d)?\s+(?:both\s+)?unstaged(?:\s+changes?)?\s+and\s+untracked(?:\s+files?)?\b|\bunstaged(?:\s+changes?)?\s+and\s+untracked(?:\s+files?)?\s+(?:untouched|unchanged|preserved)\b)/i.test(
-        text
+      !statements.some((statement) => DESTRUCTIVE_FINALIZATION_DIRECTIVE.test(statement)) &&
+      statements.some(
+        (statement) =>
+          finalizationSource.test(statement) && FINALIZATION_PRESERVATION.test(statement)
       )
     );
   },

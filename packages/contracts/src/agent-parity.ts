@@ -33,10 +33,13 @@ type GitHubResourceIdentity = GitHubRepositoryIdentity & {
 const GITHUB_REPOSITORY_URL = /^https:\/\/github\.com\/([A-Za-z0-9_-]+)\/([A-Za-z0-9_.-]+)$/;
 const GITHUB_RESOURCE_URL =
   /^https:\/\/github\.com\/([A-Za-z0-9_-]+)\/([A-Za-z0-9_.-]+)\/(issues|pull)\/(\d+)$/;
+const isDotRepositorySegment = (segment: string) => segment === "." || segment === "..";
 
 function parseGitHubRepository(value: string): GitHubRepositoryIdentity | undefined {
   const match = GITHUB_REPOSITORY_URL.exec(value);
-  if (!match || match[0] !== value) return undefined;
+  if (!match || match[0] !== value || isDotRepositorySegment(match[1]) || isDotRepositorySegment(match[2])) {
+    return undefined;
+  }
 
   const owner = match[1].toLowerCase();
   const repository = match[2].toLowerCase();
@@ -48,7 +51,15 @@ function parseGitHubResource(
   expectedResource: "issues" | "pull"
 ): GitHubResourceIdentity | undefined {
   const match = GITHUB_RESOURCE_URL.exec(value);
-  if (!match || match[0] !== value || match[3] !== expectedResource) return undefined;
+  if (
+    !match ||
+    match[0] !== value ||
+    isDotRepositorySegment(match[1]) ||
+    isDotRepositorySegment(match[2]) ||
+    match[3] !== expectedResource
+  ) {
+    return undefined;
+  }
 
   const owner = match[1].toLowerCase();
   const repository = match[2].toLowerCase();

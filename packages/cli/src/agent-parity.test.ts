@@ -104,6 +104,78 @@ describe("three-host Agent Skills parity", () => {
     }
   });
 
+  it("fails every installed host when an unrelated commit prohibition masks raw artifact staging", () => {
+    const sourceRoot = createSourceFixture((content) =>
+      content.replaceAll(
+        "They are raw workflow artifacts and stay local. Never stage or commit them",
+        "Always stage and commit raw workflow artifacts. Never commit implementation files"
+      )
+    );
+    const temporaryRoot = mkdtempSync(join(tmpdir(), "prs-agent-parity-artifact-unrelated-"));
+
+    const report = validateAgentSkillParity({ sourceRoot, temporaryRoot });
+
+    expect(report.status).toBe("failed");
+    expect(report.hosts.map((row) => row.status)).toEqual(["failed", "failed", "failed"]);
+    for (const row of report.hosts) {
+      expect(row.errors).toContain("missing safeguard: artifact-locality");
+    }
+  });
+
+  it("fails every installed host when unrelated preservation prose masks destructive finalization", () => {
+    const sourceRoot = createSourceFixture((content) =>
+      content.replace(
+        "The command commits only the existing index and leaves unstaged changes and untracked files untouched.",
+        "The command commits only the existing index and deletes unstaged changes and untracked files.\nPreserve unstaged changes and untracked files outside finalization."
+      )
+    );
+    const temporaryRoot = mkdtempSync(join(tmpdir(), "prs-agent-parity-finalization-unrelated-"));
+
+    const report = validateAgentSkillParity({ sourceRoot, temporaryRoot });
+
+    expect(report.status).toBe("failed");
+    expect(report.hosts.map((row) => row.status)).toEqual(["failed", "failed", "failed"]);
+    for (const row of report.hosts) {
+      expect(row.errors).toContain("missing safeguard: staged-only-finalization");
+    }
+  });
+
+  it("fails every installed host when a preceding raw-artifact staging directive contradicts a prohibition", () => {
+    const sourceRoot = createSourceFixture((content) =>
+      content.replaceAll(
+        "They are raw workflow artifacts and stay local. Never stage or commit them",
+        "Always stage and commit raw workflow artifacts. Never stage or commit them"
+      )
+    );
+    const temporaryRoot = mkdtempSync(join(tmpdir(), "prs-agent-parity-artifact-contradictory-"));
+
+    const report = validateAgentSkillParity({ sourceRoot, temporaryRoot });
+
+    expect(report.status).toBe("failed");
+    expect(report.hosts.map((row) => row.status)).toEqual(["failed", "failed", "failed"]);
+    for (const row of report.hosts) {
+      expect(row.errors).toContain("missing safeguard: artifact-locality");
+    }
+  });
+
+  it("fails every installed host when a same-line destructive finalization statement contradicts preservation", () => {
+    const sourceRoot = createSourceFixture((content) =>
+      content.replace(
+        "The command commits only the existing index and leaves unstaged changes and untracked files untouched.",
+        "The command commits only the existing index and deletes unstaged changes and untracked files. The command commits only the existing index and leaves unstaged changes and untracked files untouched."
+      )
+    );
+    const temporaryRoot = mkdtempSync(join(tmpdir(), "prs-agent-parity-finalization-contradictory-"));
+
+    const report = validateAgentSkillParity({ sourceRoot, temporaryRoot });
+
+    expect(report.status).toBe("failed");
+    expect(report.hosts.map((row) => row.status)).toEqual(["failed", "failed", "failed"]);
+    for (const row of report.hosts) {
+      expect(row.errors).toContain("missing safeguard: staged-only-finalization");
+    }
+  });
+
   it("records one host failure separately instead of borrowing another host's pass", () => {
     const temporaryRoot = mkdtempSync(join(tmpdir(), "prs-agent-parity-collision-"));
     const customFile = join(temporaryRoot, "codex", ".agents", "skills", "prs", "SKILL.md");
