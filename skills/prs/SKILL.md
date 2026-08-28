@@ -16,6 +16,12 @@ Use `prs` as the router for the local GitHub workflow. The active coding agent o
 - Existing pull request: run `prs tool pr ready <number> --json`, then inspect the returned checks, comments, readiness steps, and local runtime guidance.
 - No selected issue or pull request: run `prs tool issue list --actionable --json` or `prs tool pr list --actionable --json` and show number, title, and URL.
 
+## Local artifacts
+
+`.prs/runs/<task-specific-run>/` is the only repository-local root for generated workflow artifacts. Use a run directory returned by `prs` when available; otherwise create a task-specific directory beneath `.prs/runs`.
+
+This covers issue drafts, linked-set manifests, specifications, plans, working notes, and completion evidence. They are raw workflow artifacts and stay local. Never stage or commit them, and never create another repository-local scratch root such as `.prs-work`.
+
 ## Shared safeguards
 
 - Get explicit user approval immediately before creating issues or publishing GitHub comments.

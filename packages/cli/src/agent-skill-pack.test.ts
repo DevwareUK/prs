@@ -4,6 +4,20 @@ import { describe, expect, it } from "vitest";
 import { AgentSkillManifest } from "@prs/contracts";
 
 const EXPECTED_SKILLS = ["prs", "prs-create", "prs-finish", "prs-issue", "prs-orchestrate"];
+const REQUIRED_ARTIFACT_INSTRUCTIONS = [
+  ".prs/runs/<task-specific-run>/",
+  "only repository-local root",
+  "Use a run directory returned by `prs` when available",
+  "issue drafts, linked-set manifests, specifications, plans, working notes, and completion evidence",
+  "Never stage or commit them",
+  ".prs-work",
+];
+
+function expectArtifactContract(markdown: string): void {
+  for (const instruction of REQUIRED_ARTIFACT_INSTRUCTIONS) {
+    expect(markdown).toContain(instruction);
+  }
+}
 
 describe("canonical agent skill pack", () => {
   it("publishes the exact portable inventory through one manifest", () => {
@@ -23,6 +37,12 @@ describe("canonical agent skill pack", () => {
       expect(markdown).toMatch(new RegExp(`^---\\nname: ${name}\\ndescription: Use when `));
       expect(markdown).toContain("prs tool");
       expect(markdown).not.toMatch(/~\/\.(?:codex|claude)|slash command|Superpowers|token telemetry|model profile|API key|OPENAI|Bedrock/i);
+    }
+  });
+
+  it("keeps generated workflow artifacts under the ignored run root", () => {
+    for (const name of EXPECTED_SKILLS) {
+      expectArtifactContract(readFileSync(resolve("skills", name, "SKILL.md"), "utf8"));
     }
   });
 

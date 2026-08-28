@@ -6,6 +6,19 @@ import { validateAgentSkillParity } from "./agent-parity";
 
 const EXPECTED_SKILLS = ["prs", "prs-create", "prs-finish", "prs-issue", "prs-orchestrate"];
 
+function expectArtifactContract(markdown: string): void {
+  for (const instruction of [
+    ".prs/runs/<task-specific-run>/",
+    "only repository-local root",
+    "Use a run directory returned by `prs` when available",
+    "issue drafts, linked-set manifests, specifications, plans, working notes, and completion evidence",
+    "Never stage or commit them",
+    ".prs-work",
+  ]) {
+    expect(markdown).toContain(instruction);
+  }
+}
+
 describe("three-host Agent Skills parity", () => {
   it("installs and validates every host in its own temporary home", () => {
     const temporaryRoot = mkdtempSync(join(tmpdir(), "prs-agent-parity-test-"));
@@ -21,6 +34,9 @@ describe("three-host Agent Skills parity", () => {
       expect(row.contentHashes).toEqual(report.canonical.contentHashes);
       expect(row.requiredOperations).toEqual(report.canonical.requiredOperations);
       expect(row.errors).toEqual([]);
+      for (const name of EXPECTED_SKILLS) {
+        expectArtifactContract(readFileSync(join(row.targetRoot, name, "SKILL.md"), "utf8"));
+      }
     }
   });
 

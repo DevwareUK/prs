@@ -19,6 +19,23 @@ function fixture(): { home: string; sourceRoot: string } {
   return { home: join(root, "home"), sourceRoot };
 }
 
+function expectInstalledArtifactContract(root: string): void {
+  const requiredInstructions = [
+    ".prs/runs/<task-specific-run>/",
+    "only repository-local root",
+    "Use a run directory returned by `prs` when available",
+    "issue drafts, linked-set manifests, specifications, plans, working notes, and completion evidence",
+    "Never stage or commit them",
+    ".prs-work",
+  ];
+  for (const name of ["prs", "prs-create", "prs-issue", "prs-finish", "prs-orchestrate"]) {
+    const markdown = readFileSync(join(root, name, "SKILL.md"), "utf8");
+    for (const instruction of requiredInstructions) {
+      expect(markdown).toContain(instruction);
+    }
+  }
+}
+
 describe("Codex Agent Skills installer", () => {
   it("finds the repository canonical pack without a source override", () => {
     const root = mkdtempSync(join(tmpdir(), "prs-codex-default-source-"));
@@ -41,6 +58,7 @@ describe("Codex Agent Skills installer", () => {
       );
     }
     expect(existsSync(join(result.targetRoot, ".prs-managed-skills.json"))).toBe(true);
+    expectInstalledArtifactContract(result.targetRoot);
   });
 
   it("is idempotent and updates only files that still match their managed hash", () => {
@@ -129,6 +147,7 @@ describe("Claude Code Agent Skills installer", () => {
         readFileSync(join(sourceRoot, "skills", name, "SKILL.md"), "utf8")
       );
     }
+    expectInstalledArtifactContract(result.targetRoot);
   });
 
   it("uses the same managed-hash protection for Claude custom files", () => {
@@ -162,6 +181,7 @@ describe("GitHub Copilot Agent Skills installer", () => {
       readFileSync(join(copilot.targetRoot, ".prs-managed-skills.json"), "utf8")
     ) as { hosts: string[] };
     expect(state.hosts).toEqual(["codex", "copilot"]);
+    expectInstalledArtifactContract(copilot.targetRoot);
   });
 
   it("protects shared custom collisions when Copilot installs first", () => {
