@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "repository": "https://github.com/OWNER/DISPOSABLE_REPOSITORY",
   "recordedAt": "1970-01-01T00:00:00.000Z",
   "hosts": [
@@ -12,8 +12,22 @@
         "plan": { "status": "not-run", "evidence": "Record the approved plan URL" },
         "implement": { "status": "not-run", "evidence": "Record the implementation commit" },
         "verify": { "status": "not-run", "evidence": "Record local verification output" },
+        "finalize": { "status": "not-run", "evidence": "Record staged-only finalization output" },
         "open-pr": { "status": "not-run", "evidence": "Record the pull request URL" },
         "validate": { "status": "not-run", "evidence": "Record hosted checks and final audit URLs" }
+      },
+      "safety": {
+        "artifactRoot": ".prs/runs",
+        "artifactPaths": [],
+        "committedPaths": [],
+        "sentinel": {
+          "path": "sentinel-codex.txt",
+          "state": "not-run",
+          "evidence": "Record whether the Codex sentinel remains untracked after finalization"
+        },
+        "checks": [],
+        "capabilityFallbacks": [],
+        "deviations": []
       }
     },
     {
@@ -25,8 +39,22 @@
         "plan": { "status": "not-run", "evidence": "Record the approved plan URL" },
         "implement": { "status": "not-run", "evidence": "Record the implementation commit" },
         "verify": { "status": "not-run", "evidence": "Record local verification output" },
+        "finalize": { "status": "not-run", "evidence": "Record staged-only finalization output" },
         "open-pr": { "status": "not-run", "evidence": "Record the pull request URL" },
         "validate": { "status": "not-run", "evidence": "Record hosted checks and final audit URLs" }
+      },
+      "safety": {
+        "artifactRoot": ".prs/runs",
+        "artifactPaths": [],
+        "committedPaths": [],
+        "sentinel": {
+          "path": "sentinel-claude-code.txt",
+          "state": "not-run",
+          "evidence": "Record whether the Claude Code sentinel remains untracked after finalization"
+        },
+        "checks": [],
+        "capabilityFallbacks": [],
+        "deviations": []
       }
     },
     {
@@ -38,8 +66,22 @@
         "plan": { "status": "not-run", "evidence": "Record the approved plan URL" },
         "implement": { "status": "not-run", "evidence": "Record the implementation commit" },
         "verify": { "status": "not-run", "evidence": "Record local verification output" },
+        "finalize": { "status": "not-run", "evidence": "Record staged-only finalization output" },
         "open-pr": { "status": "not-run", "evidence": "Record the pull request URL" },
         "validate": { "status": "not-run", "evidence": "Record hosted checks and final audit URLs" }
+      },
+      "safety": {
+        "artifactRoot": ".prs/runs",
+        "artifactPaths": [],
+        "committedPaths": [],
+        "sentinel": {
+          "path": "sentinel-copilot.txt",
+          "state": "not-run",
+          "evidence": "Record whether the Copilot sentinel remains untracked after finalization"
+        },
+        "checks": [],
+        "capabilityFallbacks": [],
+        "deviations": []
       }
     }
   ]
