@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { AgentSkillManifest, type AgentHostType } from "@prs/contracts";
+import { AGENT_WORKFLOW_CONTRACT, AgentSkillManifest, type AgentHostType } from "@prs/contracts";
 import { installAgentSkills } from "./agent-skills-installer";
 
 const HOSTS: AgentHostType[] = ["codex", "claude-code", "copilot"];
@@ -15,6 +15,33 @@ const REQUIRED_OPERATIONS = [
   "prs tool pr ready",
   "prs audit publish",
 ];
+const ARTIFACT_LOCALITY_SAFEGUARD = {
+  id: "artifact-locality",
+  matches: (text: string): boolean =>
+    text.includes(AGENT_WORKFLOW_CONTRACT.safety.artifactLocality.root) &&
+    text.split(/\r?\n/).some((line) =>
+      /\b(?:must not|never)\s+(?:stage|commit)\b/i.test(line)
+    ),
+} as const;
+const STAGED_ONLY_FINALIZATION_SAFEGUARD = {
+  id: "staged-only-finalization",
+  matches: (text: string): boolean => {
+    const existingIndex = AGENT_WORKFLOW_CONTRACT.safety.finalization.commitSource.replace(
+      "-",
+      "[\\s-]+"
+    );
+    return (
+      new RegExp(`\\b(?:staged(?:[\\s-]+changes?)?|${existingIndex})\\b`, "i").test(text) &&
+      /(?:\bpreserve(?:s|d)?\s+(?:both\s+)?unstaged(?:\s+changes?)?\s+and\s+untracked(?:\s+files?)?\b|\bunstaged(?:\s+changes?)?\s+and\s+untracked(?:\s+files?)?\s+(?:untouched|unchanged|preserved)\b)/i.test(
+        text
+      )
+    );
+  },
+} as const;
+const REQUIRED_SAFEGUARDS = [
+  ARTIFACT_LOCALITY_SAFEGUARD,
+  STAGED_ONLY_FINALIZATION_SAFEGUARD,
+] as const;
 
 type HostParityResult = {
   host: AgentHostType;
@@ -24,6 +51,7 @@ type HostParityResult = {
   inventory: string[];
   contentHashes: Record<string, string>;
   requiredOperations: string[];
+  safeguards: string[];
   errors: string[];
 };
 
@@ -35,6 +63,7 @@ export type AgentSkillParityReport = {
     inventory: string[];
     contentHashes: Record<string, string>;
     requiredOperations: string[];
+    requiredSafeguards: string[];
   };
   hosts: HostParityResult[];
 };
@@ -103,6 +132,12 @@ export function validateAgentSkillParity(options: {
     for (const operation of REQUIRED_OPERATIONS) {
       if (!requiredOperations.includes(operation)) errors.push(`missing operation reference: ${operation}`);
     }
+    const safeguards = REQUIRED_SAFEGUARDS.filter((safeguard) =>
+      safeguard.matches(combinedText)
+    ).map((safeguard) => safeguard.id);
+    for (const safeguard of REQUIRED_SAFEGUARDS) {
+      if (!safeguards.includes(safeguard.id)) errors.push(`missing safeguard: ${safeguard.id}`);
+    }
 
     return {
       host,
@@ -112,6 +147,7 @@ export function validateAgentSkillParity(options: {
       inventory,
       contentHashes,
       requiredOperations,
+      safeguards,
       errors,
     };
   });
@@ -124,6 +160,7 @@ export function validateAgentSkillParity(options: {
       inventory: canonicalInventory,
       contentHashes: canonicalHashes,
       requiredOperations: [...REQUIRED_OPERATIONS],
+      requiredSafeguards: REQUIRED_SAFEGUARDS.map((safeguard) => safeguard.id),
     },
     hosts,
   };
