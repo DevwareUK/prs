@@ -7,7 +7,7 @@ import { runAuditCommand } from "./commands/audit-runner";
 import { parseIssueCommandArgs } from "./commands/issue";
 import { runSkillsCommand } from "./commands/skills";
 import { runToolCommand } from "./commands/tool-runner";
-import { finalizeIssueChanges } from "./issue-finalize-tool";
+import { finalizeIssueChanges, formatIssueFinalizePreview } from "./issue-finalize-tool";
 import { parseSetupCommandArgs, runSetupCommand } from "./setup";
 
 export { parseAuditCommandArgs } from "./commands/audit";
@@ -51,8 +51,8 @@ export async function run(): Promise<void> {
     repoRoot: getDefaultRepoRoot(),
     issueNumber: issue.issueNumber,
     forge: getRepositoryForge(getDefaultRepoRoot()),
-    confirm: async (message) => {
-      process.stdout.write(`Proposed commit message:\n\n${message}\n\n`);
+    confirm: async (preview) => {
+      process.stdout.write(formatIssueFinalizePreview(preview) + "\n\n");
       const answer = (await promptForLine("Create this commit? [y/N]: ")).trim().toLowerCase();
       return answer === "y" || answer === "yes";
     },
