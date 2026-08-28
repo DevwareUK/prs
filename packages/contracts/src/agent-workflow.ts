@@ -10,6 +10,7 @@ export const ISSUE_LIFECYCLE_PHASES = [
   "plan",
   "implement",
   "verify",
+  "finalize",
   "open-pr",
   "validate",
 ] as const;
@@ -91,6 +92,7 @@ export const AgentWorkflowContract = z
       z.literal("plan"),
       z.literal("implement"),
       z.literal("verify"),
+      z.literal("finalize"),
       z.literal("open-pr"),
       z.literal("validate"),
     ]),
@@ -101,6 +103,24 @@ export const AgentWorkflowContract = z
         specificationMarker: z.literal("<!-- prs:issue-spec -->"),
         planMarker: z.literal("<!-- prs:issue-plan -->"),
         auditMarker: z.literal("<!-- prs:audit -->"),
+      })
+      .strict(),
+    safety: z
+      .object({
+        artifactLocality: z
+          .object({
+            root: z.literal(".prs/runs"),
+            rawArtifacts: z.literal("local-only"),
+            staging: z.literal("forbidden"),
+          })
+          .strict(),
+        finalization: z
+          .object({
+            commitSource: z.literal("existing-index"),
+            unstagedChanges: z.literal("preserve"),
+            untrackedFiles: z.literal("preserve"),
+          })
+          .strict(),
       })
       .strict(),
     capabilityFallbacks: z
@@ -166,6 +186,18 @@ export const AGENT_WORKFLOW_CONTRACT = AgentWorkflowContract.parse({
     specificationMarker: "<!-- prs:issue-spec -->",
     planMarker: "<!-- prs:issue-plan -->",
     auditMarker: "<!-- prs:audit -->",
+  },
+  safety: {
+    artifactLocality: {
+      root: ".prs/runs",
+      rawArtifacts: "local-only",
+      staging: "forbidden",
+    },
+    finalization: {
+      commitSource: "existing-index",
+      unstagedChanges: "preserve",
+      untrackedFiles: "preserve",
+    },
   },
   capabilityFallbacks: {
     isolation: "continue-in-active-workspace",
