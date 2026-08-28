@@ -9,6 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { expectInstalledArtifactContract } from "./agent-skill-artifact-contract.test-support";
 import { installAgentSkills } from "./agent-skills-installer";
 
 function fixture(): { home: string; sourceRoot: string } {
@@ -41,6 +42,7 @@ describe("Codex Agent Skills installer", () => {
       );
     }
     expect(existsSync(join(result.targetRoot, ".prs-managed-skills.json"))).toBe(true);
+    expectInstalledArtifactContract(result.targetRoot);
   });
 
   it("is idempotent and updates only files that still match their managed hash", () => {
@@ -129,6 +131,7 @@ describe("Claude Code Agent Skills installer", () => {
         readFileSync(join(sourceRoot, "skills", name, "SKILL.md"), "utf8")
       );
     }
+    expectInstalledArtifactContract(result.targetRoot);
   });
 
   it("uses the same managed-hash protection for Claude custom files", () => {
@@ -162,6 +165,7 @@ describe("GitHub Copilot Agent Skills installer", () => {
       readFileSync(join(copilot.targetRoot, ".prs-managed-skills.json"), "utf8")
     ) as { hosts: string[] };
     expect(state.hosts).toEqual(["codex", "copilot"]);
+    expectInstalledArtifactContract(copilot.targetRoot);
   });
 
   it("protects shared custom collisions when Copilot installs first", () => {

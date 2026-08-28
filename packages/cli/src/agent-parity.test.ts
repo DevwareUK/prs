@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { expectArtifactContract } from "./agent-skill-artifact-contract.test-support";
 import { validateAgentSkillParity } from "./agent-parity";
 
 const EXPECTED_SKILLS = ["prs", "prs-create", "prs-finish", "prs-issue", "prs-orchestrate"];
@@ -21,6 +22,9 @@ describe("three-host Agent Skills parity", () => {
       expect(row.contentHashes).toEqual(report.canonical.contentHashes);
       expect(row.requiredOperations).toEqual(report.canonical.requiredOperations);
       expect(row.errors).toEqual([]);
+      for (const name of EXPECTED_SKILLS) {
+        expectArtifactContract(readFileSync(join(row.targetRoot, name, "SKILL.md"), "utf8"));
+      }
     }
   });
 

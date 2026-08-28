@@ -16,11 +16,14 @@ The command creates a different temporary home for Codex, Claude Code, and GitHu
 
 Use a disposable GitHub repository owned for testing. Never point the smoke procedure at a production repository.
 
-1. Copy `docs/examples/agent-lifecycle-smoke-matrix.template.json` into the run directory.
+1. Create a task-specific directory beneath `.prs/runs` and copy `docs/examples/agent-lifecycle-smoke-matrix.template.json` into it. Keep every supporting draft, specification, plan, working note, and completion artifact in that directory or a run directory returned by `prs`.
 2. For each host, start a fresh native session and fresh repository clone. Run `prs setup --skills <host>`.
 3. Use the host's native invocation behavior to create a small issue, refine and approve its specification, approve its plan, implement one trivial tested change, verify it locally, open a dedicated pull request, wait for hosted checks, and publish final audit evidence.
 4. Record the issue and pull-request URLs, the native session identifier, and evidence for every phase in that host's own row.
 5. Mark a phase `passed` only from evidence produced by that row's host. Use `failed` for an attempted failure and `not-run` when it was not attempted. Never copy another host's URL or result to satisfy the row.
+
+Each host row must record that its raw workflow artifacts stayed below `.prs/runs` and were not committed. Do not create an alternative scratch root such as `.prs-work`. This manual evidence requirement is separate from the automated static parity report.
+
 6. Run the full repository verification suite after all child changes are integrated.
 
-The matrix schema requires exactly one row for each of `codex`, `claude-code`, and `copilot`, with all seven lifecycle phases present. Store completed matrices under `.prs/runs`; publish them only after reviewing the repository and URLs to ensure they are disposable test resources.
+The matrix schema requires exactly one row for each of `codex`, `claude-code`, and `copilot`, with all seven lifecycle phases present. Store completed matrices under `.prs/runs/<task-specific-run>/`; publish them only after reviewing the repository and URLs to ensure they are disposable test resources.
