@@ -48,5 +48,8 @@ describe("canonical agent skill pack", () => {
     expect(finish).toContain("Stage only files that belong to the approved issue");
     expect(finish).toContain("git diff --cached --name-status");
     expect(finish).toContain("displayed commit message and staged paths");
+    expect(finish).toContain("existing index");
+    expect(finish).toContain("unstaged changes");
+    expect(finish).toContain("untracked files");
   });
 });

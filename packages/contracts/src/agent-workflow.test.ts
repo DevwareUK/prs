@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   AGENT_WORKFLOW_CONTRACT,
@@ -24,6 +25,12 @@ const validManifest = {
   ],
 } as const;
 
+const canonicalSkillManifest = JSON.parse(
+  readFileSync("skills/manifest.json", "utf8")
+) as {
+  skills: Array<{ name: string; phases: string[] }>;
+};
+
 describe("agent workflow contract", () => {
   it("exposes the supported hosts and complete issue lifecycle", () => {
     expect(SUPPORTED_AGENT_HOSTS).toEqual(["codex", "claude-code", "copilot"]);
@@ -33,6 +40,7 @@ describe("agent workflow contract", () => {
       "plan",
       "implement",
       "verify",
+      "finalize",
       "open-pr",
       "validate",
     ]);
@@ -86,6 +94,30 @@ describe("agent workflow contract", () => {
     expect(
       AGENT_WORKFLOW_CONTRACT.commands.find((command) => command.name === "issue-finalize")
     ).toMatchObject({ json: false, mutatesRemote: false, approval: "explicit" });
+  });
+
+  it("defines portable artifact-locality and staged-finalization safety policies", () => {
+    expect(AGENT_WORKFLOW_CONTRACT.safety.artifactLocality).toEqual({
+      root: ".prs/runs",
+      rawArtifacts: "local-only",
+      staging: "forbidden",
+    });
+    expect(AGENT_WORKFLOW_CONTRACT.safety.finalization).toEqual({
+      commitSource: "existing-index",
+      unstagedChanges: "preserve",
+      untrackedFiles: "preserve",
+    });
+  });
+
+  it("assigns finalization to completion skills but not creation", () => {
+    const phasesBySkill = new Map(
+      canonicalSkillManifest.skills.map((skill) => [skill.name, skill.phases])
+    );
+
+    for (const skill of ["prs", "prs-issue", "prs-finish", "prs-orchestrate"]) {
+      expect(phasesBySkill.get(skill)).toContain("finalize");
+    }
+    expect(phasesBySkill.get("prs-create")).not.toContain("finalize");
   });
 
   it.each([

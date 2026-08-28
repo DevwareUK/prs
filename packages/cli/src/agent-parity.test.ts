@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -6,6 +6,19 @@ import { expectArtifactContract } from "./agent-skill-artifact-contract.test-sup
 import { validateAgentSkillParity } from "./agent-parity";
 
 const EXPECTED_SKILLS = ["prs", "prs-create", "prs-finish", "prs-issue", "prs-orchestrate"];
+const REQUIRED_SAFEGUARDS = ["artifact-locality", "staged-only-finalization"];
+
+function createSourceFixture(mutate: (content: string) => string): string {
+  const sourceRoot = mkdtempSync(join(tmpdir(), "prs-agent-parity-source-"));
+  cpSync(resolve("skills"), join(sourceRoot, "skills"), { recursive: true });
+
+  for (const name of EXPECTED_SKILLS) {
+    const skillPath = join(sourceRoot, "skills", name, "SKILL.md");
+    writeFileSync(skillPath, mutate(readFileSync(skillPath, "utf8")), "utf8");
+  }
+
+  return sourceRoot;
+}
 
 describe("three-host Agent Skills parity", () => {
   it("installs and validates every host in its own temporary home", () => {
@@ -14,6 +27,7 @@ describe("three-host Agent Skills parity", () => {
     const report = validateAgentSkillParity({ sourceRoot: resolve("."), temporaryRoot });
 
     expect(report.status).toBe("passed");
+    expect(report.canonical.requiredSafeguards).toEqual(REQUIRED_SAFEGUARDS);
     expect(report.hosts.map((row) => row.host)).toEqual(["codex", "claude-code", "copilot"]);
     expect(new Set(report.hosts.map((row) => row.home)).size).toBe(3);
     for (const row of report.hosts) {
@@ -21,10 +35,144 @@ describe("three-host Agent Skills parity", () => {
       expect(row.inventory).toEqual(EXPECTED_SKILLS);
       expect(row.contentHashes).toEqual(report.canonical.contentHashes);
       expect(row.requiredOperations).toEqual(report.canonical.requiredOperations);
+      expect(row.safeguards).toEqual(REQUIRED_SAFEGUARDS);
       expect(row.errors).toEqual([]);
       for (const name of EXPECTED_SKILLS) {
         expectArtifactContract(readFileSync(join(row.targetRoot, name, "SKILL.md"), "utf8"));
       }
+    }
+  });
+
+  it("fails every installed host when artifact locality safeguards are absent", () => {
+    const sourceRoot = createSourceFixture((content) => content.replaceAll(".prs/runs", ".prs-work"));
+    const temporaryRoot = mkdtempSync(join(tmpdir(), "prs-agent-parity-artifact-locality-"));
+
+    const report = validateAgentSkillParity({ sourceRoot, temporaryRoot });
+
+    expect(report.status).toBe("failed");
+    expect(report.hosts.map((row) => row.status)).toEqual(["failed", "failed", "failed"]);
+    for (const row of report.hosts) {
+      expect(row.errors).toContain("missing safeguard: artifact-locality");
+    }
+  });
+
+  it("fails every installed host when staged-only finalization safeguards are absent", () => {
+    const sourceRoot = createSourceFixture((content) =>
+      content.replace(/\b(?:staged|index|unstaged|untracked)\b/gi, "")
+    );
+    const temporaryRoot = mkdtempSync(join(tmpdir(), "prs-agent-parity-finalization-"));
+
+    const report = validateAgentSkillParity({ sourceRoot, temporaryRoot });
+
+    expect(report.status).toBe("failed");
+    expect(report.hosts.map((row) => row.status)).toEqual(["failed", "failed", "failed"]);
+    for (const row of report.hosts) {
+      expect(row.errors).toContain("missing safeguard: staged-only-finalization");
+    }
+  });
+
+  it("fails every installed host when staging raw artifacts is required", () => {
+    const sourceRoot = createSourceFixture((content) =>
+      content.replaceAll("Never stage or commit them", "Always stage and commit them")
+    );
+    const temporaryRoot = mkdtempSync(join(tmpdir(), "prs-agent-parity-artifact-reversed-"));
+
+    const report = validateAgentSkillParity({ sourceRoot, temporaryRoot });
+
+    expect(report.status).toBe("failed");
+    expect(report.hosts.map((row) => row.status)).toEqual(["failed", "failed", "failed"]);
+    for (const row of report.hosts) {
+      expect(row.errors).toContain("missing safeguard: artifact-locality");
+    }
+  });
+
+  it("fails every installed host when finalization deletes preserved files", () => {
+    const sourceRoot = createSourceFixture((content) =>
+      content.replace(
+        "The command commits only the existing index and leaves unstaged changes and untracked files untouched.",
+        "The command commits only the existing index and deletes unstaged changes and untracked files."
+      )
+    );
+    const temporaryRoot = mkdtempSync(join(tmpdir(), "prs-agent-parity-finalization-reversed-"));
+
+    const report = validateAgentSkillParity({ sourceRoot, temporaryRoot });
+
+    expect(report.status).toBe("failed");
+    expect(report.hosts.map((row) => row.status)).toEqual(["failed", "failed", "failed"]);
+    for (const row of report.hosts) {
+      expect(row.errors).toContain("missing safeguard: staged-only-finalization");
+    }
+  });
+
+  it("fails every installed host when an unrelated commit prohibition masks raw artifact staging", () => {
+    const sourceRoot = createSourceFixture((content) =>
+      content.replaceAll(
+        "They are raw workflow artifacts and stay local. Never stage or commit them",
+        "Always stage and commit raw workflow artifacts. Never commit implementation files"
+      )
+    );
+    const temporaryRoot = mkdtempSync(join(tmpdir(), "prs-agent-parity-artifact-unrelated-"));
+
+    const report = validateAgentSkillParity({ sourceRoot, temporaryRoot });
+
+    expect(report.status).toBe("failed");
+    expect(report.hosts.map((row) => row.status)).toEqual(["failed", "failed", "failed"]);
+    for (const row of report.hosts) {
+      expect(row.errors).toContain("missing safeguard: artifact-locality");
+    }
+  });
+
+  it("fails every installed host when unrelated preservation prose masks destructive finalization", () => {
+    const sourceRoot = createSourceFixture((content) =>
+      content.replace(
+        "The command commits only the existing index and leaves unstaged changes and untracked files untouched.",
+        "The command commits only the existing index and deletes unstaged changes and untracked files.\nPreserve unstaged changes and untracked files outside finalization."
+      )
+    );
+    const temporaryRoot = mkdtempSync(join(tmpdir(), "prs-agent-parity-finalization-unrelated-"));
+
+    const report = validateAgentSkillParity({ sourceRoot, temporaryRoot });
+
+    expect(report.status).toBe("failed");
+    expect(report.hosts.map((row) => row.status)).toEqual(["failed", "failed", "failed"]);
+    for (const row of report.hosts) {
+      expect(row.errors).toContain("missing safeguard: staged-only-finalization");
+    }
+  });
+
+  it("fails every installed host when a preceding raw-artifact staging directive contradicts a prohibition", () => {
+    const sourceRoot = createSourceFixture((content) =>
+      content.replaceAll(
+        "They are raw workflow artifacts and stay local. Never stage or commit them",
+        "Always stage and commit raw workflow artifacts. Never stage or commit them"
+      )
+    );
+    const temporaryRoot = mkdtempSync(join(tmpdir(), "prs-agent-parity-artifact-contradictory-"));
+
+    const report = validateAgentSkillParity({ sourceRoot, temporaryRoot });
+
+    expect(report.status).toBe("failed");
+    expect(report.hosts.map((row) => row.status)).toEqual(["failed", "failed", "failed"]);
+    for (const row of report.hosts) {
+      expect(row.errors).toContain("missing safeguard: artifact-locality");
+    }
+  });
+
+  it("fails every installed host when a same-line destructive finalization statement contradicts preservation", () => {
+    const sourceRoot = createSourceFixture((content) =>
+      content.replace(
+        "The command commits only the existing index and leaves unstaged changes and untracked files untouched.",
+        "The command commits only the existing index and deletes unstaged changes and untracked files. The command commits only the existing index and leaves unstaged changes and untracked files untouched."
+      )
+    );
+    const temporaryRoot = mkdtempSync(join(tmpdir(), "prs-agent-parity-finalization-contradictory-"));
+
+    const report = validateAgentSkillParity({ sourceRoot, temporaryRoot });
+
+    expect(report.status).toBe("failed");
+    expect(report.hosts.map((row) => row.status)).toEqual(["failed", "failed", "failed"]);
+    for (const row of report.hosts) {
+      expect(row.errors).toContain("missing safeguard: staged-only-finalization");
     }
   });
 

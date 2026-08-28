@@ -30,7 +30,7 @@ The GitHub Copilot adapter uses the same `~/.agents/skills` target and hash ledg
 prs skills validate [--json]
 ```
 
-Parity validation installs all three host adapters into separate temporary homes, then compares each installed inventory, content hash, and retained operation reference with the canonical pack. The command reports static installation and instruction parity only. End-to-end native host results belong in the separate manual smoke matrix described in [the agent parity guide](agent-parity.md).
+Parity validation installs all three host adapters into separate temporary homes, then compares each installed inventory, content hash, and retained operation reference with the canonical pack. It also checks the installed `artifact-locality` instruction (raw workflow artifacts stay under `.prs/runs` and are not staged or committed) and `staged-only-finalization` instruction (the existing index is the commit source while unstaged and untracked files are preserved). The JSON report names the required safeguards and reports passing safeguards or missing-safeguard errors for each host independently. The command reports static installation and instruction parity only; it does not launch host runtimes. End-to-end native host evidence remains manual and separately attributed in [the agent parity guide](agent-parity.md)'s smoke matrix.
 
 ## Issue tools
 
@@ -42,7 +42,7 @@ Parity validation installs all three host adapters into separate temporary homes
 | `prs tool issue publish-artifacts <number> --spec-file <path> --plan-file <path> --json` | Validates approved non-empty Markdown and creates or updates the managed specification and plan comments. |
 | `prs tool issue create --draft-file <path> --json` | Creates or reuses one issue from an approved Markdown draft. Optional labels, managed markers, spec/plan files, and a media manifest are supported. |
 | `prs tool issue create --issue-set <path> --json` | Creates or reuses a linked set described by a version-1 JSON manifest. `--run-dir` resolves relative draft paths. |
-| `prs issue finalize <number>` | Shows deterministic commit text, asks for explicit confirmation, stages all local changes, and creates one local commit. It does not push or open a pull request. |
+| `prs issue finalize <number>` | Shows deterministic commit text and the exact staged paths, asks for explicit confirmation, and creates one local commit from the existing index. It does not stage files, push, or open a pull request. |
 
 The single-draft Markdown format starts with an H1 title; the remainder becomes the issue body. A linked issue-set manifest contains `version`, `mode`, and `issues`, where each issue has an `id`, `draftFile`, and optional `dependsOn`, `blocks`, and `related` IDs.
 
