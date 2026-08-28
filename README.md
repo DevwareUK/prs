@@ -60,7 +60,7 @@ A normal issue flow is:
 2. After approval, it creates the issue(s) with `prs tool issue create`.
 3. It reads live context with `prs tool issue context` and publishes an approved specification and plan with `prs tool issue publish-artifacts`.
 4. It prepares implementation context with `prs tool issue ready`, then works in an isolated branch or worktree.
-5. It verifies the changes and uses `prs issue finalize` to create a deterministic local commit after explicit confirmation.
+5. The active agent stages only the approved issue changes, verifies them with `git diff --cached --name-status`, and uses `prs issue finalize` to preview and create a deterministic local commit after explicit confirmation.
 6. It opens or updates the pull request through its normal GitHub tooling and publishes evidence with `prs audit publish`.
 
 For an existing pull request, `prs tool pr ready` checks out the actual head branch, synchronizes the configured base, runs configured local-readiness commands, and returns GitHub checks and review-comment context as JSON.
@@ -90,6 +90,8 @@ prs tool pr ready <pr-number> [--unattended|--auto|--jdi] --json
 prs audit publish (--issue <number>|--pr <number>) --file <path> --section <name>
                   [--local-run <path>] [--media-manifest <path>]
 ```
+
+`prs issue finalize` does not stage files for you. It previews the deterministic commit message and exact staged paths, refuses an empty index, and commits only changes already in the index, leaving unstaged and untracked files untouched.
 
 Remote mutations—creating issues and publishing managed comments or audits—must be approved by the user before the active agent invokes them. Read-only context commands need no approval. `prs tool pr ready` changes the local checkout and may merge the latest base branch, but it does not push or merge a pull request.
 

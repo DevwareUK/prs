@@ -29,4 +29,11 @@ describe("provider-free CLI command surface", () => {
       "pnpm --filter @prs/contracts build && vitest run packages/cli/src/agent-parity.test.ts packages/contracts/src/agent-parity.test.ts packages/cli/src/commands/skills.test.ts"
     );
   });
+
+  it("documents staged-only issue finalization", () => {
+    const readme = readFileSync(resolve(process.cwd(), "README.md"), "utf8");
+    expect(readme).toContain("does not stage files for you");
+    expect(readme).toContain("refuses an empty index");
+    expect(readme).toContain("unstaged and untracked files untouched");
+  });
 });

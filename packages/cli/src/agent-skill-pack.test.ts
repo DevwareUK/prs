@@ -42,4 +42,11 @@ describe("canonical agent skill pack", () => {
     expect(combined).toContain("sequentially");
     expect(combined).toContain("verification");
   });
+
+  it("requires deliberate staging before issue finalization", () => {
+    const finish = readFileSync(resolve("skills/prs-finish/SKILL.md"), "utf8");
+    expect(finish).toContain("Stage only files that belong to the approved issue");
+    expect(finish).toContain("git diff --cached --name-status");
+    expect(finish).toContain("displayed commit message and staged paths");
+  });
 });
