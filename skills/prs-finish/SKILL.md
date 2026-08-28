@@ -15,7 +15,7 @@ This covers issue drafts, linked-set manifests, specifications, plans, working n
 
 1. Review the diff against the approved issue scope and acceptance criteria.
 2. Run fresh verification. Fix in-scope failures; report inherited or external failures with evidence.
-3. Obtain explicit user approval for the deterministic commit, then run `prs issue finalize <number>`.
+3. Stage only files that belong to the approved issue and inspect `git diff --cached --name-status`. Run `prs issue finalize <number>`, then approve only after checking its displayed commit message and staged paths.
 4. Push the issue branch and open or update its pull request with the host's normal GitHub capability. Keep one issue task per pull request unless the approved plan says otherwise.
 5. Run `prs tool pr ready <number> --json`; resolve local-readiness failures or merge conflicts and re-run verification.
 6. Write a concise completion artifact in the run directory returned for this task. If none is available, create a task-specific directory beneath `.prs/runs`. Obtain explicit user approval before publishing the reviewed content with `prs audit publish --issue <number> ...` or `prs audit publish --pr <number> ...`.
