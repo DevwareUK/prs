@@ -5,6 +5,12 @@ The portable flow is deliberately split:
 - the active coding agent owns questions, specifications, plans, implementation, review, and user approval;
 - `prs` owns deterministic local GitHub, Git, artifact, and validation operations.
 
+## Local artifact contract
+
+`.prs/runs/<task-specific-run>/` is the only repository-local root for generated workflow artifacts. Use a run directory returned by `prs` when available; otherwise create a task-specific directory beneath `.prs/runs`. Issue drafts, linked-set manifests, specifications, plans, working notes, and completion evidence all stay below this root.
+
+These raw files remain ignored and local; never stage or commit them, and never create an alternative repository-local scratch root such as `.prs-work`. Explicitly approved publication commands may publish reviewed specification, plan, or completion content to managed GitHub comments; publication does not make the raw local files repository content.
+
 Codex, Claude Code, and GitHub Copilot should use the same lifecycle and command contract:
 
 1. create approved issue drafts with `prs tool issue create`;

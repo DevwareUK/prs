@@ -50,11 +50,13 @@ For Claude Code, `prs skills install claude-code` installs the same files under 
 
 For GitHub Copilot, `prs skills install copilot` shares the Codex installation under `~/.agents/skills` without duplicating managed files. See [the Copilot guide](docs/github-copilot.md).
 
+All generated workflow artifacts use `.prs/runs/<task-specific-run>/` as their only repository-local root. Use a run directory returned by `prs` when available; otherwise create a task-specific directory beneath `.prs/runs`. This covers issue drafts, linked-set manifests, specifications, plans, working notes, and completion evidence. These raw files remain local: never stage or commit them, and never create an alternative scratch root such as `.prs-work`.
+
 ## Workflow
 
 A normal issue flow is:
 
-1. The active agent drafts one issue or a linked issue set as local files.
+1. The active agent drafts one issue or a linked issue set inside a task-specific directory beneath `.prs/runs`.
 2. After approval, it creates the issue(s) with `prs tool issue create`.
 3. It reads live context with `prs tool issue context` and publishes an approved specification and plan with `prs tool issue publish-artifacts`.
 4. It prepares implementation context with `prs tool issue ready`, then works in an isolated branch or worktree.
