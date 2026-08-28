@@ -2,22 +2,9 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { AgentSkillManifest } from "@prs/contracts";
+import { expectArtifactContract } from "./agent-skill-artifact-contract.test-support";
 
 const EXPECTED_SKILLS = ["prs", "prs-create", "prs-finish", "prs-issue", "prs-orchestrate"];
-const REQUIRED_ARTIFACT_INSTRUCTIONS = [
-  ".prs/runs/<task-specific-run>/",
-  "only repository-local root",
-  "Use a run directory returned by `prs` when available",
-  "issue drafts, linked-set manifests, specifications, plans, working notes, and completion evidence",
-  "Never stage or commit them",
-  ".prs-work",
-];
-
-function expectArtifactContract(markdown: string): void {
-  for (const instruction of REQUIRED_ARTIFACT_INSTRUCTIONS) {
-    expect(markdown).toContain(instruction);
-  }
-}
 
 describe("canonical agent skill pack", () => {
   it("publishes the exact portable inventory through one manifest", () => {

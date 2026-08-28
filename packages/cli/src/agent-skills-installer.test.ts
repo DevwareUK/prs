@@ -9,6 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { expectInstalledArtifactContract } from "./agent-skill-artifact-contract.test-support";
 import { installAgentSkills } from "./agent-skills-installer";
 
 function fixture(): { home: string; sourceRoot: string } {
@@ -17,23 +18,6 @@ function fixture(): { home: string; sourceRoot: string } {
   mkdirSync(sourceRoot, { recursive: true });
   cpSync(resolve("skills"), join(sourceRoot, "skills"), { recursive: true });
   return { home: join(root, "home"), sourceRoot };
-}
-
-function expectInstalledArtifactContract(root: string): void {
-  const requiredInstructions = [
-    ".prs/runs/<task-specific-run>/",
-    "only repository-local root",
-    "Use a run directory returned by `prs` when available",
-    "issue drafts, linked-set manifests, specifications, plans, working notes, and completion evidence",
-    "Never stage or commit them",
-    ".prs-work",
-  ];
-  for (const name of ["prs", "prs-create", "prs-issue", "prs-finish", "prs-orchestrate"]) {
-    const markdown = readFileSync(join(root, name, "SKILL.md"), "utf8");
-    for (const instruction of requiredInstructions) {
-      expect(markdown).toContain(instruction);
-    }
-  }
 }
 
 describe("Codex Agent Skills installer", () => {
