@@ -74,7 +74,6 @@ describe("canonical agent skill pack", () => {
     for (const action of ["review", "resolve-conflicts", "address-comments", "fix-tests"]) {
       expect(pr).toContain(`### ${action}`);
     }
-    expect(pr).not.toContain("### add-tests");
     expect(pr).not.toMatch(/prs tool pr (?:review|address-comments|fix-tests|push-reviewed)/);
   });
 

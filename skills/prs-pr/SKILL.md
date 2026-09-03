@@ -49,8 +49,6 @@ Implement the requested fixes and relevant regression tests, then follow the ver
 
 Treat the older `fix-failing-tests` wording as this action. Inspect failed checks with `gh pr checks <number>` and their logs (`gh run view <run-id> --log-failed` for GitHub Actions), or equivalent host tools. For local failures, read the readiness log or reproduce the failing verification command. Confirm the failure applies to the current PR head; pending or unavailable checks are not failures. Repair the cause, rerun the failing test plus relevant regression checks, and follow the verified-change steps. Report inherited or external failures with evidence rather than suppressing tests.
 
-The retired `add-tests` action consumed managed suggestions from a removed Action and is not offered. Necessary regression tests remain part of fixes.
-
 ## Verify and push changes
 
 1. Review the diff against the requested fix and run fresh relevant verification. Stage only intended paths, inspect `git diff --cached --name-status` and the staged diff, and commit only the existing index; preserve unstaged changes and untracked files. When there is no linked issue, use a normal Git commit with a reviewed message. Never invent an issue number for `prs issue finalize`.

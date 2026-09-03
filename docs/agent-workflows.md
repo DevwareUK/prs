@@ -52,6 +52,6 @@ Request one of these actions after preparation or directly for a selected PR:
 | `address-comments` | Read full actionable threads, evaluate and fix selected findings, verify changes, and draft approved replies/resolutions. Requests to resolve comments and `fix-comments` wording select this action. |
 | `fix-tests` | Inspect actual local or hosted-check failures, repair the cause, and rerun relevant verification. |
 
-These are active-agent workflows, not additional CLI commands. `add-tests` is excluded because it consumed suggestions from a retired Action. Adding necessary regression tests remains part of fixes.
+These are active-agent workflows, not additional CLI commands.
 
 Readiness success is not review completion; its unattended flags only govern preparation and runtime startup. For authorized changes, the agent stages intended paths, inspects the index, and uses normal Git finalization when no issue is linked. Before pushing, it confirms the actual PR head destination (including forks), fetches its current tip, inspects outgoing commits, and pushes only when ahead and not behind, without force. Completion evidence records the current head, local verification, hosted checks and remaining blockers. Pending or unavailable checks must remain visible. Review/comment/audit publication and destructive cleanup retain explicit approval gates; readiness alone never authorizes a merge.

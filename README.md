@@ -68,7 +68,7 @@ A normal issue flow is:
 
 For an existing pull request, use `prs-pr`. It locates the main checkout used by your local application and runs `prs tool pr ready` there to check out the actual head branch, synchronize the PR base, run configured local-readiness commands, and return GitHub checks and review-comment context. With no PR selected, it lists actionable PRs with links. With no follow-up action requested, it prepares local testing and offers relevant next steps.
 
-The skill accepts `review`, `resolve-conflicts`, `address-comments` (including requests to resolve comments), and `fix-tests`. These are active-agent actions, not additional CLI subcommands. Review preparation and approved publication, deliberate commits, guarded pushes and fresh hosted checks remain part of the workflow; PRs need no linked issue. `fix-tests` repairs observed failures. The retired `add-tests` action depended on the removed test-suggestions Action and is not offered.
+The skill accepts `review`, `resolve-conflicts`, `address-comments` (including requests to resolve comments), and `fix-tests`. These are active-agent actions, not additional CLI subcommands. Review preparation and approved publication, deliberate commits, guarded pushes and fresh hosted checks remain part of the workflow; PRs need no linked issue. `fix-tests` repairs observed failures.
 
 For example, ask: "Use prs-pr to prepare PR 88 for local testing", then "Use prs-pr to address comments on PR 88". See the host guides for native invocation syntax. Readiness flags such as `--jdi` apply only to preparation and configured runtime startup; they do not authorize review publication, fixes, pushes or merging.
 
