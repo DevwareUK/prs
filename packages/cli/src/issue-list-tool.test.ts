@@ -1,15 +1,18 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { listIssuesTool } from "./issue-list-tool";
+
+beforeEach(() => vi.stubGlobal("fetch", () => { throw new Error("Direct HTTP must not be used"); }));
+afterEach(() => vi.unstubAllGlobals());
 
 describe("issue list tool", () => {
   it("returns a structured blocked result when GitHub auth is unavailable", async () => {
-    const fetchImpl = vi.fn();
+    const request = vi.fn();
 
     await expect(
       listIssuesTool({
         actionable: true,
         env: {},
-        fetchImpl,
+        request,
         repoRoot: "/repo",
         runCommand: (command) => {
           if (command === "gh") {
@@ -27,13 +30,13 @@ describe("issue list tool", () => {
         "GitHub authentication is required for `prs tool issue list --actionable --json`."
       ),
       nextAction:
-        "Set GH_TOKEN or GITHUB_TOKEN in the repository environment, or authenticate gh in the shell that runs prs.",
+        "Install gh and authenticate with gh auth login --hostname github.com for the selected account.",
     });
-    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
   });
 
   it("lists and filters actionable issues for the authenticated user", async () => {
-    const fetchImpl = vi
+    const request = vi
       .fn()
       .mockResolvedValueOnce({
         ok: true,
@@ -115,7 +118,8 @@ describe("issue list tool", () => {
       listIssuesTool({
         actionable: true,
         env: { GH_TOKEN: "token" },
-        fetchImpl,
+        request,
+        spawnSyncImpl: () => ({ status: 0 }),
         repoRoot: "/repo",
         runCommand: () => "git@github.com:DevwareUK/prs.git",
       })
@@ -141,7 +145,7 @@ describe("issue list tool", () => {
   });
 
   it("skips issues without usable GitHub URLs", async () => {
-    const fetchImpl = vi
+    const request = vi
       .fn()
       .mockResolvedValueOnce({
         ok: true,
@@ -199,7 +203,8 @@ describe("issue list tool", () => {
       listIssuesTool({
         actionable: false,
         env: { GH_TOKEN: "token" },
-        fetchImpl,
+        request,
+        spawnSyncImpl: () => ({ status: 0 }),
         repoRoot: "/repo",
         runCommand: () => "git@github.com:DevwareUK/prs.git",
       })
@@ -213,4 +218,26 @@ describe("issue list tool", () => {
       ],
     });
   });
+});
+
+it("uses the project account for both viewer identity and actionable filtering", async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const root = mkdtempSync(join(tmpdir(), "prs-list-account-"));
+  mkdirSync(join(root, ".prs"));
+  writeFileSync(join(root, ".prs/config.local.json"), JSON.stringify({ forge: { githubAccount: "work" } }));
+  const result = await listIssuesTool({ actionable: true, repoRoot: root,
+    env: { GH_TOKEN: "personal-secret" }, spawnSyncImpl: () => ({ status: 0 }),
+    runCommand: () => "git@github.com:DevwareUK/prs.git",
+    runGitHubCommand: (_command, args, options) => {
+      if (args[0] === "auth") return "work-secret";
+      expect(options.env.GH_TOKEN).toBe("work-secret");
+      const payload = args[1] === "user" ? { login: "work" }
+        : args[1].includes("/issues?") ? [{ number: 1, title: "Work task", html_url: "https://github.com/DevwareUK/prs/issues/1", user: { login: "work" }, updated_at: "2026-09-03T09:00:00Z" }]
+        : [];
+      return `HTTP/2.0 200 OK\n\n${JSON.stringify(payload)}`;
+    },
+  });
+  expect(result).toMatchObject({ status: "ready", currentUser: "work", issues: [{ number: 1, author: "work" }] });
 });

@@ -10,7 +10,7 @@ prs setup [--skills <none|codex|claude-code|copilot|all>]
 
 `prs setup` verifies the current directory is a Git repository, detects a default base branch and build command, then writes `.prs/config.json` and `.prs/.gitignore`. Existing `ai` and `githubActions` sections are removed with a visible migration notice.
 
-Without `--skills`, setup asks whether to install personal skills for one host, every host, or none. An empty answer selects `none`. The flag supports repeatable non-interactive setup. Host selection affects personal skill files only and is not stored in repository configuration.
+Without `--skills` in an interactive terminal, setup asks whether to install personal skills for one host, every host, or none; an empty answer selects `none`. It then offers saved GitHub accounts plus “Use the default account” and writes an explicit choice to ignored `.prs/config.local.json`. Reruns keep the current account unless explicitly changed. Supplying `--skills` skips all prompts; without interactive input, setup also skips prompts and defaults skill installation to `none`. Neither non-interactive path alters the account selection. Host selection affects personal skill files only and is not stored in repository configuration. See [setup and authentication](setup-configuration.md) for details.
 
 ## Install agent skills
 

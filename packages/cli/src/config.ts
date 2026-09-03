@@ -49,3 +49,25 @@ export function formatCommandForDisplay(command: string[]): string {
     .map((segment) => (/\s/.test(segment) ? JSON.stringify(segment) : segment))
     .join(" ");
 }
+
+export const LOCAL_REPOSITORY_CONFIG_RELATIVE_PATH = ".prs/config.local.json";
+export type LocalRepositoryConfig = { forge?: { githubAccount?: string } };
+
+export function loadLocalRepositoryConfig(repoRoot: string): LocalRepositoryConfig {
+  const path = resolve(repoRoot, LOCAL_REPOSITORY_CONFIG_RELATIVE_PATH);
+  if (!existsSync(path)) return {};
+  // Keep personal configuration separate from the committed workflow schema.
+  const invalid = () => new Error(`Invalid ${LOCAL_REPOSITORY_CONFIG_RELATIVE_PATH}: expected an optional forge.githubAccount username.`);
+  let value: unknown;
+  try { value = JSON.parse(readFileSync(path, "utf8")); } catch { throw invalid(); }
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw invalid();
+  const config = value as Record<string, unknown>;
+  if (Object.keys(config).some(key => key !== "forge")) throw invalid();
+  if (config.forge === undefined) return {};
+  if (!config.forge || typeof config.forge !== "object" || Array.isArray(config.forge)) throw invalid();
+  const forge = config.forge as Record<string, unknown>;
+  if (Object.keys(forge).some(key => key !== "githubAccount")) throw invalid();
+  if (forge.githubAccount === undefined) return { forge: {} };
+  if (typeof forge.githubAccount !== "string" || !forge.githubAccount.trim()) throw invalid();
+  return { forge: { githubAccount: forge.githubAccount.trim() } };
+}

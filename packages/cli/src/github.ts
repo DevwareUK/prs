@@ -18,11 +18,7 @@ import type {
   RepositoryForge,
 } from "./forge";
 import { AUDIT_COMMENT_MARKER } from "./audit-artifacts";
-import {
-  formatGitHubAuthDiagnostics,
-  resolveGitHubCli,
-  resolveGitHubToken,
-} from "./github-auth";
+import { createGitHubClient, requestGitHub } from "./github-client";
 import { ISSUE_PLAN_COMMENT_MARKER, startsWithManagedMarker } from "@prs/contracts";
 
 function runCommand(
@@ -49,10 +45,6 @@ function runCommand(
   }
 }
 
-function hasGitHubApiToken(): boolean {
-  return Boolean(process.env.GH_TOKEN?.trim() || process.env.GITHUB_TOKEN?.trim());
-}
-
 function parseGitHubRepoFromRemote(repoRoot: string): { owner: string; repo: string } {
   const remoteUrl = runCommand(
     "git",
@@ -71,50 +63,13 @@ function parseGitHubRepoFromRemote(repoRoot: string): { owner: string; repo: str
   };
 }
 
-function resolveGhCommand(repoRoot?: string): string | undefined {
-  return resolveGitHubCli({ repoRoot }).path;
-}
-
-function isGhAuthenticated(repoRoot?: string): boolean {
-  const ghCommand = resolveGhCommand(repoRoot);
-  if (!ghCommand) {
-    return false;
-  }
-
-  let result: ReturnType<typeof spawnSync>;
-  try {
-    result = spawnSync(ghCommand, ["auth", "status"], {
-      stdio: "ignore",
-    });
-  } catch {
-    return false;
-  }
-
-  return !result.error && result.status === 0;
-}
-
-function canUseGitHub(repoRoot?: string): boolean {
-  return (
-    hasGitHubApiToken() ||
-    isGhAuthenticated(repoRoot) ||
-    Boolean(tryResolveGitHubApiToken(repoRoot))
+function canUseGitHub(repoRoot: string): boolean {
+  const { owner, repo } = parseGitHubRepoFromRemote(repoRoot);
+  createGitHubClient({ repoRoot }).run(
+    ["api", `repos/${owner}/${repo}`, "--hostname", "github.com", "--jq", ".id"],
+    "GitHub authentication failed."
   );
-}
-
-function tryResolveGitHubApiToken(repoRoot?: string): string | undefined {
-  return resolveGitHubToken({ repoRoot }).token;
-}
-
-function getGitHubApiToken(requiredMessage: string, repoRoot?: string): string {
-  const resolution = resolveGitHubToken({ repoRoot });
-  const token = resolution.token;
-  if (!token) {
-    throw new Error(
-      `${requiredMessage}\n${formatGitHubAuthDiagnostics(resolution.diagnostics)}`
-    );
-  }
-
-  return token;
+  return true;
 }
 
 function parseIssuePlanCommentPayload(
@@ -242,24 +197,14 @@ async function listIssueComments(
   issueNumber: number,
   repoRoot?: string
 ): Promise<RepositoryComment[]> {
-  const token = tryResolveGitHubApiToken(repoRoot);
-  const headers: Record<string, string> = {
-    Accept: "application/vnd.github+json",
-    "User-Agent": "prs-cli",
-  };
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
 
   const comments: RepositoryComment[] = [];
   let page = 1;
 
   while (true) {
     const pageParameter = page === 1 ? "" : `&page=${page}`;
-    const response = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}/comments?per_page=100${pageParameter}`,
-      { headers }
+    const response = await requestGitHub(repoRoot,
+      `repos/${owner}/${repo}/issues/${issueNumber}/comments?per_page=100${pageParameter}`
     );
 
     if (!response.ok) {
@@ -305,20 +250,10 @@ async function assertAuditTargetMatchesType(
   target: AuditTarget,
   repoRoot?: string
 ): Promise<void> {
-  const token = tryResolveGitHubApiToken(repoRoot);
-  const headers: Record<string, string> = {
-    Accept: "application/vnd.github+json",
-    "User-Agent": "prs-cli",
-  };
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
 
   if (target.type === "pull-request") {
-    const response = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/pulls/${target.number}`,
-      { headers }
+    const response = await requestGitHub(repoRoot,
+      `repos/${owner}/${repo}/pulls/${target.number}`
     );
     if (!response.ok) {
       throw new Error(
@@ -328,9 +263,8 @@ async function assertAuditTargetMatchesType(
     return;
   }
 
-  const response = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}/issues/${target.number}`,
-    { headers }
+  const response = await requestGitHub(repoRoot,
+    `repos/${owner}/${repo}/issues/${target.number}`
   );
   if (!response.ok) {
     throw new Error(
@@ -346,117 +280,15 @@ async function assertAuditTargetMatchesType(
   }
 }
 
-function tryFetchPullRequestWithGh(
-  owner: string,
-  repo: string,
-  prNumber: number,
-  repoRoot?: string
-): PullRequestDetails | undefined {
-  const ghCommand = resolveGhCommand(repoRoot);
-  if (!ghCommand) {
-    return undefined;
-  }
-
-  try {
-    const payload = runCommand(
-      ghCommand,
-      [
-        "pr",
-        "view",
-        String(prNumber),
-        "--repo",
-        `${owner}/${repo}`,
-        "--json",
-        "number,title,body,url,baseRefName,headRefName,headRefOid,isDraft,mergeStateStatus",
-      ],
-      `Failed to fetch GitHub pull request #${prNumber} with gh.`
-    );
-
-    const parsed = JSON.parse(payload) as Partial<
-      PullRequestDetails & {
-        headRefOid?: string;
-        isDraft?: boolean;
-        mergeStateStatus?: string | null;
-      }
-    >;
-    if (
-      !parsed.number ||
-      !parsed.title ||
-      !parsed.url ||
-      !parsed.baseRefName ||
-      !parsed.headRefName
-    ) {
-      throw new Error("Pull request payload was incomplete.");
-    }
-
-    return {
-      number: parsed.number,
-      title: parsed.title,
-      body: parsed.body ?? "",
-      url: parsed.url,
-      baseRefName: parsed.baseRefName,
-      headRefName: parsed.headRefName,
-      headSha: parsed.headSha ?? parsed.headRefOid,
-      isDraft: parsed.isDraft,
-      mergeableState: parsed.mergeableState ?? parsed.mergeStateStatus,
-    };
-  } catch {
-    return undefined;
-  }
-}
-
-function tryFetchIssueWithGh(
-  owner: string,
-  repo: string,
-  issueNumber: number,
-  repoRoot?: string
-): IssueDetails | undefined {
-  const ghCommand = resolveGhCommand(repoRoot);
-  if (!ghCommand) {
-    return undefined;
-  }
-
-  try {
-    const payload = runCommand(
-      ghCommand,
-      ["issue", "view", String(issueNumber), "--repo", `${owner}/${repo}`, "--json", "title,body,url"],
-      `Failed to fetch GitHub issue #${issueNumber} with gh.`
-    );
-
-    const parsed = JSON.parse(payload) as Partial<IssueDetails>;
-    if (!parsed.title || !parsed.url) {
-      throw new Error("Issue payload was incomplete.");
-    }
-
-    return {
-      title: parsed.title,
-      body: parsed.body ?? "",
-      url: parsed.url,
-    };
-  } catch {
-    return undefined;
-  }
-}
-
 async function fetchIssueWithApi(
   owner: string,
   repo: string,
   issueNumber: number,
   repoRoot?: string
 ): Promise<IssueDetails> {
-  const token = tryResolveGitHubApiToken(repoRoot);
-  const headers: Record<string, string> = {
-    Accept: "application/vnd.github+json",
-    "User-Agent": "prs-cli",
-  };
 
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  const response = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}`,
-    { headers }
+  const response = await requestGitHub(repoRoot,
+    `repos/${owner}/${repo}/issues/${issueNumber}`
   );
 
   if (!response.ok) {
@@ -488,19 +320,9 @@ async function fetchPullRequestWithApi(
   prNumber: number,
   repoRoot?: string
 ): Promise<PullRequestDetails> {
-  const token = tryResolveGitHubApiToken(repoRoot);
-  const headers: Record<string, string> = {
-    Accept: "application/vnd.github+json",
-    "User-Agent": "prs-cli",
-  };
 
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  const response = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}`,
-    { headers }
+  const response = await requestGitHub(repoRoot,
+    `repos/${owner}/${repo}/pulls/${prNumber}`
   );
 
   if (!response.ok) {
@@ -556,23 +378,11 @@ async function listPullRequestChecks(
     return [];
   }
 
-  const token = tryResolveGitHubApiToken(repoRoot);
-  const headers: Record<string, string> = {
-    Accept: "application/vnd.github+json",
-    "User-Agent": "prs-cli",
-  };
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  const checkRunsPromise = fetch(
-    `https://api.github.com/repos/${owner}/${repo}/commits/${pullRequest.headSha}/check-runs?per_page=100`,
-    { headers }
+  const checkRunsPromise = requestGitHub(repoRoot,
+    `repos/${owner}/${repo}/commits/${pullRequest.headSha}/check-runs?per_page=100`
   );
-  const statusesPromise = fetch(
-    `https://api.github.com/repos/${owner}/${repo}/commits/${pullRequest.headSha}/status`,
-    { headers }
+  const statusesPromise = requestGitHub(repoRoot,
+    `repos/${owner}/${repo}/commits/${pullRequest.headSha}/status`
   );
 
   const [checkRunsResponse, statusesResponse] = await Promise.allSettled([
@@ -689,19 +499,9 @@ async function listOpenPullRequests(
   repo: string,
   repoRoot?: string
 ): Promise<Array<Omit<OpenPullRequestChange, "files">>> {
-  const token = tryResolveGitHubApiToken(repoRoot);
-  const headers: Record<string, string> = {
-    Accept: "application/vnd.github+json",
-    "User-Agent": "prs-cli",
-  };
 
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  const response = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}/pulls?state=open&per_page=100`,
-    { headers }
+  const response = await requestGitHub(repoRoot,
+    `repos/${owner}/${repo}/pulls?state=open&per_page=100`
   );
 
   if (!response.ok) {
@@ -742,19 +542,9 @@ async function listPullRequestFiles(
   prNumber: number,
   repoRoot?: string
 ): Promise<string[]> {
-  const token = tryResolveGitHubApiToken(repoRoot);
-  const headers: Record<string, string> = {
-    Accept: "application/vnd.github+json",
-    "User-Agent": "prs-cli",
-  };
 
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  const response = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}/files?per_page=100`,
-    { headers }
+  const response = await requestGitHub(repoRoot,
+    `repos/${owner}/${repo}/pulls/${prNumber}/files?per_page=100`
   );
 
   if (!response.ok) {
@@ -775,19 +565,9 @@ async function listPullRequestReviewComments(
   prNumber: number,
   repoRoot?: string
 ): Promise<PullRequestReviewComment[]> {
-  const token = tryResolveGitHubApiToken(repoRoot);
-  const headers: Record<string, string> = {
-    Accept: "application/vnd.github+json",
-    "User-Agent": "prs-cli",
-  };
 
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  const response = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}/comments?per_page=100`,
-    { headers }
+  const response = await requestGitHub(repoRoot,
+    `repos/${owner}/${repo}/pulls/${prNumber}/comments?per_page=100`
   );
 
   if (!response.ok) {
@@ -851,15 +631,9 @@ async function postGitHubGraphQL<T>(
   variables: Record<string, unknown>,
   errorMessage: string
 ): Promise<T> {
-  const token = getGitHubApiToken(errorMessage, repoRoot);
-  const response = await fetch("https://api.github.com/graphql", {
+
+  const response = await requestGitHub(repoRoot, "graphql", {
     method: "POST",
-    headers: {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      "User-Agent": "prs-cli",
-    },
     body: JSON.stringify({
       query,
       variables,
@@ -1066,22 +840,13 @@ async function listIssueLinkedPullRequests(
       };
     };
   };
-  const token = tryResolveGitHubApiToken(repoRoot);
-  const headers: Record<string, string> = {
-    Accept: "application/vnd.github+json",
-    "User-Agent": "prs-cli",
-  };
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
   const linked = new Map<number, IssueLinkedPullRequest>();
   let page = 1;
 
   while (true) {
     const pageParameter = page === 1 ? "" : `&page=${page}`;
-    const response = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}/timeline?per_page=100${pageParameter}`,
-      { headers }
+    const response = await requestGitHub(repoRoot,
+      `repos/${owner}/${repo}/issues/${issueNumber}/timeline?per_page=100${pageParameter}`
     );
     if (!response.ok) {
       throw new Error(
@@ -1131,17 +896,10 @@ export async function listIssueLinkedPullRequestsForRepoRoot(
 async function listOpenIssues(
   owner: string,
   repo: string,
-  token: string
+  repoRoot?: string
 ): Promise<Array<{ number: number; title: string; url: string; body?: string }>> {
-  const response = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}/issues?state=open&per_page=100`,
-    {
-      headers: {
-        Accept: "application/vnd.github+json",
-        Authorization: `Bearer ${token}`,
-        "User-Agent": "prs-cli",
-      },
-    }
+  const response = await requestGitHub(repoRoot,
+    `repos/${owner}/${repo}/issues?state=open&per_page=100`
   );
 
   if (!response.ok) {
@@ -1169,30 +927,21 @@ async function listOpenIssues(
 export async function listOpenGitHubIssuesForRepoRoot(
   repoRoot: string
 ): Promise<Array<{ number: number; title: string; url: string; body?: string }>> {
-  const token = getGitHubApiToken(
-    "Listing GitHub issues requires GH_TOKEN or GITHUB_TOKEN to be set.",
-    repoRoot
-  );
+
   const { owner, repo } = parseGitHubRepoFromRemote(repoRoot);
-  return listOpenIssues(owner, repo, token);
+  return listOpenIssues(owner, repo, repoRoot);
 }
 
 async function createGitHubIssue(
   owner: string,
   repo: string,
-  token: string,
+  repoRoot: string | undefined,
   title: string,
   body: string,
   labels: string[]
 ): Promise<{ number: number; title: string; url: string }> {
-  const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/issues`, {
+  const response = await requestGitHub(repoRoot, `repos/${owner}/${repo}/issues`, {
     method: "POST",
-    headers: {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      "User-Agent": "prs-cli",
-    },
     body: JSON.stringify({
       title,
       body,
@@ -1244,11 +993,6 @@ class GitHubRepositoryForge implements RepositoryForge {
 
   async fetchIssueDetails(issueNumber: number): Promise<IssueDetails> {
     const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
-    const ghIssue = tryFetchIssueWithGh(owner, repo, issueNumber, this.repoRoot);
-    if (ghIssue) {
-      return ghIssue;
-    }
-
     return fetchIssueWithApi(owner, repo, issueNumber, this.repoRoot);
   }
 
@@ -1285,11 +1029,6 @@ class GitHubRepositoryForge implements RepositoryForge {
 
   async fetchPullRequestDetails(prNumber: number): Promise<PullRequestDetails> {
     const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
-    const ghPullRequest = tryFetchPullRequestWithGh(owner, repo, prNumber, this.repoRoot);
-    if (ghPullRequest) {
-      return ghPullRequest;
-    }
-
     return fetchPullRequestWithApi(owner, repo, prNumber, this.repoRoot);
   }
 
@@ -1374,20 +1113,11 @@ class GitHubRepositoryForge implements RepositoryForge {
     input: CreatePullRequestReviewInput
   ): Promise<{ id?: number; url?: string }> {
     const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
-    const token = getGitHubApiToken(
-      "Creating pull request reviews requires GH_TOKEN or GITHUB_TOKEN to be set, or gh to be installed and authenticated.",
-      this.repoRoot
-    );
-    const response = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/pulls/${input.prNumber}/reviews`,
+
+    const response = await requestGitHub(this.repoRoot,
+      `repos/${owner}/${repo}/pulls/${input.prNumber}/reviews`,
       {
         method: "POST",
-        headers: {
-          Accept: "application/vnd.github+json",
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          "User-Agent": "prs-cli",
-        },
         body: JSON.stringify({
           commit_id: input.commitSha,
           event: input.event,
@@ -1416,19 +1146,9 @@ class GitHubRepositoryForge implements RepositoryForge {
 
   async markPullRequestReadyForReview(prNumber: number): Promise<void> {
     const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
-    const token = getGitHubApiToken(
-      "Marking a pull request ready for review requires GH_TOKEN or GITHUB_TOKEN to be set, or gh to be installed and authenticated.",
-      this.repoRoot
-    );
-    const response = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}`,
-      {
-        headers: {
-          Accept: "application/vnd.github+json",
-          Authorization: `Bearer ${token}`,
-          "User-Agent": "prs-cli",
-        },
-      }
+
+    const response = await requestGitHub(this.repoRoot,
+      `repos/${owner}/${repo}/pulls/${prNumber}`
     );
 
     if (!response.ok) {
@@ -1474,20 +1194,11 @@ class GitHubRepositoryForge implements RepositoryForge {
     body: string
   ): Promise<IssuePlanComment> {
     const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
-    const token = getGitHubApiToken(
-      "Posting issue resolution plans requires GH_TOKEN or GITHUB_TOKEN to be set, or gh to be installed and authenticated.",
-      this.repoRoot
-    );
-    const response = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}/comments`,
+
+    const response = await requestGitHub(this.repoRoot,
+      `repos/${owner}/${repo}/issues/${issueNumber}/comments`,
       {
         method: "POST",
-        headers: {
-          Accept: "application/vnd.github+json",
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          "User-Agent": "prs-cli",
-        },
         body: JSON.stringify({ body }),
       }
     );
@@ -1517,20 +1228,11 @@ class GitHubRepositoryForge implements RepositoryForge {
   ): Promise<RepositoryComment> {
     const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
     await assertAuditTargetMatchesType(owner, repo, target, this.repoRoot);
-    const token = getGitHubApiToken(
-      "Publishing audit comments requires GH_TOKEN or GITHUB_TOKEN to be set, or gh to be installed and authenticated.",
-      this.repoRoot
-    );
-    const response = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/issues/${target.number}/comments`,
+
+    const response = await requestGitHub(this.repoRoot,
+      `repos/${owner}/${repo}/issues/${target.number}/comments`,
       {
         method: "POST",
-        headers: {
-          Accept: "application/vnd.github+json",
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          "User-Agent": "prs-cli",
-        },
         body: JSON.stringify({ body }),
       }
     );
@@ -1559,20 +1261,11 @@ class GitHubRepositoryForge implements RepositoryForge {
     body: string
   ): Promise<IssuePlanComment> {
     const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
-    const token = getGitHubApiToken(
-      "Refreshing issue resolution plans requires GH_TOKEN or GITHUB_TOKEN to be set, or gh to be installed and authenticated.",
-      this.repoRoot
-    );
-    const response = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/issues/comments/${commentId}`,
+
+    const response = await requestGitHub(this.repoRoot,
+      `repos/${owner}/${repo}/issues/comments/${commentId}`,
       {
         method: "PATCH",
-        headers: {
-          Accept: "application/vnd.github+json",
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          "User-Agent": "prs-cli",
-        },
         body: JSON.stringify({ body }),
       }
     );
@@ -1598,20 +1291,11 @@ class GitHubRepositoryForge implements RepositoryForge {
 
   async updateIssueComment(commentId: number, body: string): Promise<RepositoryComment> {
     const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
-    const token = getGitHubApiToken(
-      "Updating issue comments requires GH_TOKEN or GITHUB_TOKEN to be set, or gh to be installed and authenticated.",
-      this.repoRoot
-    );
-    const response = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/issues/comments/${commentId}`,
+
+    const response = await requestGitHub(this.repoRoot,
+      `repos/${owner}/${repo}/issues/comments/${commentId}`,
       {
         method: "PATCH",
-        headers: {
-          Accept: "application/vnd.github+json",
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          "User-Agent": "prs-cli",
-        },
         body: JSON.stringify({ body }),
       }
     );
@@ -1638,28 +1322,7 @@ class GitHubRepositoryForge implements RepositoryForge {
   async createDraftIssue(title: string, body: string): Promise<string> {
     const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
 
-    const ghCommand = hasGitHubApiToken()
-      ? undefined
-      : resolveGhCommand(this.repoRoot);
-    if (ghCommand && isGhAuthenticated(this.repoRoot)) {
-      const output = runCommand(
-        ghCommand,
-        ["issue", "create", "--repo", `${owner}/${repo}`, "--title", title, "--body", body],
-        `Failed to create GitHub issue "${title}" with gh.`
-      );
-
-      const lines = output
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean);
-      return lines[lines.length - 1] ?? output;
-    }
-
-    const token = getGitHubApiToken(
-      "Creating issues requires GH_TOKEN or GITHUB_TOKEN to be set, or gh to be installed and authenticated.",
-      this.repoRoot
-    );
-    const createdIssue = await createGitHubIssue(owner, repo, token, title, body, []);
+    const createdIssue = await createGitHubIssue(owner, repo, this.repoRoot, title, body, []);
     return createdIssue.url;
   }
 
@@ -1669,20 +1332,11 @@ class GitHubRepositoryForge implements RepositoryForge {
     body: string
   ): Promise<CreatedIssueRecord> {
     const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
-    const token = getGitHubApiToken(
-      "Updating GitHub issues requires GH_TOKEN or GITHUB_TOKEN to be set, or gh to be installed and authenticated.",
-      this.repoRoot
-    );
-    const response = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}`,
+
+    const response = await requestGitHub(this.repoRoot,
+      `repos/${owner}/${repo}/issues/${issueNumber}`,
       {
         method: "PATCH",
-        headers: {
-          Accept: "application/vnd.github+json",
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          "User-Agent": "prs-cli",
-        },
         body: JSON.stringify({ title, body }),
       }
     );
@@ -1709,13 +1363,10 @@ class GitHubRepositoryForge implements RepositoryForge {
     body: string,
     labels: string[]
   ): Promise<CreatedIssueRecord> {
-    const token = getGitHubApiToken(
-      "Creating GitHub issues requires GH_TOKEN or GITHUB_TOKEN to be set.",
-      this.repoRoot
-    );
+
     const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
     if (!this.openIssuesByTitle) {
-      const existingIssues = await listOpenIssues(owner, repo, token);
+      const existingIssues = await listOpenIssues(owner, repo, this.repoRoot);
       this.openIssuesByTitle = new Map(
         existingIssues.map((issue) => [issue.title.trim().toLowerCase(), issue])
       );
@@ -1731,7 +1382,7 @@ class GitHubRepositoryForge implements RepositoryForge {
       };
     }
 
-    const createdIssue = await createGitHubIssue(owner, repo, token, title, body, labels);
+    const createdIssue = await createGitHubIssue(owner, repo, this.repoRoot, title, body, labels);
     this.openIssuesByTitle.set(createdIssue.title.trim().toLowerCase(), createdIssue);
     return {
       ...createdIssue,
@@ -1740,6 +1391,8 @@ class GitHubRepositoryForge implements RepositoryForge {
   }
 
   async createPullRequest(input: CreatePullRequestInput): Promise<CreatedPullRequestRecord> {
+    const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
+    const client = createGitHubClient({ repoRoot: this.repoRoot });
     runTrackedCommand(
       "git",
       ["push", "-u", "origin", input.branchName],
@@ -1750,6 +1403,8 @@ class GitHubRepositoryForge implements RepositoryForge {
     const prArgs = [
       "pr",
       "create",
+      "--repo",
+      `${owner}/${repo}`,
       "--title",
       input.title,
       ...(input.bodyFilePath
@@ -1758,13 +1413,11 @@ class GitHubRepositoryForge implements RepositoryForge {
       "--base",
       input.baseBranch,
     ];
-    const stdout = runTrackedCommand(
-      resolveGhCommand(this.repoRoot) ?? "gh",
-      prArgs,
-      "Failed to create a pull request.",
-      input.outputLogPath,
-      this.repoRoot
+    const stdout = client.run(
+      prArgs, "Failed to create a pull request."
     );
+    appendRunLog(input.outputLogPath, "gh", prArgs, stdout, "");
+    if (stdout) process.stdout.write(`${stdout}\n`);
 
     return {
       url: stdout

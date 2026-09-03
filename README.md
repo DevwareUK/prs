@@ -13,7 +13,7 @@ Prerequisites:
 - Node.js 20 or later
 - pnpm 10.7
 - Git
-- either `GH_TOKEN`/`GITHUB_TOKEN` or an authenticated GitHub CLI session
+- GitHub CLI (`gh`), authenticated for GitHub-backed commands; local setup and disabled-forge workflows can run without it
 
 From this repository:
 
@@ -30,7 +30,7 @@ In a target repository:
 prs setup --skills all
 ```
 
-Setup writes `.prs/config.json` and `.prs/.gitignore`, then installs the canonical skills for the selected host or all hosts. Run `prs setup` without `--skills` for an interactive choice; an empty answer skips personal skill installation. If an older configuration contains `ai` or `githubActions`, setup preserves supported settings, removes those retired sections, and prints a migration notice.
+Setup writes `.prs/config.json` and `.prs/.gitignore`, then installs the canonical skills for the selected host or all hosts. Run `prs setup` in a terminal without `--skills` to choose personal skills and a GitHub account. An empty skills answer skips installation. Setup lists saved GitHub accounts plus “Use the default account”, writes an explicit account choice to ignored `.prs/config.local.json`, and preserves an existing choice unless you change it. Supplying `--skills`, or running without interactive input, skips account selection and preserves local settings. If an older configuration contains `ai` or `githubActions`, setup preserves supported settings, removes those retired sections, and prints a migration notice.
 
 ## Agent skills
 
@@ -123,6 +123,16 @@ Remote mutations—creating issues and publishing managed comments or audits—m
   }
 }
 ```
+
+For a personal account choice, run `gh auth login --hostname github.com` for each account and then interactive `prs setup`. You can also edit the ignored `.prs/config.local.json` after running setup:
+
+```json
+{
+  "forge": { "githubAccount": "your-work-username" }
+}
+```
+
+The configured account applies to every GitHub operation performed by `prs` and takes precedence over inherited token variables. Missing saved credentials produce a login error; account selection never changes the globally active account. Without a local account choice, `gh` uses its normal authentication, including `GH_TOKEN`/`GITHUB_TOKEN` for automation. GitHub CLI is required even when a token is supplied; `prs` no longer makes direct GitHub HTTP requests. A linked worktree has its own local account file. See [setup configuration](docs/setup-configuration.md) for reruns and non-interactive behavior.
 
 See [the CLI reference](docs/cli-reference.md), [setup configuration](docs/setup-configuration.md), [agent parity guide](docs/agent-parity.md), [migration guide](docs/migration.md), and [development guide](docs/development.md).
 

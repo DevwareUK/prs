@@ -26,3 +26,7 @@ Use a disposable GitHub repository owned for testing. Never point the smoke proc
 8. Complete only that host's row with its native session identifier, issue and pull-request URLs, commit SHA, artifact paths, inspected committed paths, sentinel state, local and hosted checks, capability fallbacks, and deviations. Fallback and deviation arrays are required even when empty. Never copy another host's URLs, session identifier, paths, or results.
 
 The version-2 matrix requires exactly one separately attributed row for each of `codex`, `claude-code`, and `copilot`, with all eight phases present. Store completed matrices under `.prs/runs/<task-specific-run>/`; publish them only after reviewing the repository and URLs to ensure they are disposable test resources.
+
+## GitHub account context
+
+All three hosts use the same GitHub CLI integration when calling `prs`. GitHub-backed commands require installed and authenticated `gh`. Interactive `prs setup` can write a personal account choice to ignored `.prs/config.local.json` (`forge.githubAccount`); preserve that choice and resolve login errors instead of switching the global account. Direct host `gh` commands and Git transport do not read this `prs` setting. When no account is selected, `gh` handles normal authentication, including environment tokens for automation.
