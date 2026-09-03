@@ -32,6 +32,8 @@ prs skills validate [--json]
 
 Parity validation installs all three host adapters into separate temporary homes, then compares each installed inventory, content hash, and retained operation reference with the canonical pack. It also checks the installed `artifact-locality` instruction (raw workflow artifacts stay under `.prs/runs` and are not staged or committed) and `staged-only-finalization` instruction (the existing index is the commit source while unstaged and untracked files are preserved). The JSON report names the required safeguards and reports passing safeguards or missing-safeguard errors for each host independently. The command reports static installation and instruction parity only; it does not launch host runtimes. End-to-end native host evidence remains manual and separately attributed in [the agent parity guide](agent-parity.md)'s smoke matrix.
 
+The validator also requires `prs-pr`, its existing-PR router entry, and non-empty sections for `review`, `resolve-conflicts`, `address-comments`, and `fix-tests`. Missing instructions are reported in each host's `errors`, even when the installed files match the canonical pack exactly.
+
 ## Issue tools
 
 | Command | Behaviour |
@@ -54,6 +56,8 @@ The single-draft Markdown format starts with an H1 title; the remainder becomes 
 | `prs tool pr ready <number> [--unattended\|--auto\|--jdi] --json` | Requires a clean checkout, checks out the PR head, fetches and merges the latest base, runs `prReadiness.commands`, records logs under `.prs/runs`, and returns checks, comments, and review-thread context. Unattended aliases may start a configured local application runtime. |
 
 Readiness stops with a structured blocked result for merge conflicts, a failed local-readiness command, or a failed runtime start. It never pushes or merges the pull request.
+
+Use the `prs-pr` skill to coordinate main-checkout preparation and follow-up `review`, `resolve-conflicts`, `address-comments`, and `fix-tests` actions. They are skill actions executed with the host's normal Git/GitHub capabilities, not `prs tool pr` subcommands. The skill handles review preparation/publication and guarded pushes while preserving approval gates and support for PRs without linked issues. See [the workflow guide](agent-workflows.md#existing-pull-requests).
 
 ## Audit
 

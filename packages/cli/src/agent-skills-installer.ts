@@ -43,7 +43,7 @@ export type InstallAgentSkillsResult = {
 };
 
 const STATE_FILE = ".prs-managed-skills.json";
-const LEGACY_MARKER = /<!-- prs:managed-skill name="prs(?:-[a-z0-9-]+)?" version="[^"]+" hash="[a-f0-9]+" -->/;
+const LEGACY_MARKER = /<!-- prs:managed-skill name="prs(?:[-:][a-z0-9-]+)?" version="[^"]+" hash="[a-f0-9]+" -->/;
 
 function hash(content: string): string {
   return createHash("sha256").update(content).digest("hex");
