@@ -57,6 +57,18 @@ Readiness stops with a structured blocked result for merge conflicts, a failed l
 
 ## Audit
 
+### Render local usage
+
+```text
+prs tool token-usage render --file <usage-evidence.json> --output <token-usage.md> --json
+```
+
+Both required paths resolve from the repository root and must be within the same concrete `.prs/runs/<runId>/` directory; the envelope's `runId` must match. Traversal, symlink escapes, input/output aliases, malformed evidence, and conflicting counters fail without replacing existing output. Successful rerenders replace the selected local Markdown file deterministically. No forge configuration or authentication is required and no network calls occur.
+
+The JSON result contains `status: rendered`, `outputFile`, local source/normalized `ledger`, derived `totals` with contributions and exclusions, `pricing` (estimates, unpriced reasons, reported charges, credits/conversions, and rate cards), and `warnings`. JSON includes raw local evidence: publish only the reviewed Markdown, never redirect raw JSON into a GitHub comment. Unknowns remain unknown, and partial totals/estimates are labelled. See [the version-1 contract and examples](usage-evidence.md).
+
+### Publish a reviewed report
+
 `prs audit publish (--issue <number>|--pr <number>) --file <path> --section <name>` publishes or updates a marker-managed audit section on GitHub. `--local-run` adds a local run reference. `--media-manifest` appends validated image or video evidence.
 
 ## Exit behaviour

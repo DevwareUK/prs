@@ -21,5 +21,6 @@ export const TOP_LEVEL_HELP = [
   "  prs tool pr ready <pr-number> [--unattended|--auto|--jdi] --json",
   "",
   "Audit:",
+  "  prs tool token-usage render --file <path> --output <path> --json",
   "  prs audit publish (--issue <number>|--pr <number>) --file <path> --section <name>",
 ].join("\n");

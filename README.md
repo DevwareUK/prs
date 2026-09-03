@@ -91,13 +91,20 @@ prs tool pr ready <pr-number> [--unattended|--auto|--jdi] --json
 
 prs audit publish (--issue <number>|--pr <number>) --file <path> --section <name>
                   [--local-run <path>] [--media-manifest <path>]
+prs tool token-usage render --file <path> --output <path> --json
 ```
 
 `prs issue finalize` does not stage files for you. It previews the deterministic commit message and exact staged paths, refuses an empty index, and commits only changes already in the index, leaving unstaged and untracked files untouched.
 
 Remote mutations—creating issues and publishing managed comments or audits—must be approved by the user before the active agent invokes them. Read-only context commands need no approval. `prs tool pr ready` changes the local checkout and may merge the latest base branch, but it does not push or merge a pull request.
 
-## Configuration
+## Local usage and cost evidence
+
+`prs tool token-usage render` validates version-1 local evidence from Codex, Claude Code, or Copilot and writes a publication-safe Markdown report. Both files must stay in the same `.prs/runs/<runId>/` directory. It needs no GitHub authentication, provider connection, or model calls. Publish the reviewed report separately with `prs audit publish ... --section token-usage` after approval.
+
+Cumulative snapshots are differenced, never added as independent phase totals. Missing baselines, uncertain parent/child overlap, and unavailable captures remain visibly incomplete. Codex goal counters are host counters—not raw model tokens. Credits, provider charges, and estimates remain separate. Estimates require supplied, sourced model/context-specific rate snapshots; unknown models are unpriced and expired promotions cannot silently price later work. See [usage evidence and examples](docs/usage-evidence.md) for the contract, native mappings, legacy handling, and limitations. Synthetic tests and static skill parity do not claim live host validation.
+
+## Repository configuration
 
 `.prs/config.json` accepts only local workflow settings:
 

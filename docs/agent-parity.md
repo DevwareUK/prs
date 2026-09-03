@@ -14,6 +14,8 @@ The command creates a different temporary home for Codex, Claude Code, and GitHu
 
 ## Manual lifecycle smoke matrix
 
+Local usage adapter fixtures and `prs tool token-usage render` tests validate deterministic mappings and accounting without launching models. Static parity also checks the installed usage-render command reference. Neither layer demonstrates native telemetry availability or completes a host lifecycle. Run native validation only when requested and authorized; record unattempted rows as `not-run`. Missing usage evidence is a valid unavailable record, not a reason to make billable calls.
+
 Use a disposable GitHub repository owned for testing. Never point the smoke procedure at a production repository. Native evidence is manual, separate from static validation, and must be run sequentially in a fresh clone and a fresh native session for each host.
 
 1. Create a task-specific directory beneath `.prs/runs` and copy `docs/examples/agent-lifecycle-smoke-matrix.template.json` into it. Keep every issue draft, specification, plan, working note, and completion artifact in that directory or a run directory returned by `prs`.

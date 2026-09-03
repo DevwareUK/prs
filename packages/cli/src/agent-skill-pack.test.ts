@@ -23,7 +23,7 @@ describe("canonical agent skill pack", () => {
       const markdown = readFileSync(resolve("skills", name, "SKILL.md"), "utf8");
       expect(markdown).toMatch(new RegExp(`^---\\nname: ${name}\\ndescription: Use when `));
       expect(markdown).toContain("prs tool");
-      expect(markdown).not.toMatch(/~\/\.(?:codex|claude)|slash command|Superpowers|token telemetry|model profile|API key|OPENAI|Bedrock/i);
+      expect(markdown).not.toMatch(/~\/\.(?:codex|claude)|slash command|Superpowers|model profile|API key|OPENAI|Bedrock/i);
     }
   });
 
@@ -41,6 +41,10 @@ describe("canonical agent skill pack", () => {
     expect(combined).toContain("active workspace");
     expect(combined).toContain("sequentially");
     expect(combined).toContain("verification");
+    expect(combined).toContain("usage-evidence.json");
+    expect(combined).toContain("cumulative-snapshot");
+    expect(combined).toContain("prs tool token-usage render");
+    expect(combined).toContain("unavailable");
   });
 
   it("requires deliberate staging before issue finalization", () => {

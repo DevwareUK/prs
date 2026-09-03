@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { renderTokenUsageTool } from "../token-usage-tool";
 import { dirname, resolve } from "node:path";
 import {
   getCliArgs,
@@ -28,8 +29,12 @@ function writeJson(value: unknown): void {
 
 export async function runToolCommand(): Promise<void> {
   const repoRoot = getDefaultRepoRoot();
-  loadRepoEnv(repoRoot);
   const command = parsePrsToolCommandArgs(getCliArgs().slice(1));
+  if (command.kind === "token-usage-render") {
+    writeJson(renderTokenUsageTool({ repoRoot, filePath: command.filePath, outputFilePath: command.outputFilePath }));
+    return;
+  }
+  loadRepoEnv(repoRoot);
   const repositoryConfig = getRepositoryConfig(repoRoot);
 
   if (command.kind === "issue-list") {

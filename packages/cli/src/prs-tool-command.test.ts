@@ -46,6 +46,24 @@ describe("provider-free prs tool command parser", () => {
     expect(() => parsePrsToolCommandArgs(["issue", "context", "151"])).toThrow("Usage:");
     expect(() => parsePrsToolCommandArgs(["issue", "estimate", "151", "--json"])).toThrow("Usage:");
     expect(() => parsePrsToolCommandArgs(["pr", "review", "42", "--json"])).toThrow("Usage:");
-    expect(renderPrsToolCommandHelp()).not.toMatch(/provider|estimate|review|token-usage/i);
+    expect(renderPrsToolCommandHelp()).not.toMatch(/provider|estimate|review/i);
+  });
+});
+
+describe("local usage command", () => {
+  it("parses required file paths and advertises the deterministic route", () => {
+    expect(parsePrsToolCommandArgs(["token-usage", "render", "--file=input.json", "--output", "output.md", "--json"])).toEqual({
+      kind: "token-usage-render", filePath: "input.json", outputFilePath: "output.md", json: true,
+    });
+    expect(renderPrsToolCommandHelp()).toContain("prs tool token-usage render");
+  });
+  it.each([
+    ["--file", "in", "--json"], ["--output", "out", "--json"],
+    ["--file", "in", "--output", "out"], ["--file", "in", "--output", "out", "--json", "--json"],
+    ["--file", "in", "--file", "other", "--output", "out", "--json"],
+    ["--file", "in", "--output", "out", "--output=other", "--json"],
+    ["--file", "in", "--output", "out", "--json", "--provider", "x"],
+  ])("rejects malformed options %j", (...options) => {
+    expect(() => parsePrsToolCommandArgs(["token-usage", "render", ...options])).toThrow();
   });
 });
