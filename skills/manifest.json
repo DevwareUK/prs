@@ -25,6 +25,11 @@
       "name": "prs-orchestrate",
       "source": "skills/prs-orchestrate/SKILL.md",
       "phases": ["create", "refine", "plan", "implement", "verify", "finalize", "open-pr", "validate"]
+    },
+    {
+      "name": "prs-pr",
+      "source": "skills/prs-pr/SKILL.md",
+      "phases": ["implement", "verify", "finalize", "validate"]
     }
   ]
 }

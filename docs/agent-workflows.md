@@ -28,12 +28,30 @@ Remote mutations require explicit user approval. Read-only context gathering doe
 
 ## Canonical skill pack
 
-`skills/manifest.json` is the portable inventory. It maps the five shared skill names to their source files and lifecycle phases:
+`skills/manifest.json` is the portable inventory. It maps the six shared skill names to their source files and lifecycle phases:
 
 - `prs`: workflow router;
 - `prs-create`: issue and issue-set creation;
 - `prs-issue`: one complete issue flow;
 - `prs-finish`: verification, pull-request preparation, and validation;
+- `prs-pr`: main-checkout PR readiness and requested review, conflict, comment and failing-test work;
 - `prs-orchestrate`: dependency-aware execution of an issue set as separate pull requests.
 
 The source bodies use only portable Markdown instructions and the public `prs` command contract. They do not assume a host-specific command syntax, filesystem location, delegation feature, model, or telemetry system. Host adapters install these files without changing their shared bodies.
+
+## Existing pull requests
+
+Use `prs-pr` directly, through the `prs` router, or after `prs-finish` creates a PR. A linked issue is optional. The default flow lists actionable PRs when needed, locates the main checkout used by the local application, and invokes `prs tool pr ready <number> --json` there. The agent checks checkout/worktree blockers before readiness; it asks before any destructive worktree removal and preserves unrelated work. Preparation syncs the base and runs `prReadiness.commands`, then reports readiness results and runtime instructions.
+
+Request one of these actions after preparation or directly for a selected PR:
+
+| Skill action | Outcome |
+| --- | --- |
+| `review` | Inspect the current PR diff and requirements; draft the report, line-linked findings and review outcome; publish only after approval. |
+| `resolve-conflicts` | Resolve the existing base-sync conflict, verify the affected code, and deliberately commit the intended changes. |
+| `address-comments` | Read full actionable threads, evaluate and fix selected findings, verify changes, and draft approved replies/resolutions. Requests to resolve comments and `fix-comments` wording select this action. |
+| `fix-tests` | Inspect actual local or hosted-check failures, repair the cause, and rerun relevant verification. |
+
+These are active-agent workflows, not additional CLI commands. `add-tests` is excluded because it consumed suggestions from a retired Action. Adding necessary regression tests remains part of fixes.
+
+Readiness success is not review completion; its unattended flags only govern preparation and runtime startup. For authorized changes, the agent stages intended paths, inspects the index, and uses normal Git finalization when no issue is linked. Before pushing, it confirms the actual PR head destination (including forks), fetches its current tip, inspects outgoing commits, and pushes only when ahead and not behind, without force. Completion evidence records the current head, local verification, hosted checks and remaining blockers. Pending or unavailable checks must remain visible. Review/comment/audit publication and destructive cleanup retain explicit approval gates; readiness alone never authorizes a merge.

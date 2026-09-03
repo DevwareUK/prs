@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { AgentSkillManifest } from "@prs/contracts";
 import { expectArtifactContract } from "./agent-skill-artifact-contract.test-support";
 
-const EXPECTED_SKILLS = ["prs", "prs-create", "prs-finish", "prs-issue", "prs-orchestrate"];
+const EXPECTED_SKILLS = ["prs", "prs-create", "prs-finish", "prs-issue", "prs-orchestrate", "prs-pr"];
 
 describe("canonical agent skill pack", () => {
   it("publishes the exact portable inventory through one manifest", () => {
@@ -51,5 +51,46 @@ describe("canonical agent skill pack", () => {
     expect(finish).toContain("existing index");
     expect(finish).toContain("unstaged changes");
     expect(finish).toContain("untracked files");
+  });
+
+  it("routes existing PRs and the issue-completion handoff to prs-pr", () => {
+    const router = readFileSync(resolve("skills/prs/SKILL.md"), "utf8");
+    const finish = readFileSync(resolve("skills/prs-finish/SKILL.md"), "utf8");
+    expect(router).toMatch(/Existing pull request:[^\n]*`prs-pr`/);
+    expect(finish).toMatch(/`prs-pr`[^\n]*pull request/);
+  });
+
+  it("keeps main-checkout readiness separate from requested PR actions", () => {
+    const pr = readFileSync(resolve("skills/prs-pr/SKILL.md"), "utf8");
+    expect(pr).toContain("git worktree list --porcelain");
+    expect(pr).toContain("main checkout");
+    expect(pr).toContain("prs tool pr list --actionable --json");
+    expect(pr).toContain("prs tool pr ready <number> --json");
+    expect(pr).toContain("prReadiness.commands");
+    expect(pr).toContain("readiness only");
+    for (const field of ["baseSync", "localReadiness", "prContext", "runtime", "nextAction"]) {
+      expect(pr).toContain(field);
+    }
+    for (const action of ["review", "resolve-conflicts", "address-comments", "fix-tests"]) {
+      expect(pr).toContain(`### ${action}`);
+    }
+    expect(pr).not.toContain("### add-tests");
+    expect(pr).not.toMatch(/prs tool pr (?:review|address-comments|fix-tests|push-reviewed)/);
+  });
+
+  it("supports PR-only fixes, approved review publication and guarded pushes", () => {
+    const pr = readFileSync(resolve("skills/prs-pr/SKILL.md"), "utf8");
+    expect(pr).toContain("no linked issue");
+    expect(pr).toContain("normal Git commit");
+    expect(pr).toContain("git diff --cached --name-status");
+    expect(pr).toContain("explicit user approval");
+    expect(pr).toContain("line-linked");
+    expect(pr).toContain("REQUEST_CHANGES");
+    expect(pr).toContain("APPROVE");
+    expect(pr).toContain("COMMENT");
+    expect(pr).toContain("git rev-list --left-right --count");
+    expect(pr).toContain("ahead and not behind");
+    expect(pr).toContain("current PR head");
+    expect(pr).toContain("pending");
   });
 });

@@ -11,9 +11,13 @@ Claude Code discovers personal skills under `~/.claude/skills`. It can select a 
 ```text
 /prs-issue 328
 /prs-orchestrate 323
+/prs-pr 88
+/prs-pr 88 address-comments
 ```
 
-The five available names are `/prs`, `/prs-create`, `/prs-issue`, `/prs-finish`, and `/prs-orchestrate`. This is Claude Code syntax only; no slash-command behavior is added to the canonical bodies.
+The six available names are `/prs`, `/prs-create`, `/prs-issue`, `/prs-finish`, `/prs-pr`, and `/prs-orchestrate`. This is Claude Code syntax only; no slash-command behavior is added to the canonical bodies.
+
+`/prs-pr 88` prepares the PR in the main checkout with configured readiness steps, then offers `review`, `resolve-conflicts`, `address-comments`, and `fix-tests`. These are agent actions rather than new CLI commands. PRs do not need a linked issue. See [the PR workflow](agent-workflows.md#existing-pull-requests) for publication and push safeguards.
 
 Claude Code-specific frontmatter, dynamic context injection, and subagent execution are optional host features. The installed PRS pack does not depend on them, so the same workflow instructions and fallbacks remain valid on every supported host.
 

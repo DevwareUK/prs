@@ -114,7 +114,7 @@ describe("agent workflow contract", () => {
       canonicalSkillManifest.skills.map((skill) => [skill.name, skill.phases])
     );
 
-    for (const skill of ["prs", "prs-issue", "prs-finish", "prs-orchestrate"]) {
+    for (const skill of ["prs", "prs-issue", "prs-finish", "prs-orchestrate", "prs-pr"]) {
       expect(phasesBySkill.get(skill)).toContain("finalize");
     }
     expect(phasesBySkill.get("prs-create")).not.toContain("finalize");

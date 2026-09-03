@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect } from "vitest";
 
-const ARTIFACT_SKILL_NAMES = ["prs", "prs-create", "prs-issue", "prs-finish", "prs-orchestrate"];
+const ARTIFACT_SKILL_NAMES = ["prs", "prs-create", "prs-issue", "prs-finish", "prs-orchestrate", "prs-pr"];
 const REQUIRED_ARTIFACT_INSTRUCTIONS = [
   ".prs/runs/<task-specific-run>/",
   "only repository-local root",

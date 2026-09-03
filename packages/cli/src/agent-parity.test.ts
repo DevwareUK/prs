@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { expectArtifactContract } from "./agent-skill-artifact-contract.test-support";
 import { validateAgentSkillParity } from "./agent-parity";
 
-const EXPECTED_SKILLS = ["prs", "prs-create", "prs-finish", "prs-issue", "prs-orchestrate"];
+const EXPECTED_SKILLS = ["prs", "prs-create", "prs-finish", "prs-issue", "prs-orchestrate", "prs-pr"];
 const REQUIRED_SAFEGUARDS = ["artifact-locality", "staged-only-finalization"];
 
 function createSourceFixture(mutate: (content: string) => string): string {
@@ -21,6 +21,49 @@ function createSourceFixture(mutate: (content: string) => string): string {
 }
 
 describe("three-host Agent Skills parity", () => {
+  it("rejects a canonical pack that omits prs-pr even when all hosts install identical files", () => {
+    const sourceRoot = createSourceFixture((content) => content);
+    const manifestPath = join(sourceRoot, "skills", "manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    manifest.skills = manifest.skills.filter((skill: { name: string }) => skill.name !== "prs-pr");
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+
+    const report = validateAgentSkillParity({ sourceRoot });
+    expect(report.status).toBe("failed");
+    for (const row of report.hosts) {
+      expect(row.errors).toContain("missing workflow skill: prs-pr");
+    }
+  });
+
+  it.each(["review", "resolve-conflicts", "address-comments", "fix-tests"])(
+    "rejects identical installs with no %s action instructions",
+    (action) => {
+      const sourceRoot = createSourceFixture((content) => content);
+      const prPath = join(sourceRoot, "skills", "prs-pr", "SKILL.md");
+      const content = readFileSync(prPath, "utf8");
+      writeFileSync(prPath, content.replace(new RegExp(`^### ${action}\\n[\\s\\S]*?(?=^#{2,3} |$(?![\\s\\S]))`, "m"), ""));
+
+      const report = validateAgentSkillParity({ sourceRoot });
+      expect(report.status).toBe("failed");
+      for (const row of report.hosts) {
+        expect(row.errors).toContain(`prs-pr: missing action instructions: ${action}`);
+      }
+    }
+  );
+
+  it("rejects a router that stops at readiness without the dedicated PR handoff", () => {
+    const sourceRoot = createSourceFixture((content) => content);
+    const routerPath = join(sourceRoot, "skills", "prs", "SKILL.md");
+    const content = readFileSync(routerPath, "utf8");
+    writeFileSync(routerPath, content.replace(/^.*Existing pull request:.*$/m, "- Existing pull request: run `prs tool pr ready <number> --json`."));
+
+    const report = validateAgentSkillParity({ sourceRoot });
+    expect(report.status).toBe("failed");
+    for (const row of report.hosts) {
+      expect(row.errors).toContain("prs: missing prs-pr route");
+    }
+  });
+
   it("installs and validates every host in its own temporary home", () => {
     const temporaryRoot = mkdtempSync(join(tmpdir(), "prs-agent-parity-test-"));
 
