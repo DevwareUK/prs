@@ -82,11 +82,17 @@ export async function runToolCommand(): Promise<void> {
       });
       return;
     }
-    if (!forge.isAuthenticated()) {
+    let authenticated = false;
+    let authMessage = "GitHub issue creation requires an installed and authenticated GitHub CLI (gh).";
+    try {
+      authenticated = forge.isAuthenticated();
+    } catch (error) {
+      if (error instanceof Error) authMessage = error.message;
+    }
+    if (!authenticated) {
       writeJson({
         status: "blocked",
-        message:
-          "GitHub issue creation requires GH_TOKEN or GITHUB_TOKEN, or an authenticated gh session.",
+        message: authMessage,
         nextAction: "configure-github-auth",
       });
       return;

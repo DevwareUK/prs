@@ -26,3 +26,9 @@ Host selection, model choice, credentials, and reasoning settings are not reposi
 Use the five canonical skills—`prs`, `prs-create`, `prs-issue`, `prs-finish`, and `prs-orchestrate`—through each host's native discovery and invocation behavior. Parity means the same lifecycle phases, approval gates, separate pull requests, verification, and audit evidence. It does not require identical prompt syntax or optional worktree and delegation features.
 
 The supported CLI surface is listed in the README and CLI reference. Retired provider execution, generated commit or review text, and distributed GitHub Action entrypoints are not compatibility aliases; use the active agent with the retained deterministic commands instead.
+
+## GitHub CLI and personal account selection
+
+GitHub-backed commands now require installed `gh`; supplying a token alone no longer enables a direct HTTP fallback. Sign in with `gh auth login --hostname github.com`. Automation can continue to supply `GH_TOKEN` or `GITHUB_TOKEN` through GitHub CLI when no project account is selected.
+
+Run interactive `prs setup` to choose a saved account and write ignored `.prs/config.local.json`. Existing scripted `prs setup --skills all` invocations remain non-interactive and preserve any account choice. Keep personal account selection out of committed `.prs/config.json`; see [setup configuration](setup-configuration.md).

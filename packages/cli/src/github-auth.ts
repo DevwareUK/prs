@@ -1,4 +1,4 @@
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { loadRepositoryConfig } from "./config";
 
 export const COMMON_GH_EXECUTABLE_PATHS = [
@@ -12,7 +12,6 @@ type SpawnResult = {
 };
 
 type SpawnCommand = (command: string, args: string[]) => SpawnResult;
-type RunCommand = (command: string, args: string[]) => string;
 
 export type GitHubCliResolutionSource =
   | "env"
@@ -27,37 +26,20 @@ export type GitHubCliAttempt = {
   error?: string;
 };
 
-export type GitHubAuthDiagnostics = {
-  ghTokenPresent: boolean;
-  githubTokenPresent: boolean;
+export type GitHubCliDiagnostics = {
   ghCandidates: GitHubCliAttempt[];
   selectedGhPath?: string;
   selectedGhSource?: GitHubCliResolutionSource;
-  tokenSource?: "GH_TOKEN" | "GITHUB_TOKEN" | "gh";
-  ghTokenError?: string;
 };
 
 export type GitHubCliResolution = {
   path?: string;
   source?: GitHubCliResolutionSource;
-  diagnostics: GitHubAuthDiagnostics;
+  diagnostics: GitHubCliDiagnostics;
 };
 
-function defaultSpawnCommand(command: string, args: string[]): SpawnResult {
-  return spawnSync(command, args, { stdio: "ignore" });
-}
-
-function defaultRunCommand(command: string, args: string[]): string {
-  return execFileSync(command, args, {
-    encoding: "utf8",
-    maxBuffer: 10 * 1024 * 1024,
-    stdio: ["ignore", "pipe", "pipe"],
-  }).trim();
-}
-
-function normalizeToken(value: string | undefined): string | undefined {
-  const token = value?.trim();
-  return token ? token : undefined;
+function defaultSpawnCommand(command: string, args: string[], env: Record<string, string | undefined>): SpawnResult {
+  return spawnSync(command, args, { env, stdio: "ignore", timeout: 10_000 });
 }
 
 function loadConfiguredGitHubCliPath(repoRoot: string | undefined): string | undefined {
@@ -65,11 +47,7 @@ function loadConfiguredGitHubCliPath(repoRoot: string | undefined): string | und
     return undefined;
   }
 
-  try {
-    return loadRepositoryConfig(repoRoot)?.forge?.githubCliPath?.trim() || undefined;
-  } catch {
-    return undefined;
-  }
+  return loadRepositoryConfig(repoRoot)?.forge?.githubCliPath?.trim() || undefined;
 }
 
 function uniqueCandidates(
@@ -109,12 +87,10 @@ export function resolveGitHubCli(options: {
   spawnSync?: SpawnCommand;
 } = {}): GitHubCliResolution {
   const env = options.env ?? process.env;
-  const spawn = options.spawnSync ?? defaultSpawnCommand;
+  const spawn = options.spawnSync ?? ((command: string, args: string[]) => defaultSpawnCommand(command, args, env));
   const configuredPath =
     options.configuredPath ?? loadConfiguredGitHubCliPath(options.repoRoot);
-  const diagnostics: GitHubAuthDiagnostics = {
-    ghTokenPresent: Boolean(normalizeToken(env.GH_TOKEN)),
-    githubTokenPresent: Boolean(normalizeToken(env.GITHUB_TOKEN)),
+  const diagnostics: GitHubCliDiagnostics = {
     ghCandidates: [],
   };
 
@@ -156,107 +132,4 @@ export function resolveGitHubCli(options: {
   }
 
   return { diagnostics };
-}
-
-export function resolveGitHubToken(options: {
-  configuredPath?: string;
-  env?: Record<string, string | undefined>;
-  repoRoot?: string;
-  runCommand?: RunCommand;
-  spawnSync?: SpawnCommand;
-} = {}): { token?: string; diagnostics: GitHubAuthDiagnostics } {
-  const env = options.env ?? process.env;
-  const ghToken = normalizeToken(env.GH_TOKEN);
-  const githubToken = normalizeToken(env.GITHUB_TOKEN);
-
-  if (ghToken) {
-    return {
-      token: ghToken,
-      diagnostics: {
-        ghTokenPresent: true,
-        githubTokenPresent: Boolean(githubToken),
-        ghCandidates: [],
-        tokenSource: "GH_TOKEN",
-      },
-    };
-  }
-
-  if (githubToken) {
-    return {
-      token: githubToken,
-      diagnostics: {
-        ghTokenPresent: false,
-        githubTokenPresent: true,
-        ghCandidates: [],
-        tokenSource: "GITHUB_TOKEN",
-      },
-    };
-  }
-
-  const cli = resolveGitHubCli({
-    configuredPath: options.configuredPath,
-    env,
-    repoRoot: options.repoRoot,
-    spawnSync: options.spawnSync,
-  });
-  if (!cli.path) {
-    return { diagnostics: cli.diagnostics };
-  }
-
-  try {
-    const token = normalizeToken(
-      (options.runCommand ?? defaultRunCommand)(cli.path, ["auth", "token"])
-    );
-    return {
-      token,
-      diagnostics: {
-        ...cli.diagnostics,
-        tokenSource: token ? "gh" : undefined,
-      },
-    };
-  } catch (error: unknown) {
-    return {
-      diagnostics: {
-        ...cli.diagnostics,
-        ghTokenError: error instanceof Error ? error.message : String(error),
-      },
-    };
-  }
-}
-
-export function formatGitHubAuthDiagnostics(
-  diagnostics: GitHubAuthDiagnostics
-): string {
-  const lines = [
-    "GitHub auth diagnostics:",
-    `- GH_TOKEN present: ${diagnostics.ghTokenPresent ? "yes" : "no"}`,
-    `- GITHUB_TOKEN present: ${diagnostics.githubTokenPresent ? "yes" : "no"}`,
-  ];
-
-  if (diagnostics.tokenSource) {
-    lines.push(`- token source: ${diagnostics.tokenSource}`);
-  }
-
-  if (diagnostics.selectedGhPath) {
-    lines.push(
-      `- selected gh: ${diagnostics.selectedGhPath} (${diagnostics.selectedGhSource})`
-    );
-  }
-
-  if (diagnostics.ghCandidates.length > 0) {
-    lines.push("- gh candidates tried:");
-    for (const candidate of diagnostics.ghCandidates) {
-      lines.push(
-        `  - ${candidate.path} (${candidate.source}): ${
-          candidate.available ? "available" : `unavailable${candidate.error ? `, ${candidate.error}` : ""}`
-        }`
-      );
-    }
-  }
-
-  if (diagnostics.ghTokenError) {
-    lines.push(`- gh auth token failed: ${diagnostics.ghTokenError}`);
-  }
-
-  return lines.join("\n");
 }

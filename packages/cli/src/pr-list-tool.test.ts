@@ -1,15 +1,18 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { listPullRequestsTool } from "./pr-list-tool";
+
+beforeEach(() => vi.stubGlobal("fetch", () => { throw new Error("Direct HTTP must not be used"); }));
+afterEach(() => vi.unstubAllGlobals());
 
 describe("PR list tool", () => {
   it("returns a structured blocked result when GitHub auth is unavailable", async () => {
-    const fetchImpl = vi.fn();
+    const request = vi.fn();
 
     await expect(
       listPullRequestsTool({
         actionable: true,
         env: {},
-        fetchImpl,
+        request,
         repoRoot: "/repo",
         runCommand: (command) => {
           if (command === "gh") {
@@ -27,13 +30,13 @@ describe("PR list tool", () => {
         "GitHub authentication is required for `prs tool pr list --actionable --json`."
       ),
       nextAction:
-        "Set GH_TOKEN or GITHUB_TOKEN in the repository environment, or authenticate gh in the shell that runs prs.",
+        "Install gh and authenticate with gh auth login --hostname github.com for the selected account.",
     });
-    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
   });
 
   it("lists and filters actionable pull requests for the authenticated user", async () => {
-    const fetchImpl = vi
+    const request = vi
       .fn()
       .mockResolvedValueOnce({
         ok: true,
@@ -85,7 +88,8 @@ describe("PR list tool", () => {
       listPullRequestsTool({
         actionable: true,
         env: { GITHUB_TOKEN: "token" },
-        fetchImpl,
+        request,
+        spawnSyncImpl: () => ({ status: 0 }),
         repoRoot: "/repo",
         runCommand: () => "git@github.com:DevwareUK/prs.git",
       })
@@ -110,7 +114,7 @@ describe("PR list tool", () => {
   });
 
   it("skips pull requests without usable GitHub URLs", async () => {
-    const fetchImpl = vi
+    const request = vi
       .fn()
       .mockResolvedValueOnce({
         ok: true,
@@ -161,7 +165,8 @@ describe("PR list tool", () => {
       listPullRequestsTool({
         actionable: false,
         env: { GITHUB_TOKEN: "token" },
-        fetchImpl,
+        request,
+        spawnSyncImpl: () => ({ status: 0 }),
         repoRoot: "/repo",
         runCommand: () => "git@github.com:DevwareUK/prs.git",
       })

@@ -10,7 +10,8 @@ import {
   type InstallAgentSkillsResult,
   type InstallableAgentHost,
 } from "./agent-skills-installer";
-import { getRepositoryConfigPath } from "./config";
+import { getRepositoryConfigPath, loadLocalRepositoryConfig, LOCAL_REPOSITORY_CONFIG_RELATIVE_PATH } from "./config";
+import { listGitHubAccounts } from "./github-client";
 
 const SETUP_USAGE = "Usage: prs setup [--skills <none|codex|claude-code|copilot|all>]";
 const SETUP_SKILL_SELECTIONS = ["none", "codex", "claude-code", "copilot", "all"] as const;
@@ -94,11 +95,14 @@ export async function runSetupCommand(options: {
   promptForLine(prompt: string): Promise<string>;
   repoRoot: string;
   skills?: SetupSkillSelection;
+  interactive?: boolean;
+  discoverAccounts?: typeof listGitHubAccounts;
 }): Promise<void> {
   assertGitRepository(options.repoRoot);
+  const interactive = !options.skills && (options.interactive ?? Boolean(process.stdin.isTTY));
   const promptedSelection = options.skills
     ? options.skills
-    : (await options.promptForLine(
+    : !interactive ? "none" : (await options.promptForLine(
         "Install Agent Skills? [none/codex/claude-code/copilot/all] (none): "
       ))
         .trim()
@@ -118,11 +122,38 @@ export async function runSetupCommand(options: {
   mkdirSync(resolve(options.repoRoot, ".prs"), { recursive: true });
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
   const ignorePath = resolve(options.repoRoot, ".prs", ".gitignore");
-  const requiredIgnores = ["runs/", "state/", "worktrees/"];
+  const requiredIgnores = ["runs/", "state/", "worktrees/", "config.local.json"];
   const existingIgnores = existsSync(ignorePath)
     ? readFileSync(ignorePath, "utf8").split(/\r?\n/).filter(Boolean)
     : [];
   writeFileSync(ignorePath, `${[...new Set([...existingIgnores, ...requiredIgnores])].join("\n")}\n`, "utf8");
+
+  if (interactive && (config.forge?.type ?? "github") === "github") {
+    const local = loadLocalRepositoryConfig(options.repoRoot);
+    const current = local.forge?.githubAccount;
+    const { accounts, guidance } = (options.discoverAccounts ?? listGitHubAccounts)({ repoRoot: options.repoRoot });
+    if (guidance) console.log(guidance);
+    if (current && !accounts.includes(current)) {
+      console.log(`Saved account "${current}" is unavailable; log in with gh auth login --hostname github.com to use it. Keeping the existing selection unless changed.`);
+    }
+    if (accounts.length) {
+      const choices = ["0: Use the default account", ...accounts.map((account, index) => `${index + 1}: ${account}`)];
+      const answer = (await options.promptForLine(`GitHub account for this project:\n${choices.join("\n")}\nSelection (keep ${current ?? "default"}): `)).trim();
+      if (answer) {
+        const index = /^\d+$/.test(answer) ? Number(answer) : -1;
+        if (index < 0 || index > accounts.length) throw new Error("Choose a listed GitHub account number, or rerun setup and press Enter to keep the current selection.");
+        const selected = index === 0 ? undefined : accounts[index - 1];
+        if (selected || current) {
+          const updated = { ...local, forge: { ...local.forge } };
+          if (selected) updated.forge.githubAccount = selected;
+          else delete updated.forge.githubAccount;
+          const localPath = resolve(options.repoRoot, LOCAL_REPOSITORY_CONFIG_RELATIVE_PATH);
+          writeFileSync(localPath, `${JSON.stringify(updated, null, 2)}\n`, "utf8");
+          console.log(`Wrote ${localPath}.`);
+        }
+      }
+    }
+  }
 
   console.log(`Wrote ${configPath}.`);
   console.log(`Configured base branch: ${config.baseBranch}.`);

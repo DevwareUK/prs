@@ -3,7 +3,7 @@ import {
   filterActionableIssuesForUser,
   type ActionableIssue,
 } from "./actionable-github";
-import { formatGitHubAuthDiagnostics, resolveGitHubToken } from "./github-auth";
+import { createGitHubClient, type GitHubClient, type GitHubCommandRunner } from "./github-client";
 import { ISSUE_PLAN_COMMENT_MARKER, startsWithManagedMarker } from "@prs/contracts";
 
 export type IssueListToolResult =
@@ -21,7 +21,7 @@ export type IssueListToolResult =
       nextAction: string;
     };
 
-type FetchLike = (input: string, init?: { headers?: Record<string, string> }) => Promise<{
+type GitHubRequest = (endpoint: string) => Promise<{
   ok: boolean;
   status?: number;
   statusText?: string;
@@ -31,7 +31,8 @@ type FetchLike = (input: string, init?: { headers?: Record<string, string> }) =>
 type ListIssuesToolOptions = {
   actionable: boolean;
   env?: Record<string, string | undefined>;
-  fetchImpl?: FetchLike;
+  request?: GitHubRequest;
+  runGitHubCommand?: GitHubCommandRunner;
   repoRoot: string;
   runCommand?: (command: string, args: string[]) => string;
   spawnSyncImpl?: (command: string, args: string[]) => { status?: number | null; error?: Error };
@@ -57,27 +58,9 @@ function parseGitHubRepoFromRemote(remoteUrl: string): { owner: string; repo: st
   };
 }
 
-function createGitHubHeaders(token: string): Record<string, string> {
-  return {
-    Accept: "application/vnd.github+json",
-    Authorization: `Bearer ${token}`,
-    "User-Agent": "prs-cli",
-  };
-}
-
-async function fetchJson<T>(
-  fetchImpl: FetchLike,
-  url: string,
-  headers: Record<string, string>,
-  errorMessage: string
-): Promise<T> {
-  const response = await fetchImpl(url, { headers });
-  if (!response.ok) {
-    throw new Error(
-      `${errorMessage} (${response.status ?? "unknown"} ${response.statusText ?? "error"}).`
-    );
-  }
-
+async function requestJson<T>(request: GitHubRequest, endpoint: string, errorMessage: string): Promise<T> {
+  const response = await request(endpoint);
+  if (!response.ok) throw new Error(`${errorMessage} (${response.status ?? "unknown"} ${response.statusText ?? "error"}).`);
   return (await response.json()) as T;
 }
 
@@ -161,22 +144,16 @@ export async function listIssuesTool(
 ): Promise<IssueListToolResult> {
   const env = options.env ?? process.env;
   const commandRunner = options.runCommand ?? runCommand;
-  const tokenResolution = resolveGitHubToken({
-    env,
-    repoRoot: options.repoRoot,
-    runCommand: commandRunner,
-    spawnSync: options.spawnSyncImpl,
+  let client: GitHubClient;
+  const blocked = (detail: string): IssueListToolResult => ({
+    status: "blocked", reason: "github-auth-required",
+    message: `GitHub authentication is required for \`prs tool issue list --actionable --json\`.\n${detail}`,
+    nextAction: "Install gh and authenticate with gh auth login --hostname github.com for the selected account.",
   });
-  const token = tokenResolution.token;
-  if (!token) {
-    return {
-      status: "blocked",
-      reason: "github-auth-required",
-      message:
-        `GitHub authentication is required for \`prs tool issue list --actionable --json\`.\n${formatGitHubAuthDiagnostics(tokenResolution.diagnostics)}`,
-      nextAction:
-        "Set GH_TOKEN or GITHUB_TOKEN in the repository environment, or authenticate gh in the shell that runs prs.",
-    };
+  try {
+    client = createGitHubClient({ env, repoRoot: options.repoRoot, runCommand: options.runGitHubCommand, spawnSync: options.spawnSyncImpl });
+  } catch (error) {
+    return blocked(error instanceof Error ? error.message : "GitHub CLI unavailable.");
   }
 
   const remoteUrl = commandRunner("git", ["-C", options.repoRoot, "remote", "get-url", "origin"]);
@@ -190,28 +167,25 @@ export async function listIssuesTool(
     };
   }
 
-  const fetchImpl = options.fetchImpl ?? fetch;
-  const headers = createGitHubHeaders(token);
-  const currentUser = await fetchJson<{ login?: string }>(
-    fetchImpl,
-    "https://api.github.com/user",
-    headers,
-    "Failed to fetch the authenticated GitHub user"
-  );
+  const request = options.request ?? client.request;
+  let currentUser: { login?: string };
+  try {
+    currentUser = await requestJson<{ login?: string }>(request, "user", "Failed to fetch the authenticated GitHub user");
+  } catch (error) {
+    return blocked(error instanceof Error ? error.message : "GitHub authentication failed.");
+  }
   if (!currentUser.login) {
     throw new Error("GitHub user response did not include a login.");
   }
 
-  const issuePayload = await fetchJson<Array<Parameters<typeof normalizeIssue>[0]>>(
-    fetchImpl,
-    `https://api.github.com/repos/${repository.owner}/${repository.repo}/issues?state=open&per_page=100`,
-    headers,
+  const issuePayload = await requestJson<Array<Parameters<typeof normalizeIssue>[0]>>(
+    request,
+    `repos/${repository.owner}/${repository.repo}/issues?state=open&per_page=100`,
     "Failed to list open GitHub issues"
   );
-  const pullPayload = await fetchJson<Array<{ title?: string; body?: string | null }>>(
-    fetchImpl,
-    `https://api.github.com/repos/${repository.owner}/${repository.repo}/pulls?state=open&per_page=100`,
-    headers,
+  const pullPayload = await requestJson<Array<{ title?: string; body?: string | null }>>(
+    request,
+    `repos/${repository.owner}/${repository.repo}/pulls?state=open&per_page=100`,
     "Failed to list open GitHub pull requests"
   );
 
@@ -219,10 +193,9 @@ export async function listIssuesTool(
   const commentsByIssue = await Promise.all(
     issuePayloadOnly.map(async (issue) => ({
       number: issue.number as number,
-      comments: await fetchJson<Array<{ body?: string }>>(
-        fetchImpl,
-        `https://api.github.com/repos/${repository.owner}/${repository.repo}/issues/${issue.number}/comments?per_page=100`,
-        headers,
+      comments: await requestJson<Array<{ body?: string }>>(
+        request,
+        `repos/${repository.owner}/${repository.repo}/issues/${issue.number}/comments?per_page=100`,
         `Failed to list comments for GitHub issue #${issue.number}`
       ),
     }))

@@ -25,3 +25,18 @@ describe("repository config loading", () => {
     error.mockRestore();
   });
 });
+
+it("loads a trimmed local account without changing shared configuration", async () => {
+  const { loadLocalRepositoryConfig } = await import("./config");
+  const root = mkdtempSync(join(tmpdir(), "prs-local-config-"));
+  mkdirSync(join(root, ".prs"));
+  writeFileSync(join(root, ".prs/config.json"), JSON.stringify({ baseBranch: "develop" }));
+  writeFileSync(join(root, ".prs/config.local.json"), JSON.stringify({ forge: { githubAccount: " work " } }));
+  expect(loadLocalRepositoryConfig(root)).toEqual({ forge: { githubAccount: "work" } });
+  expect(loadResolvedRepositoryConfig(root).baseBranch).toBe("develop");
+  expect(loadRepositoryConfig(root)?.forge).toBeUndefined();
+  for (const invalid of [{ forge: { githubAccount: " " } }, { forge: { githubAccount: 42 } }, { token: "secret" }]) {
+    writeFileSync(join(root, ".prs/config.local.json"), JSON.stringify(invalid));
+    expect(() => loadLocalRepositoryConfig(root)).toThrow(/config.local.json/);
+  }
+});
