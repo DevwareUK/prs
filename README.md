@@ -40,17 +40,18 @@ The canonical, host-neutral skill pack lives under `skills/` and is indexed by `
 - `prs-create` drafts and creates approved issues or issue sets;
 - `prs-issue` carries one issue from context through implementation and validation;
 - `prs-finish` verifies completed work and prepares its pull request and audit trail;
+- `prs-pr` prepares an existing PR in the main checkout and handles requested review, conflicts, comment fixes and failing-test repairs;
 - `prs-orchestrate` coordinates a dependency-aware issue set as separate pull requests.
 
 These are the shared workflow bodies for Codex, Claude Code, and GitHub Copilot. Host installers place them in supported personal directories without rewriting their instructions.
 
-For Codex, `prs skills install codex` installs the pack under `~/.agents/skills`. Re-running it safely updates unchanged PRS-managed copies, preserves customized or colliding files, and moves marked legacy copies under `~/.codex/skills` to recoverable `.prs-retired` files. See [the Codex guide](docs/codex.md).
+For Codex, `prs skills install codex` installs the pack under `~/.agents/skills`. Re-running it safely updates unchanged PRS-managed copies, preserves customized or colliding files, and moves marked legacy copies under `~/.codex/skills` (including colon-named aliases such as `prs:pr`) to recoverable `.prs-retired` files. See [the Codex guide](docs/codex.md).
 
 For Claude Code, `prs skills install claude-code` installs the same files under `~/.claude/skills`. See [the Claude Code guide](docs/claude-code.md).
 
 For GitHub Copilot, `prs skills install copilot` shares the Codex installation under `~/.agents/skills` without duplicating managed files. See [the Copilot guide](docs/github-copilot.md).
 
-`prs skills validate --json` installs each host pack in an isolated temporary home and checks its inventory, hashes, retained operation references, and the named `artifact-locality` and `staged-only-finalization` instructions. Its per-host safeguard results are static evidence only: it does not launch a native host runtime. Native behavioral evidence is a separate manual smoke matrix with one independently attributed row for each host; see [the agent parity guide](docs/agent-parity.md).
+`prs skills validate --json` installs each host pack in an isolated temporary home and checks its inventory, hashes, retained operation references, and the named `artifact-locality` and `staged-only-finalization` instructions. It also requires the `prs-pr` skill, its router entry and non-empty sections for all four PR actions, even if every host installs the same incomplete pack. These are static checks: they do not launch a native host runtime. Native behavioral evidence is a separate manual smoke matrix with one independently attributed row for each host; see [the agent parity guide](docs/agent-parity.md).
 
 All generated workflow artifacts use `.prs/runs/<task-specific-run>/` as their only repository-local root. Use a run directory returned by `prs` when available; otherwise create a task-specific directory beneath `.prs/runs`. This covers issue drafts, linked-set manifests, specifications, plans, working notes, and completion evidence. These raw files remain local: never stage or commit them, and never create an alternative scratch root such as `.prs-work`.
 
@@ -65,7 +66,11 @@ A normal issue flow is:
 5. The active agent stages only the approved issue changes, verifies them with `git diff --cached --name-status`, and uses `prs issue finalize` to preview and create a deterministic local commit after explicit confirmation.
 6. It opens or updates the pull request through its normal GitHub tooling and publishes evidence with `prs audit publish`.
 
-For an existing pull request, `prs tool pr ready` checks out the actual head branch, synchronizes the configured base, runs configured local-readiness commands, and returns GitHub checks and review-comment context as JSON.
+For an existing pull request, use `prs-pr`. It locates the main checkout used by your local application and runs `prs tool pr ready` there to check out the actual head branch, synchronize the PR base, run configured local-readiness commands, and return GitHub checks and review-comment context. With no PR selected, it lists actionable PRs with links. With no follow-up action requested, it prepares local testing and offers relevant next steps.
+
+The skill accepts `review`, `resolve-conflicts`, `address-comments` (including requests to resolve comments), and `fix-tests`. These are active-agent actions, not additional CLI subcommands. Review preparation and approved publication, deliberate commits, guarded pushes and fresh hosted checks remain part of the workflow; PRs need no linked issue. `fix-tests` repairs observed failures.
+
+For example, ask: "Use prs-pr to prepare PR 88 for local testing", then "Use prs-pr to address comments on PR 88". See the host guides for native invocation syntax. Readiness flags such as `--jdi` apply only to preparation and configured runtime startup; they do not authorize review publication, fixes, pushes or merging.
 
 ## Commands
 

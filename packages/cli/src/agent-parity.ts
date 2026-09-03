@@ -12,6 +12,7 @@ const REQUIRED_OPERATIONS = [
   "prs tool issue publish-artifacts",
   "prs tool issue ready",
   "prs issue finalize",
+  "prs tool pr list",
   "prs tool pr ready",
   "prs audit publish",
   "prs tool token-usage render",
@@ -137,6 +138,7 @@ export function validateAgentSkillParity(options: {
       (skip) => `${skip.name}: ${skip.reason} at ${skip.filePath}`
     );
     const combined: string[] = [];
+    const installedContent = new Map<string, string>();
 
     for (const name of canonicalInventory) {
       const filePath = join(install.targetRoot, name, "SKILL.md");
@@ -146,6 +148,7 @@ export function validateAgentSkillParity(options: {
       }
       const content = readFileSync(filePath, "utf8");
       combined.push(content);
+      installedContent.set(name, content);
       contentHashes[name] = hash(content);
       if (contentHashes[name] !== canonicalHashes[name]) {
         errors.push(`${name}: installed content differs from canonical source`);
@@ -154,6 +157,20 @@ export function validateAgentSkillParity(options: {
 
     if (JSON.stringify(inventory) !== JSON.stringify(canonicalInventory)) {
       errors.push("installed inventory differs from the canonical manifest");
+    }
+    // Identical installations can all omit the same workflow. Check its entrypoint
+    // and action sections independently of the manifest and combined tool references.
+    const prWorkflow = installedContent.get("prs-pr");
+    if (!prWorkflow) {
+      errors.push("missing workflow skill: prs-pr");
+    } else {
+      for (const action of ["review", "resolve-conflicts", "address-comments", "fix-tests"]) {
+        const section = prWorkflow.split(`### ${action}\n`)[1]?.split(/^#{1,3} /m)[0]?.trim();
+        if (!section) errors.push(`prs-pr: missing action instructions: ${action}`);
+      }
+    }
+    if (!/Existing pull request:[^\n]*`prs-pr`/.test(installedContent.get("prs") ?? "")) {
+      errors.push("prs: missing prs-pr route");
     }
     const combinedText = combined.join("\n");
     const requiredOperations = REQUIRED_OPERATIONS.filter((operation) =>
