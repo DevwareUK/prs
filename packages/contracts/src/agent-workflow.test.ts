@@ -83,6 +83,7 @@ describe("agent workflow contract", () => {
       "issue-finalize",
       "audit-publish",
       "token-usage-render",
+      "token-usage-capture",
     ]);
     expect(
       AGENT_WORKFLOW_CONTRACT.commands

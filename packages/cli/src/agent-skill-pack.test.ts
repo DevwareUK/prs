@@ -42,7 +42,7 @@ describe("canonical agent skill pack", () => {
     expect(combined).toContain("sequentially");
     expect(combined).toContain("verification");
     expect(combined).toContain("usage-evidence.json");
-    expect(combined).toContain("cumulative-snapshot");
+    expect(combined).toContain("prs tool token-usage capture");
     expect(combined).toContain("prs tool token-usage render");
     expect(combined).toContain("unavailable");
   });

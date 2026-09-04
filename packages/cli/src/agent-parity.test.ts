@@ -21,6 +21,12 @@ function createSourceFixture(mutate: (content: string) => string): string {
 }
 
 describe("three-host Agent Skills parity", () => {
+  it("requires local usage capture in installed workflow guidance", () => {
+    const sourceRoot = createSourceFixture(content => content.replaceAll("prs tool token-usage capture", "removed-capture-command"));
+    const report = validateAgentSkillParity({ sourceRoot });
+    expect(report.status).toBe("failed");
+    for (const host of report.hosts) expect(host.errors).toContain("missing operation reference: prs tool token-usage capture");
+  });
   it("requires the local usage renderer in installed workflow guidance", () => {
     const sourceRoot = createSourceFixture(content => content.replaceAll("prs tool token-usage render", "removed-usage-command"));
     const temporaryRoot = mkdtempSync(join(tmpdir(), "prs-agent-parity-usage-"));

@@ -97,6 +97,7 @@ prs tool pr ready <pr-number> [--unattended|--auto|--jdi] --json
 prs audit publish (--issue <number>|--pr <number>) --file <path> --section <name>
                   [--local-run <path>] [--media-manifest <path>]
 prs tool token-usage render --file <path> --output <path> --json
+prs tool token-usage capture --host <codex|claude-code|copilot> --output <path> [--session <id>] [--source <path>] [--since <ISO>] --json
 ```
 
 `prs issue finalize` does not stage files for you. It previews the deterministic commit message and exact staged paths, refuses an empty index, and commits only changes already in the index, leaving unstaged and untracked files untouched.
@@ -106,6 +107,8 @@ Remote mutations—creating issues and publishing managed comments or audits—m
 ## Local usage and cost evidence
 
 `prs tool token-usage render` validates version-1 local evidence from Codex, Claude Code, or Copilot and writes a publication-safe Markdown report. Both files must stay in the same `.prs/runs/<runId>/` directory. It needs no GitHub authentication, provider connection, or model calls. Publish the reviewed report separately with `prs audit publish ... --section token-usage` after approval.
+
+`prs tool token-usage capture` creates that evidence directly from a selected native session or local telemetry export. Start it when the task's run directory exists, then repeat with the same output before reporting; its original session/source/start boundary is retained. The first call starts at now unless you provide a known task-start `--since` timestamp. Codex can use `CODEX_THREAD_ID`; Claude Code needs its session ID and transcript path; Copilot needs its session ID and a telemetry file exported before capture. Missing setup is reported as unavailable, not zero. Capture makes no model calls and installs no hooks. These are selected-session checkpoints, not guaranteed full-task/subagent totals. See [native setup and supported formats](docs/usage-evidence.md#native-capture) before testing on real issues.
 
 Cumulative snapshots are differenced, never added as independent phase totals. Missing baselines, uncertain parent/child overlap, and unavailable captures remain visibly incomplete. Codex goal counters are host counters—not raw model tokens. Credits, provider charges, and estimates remain separate. Estimates require supplied, sourced model/context-specific rate snapshots; unknown models are unpriced and expired promotions cannot silently price later work. See [usage evidence and examples](docs/usage-evidence.md) for the contract, native mappings, legacy handling, and limitations. Synthetic tests and static skill parity do not claim live host validation.
 

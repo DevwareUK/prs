@@ -1,6 +1,34 @@
 # Usage evidence (version 1)
 
-PRS consumes local host-export envelopes; it does not collect private logs, launch models, fetch prices, or use provider credentials. Synthetic fixtures establish mappings, not compatibility with every native host version or provider invoices.
+PRS can capture allowlisted usage metadata from one selected native session file or local telemetry export, or consume manually supplied host-export envelopes. It does not search transcript contents, launch models, fetch prices, or use provider credentials. Synthetic fixtures establish mappings, not compatibility with every native host version or provider invoices.
+
+## Native capture
+
+Create or reuse a task-specific directory beneath `.prs/runs`, then start capture immediately:
+
+```text
+prs tool token-usage capture --host <codex|claude-code|copilot> --output .prs/runs/<run>/usage-evidence.json --json
+```
+
+Repeat with the same output before rendering. First capture defaults to now, excluding earlier work in a reused session. For retrospective capture, supply `--since <ISO-8601-with-offset>` with a known task-start time on the first call. Selection is by response observation/completion timestamp, strictly after the start and through the checkpoint; it is not an exact request-start or billing window. The last assistant response is emitted after its own capture call, so a later checkpoint is needed to include it.
+
+The output binds the host, session, source and start time. Repeated calls retain those values, deduplicate response IDs and update growing Claude output counters. Binding changes, conflicting counters, lost responses, malformed complete JSON records and backwards checkpoints fail without replacing existing evidence. An incomplete final JSONL write is excluded with a partial warning. Use a separate artifact for a different session; do not sum reports that cover the same work. Keep the original artifact across issue/PR readiness handoffs even if the readiness run directory changes. Manually supplied evidence is not overwritten. Existing rate cards are retained.
+
+Capture requires an existing real run directory and a regular source file no larger than 64 MiB. Source-file symlinks and aliased outputs are rejected. A per-output lock prevents simultaneous writers; after an interrupted process, inspect that no capture is running before removing its `.lock` file. Unknown usage remains unavailable/partial, never zero.
+
+### Host connection
+
+| Host | Session and source | Supported capture |
+| --- | --- | --- |
+| Codex | `--session` or `PRS_USAGE_SESSION_ID`, otherwise `CODEX_THREAD_ID`. `--source` or `PRS_USAGE_SOURCE`; otherwise exact session filename beneath `CODEX_HOME/sessions` (default native home). Multiple matches require an explicit path. | `token_usage_record` per-response `usage`, with matching `session_meta.id` and `turn_context` model. Legacy cumulative `token_count` and goal counters are not added. Nonzero cache-write semantics are not yet validated and are rejected. |
+| Claude Code | `--session` / `PRS_USAGE_SESSION_ID` and `--source` / `PRS_USAGE_SOURCE` from native session metadata. An exact `<session>.jsonl` filename beneath the native `.claude/projects` directory can also be resolved. | Assistant transcript `message.usage`, deduplicated by `message.id`, or OTLP JSON `api_request` logs with matching `session.id`. Sidechain transcript records are excluded with a warning. |
+| Copilot | `--session` / `PRS_USAGE_SESSION_ID` and `--source` / `PRS_USAGE_SOURCE`, otherwise `COPILOT_OTEL_FILE_EXPORTER_PATH`. Enable the local exporter before the native session; PRS does not enable it. | OTLP JSON chat spans or individual exported span records, with matching `gen_ai.conversation.id`. Parent `invoke_agent` spans and metric snapshots are not added. |
+
+Use an explicitly known session ID, never the newest file or a guessed ID. For Claude Code, SessionStart hook input provides `session_id` and `transcript_path`; an existing user-managed hook can expose these as `PRS_USAGE_SESSION_ID` and `PRS_USAGE_SOURCE` through `CLAUDE_ENV_FILE`. This is optional setup, not a hook installed by PRS. For Copilot, configure `COPILOT_OTEL_FILE_EXPORTER_PATH` in the launching environment and pass the exact native session ID to capture. Keep content capture disabled. See [Claude hooks](https://code.claude.com/docs/en/hooks), [Claude monitoring](https://code.claude.com/docs/en/monitoring-usage) and [Copilot CLI reference](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference) for native setup. Do not launch an extra session just to validate capture.
+
+The capture output is normalized, version-1 evidence; raw prompts, tool results and transcript bodies are discarded. A private `capture.sourcePath` remains in the local artifact to retain its binding, but is omitted from the capture command's JSON summary and rendered Markdown. `capture` records host/session, format, start/checkpoint, warnings and status. A `captured` status means supported records were read, **not** that full-task/subagent coverage is proven. All reports label that limitation. Codex's recorded single-session probe validated its response mapping; Claude/Copilot adapters have offline coverage and await validation during real issue work.
+
+Native `hostEstimatedCost` (Claude OTLP `cost_usd`) is displayed separately from sourced-rate estimates and provider-reported charges; it is not an invoice and is never added to either total. Copilot's supported span schema does not declare the currency of `github.copilot.cost`, so capture omits that amount with a warning rather than assuming USD; AI units are not converted into tokens or currency. Capture does not fetch rates or manufacture missing cache fields. Missing source/identity gives actionable unavailable evidence. Check that evidence on the next real issue rather than making billable validation calls.
 
 ## Render and publish
 

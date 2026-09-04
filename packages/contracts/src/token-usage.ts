@@ -71,6 +71,7 @@ export const UsageEvent = z.object({
   model: z.object({ provider: id, name: id }).strict().optional(),
   context: z.object({ tier: id, tokens: counter.optional() }).strict().optional(),
   rateCardId: id.optional(),
+  hostEstimatedCost: z.object({ amount: z.number().finite().nonnegative(), currency: z.string().regex(/^[A-Z]{3}$/) }).strict().optional(),
   tokenSemantics: z.object({ reasoning }).strict().optional(),
   usage: TokenUsage.optional(), value: scalar.optional(), native: native.optional(),
   raw: z.record(z.string(), z.unknown()).optional(),
@@ -93,7 +94,8 @@ export const UsageEvent = z.object({
   if (event.value?.conversion && event.unit !== "credits") fail("Credit conversion belongs only to credits");
   if (event.interval && (Date.parse(event.interval.start) >= Date.parse(event.interval.end) || Date.parse(event.interval.end) > Date.parse(event.observedAt))) fail("Invalid interval ordering");
   if (event.status !== "unavailable" && event.measurementKind === "scoped-delta" && !event.interval) fail("Scoped deltas require an interval");
-  if (event.status !== "unavailable" && event.measurementKind === "provider-request" && (!event.requestId || !event.interval)) fail("Provider requests require stable request identity and interval");
+  if (event.status !== "unavailable" && event.measurementKind === "provider-request" && (!event.requestId || (!event.interval && !event.requestsDisjoint))) fail("Provider requests require stable request identity and an interval or explicit disjointness");
+  if (event.hostEstimatedCost && (event.status === "unavailable" || event.unit !== "model-tokens" || event.measurementKind !== "provider-request")) fail("Host estimates belong to observed token requests, not cumulative totals or charges");
   if (event.baseline) {
     if (event.measurementKind !== "cumulative-snapshot" || Date.parse(event.baseline.observedAt) >= Date.parse(event.observedAt)) fail("Baseline must precede a cumulative observation");
     if (event.unit === "model-tokens" ? (!event.baseline.usage || !!event.baseline.value) : (!event.baseline.value || !!event.baseline.usage))
@@ -145,8 +147,17 @@ export function usagePartitionKey(event: UsageEvent): string {
 export const UsageEvidence = z.object({
   version: z.literal(1), kind: z.literal("usage-evidence"), runId: id,
   events: z.array(UsageEvent).min(1), rateCards: z.array(UsageRateCard).default([]),
+  capture: z.object({
+    version: z.literal(1), host: AgentHost, sessionId: id,
+    since: timestamp, capturedAt: timestamp, format: id,
+    status: z.enum(["captured", "partial", "unavailable"]),
+    scope: z.literal("selected-session-checkpoint"), warnings: z.array(id),
+    // Private local binding, never included in rendered/publication output.
+    sourcePath: id.optional(),
+  }).strict().optional(),
 }).strict().superRefine((evidence, ctx) => {
   const fail = (message: string) => ctx.addIssue({ code: "custom", message });
+  if (evidence.capture && Date.parse(evidence.capture.since) > Date.parse(evidence.capture.capturedAt)) fail("Capture start must not follow checkpoint");
   const ids = new Map<string, string>();
   const snapshots = new Map<string, string>();
   const parents = new Map<string, string>();

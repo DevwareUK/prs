@@ -16,9 +16,29 @@ function table(headings: string[], rows: unknown[][]): string[] {
 }
 function money(value: number): string { return String(Number(value.toPrecision(12))); }
 export function renderUsageMarkdown(ledger: NormalizedUsageLedger, totals: UsageAggregation, pricing: UsagePricingResult): string {
+  const capture = ledger.source.capture;
+  if (capture && ledger.events.every(event => event.status === "unavailable")) {
+    return ["# Usage and cost evidence", "", "Run: " + text(ledger.source.runId), "",
+      "Selected-session checkpoint: " + text(capture.host) + " / " + text(capture.sessionId) + " (unavailable).",
+      "Request observations after " + text(capture.since) + " through " + text(capture.capturedAt) + ".", "",
+      "Model-token total and cost: unavailable, not zero. Full-task and subagent coverage are unproven.",
+      "Responses emitted after this checkpoint are not included.", "",
+      ...capture.warnings.map(warning => "- " + text(warning)), "",
+      "Private source paths and raw data remain local.", ""].join("\n");
+  }
+  const hostEstimates = totals.contributions.filter(row => row.included && row.event.hostEstimatedCost);
+  const hostSubtotals = new Map<string, number>();
+  for (const row of hostEstimates) {
+    const cost = row.event.hostEstimatedCost!;
+    hostSubtotals.set(cost.currency, (hostSubtotals.get(cost.currency) ?? 0) + cost.amount);
+  }
   const lines = [
     "# Usage and cost evidence", "",
     "Run: " + text(ledger.source.runId), "",
+    ...(capture ? ["Selected-session checkpoint: " + text(capture.host) + " / " + text(capture.sessionId) + " (" + text(capture.status) + ").",
+      "Request observations after " + text(capture.since) + " through " + text(capture.capturedAt) + ".",
+      "Full-task and subagent coverage are unproven. Responses emitted after this checkpoint are not included.", "",
+      ...capture.warnings.map(warning => "- " + text(warning)), ""] : []),
     "Model-token known total: " + text(totals.modelTokens.totalTokens) + " (" + totals.modelTokens.status + ").",
     "Known subtotals are not guaranteed complete totals. Unknown values are never substituted with zero.", "",
     ...table(["Uncached input", "Cached input/read", "Cache write/creation", "Output", "Reasoning/thinking", "Provider total (reconciliation only)"],
@@ -46,6 +66,10 @@ export function renderUsageMarkdown(ledger: NormalizedUsageLedger, totals: Usage
       pricing.estimates.map(row => [row.eventIds.join(", "), money(row.amount), row.currency, row.status, row.rateCardId, row.missing.join(", ") || "none",
         row.assumption ? row.assumption.description + " (" + row.assumption.provenance.sourceUrl + "; retrieved " + row.assumption.provenance.retrievedAt + ")" : "none"])),
     "", ...table(["Currency", "Known estimated subtotal", "Status"], pricing.estimatedTotals.map(row => [row.currency, money(row.amount), row.status])),
+    ...(hostEstimates.length ? ["", "## Host-reported cost estimates", "",
+      "Separate estimates, not invoices or additional charges. These are not added to rate-card estimates; coverage may be partial.", "",
+      ...table(["Event", "Estimated amount", "Currency"], hostEstimates.map(row => [row.event.eventId, money(row.event.hostEstimatedCost!.amount), row.event.hostEstimatedCost!.currency])), "",
+      ...table(["Currency", "Known host-estimated subtotal"], [...hostSubtotals].map(([currency, amount]) => [currency, money(amount)]))] : []),
     "", "## Provider-reported charges", "",
     ...table(["Currency", "Reported contribution", "Source events"], pricing.reportedCharges.map(row => [row.unit, money(row.amount), row.eventIds.join(", ")])),
     "", "## Credit consumption (including GitHub AI credits)", "",

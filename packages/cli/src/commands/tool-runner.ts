@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { renderTokenUsageTool } from "../token-usage-tool";
+import { captureTokenUsageTool } from "../token-usage-capture-tool";
 import { dirname, resolve } from "node:path";
 import {
   getCliArgs,
@@ -30,6 +31,10 @@ function writeJson(value: unknown): void {
 export async function runToolCommand(): Promise<void> {
   const repoRoot = getDefaultRepoRoot();
   const command = parsePrsToolCommandArgs(getCliArgs().slice(1));
+  if (command.kind === "token-usage-capture") {
+    writeJson(captureTokenUsageTool({ repoRoot, ...command }));
+    return;
+  }
   if (command.kind === "token-usage-render") {
     writeJson(renderTokenUsageTool({ repoRoot, filePath: command.filePath, outputFilePath: command.outputFilePath }));
     return;

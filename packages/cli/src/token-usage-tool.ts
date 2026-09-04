@@ -12,7 +12,7 @@ function inside(root: string, path: string): boolean {
   const child = relative(root, path);
   return child !== "" && child !== ".." && !child.startsWith(".." + sep) && !isAbsolute(child);
 }
-function selectedRun(repoRoot: string, path: string): { path: string; runId: string; runRoot: string } {
+export function selectedRun(repoRoot: string, path: string): { path: string; runId: string; runRoot: string } {
   if (path.split(/[\\/]/).includes("..")) throw new Error("Run artifact paths must not contain traversal");
   const resolved = resolve(repoRoot, path), canonicalRoot = realpathSync(repoRoot);
   let rel = relative(repoRoot, resolved).split(sep);
@@ -20,7 +20,7 @@ function selectedRun(repoRoot: string, path: string): { path: string; runId: str
   if (rel[0] !== ".prs" || rel[1] !== "runs" || !rel[2] || rel.length < 4) throw new Error("Artifact must belong to .prs/runs/<runId>/");
   return { path: resolve(canonicalRoot, ...rel), runId: rel[2], runRoot: resolve(canonicalRoot, ".prs/runs", rel[2]) };
 }
-function assertRealContainment(runRoot: string, path: string): void {
+export function assertRealContainment(runRoot: string, path: string): void {
   let ancestor = path;
   while (!existsSync(ancestor)) {
     // A dangling symlink is not a safe nonexistent destination.

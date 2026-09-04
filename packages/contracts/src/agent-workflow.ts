@@ -66,6 +66,7 @@ export const AgentWorkflowCommand = z
       "issue-finalize",
       "audit-publish",
       "token-usage-render",
+      "token-usage-capture",
     ]),
     invocation: z.string().trim().min(1),
     json: z.boolean(),
@@ -184,6 +185,13 @@ export const AGENT_WORKFLOW_CONTRACT = AgentWorkflowContract.parse({
     {
       name: "token-usage-render",
       invocation: "prs tool token-usage render --file <path> --output <path> --json",
+      json: true,
+      mutatesRemote: false,
+      approval: "none",
+    },
+    {
+      name: "token-usage-capture",
+      invocation: "prs tool token-usage capture --host <host> --output <path> [--session <id>] [--source <path>] [--since <ISO>] --json",
       json: true,
       mutatesRemote: false,
       approval: "none",

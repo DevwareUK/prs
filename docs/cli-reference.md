@@ -65,6 +65,7 @@ Use the `prs-pr` skill to coordinate main-checkout preparation and follow-up `re
 
 ```text
 prs tool token-usage render --file <usage-evidence.json> --output <token-usage.md> --json
+prs tool token-usage capture --host <codex|claude-code|copilot> --output <usage-evidence.json> [--session <id>] [--source <path>] [--since <ISO>] --json
 ```
 
 Both required paths resolve from the repository root and must be within the same concrete `.prs/runs/<runId>/` directory; the envelope's `runId` must match. Traversal, symlink escapes, input/output aliases, malformed evidence, and conflicting counters fail without replacing existing output. Successful rerenders replace the selected local Markdown file deterministically. No forge configuration or authentication is required and no network calls occur.

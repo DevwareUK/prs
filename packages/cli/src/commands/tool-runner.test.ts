@@ -41,3 +41,20 @@ it("renders local evidence without loading repository forge configuration or aut
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+it("captures locally without loading forge configuration or authentication", async () => {
+  const root = mkdtempSync(join(tmpdir(), "prs-capture-runner-"));
+  mkdirSync(join(root, ".prs/runs/capture"), { recursive: true });
+  state.root = root; state.localOnly = true;
+  state.args = ["tool", "token-usage", "capture", "--host", "copilot", "--session", "test", "--source", join(root, "not-created.jsonl"), "--output", ".prs/runs/capture/usage-evidence.json", "--json"];
+  const output: string[] = [];
+  vi.spyOn(process.stdout, "write").mockImplementation(chunk => { output.push(String(chunk)); return true; });
+  try {
+    await runToolCommand();
+    expect(JSON.parse(output.join(""))).toMatchObject({ status: "unavailable", capture: { sessionId: "test" } });
+  } finally {
+    state.root = "/repo"; state.localOnly = false;
+    state.args = ["tool", "issue", "create", "--draft-file", "draft.md", "--json"];
+    rmSync(root, { recursive: true, force: true });
+  }
+});
