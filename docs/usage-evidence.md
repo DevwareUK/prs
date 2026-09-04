@@ -18,6 +18,8 @@ Capture requires an existing real run directory and a regular source file no lar
 
 ### Host connection
 
+For the macOS Copilot app, the skill installer and interactive setup can now configure an opt-in persistent local export. Use `prs skills install copilot` and accept the prompt, or `prs setup --skills all --copilot-telemetry enable`. Restart the app normally afterward. This enables export only; capture still requires the exact session ID. See [setup, disable and preservation rules](github-copilot.md#optional-macos-app-usage-tracking).
+
 | Host | Session and source | Supported capture |
 | --- | --- | --- |
 | Codex | `--session` or `PRS_USAGE_SESSION_ID`, otherwise `CODEX_THREAD_ID`. `--source` or `PRS_USAGE_SOURCE`; otherwise exact session filename beneath `CODEX_HOME/sessions` (default native home). Multiple matches require an explicit path. | `token_usage_record` per-response `usage`, with matching `session_meta.id` and `turn_context` model. Legacy cumulative `token_count` and goal counters are not added. Nonzero cache-write semantics are not yet validated and are rejected. |

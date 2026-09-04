@@ -38,7 +38,7 @@ export async function run(): Promise<void> {
     return;
   }
   if (command === "skills") {
-    runSkillsCommand(args);
+    await runSkillsCommand(args);
     return;
   }
   if (command === "tool") {

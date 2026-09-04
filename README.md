@@ -51,6 +51,8 @@ For Claude Code, `prs skills install claude-code` installs the same files under 
 
 For GitHub Copilot, `prs skills install copilot` shares the Codex installation under `~/.agents/skills` without duplicating managed files. See [the Copilot guide](docs/github-copilot.md).
 
+`prs skills install all` installs for all three hosts, just like `prs setup --skills all`. On macOS, interactive `prs skills install copilot` / `all`, and interactive `prs setup` when you choose `copilot` / `all`, offer local usage tracking for the Copilot app once it is not already configured. Accepting adds user login settings for a private local export with content capture disabled; fully quit and reopen Copilot from the Dock normally. This also affects Copilot CLI and other subsequently launched processes that honor those environment variables. Skill installation alone does not enable telemetry. Scripted/JSON installs and setup with explicit `--skills` never prompt: opt in with `--copilot-telemetry enable`, leave settings alone with `skip`, or remove PRS's configuration with `disable`. See [setup details and limitations](docs/github-copilot.md#optional-macos-app-usage-tracking).
+
 `prs skills validate --json` installs each host pack in an isolated temporary home and checks its inventory, hashes, retained operation references, and the named `artifact-locality` and `staged-only-finalization` instructions. It also requires the `prs-pr` skill, its router entry and non-empty sections for all four PR actions, even if every host installs the same incomplete pack. These are static checks: they do not launch a native host runtime. Native behavioral evidence is a separate manual smoke matrix with one independently attributed row for each host; see [the agent parity guide](docs/agent-parity.md).
 
 All generated workflow artifacts use `.prs/runs/<task-specific-run>/` as their only repository-local root. Use a run directory returned by `prs` when available; otherwise create a task-specific directory beneath `.prs/runs`. This covers issue drafts, linked-set manifests, specifications, plans, working notes, and completion evidence. These raw files remain local: never stage or commit them, and never create an alternative scratch root such as `.prs-work`.
@@ -77,8 +79,8 @@ For example, ask: "Use prs-pr to prepare PR 88 for local testing", then "Use prs
 The implemented command surface is:
 
 ```text
-prs setup [--skills <none|codex|claude-code|copilot|all>]
-prs skills install <codex|claude-code|copilot> [--json]
+prs setup [--skills <none|codex|claude-code|copilot|all>] [--copilot-telemetry <enable|disable|skip>]
+prs skills install <codex|claude-code|copilot|all> [--json] [--copilot-telemetry <enable|disable|skip>]
 prs skills validate [--json]
 
 prs tool issue list [--actionable] --json

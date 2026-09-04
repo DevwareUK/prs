@@ -5,7 +5,8 @@ import { TOP_LEVEL_HELP } from "./cli-notices";
 
 describe("provider-free CLI command surface", () => {
   it("advertises only setup, skill installation, deterministic tools, finalization, and audit", () => {
-    expect(TOP_LEVEL_HELP).toContain("prs skills install <codex|claude-code|copilot>");
+    expect(TOP_LEVEL_HELP).toContain("prs skills install <codex|claude-code|copilot|all>");
+    expect(TOP_LEVEL_HELP).toContain("--copilot-telemetry <enable|disable|skip>");
     expect(TOP_LEVEL_HELP).toContain("prs skills validate");
     expect(TOP_LEVEL_HELP).toContain("prs tool issue context");
     expect(TOP_LEVEL_HELP).toContain("prs tool pr ready");

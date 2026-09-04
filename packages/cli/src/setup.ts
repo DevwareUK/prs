@@ -12,35 +12,29 @@ import {
 } from "./agent-skills-installer";
 import { getRepositoryConfigPath, loadLocalRepositoryConfig, LOCAL_REPOSITORY_CONFIG_RELATIVE_PATH } from "./config";
 import { listGitHubAccounts } from "./github-client";
+import { assertTelemetrySelection, selectedSkillHosts, telemetryAction, type CopilotTelemetryAction } from "./skill-install-options";
+import { offerCopilotTelemetry } from "./copilot-telemetry-flow";
+import type { CopilotTelemetryOptions } from "./copilot-app-telemetry";
 
-const SETUP_USAGE = "Usage: prs setup [--skills <none|codex|claude-code|copilot|all>]";
+const SETUP_USAGE = "Usage: prs setup [--skills <none|codex|claude-code|copilot|all>] [--copilot-telemetry <enable|disable|skip>]";
 const SETUP_SKILL_SELECTIONS = ["none", "codex", "claude-code", "copilot", "all"] as const;
 type SetupSkillSelection = (typeof SETUP_SKILL_SELECTIONS)[number];
 
-export type SetupCommandOptions = { skills?: SetupSkillSelection };
+export type SetupCommandOptions = { skills?: SetupSkillSelection; copilotTelemetry?: CopilotTelemetryAction };
 
 export function parseSetupCommandArgs(args: string[]): SetupCommandOptions {
   const optionArgs = args[0] === "setup" ? args.slice(1) : args;
-  if (optionArgs.length === 0) return {};
-  const equalsValue = optionArgs[0]?.startsWith("--skills=")
-    ? optionArgs[0].slice("--skills=".length)
-    : undefined;
-  const value = equalsValue ?? (optionArgs[0] === "--skills" ? optionArgs[1] : undefined);
-  const expectedLength = equalsValue === undefined ? 2 : 1;
-  if (
-    value &&
-    SETUP_SKILL_SELECTIONS.includes(value as SetupSkillSelection) &&
-    optionArgs.length === expectedLength
-  ) {
-    return { skills: value as SetupSkillSelection };
+  const result: SetupCommandOptions = {};
+  for (let i = 0; i < optionArgs.length; i++) {
+    const arg = optionArgs[i], equals = arg.indexOf("="), name = equals < 0 ? arg : arg.slice(0, equals);
+    if (!["--skills", "--copilot-telemetry"].includes(name)) throw new Error(`Unknown setup option "${arg}". ${SETUP_USAGE}`);
+    const value = equals < 0 ? optionArgs[++i] : arg.slice(equals + 1);
+    if (name === "--skills" && !result.skills && SETUP_SKILL_SELECTIONS.includes(value as SetupSkillSelection)) result.skills = value as SetupSkillSelection;
+    else if (name === "--copilot-telemetry" && !result.copilotTelemetry) result.copilotTelemetry = telemetryAction(value);
+    else throw new Error(SETUP_USAGE);
   }
-  throw new Error(`Unknown setup option "${optionArgs[0] ?? ""}". ${SETUP_USAGE}`);
-}
-
-function selectedHosts(selection: SetupSkillSelection): InstallableAgentHost[] {
-  if (selection === "none") return [];
-  if (selection === "all") return ["codex", "claude-code", "copilot"];
-  return [selection];
+  if (result.skills) assertTelemetrySelection(result.skills, result.copilotTelemetry);
+  return result;
 }
 
 function assertGitRepository(repoRoot: string): void {
@@ -95,6 +89,8 @@ export async function runSetupCommand(options: {
   promptForLine(prompt: string): Promise<string>;
   repoRoot: string;
   skills?: SetupSkillSelection;
+  copilotTelemetry?: CopilotTelemetryAction;
+  telemetryOptions?: CopilotTelemetryOptions;
   interactive?: boolean;
   discoverAccounts?: typeof listGitHubAccounts;
 }): Promise<void> {
@@ -111,6 +107,7 @@ export async function runSetupCommand(options: {
     throw new Error(`Unknown Agent Skills selection "${promptedSelection}". ${SETUP_USAGE}`);
   }
   const skillSelection = promptedSelection as SetupSkillSelection;
+  assertTelemetrySelection(skillSelection, options.copilotTelemetry);
   const migration = loadMigratedConfig(options.repoRoot);
   const config: AgentRepositoryConfigType = {
     ...migration.config,
@@ -161,11 +158,15 @@ export async function runSetupCommand(options: {
   console.log(`Configured forge integration: ${config.forge?.type}.`);
   for (const notice of migration.notices) console.log(`Migration: ${notice}`);
   const installSkills = options.installSkills ?? ((host) => installAgentSkills({ host }));
-  for (const host of selectedHosts(skillSelection)) {
+  for (const host of selectedSkillHosts(skillSelection)) {
     const result = installSkills(host);
     console.log(
       `Installed Agent Skills for ${host} in ${result.targetRoot}: ${result.installed.length} new, ${result.updated.length} updated, ${result.unchanged.length} unchanged, ${result.skipped.length} custom files skipped.`
     );
+  }
+  if (skillSelection === "copilot" || skillSelection === "all") {
+    const telemetry = await offerCopilotTelemetry({ action: options.copilotTelemetry, interactive, promptForLine: options.promptForLine, options: options.telemetryOptions });
+    console.log(telemetry.message);
   }
   console.log("Agent reasoning stays in Codex, Claude Code, or GitHub Copilot; prs keeps deterministic local GitHub tooling only.");
 }
