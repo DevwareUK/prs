@@ -22,7 +22,8 @@ const systemEnvironment: LaunchEnvironment = {
     const result = launch(["getenv", key]);
     if (result.status === 1) return undefined;
     if (result.status !== 0) throw new Error("Could not read macOS launch environment");
-    return result.stdout.replace(/\n$/, "");
+    // macOS can return success with empty stdout when the key is unset.
+    return result.stdout.replace(/\n$/, "") || undefined;
   },
   set(key, value) { launchRequired(["setenv", key, value]); },
   unset(key) { launchRequired(["unsetenv", key]); },
