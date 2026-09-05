@@ -23,7 +23,9 @@ describe("canonical agent skill pack", () => {
       const markdown = readFileSync(resolve("skills", name, "SKILL.md"), "utf8");
       expect(markdown).toMatch(new RegExp(`^---\\nname: ${name}\\ndescription: Use when `));
       expect(markdown).toContain("prs tool");
-      expect(markdown).not.toMatch(/~\/\.(?:codex|claude)|slash command|Superpowers|model profile|API key|OPENAI|Bedrock/i);
+      // Shared Superpowers skill references are portable workflow prerequisites;
+      // host-specific launchers, paths and provider configuration remain excluded.
+      expect(markdown).not.toMatch(/~\/\.(?:codex|claude)|slash command|model profile|API key|OPENAI|Bedrock/i);
     }
   });
 

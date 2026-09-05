@@ -247,3 +247,108 @@ describe("three-host Agent Skills parity", () => {
     expect(readFileSync(customFile, "utf8")).toBe("custom collision\n");
   });
 });
+
+describe("installed create and refine approval gates", () => {
+  function mutateSkill(name: string, mutate: (content: string) => string): string {
+    const sourceRoot = createSourceFixture(content => content);
+    const path = join(sourceRoot, "skills", name, "SKILL.md");
+    const before = readFileSync(path, "utf8");
+    const after = mutate(before);
+    expect(after, "fixture must change the intended instructions").not.toBe(before);
+    writeFileSync(path, after);
+    return sourceRoot;
+  }
+
+  function expectRejected(sourceRoot: string, error: string): void {
+    const report = validateAgentSkillParity({ sourceRoot });
+    expect(report.status).toBe("failed");
+    expect(report.hosts.map(row => row.host)).toEqual(["codex", "claude-code", "copilot"]);
+    for (const row of report.hosts) {
+      expect(row.status).toBe("failed");
+      expect(row.errors).toContain(error);
+      // The error must survive even though every host installs the same pack.
+      expect(row.contentHashes).toEqual(report.canonical.contentHashes);
+    }
+  }
+
+  for (const name of ["prs-create", "prs-issue"]) {
+    const level = name === "prs-create" ? "##" : "###";
+    it(`${name}: rejects an omitted workflow independently of manifest parity`, () => {
+      const sourceRoot = createSourceFixture(content => content);
+      const path = join(sourceRoot, "skills", "manifest.json");
+      const manifest = JSON.parse(readFileSync(path, "utf8"));
+      manifest.skills = manifest.skills.filter((skill: { name: string }) => skill.name !== name);
+      writeFileSync(path, JSON.stringify(manifest));
+      expectRejected(sourceRoot, `missing workflow skill: ${name}`);
+    });
+
+    it.each(["Specification approval", "Plan approval", "Publication approval", "Completion verification"])(
+      `${name}: rejects a missing %s section`, (heading) => {
+        const sourceRoot = mutateSkill(name, content => content.replace(
+          new RegExp(`^${level} ${heading}\\n[\\s\\S]*?(?=^#{1,${level.length}} |$(?![\\s\\S]))`, "m"), ""
+        ));
+        expectRejected(sourceRoot, `${name}: missing ${heading.toLowerCase()} instructions`);
+      }
+    );
+
+    it.each([
+      ["brainstorming", "superpowers:brainstorming", "omitted-brainstorming", "specification approval"],
+      ["planning", "superpowers:writing-plans", "omitted-planning", "plan approval"],
+      ["spec approval", "Show the specification file and wait for explicit user approval before proceeding to the plan.", "Write a specification and proceed to the plan.", "specification approval"],
+      ["plan approval", "Show the plan file and wait for explicit user approval before", "Finish the plan before", "plan approval"],
+      ["publication approval", "Obtain explicit user approval to", "Proceed to", "publication approval"],
+      ["file preflight", "check both files exist, contain non-empty Markdown and match the approved versions", "check available files", "publication approval"],
+      ["spec flag", "--spec-file", "--omitted-spec", "publication approval"],
+      ["plan flag", "--plan-file", "--omitted-plan", "publication approval"],
+      ["spec marker", "<!-- prs:issue-spec -->", "omitted-spec-marker", "completion verification"],
+      ["plan marker", "<!-- prs:issue-plan -->", "omitted-plan-marker", "completion verification"],
+      ["incomplete result", "mean incomplete work", "are acceptable", "completion verification"],
+      ["mandatory artifacts", "Both written artifacts are required even for bounded work.", "Artifacts are optional for bounded work.", "mandatory written artifacts"],
+    ])(`${name}: rejects weakened %s instructions`, (_label, before, after, phase) => {
+      expectRejected(mutateSkill(name, content => content.replaceAll(before, after)), `${name}: missing ${phase} instructions`);
+    });
+
+    it(`${name}: rejects optional artifact instructions even alongside mandatory prose`, () => {
+      expectRejected(mutateSkill(name, content => `${content}\nAdd approved artifacts when available.\n`), `${name}: optional artifact instructions`);
+    });
+
+    it(`${name}: rejects empty gate bodies even with complete guidance elsewhere`, () => {
+      const sourceRoot = mutateSkill(name, content => {
+        const pattern = new RegExp(`^${level} Specification approval\\n([\\s\\S]*?)(?=^#{1,${level.length}} |$(?![\\s\\S]))`, "m");
+        const body = pattern.exec(content)?.[1];
+        expect(body).toBeTruthy();
+        return content.replace(pattern, `${level} Specification approval\n\n`) + `\n## Unrelated notes\n${body}`;
+      });
+      expectRejected(sourceRoot, `${name}: missing specification approval instructions`);
+    });
+
+    it(`${name}: requires live context in the completion section itself`, () => {
+      const sourceRoot = mutateSkill(name, content => content.replace(
+        "Read `prs tool issue context <number> --json` and confirm both managed artifacts are present; check the published content matches the approved files.",
+        "Assume publication succeeded."
+      ));
+      expectRejected(sourceRoot, `${name}: missing completion verification instructions`);
+    });
+  }
+
+  it.each([
+    ["original issue", "Preserve the original issue number, URL and request body.", "Use any issue.", "refinement identity"],
+    ["refine-only stop", "stop after verified publication unless implementation was requested", "continue after publication", "refinement boundary"],
+    ["lifecycle entry", "Continue here only when implementation was requested.", "Continue here after refinement.", "refinement boundary"],
+  ])("rejects removal of the %s boundary", (_label, before, after, phase) => {
+    expectRejected(mutateSkill("prs-issue", content => content.replace(before, after)), `prs-issue: missing ${phase} instructions`);
+  });
+
+  it.each([
+    "Always create a replacement issue after refinement.",
+    "Always create linked issues from refinement.",
+    "Automatically run readiness after refinement.",
+    "Automatically implement after refinement.",
+    "1. Always create a replacement issue after refinement.",
+    "2) Always create linked issues from refinement.",
+    "  3. Automatically run readiness after refinement.",
+    "  Automatically implement after refinement.",
+  ])("rejects contradictory refinement instruction: %s", (directive) => {
+    expectRejected(mutateSkill("prs-issue", content => `${content}\n${directive}\n`), "prs-issue: unsafe refinement instructions");
+  });
+});
