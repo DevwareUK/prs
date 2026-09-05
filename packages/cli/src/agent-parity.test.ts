@@ -21,6 +21,19 @@ function createSourceFixture(mutate: (content: string) => string): string {
 }
 
 describe("three-host Agent Skills parity", () => {
+  it("requires local usage capture in installed workflow guidance", () => {
+    const sourceRoot = createSourceFixture(content => content.replaceAll("prs tool token-usage capture", "removed-capture-command"));
+    const report = validateAgentSkillParity({ sourceRoot });
+    expect(report.status).toBe("failed");
+    for (const host of report.hosts) expect(host.errors).toContain("missing operation reference: prs tool token-usage capture");
+  });
+  it("requires the local usage renderer in installed workflow guidance", () => {
+    const sourceRoot = createSourceFixture(content => content.replaceAll("prs tool token-usage render", "removed-usage-command"));
+    const temporaryRoot = mkdtempSync(join(tmpdir(), "prs-agent-parity-usage-"));
+    const report = validateAgentSkillParity({ sourceRoot, temporaryRoot });
+    expect(report.status).toBe("failed");
+    for (const host of report.hosts) expect(host.errors).toContain("missing operation reference: prs tool token-usage render");
+  });
   it("rejects a canonical pack that omits prs-pr even when all hosts install identical files", () => {
     const sourceRoot = createSourceFixture((content) => content);
     const manifestPath = join(sourceRoot, "skills", "manifest.json");

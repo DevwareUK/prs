@@ -5,17 +5,17 @@
 ## Setup
 
 ```text
-prs setup [--skills <none|codex|claude-code|copilot|all>]
+prs setup [--skills <none|codex|claude-code|copilot|all>] [--copilot-telemetry <enable|disable|skip>]
 ```
 
 `prs setup` verifies the current directory is a Git repository, detects a default base branch and build command, then writes `.prs/config.json` and `.prs/.gitignore`. Existing `ai` and `githubActions` sections are removed with a visible migration notice.
 
-Without `--skills` in an interactive terminal, setup asks whether to install personal skills for one host, every host, or none; an empty answer selects `none`. It then offers saved GitHub accounts plus “Use the default account” and writes an explicit choice to ignored `.prs/config.local.json`. Reruns keep the current account unless explicitly changed. Supplying `--skills` skips all prompts; without interactive input, setup also skips prompts and defaults skill installation to `none`. Neither non-interactive path alters the account selection. Host selection affects personal skill files only and is not stored in repository configuration. See [setup and authentication](setup-configuration.md) for details.
+Without `--skills` in an interactive terminal, setup asks whether to install personal skills for one host, every host, or none; an empty answer selects `none`. It then offers saved GitHub accounts plus “Use the default account” and writes an explicit choice to ignored `.prs/config.local.json`. Reruns keep the current account unless explicitly changed. On macOS, choosing `copilot` or `all` also offers optional local app usage export if not already configured. Supplying `--skills` skips all prompts; without interactive input, setup also skips prompts and defaults skill installation to `none`. Neither non-interactive path alters the account selection or enables telemetry implicitly. `--copilot-telemetry enable|disable|skip` explicitly controls telemetry when installing `copilot` or `all`. Host selection and telemetry are not stored in repository configuration. See [setup and authentication](setup-configuration.md) for details.
 
 ## Install agent skills
 
 ```text
-prs skills install <codex|claude-code|copilot> [--json]
+prs skills install <codex|claude-code|copilot|all> [--json] [--copilot-telemetry <enable|disable|skip>]
 ```
 
 The Codex adapter copies the canonical skill files unchanged to `~/.agents/skills`. A sidecar hash ledger lets later runs update only files that still match their last managed content. Custom collisions are reported and left untouched. Marked PRS-managed files in the legacy `~/.codex/skills` location are renamed with a `.prs-retired` suffix so they no longer load but remain recoverable.
@@ -23,6 +23,10 @@ The Codex adapter copies the canonical skill files unchanged to `~/.agents/skill
 The Claude Code adapter applies the same copy and hash-protection behavior under `~/.claude/skills`. It does not add Claude-specific frontmatter or rewrite the shared skill bodies.
 
 The GitHub Copilot adapter uses the same `~/.agents/skills` target and hash ledger as Codex. Installing for both hosts adopts the existing managed files and records both hosts without creating a second copy.
+
+`all` installs Codex, Claude Code and Copilot in that order; the shared Copilot files normally report unchanged after Codex. Interactive macOS installs containing Copilot offer local app telemetry setup once per invocation, not once per host. Already configured installs keep the setup without asking again. `--json` and non-interactive installs never prompt or implicitly activate telemetry. Explicit `--copilot-telemetry enable|disable|skip` works without prompting and is only valid with `copilot` or `all`. Unsupported platforms report `unsupported` for explicit setup, while skill installation still succeeds.
+
+Single-host JSON retains its install fields, adding `copilotTelemetry` for Copilot. `all` returns one JSON object with a `hosts` array of the three install results and `copilotTelemetry`. Telemetry results contain `status`, `message`, and a local `outputFile` when applicable. `enabled` confirms saved launch configuration, not live app export or issue attribution. Partial activation fails with recovery guidance. See [macOS app setup](github-copilot.md#optional-macos-app-usage-tracking).
 
 ## Validate agent parity
 
@@ -60,6 +64,19 @@ Readiness stops with a structured blocked result for merge conflicts, a failed l
 Use the `prs-pr` skill to coordinate main-checkout preparation and follow-up `review`, `resolve-conflicts`, `address-comments`, and `fix-tests` actions. They are skill actions executed with the host's normal Git/GitHub capabilities, not `prs tool pr` subcommands. The skill handles review preparation/publication and guarded pushes while preserving approval gates and support for PRs without linked issues. See [the workflow guide](agent-workflows.md#existing-pull-requests).
 
 ## Audit
+
+### Render local usage
+
+```text
+prs tool token-usage render --file <usage-evidence.json> --output <token-usage.md> --json
+prs tool token-usage capture --host <codex|claude-code|copilot> --output <usage-evidence.json> [--session <id>] [--source <path>] [--since <ISO>] --json
+```
+
+Both required paths resolve from the repository root and must be within the same concrete `.prs/runs/<runId>/` directory; the envelope's `runId` must match. Traversal, symlink escapes, input/output aliases, malformed evidence, and conflicting counters fail without replacing existing output. Successful rerenders replace the selected local Markdown file deterministically. No forge configuration or authentication is required and no network calls occur.
+
+The JSON result contains `status: rendered`, `outputFile`, local source/normalized `ledger`, derived `totals` with contributions and exclusions, `pricing` (estimates, unpriced reasons, reported charges, credits/conversions, and rate cards), and `warnings`. JSON includes raw local evidence: publish only the reviewed Markdown, never redirect raw JSON into a GitHub comment. Unknowns remain unknown, and partial totals/estimates are labelled. See [the version-1 contract and examples](usage-evidence.md).
+
+### Publish a reviewed report
 
 `prs audit publish (--issue <number>|--pr <number>) --file <path> --section <name>` publishes or updates a marker-managed audit section on GitHub. `--local-run` adds a local run reference. `--media-manifest` appends validated image or video evidence.
 

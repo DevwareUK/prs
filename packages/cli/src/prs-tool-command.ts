@@ -1,4 +1,6 @@
 export type PrsToolCommand =
+  | { kind: "token-usage-render"; filePath: string; outputFilePath: string; json: true }
+  | { kind: "token-usage-capture"; host: "codex" | "claude-code" | "copilot"; outputFilePath: string; sessionId?: string; sourcePath?: string; since?: string; json: true }
   | { kind: "issue-list"; actionable: boolean; json: true }
   | { kind: "issue-context"; issueNumber: number; json: true }
   | { kind: "issue-ready"; issueNumber: number; unattended: boolean; json: true }
@@ -27,6 +29,8 @@ export type PrsToolCommand =
 export function renderPrsToolCommandHelp(): string {
   return [
     "Usage:",
+    "  prs tool token-usage render --file <path> --output <path> --json",
+    "  prs tool token-usage capture --host <codex|claude-code|copilot> --output <path> [--session <id>] [--source <path>] [--since <ISO>] --json",
     "  prs tool issue list [--actionable] --json",
     "  prs tool issue context <issue-number> --json",
     "  prs tool issue ready <issue-number> [--unattended|--auto|--jdi] --json",
@@ -88,6 +92,37 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
   const optionTail = [numberOrOption, ...tail].filter(
     (arg): arg is string => arg !== undefined
   );
+
+  if (scope === "token-usage" && command === "capture") {
+    const options = requireJson(optionTail), values = new Map<string, string>();
+    for (let index = 0; index < options.length; index++) {
+      const arg = options[index], equals = arg.indexOf("=");
+      const name = equals < 0 ? arg : arg.slice(0, equals);
+      if (!["--host", "--output", "--session", "--source", "--since"].includes(name) || values.has(name)) throw new Error(renderPrsToolCommandHelp());
+      const [value, next] = equals < 0 ? takeValue(options, index, name) : [arg.slice(equals + 1), index] as const;
+      if (!value) throw new Error("Missing required " + name + " value");
+      values.set(name, value); index = next;
+    }
+    const host = values.get("--host"), since = values.get("--since");
+    if ((host !== "codex" && host !== "claude-code" && host !== "copilot") || !values.get("--output")) throw new Error(renderPrsToolCommandHelp());
+    if (since && (!/^\d{4}-\d\d-\d\dT.+(?:Z|[+-]\d\d:\d\d)$/.test(since) || !Number.isFinite(Date.parse(since)))) throw new Error("--since requires an ISO timestamp with offset");
+    return { kind: "token-usage-capture", host, outputFilePath: values.get("--output")!, sessionId: values.get("--session"), sourcePath: values.get("--source"), since, json: true };
+  }
+
+  if (scope === "token-usage" && command === "render") {
+    const options = requireJson(optionTail);
+    const paths = new Map<string, string>();
+    for (let index = 0; index < options.length; index++) {
+      const arg = options[index], equals = arg.indexOf("=");
+      const name = equals < 0 ? arg : arg.slice(0, equals);
+      if (!["--file", "--output"].includes(name) || paths.has(name)) throw new Error(renderPrsToolCommandHelp());
+      const [value, next] = equals < 0 ? takeValue(options, index, name) : [arg.slice(equals + 1), index] as const;
+      if (!value) throw new Error("Missing required " + name + " value");
+      paths.set(name, value); index = next;
+    }
+    if (!paths.has("--file") || !paths.has("--output")) throw new Error(renderPrsToolCommandHelp());
+    return { kind: "token-usage-render", filePath: paths.get("--file")!, outputFilePath: paths.get("--output")!, json: true };
+  }
 
   if (scope === "issue" && command === "list") {
     return { kind: "issue-list", ...parseListOptions(optionTail), json: true };

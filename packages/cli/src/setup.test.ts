@@ -6,6 +6,13 @@ import { describe, expect, it } from "vitest";
 import { parseSetupCommandArgs, runSetupCommand } from "./setup";
 
 describe("provider-free setup", () => {
+  it("parses Copilot telemetry opt-in and rejects contradictory or repeated options", () => {
+    expect(parseSetupCommandArgs(["setup", "--skills", "all", "--copilot-telemetry=enable"])).toEqual({ skills: "all", copilotTelemetry: "enable" });
+    expect(parseSetupCommandArgs(["setup", "--copilot-telemetry", "disable", "--skills=copilot"])).toEqual({ skills: "copilot", copilotTelemetry: "disable" });
+    for (const args of [["--skills", "none", "--copilot-telemetry", "enable"], ["--skills=all", "--skills=copilot"], ["--skills=all", "--copilot-telemetry=no"]]) {
+      expect(() => parseSetupCommandArgs(["setup", ...args])).toThrow();
+    }
+  });
   it("parses the setup surface", () => {
     expect(parseSetupCommandArgs(["setup"])).toEqual({});
     expect(parseSetupCommandArgs(["setup", "--skills", "all"])).toEqual({ skills: "all" });

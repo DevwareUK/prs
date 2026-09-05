@@ -15,6 +15,8 @@ const REQUIRED_OPERATIONS = [
   "prs tool pr list",
   "prs tool pr ready",
   "prs audit publish",
+  "prs tool token-usage render",
+  "prs tool token-usage capture",
 ];
 const RAW_WORKFLOW_ARTIFACTS = /\braw workflow artifacts\b/i;
 const ARTIFACT_PROHIBITION = /\b(?:must not|never)\s+(?:stage|commit)(?:\s+(?:or|and)\s+(?:stage|commit))?\s+(?:raw workflow artifacts|them)\b/i;

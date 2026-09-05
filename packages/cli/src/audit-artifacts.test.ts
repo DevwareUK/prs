@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { UNATTENDED_GITHUB_OUTPUT_NOTE } from "@prs/contracts";
+import { makeUsageFixture } from "./token-usage.test-support";
+import { normalizeUsageEvidence } from "./token-usage-normalize";
+import { aggregateUsageEvents } from "./token-usage-aggregate";
+import { priceUsage } from "./token-usage-pricing";
+import { renderUsageMarkdown } from "./token-usage-render";
 import type { AuditTarget, RepositoryForge, RepositoryComment } from "./forge";
 import {
   AUDIT_COMMENT_MARKER,
@@ -20,6 +25,25 @@ function comment(body: string): RepositoryComment {
 }
 
 describe("audit artifacts", () => {
+  it.each(["issue", "pr"] as const)("upserts fixture-rendered usage for a %s without duplicating sections", async type => {
+    const ledger = normalizeUsageEvidence(makeUsageFixture("baseline-review"));
+    const totals = aggregateUsageEvents(ledger.events);
+    const content = renderUsageMarkdown(ledger, totals, priceUsage(totals, []));
+    let saved: RepositoryComment | undefined;
+    const forge = {
+      type: "github", isAuthenticated: () => true,
+      fetchAuditComment: async () => saved,
+      createAuditComment: async (_target: AuditTarget, body: string) => { saved = comment(body); return saved; },
+      updateIssueComment: async (_id: number, body: string) => { saved = comment(body); return saved; },
+    } as unknown as RepositoryForge;
+    const input = { target: { type: type === "pr" ? "pull-request" : "issue", number: 350 } as AuditTarget, sectionName: "token-usage", content };
+    expect((await publishAuditArtifact(forge, input)).status).toBe("created");
+    await publishAuditArtifact(forge, { ...input, sectionName: "checks", content: "Keep this check evidence." });
+    expect((await publishAuditArtifact(forge, input)).status).toBe("updated");
+    expect(saved!.body.match(/<!-- prs:audit:token-usage:start -->/g)).toHaveLength(1);
+    expect(saved!.body).toContain("Model-token known total: 160");
+    expect(saved!.body).toContain("Keep this check evidence.");
+  });
   it("renders a managed audit comment with a stable marker and section", () => {
     const body = renderAuditCommentBody({
       title: "Issue #42 audit",

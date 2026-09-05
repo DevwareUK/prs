@@ -4,8 +4,8 @@ export const TOP_LEVEL_HELP = [
   "Deterministic local GitHub tools for Codex, Claude Code, and GitHub Copilot.",
   "",
   "Setup:",
-  "  prs setup [--skills <none|codex|claude-code|copilot|all>]",
-  "  prs skills install <codex|claude-code|copilot> [--json]",
+  "  prs setup [--skills <none|codex|claude-code|copilot|all>] [--copilot-telemetry <enable|disable|skip>]",
+  "  prs skills install <codex|claude-code|copilot|all> [--json] [--copilot-telemetry <enable|disable|skip>]",
   "  prs skills validate [--json]",
   "",
   "Issue tools:",
@@ -21,5 +21,7 @@ export const TOP_LEVEL_HELP = [
   "  prs tool pr ready <pr-number> [--unattended|--auto|--jdi] --json",
   "",
   "Audit:",
+  "  prs tool token-usage render --file <path> --output <path> --json",
+  "  prs tool token-usage capture --host <codex|claude-code|copilot> --output <path> [--session <id>] [--source <path>] [--since <ISO>] --json",
   "  prs audit publish (--issue <number>|--pr <number>) --file <path> --section <name>",
 ].join("\n");
