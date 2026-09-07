@@ -352,3 +352,60 @@ describe("installed create and refine approval gates", () => {
     expectRejected(mutateSkill("prs-issue", content => `${content}\n${directive}\n`), "prs-issue: unsafe refinement instructions");
   });
 });
+
+describe("JDI completion audit authorization", () => {
+  it.each(["prs-finish", "prs-issue", "prs-pr"])("rejects an unconditional audit approval rule in %s", name => {
+    const sourceRoot = createSourceFixture(content => content);
+    const path = join(sourceRoot, "skills", name, "SKILL.md");
+    const content = readFileSync(path, "utf8");
+    writeFileSync(path, `${content}\nObtain explicit user approval before publishing the reviewed Markdown with prs audit publish.\n`);
+    const report = validateAgentSkillParity({ sourceRoot });
+    expect(report.status).toBe("failed");
+    for (const host of report.hosts) {
+      expect(host.errors).toContain(`${name}: contradictory audit approval instructions`);
+    }
+  });
+  it("requires the JDI policy even when all hosts install identical files", () => {
+    const sourceRoot = createSourceFixture(content => content.replace(
+      /^## Audit publication authorization\n[\s\S]*?(?=^## |$(?![\s\S]))/m, ""
+    ));
+    const report = validateAgentSkillParity({ sourceRoot });
+    expect(report.status).toBe("failed");
+    for (const host of report.hosts) {
+      expect(host.errors).toContain("prs-finish: missing audit publication authorization instructions");
+    }
+  });
+  it.each([
+    ["mode", "--jdi", "--omitted-jdi"],
+    ["completion", "routine completion and token-usage audits", "unrelated reports"],
+    ["interactive approval", "Without that authorization, show the exact reports and obtain explicit user approval before publication.", "Always publish reports."],
+    ["readiness boundary", "A readiness-tool flag alone does not grant audit publication authorization.", "Every readiness flag authorizes publication."],
+    ["scope boundary", "This authorization does not cover issue creation, specification or plan publication, discussion comments, PR reviews, merging or destructive cleanup.", "This authorization covers all remote operations."],
+  ])("rejects a finish policy missing the %s boundary on every host", (_label, before, after) => {
+    const sourceRoot = createSourceFixture(content => content);
+    const path = join(sourceRoot, "skills", "prs-finish", "SKILL.md");
+    const content = readFileSync(path, "utf8");
+    const mutated = content.replace(before, after);
+    expect(mutated).not.toBe(content);
+    writeFileSync(path, mutated);
+    const report = validateAgentSkillParity({ sourceRoot });
+    expect(report.status).toBe("failed");
+    for (const host of report.hosts) {
+      expect(host.errors).toContain("prs-finish: missing audit publication authorization instructions");
+    }
+  });
+
+  it.each(["prs", "prs-issue", "prs-pr"])("rejects a missing %s audit authorization handoff", name => {
+    const sourceRoot = createSourceFixture(content => content);
+    const path = join(sourceRoot, "skills", name, "SKILL.md");
+    const content = readFileSync(path, "utf8");
+    const mutated = content.replaceAll("audit publication authorization in `prs-finish`", "unconditional publication approval");
+    expect(mutated).not.toBe(content);
+    writeFileSync(path, mutated);
+    const report = validateAgentSkillParity({ sourceRoot });
+    expect(report.status).toBe("failed");
+    for (const host of report.hosts) {
+      expect(host.errors).toContain(`${name}: missing audit authorization handoff`);
+    }
+  });
+});

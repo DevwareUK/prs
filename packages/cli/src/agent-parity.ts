@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { AGENT_WORKFLOW_CONTRACT, AgentSkillManifest, type AgentHostType } from "@prs/contracts";
 import { installAgentSkills } from "./agent-skills-installer";
-import { validateIssueApprovalInstructions } from "./agent-skill-approval-contract";
+import { validateAuditAuthorizationInstructions, validateIssueApprovalInstructions } from "./agent-skill-approval-contract";
 
 const HOSTS: AgentHostType[] = ["codex", "claude-code", "copilot"];
 const REQUIRED_OPERATIONS = [
@@ -165,6 +165,7 @@ export function validateAgentSkillParity(options: {
     for (const name of ["prs-create", "prs-issue"] as const) {
       errors.push(...validateIssueApprovalInstructions(name, installedContent.get(name)));
     }
+    errors.push(...validateAuditAuthorizationInstructions(installedContent));
     const prWorkflow = installedContent.get("prs-pr");
     if (!prWorkflow) {
       errors.push("missing workflow skill: prs-pr");

@@ -32,6 +32,10 @@ The capture output is normalized, version-1 evidence; raw prompts, tool results 
 
 Native `hostEstimatedCost` (Claude OTLP `cost_usd`) is displayed separately from sourced-rate estimates and provider-reported charges; it is not an invoice and is never added to either total. Copilot's supported span schema does not declare the currency of `github.copilot.cost`, so capture omits that amount with a warning rather than assuming USD; AI units are not converted into tokens or currency. Capture does not fetch rates or manufacture missing cache fields. Missing source/identity gives actionable unavailable evidence. Check that evidence on the next real issue rather than making billable validation calls.
 
+## Publication authorization
+
+An explicit `--jdi`, `--auto` or `--unattended` issue-implementation request authorizes routine completion and token-usage audits on that issue and its resulting PR without another prompt. Preserve the originating request and targets through the finish and PR handoffs, and self-review the rendered Markdown before publication. Without that authorization, show the report and obtain explicit user approval. A readiness-tool flag alone is insufficient. A later request to withhold publication takes precedence. This does not authorize spec/plan publication, review comments, merging or cleanup.
+
 ## Render and publish
 
 Put either complete JSON envelope below at `.prs/runs/example/usage-evidence.json`, then run:
@@ -40,7 +44,7 @@ Put either complete JSON envelope below at `.prs/runs/example/usage-evidence.jso
 prs tool token-usage render --file .prs/runs/example/usage-evidence.json --output .prs/runs/example/token-usage.md --json
 ```
 
-Review warnings, exclusions, and pricing status. Publication is separate and explicitly approved:
+Review warnings, exclusions, and pricing status. Publication is separate and uses the authorization above:
 
 ```text
 prs audit publish --issue <number> --file .prs/runs/example/token-usage.md --section token-usage

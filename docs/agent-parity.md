@@ -48,6 +48,10 @@ Keep native results separately attributed by host, including approval checkpoint
 
 The six-skill pack includes `prs-pr`. Static validation independently requires its installation, the existing-PR router entry, and non-empty `review`, `resolve-conflicts`, `address-comments`, and `fix-tests` sections. Removing a workflow from the canonical manifest cannot produce a passing report merely because all three hosts share the omission. Repository tests also check the completion handoff, readiness boundaries, publication/push guidance, and upgrades from the five-skill inventory. These checks do not establish native-host PR behaviour; any such smoke evidence must be separately attributed to the host that ran it.
 
+## JDI audit authorization checks
+
+Static validation requires the finish policy that carries an explicit JDI issue-implementation request through completion and token-usage publication on the issue and its resulting PR. It checks the interactive approval fallback, readiness-only boundary, preserved approval gates and handoffs from the router, issue and PR skills. Regression fixtures remove those rules or restore contradictory unconditional audit approval instructions. All three host rows must reject the broken pack. These checks do not establish native-agent approval behavior.
+
 ## GitHub account context
 
 All three hosts use the same GitHub CLI integration when calling `prs`. GitHub-backed commands require installed and authenticated `gh`. Interactive `prs setup` can write a personal account choice to ignored `.prs/config.local.json` (`forge.githubAccount`); preserve that choice and resolve login errors instead of switching the global account. Direct host `gh` commands and Git transport do not read this `prs` setting. When no account is selected, `gh` handles normal authentication, including environment tokens for automation.
