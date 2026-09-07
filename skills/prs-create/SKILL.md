@@ -13,16 +13,40 @@ Draft implementation-ready work in a task-specific directory beneath `.prs/runs`
 
 This covers issue drafts, linked-set manifests, specifications, plans, working notes, and completion evidence. They are raw workflow artifacts and stay local. Never stage or commit them, and never create another repository-local scratch root such as `.prs-work`.
 
-1. Inspect the repository and clarify only decisions that materially change scope, behaviour, data, access, rollout, or acceptance criteria.
-2. Inside the task-specific run directory, draft an H1-titled Markdown issue. For multiple tasks, keep one draft per issue plus the version-1 linked-set manifest with stable IDs and dependency links in that directory.
-3. Keep the specification and plan Markdown in the same task-specific run directory when the scope is settled.
-4. Show the proposed issue or set and obtain explicit user approval for the GitHub write.
-5. Run `prs tool issue create --draft-file <path> --json` or `prs tool issue create --issue-set <manifest> --run-dir .prs/runs/<task-specific-run> --json`. Add approved `--spec-file` and `--plan-file` artifacts when available.
-6. Report every created or reused issue by number, title, and URL, plus any managed-comment hints.
+PRS artifact locality overrides the Superpowers default document paths and commit instructions. Both written artifacts are required even for bounded work. If either required Superpowers skill is unavailable, report the blocker and next action; do not skip a phase.
 
-Keep raw prompts and working notes in the task-specific run directory. If creation is blocked, return the tool's message and next action without substituting an unapproved remote write.
+## Specification approval
 
-Before destructive cleanup, obtain separate explicit user approval.
+Use `superpowers:brainstorming` to inspect repository behavior and clarify decisions that materially affect scope, data, access, rollout or acceptance criteria. Write and self-review the specification in the task-specific run directory.
+
+Show the specification file and wait for explicit user approval before proceeding to the plan. If the user requests changes, revise and show the specification again; wait for approval of the revised content.
+
+## Plan approval
+
+Use `superpowers:writing-plans` to write and self-review the implementation plan from the approved specification. Include concrete files, steps, acceptance coverage and verification commands checked against repository source.
+
+Show the plan file and wait for explicit user approval before issue creation or publication. If a revision changes the specification, return to specification approval and update the plan to match.
+
+## Publication approval
+
+Draft an H1-titled Markdown issue in the same run directory. For multiple tasks, keep one draft per issue plus a version-1 linked-set manifest with stable IDs and dependency links. The set-level specification and plan must map requirements, tasks and dependencies to every stable issue ID; the creation tool publishes the shared pair on every issue.
+
+Show the exact issue draft or linked set and both reviewed artifacts. Obtain explicit user approval to create or reuse the issues and publish both managed comments. Plan approval and publication authorization can share a response only when the request explicitly covers both actions and the exact content. Design approval alone does not authorize publication. An acknowledgment accompanied by a question or scope change is not publication approval: show the revised artifacts and wait for explicit approval.
+
+Before any remote write, check both files exist, contain non-empty Markdown and match the approved versions. Always pass both artifact files:
+
+```bash
+prs tool issue create --draft-file .prs/runs/<run>/issue.md --spec-file .prs/runs/<run>/spec.md --plan-file .prs/runs/<run>/plan.md --json
+prs tool issue create --issue-set .prs/runs/<run>/issue-set.json --run-dir .prs/runs/<run> --spec-file .prs/runs/<run>/spec.md --plan-file .prs/runs/<run>/plan.md --json
+```
+
+## Completion verification
+
+For every created or reused issue, require `managedComments` records with `status: published` for both `<!-- prs:issue-spec -->` and `<!-- prs:issue-plan -->`. Missing artifacts reported in `managedCommentHints` mean incomplete work even when creation returns `status: ok`. Read `prs tool issue context <number> --json` and confirm both managed artifacts are present; check the published content matches the approved files.
+
+If publication is partial, preserve the known issue numbers and approved files. Recover with `prs tool issue publish-artifacts <number> --spec-file <spec> --plan-file <plan> --json` under existing authorization for those exact artifacts and targets. Do not repeat creation blindly after an uncertain response. Changed content or targets require renewed approval. If recovery is blocked, report the issue, missing artifact, tool message and next action; do not declare completion.
+
+Report every created or reused issue by number, title and URL, plus both verified managed-comment URLs. Issue creation alone is not completion. Keep raw prompts and working notes local. Before destructive cleanup, obtain separate explicit user approval.
 
 ## Usage evidence
 

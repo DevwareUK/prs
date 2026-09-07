@@ -13,17 +13,54 @@ Run `prs tool issue context <number> --json` first. Reconcile the issue body, co
 
 This covers issue drafts, linked-set manifests, specifications, plans, working notes, and completion evidence. They are raw workflow artifacts and stay local. Never stage or commit them, and never create another repository-local scratch root such as `.prs-work`.
 
+PRS artifact locality overrides the Superpowers default document paths and commit instructions. Both written artifacts are required even for bounded work. If either required Superpowers skill is unavailable, report the blocker and next action; do not skip a phase.
+
+## Refinement
+
+Start from `prs tool issue context <number> --json`: reconcile the existing issue body, discussion, managed artifacts, linked pull requests and repository behavior with the requested changes. Preserve the original issue number, URL and request body. Never create a replacement issue or linked set from refinement; splitting work is a separate user request. Ask clarification questions in the active session; publishing discussion comments requires explicit authorization.
+
+### Specification approval
+
+Use `superpowers:brainstorming` to settle the intended outcome and acceptance criteria. Write and self-review the specification in the task-specific run directory.
+
+Show the specification file and wait for explicit user approval before proceeding to the plan. If the user requests changes, revise and show the specification again; wait for approval of the revised content.
+
+### Plan approval
+
+Use `superpowers:writing-plans` to write and self-review the implementation plan from the approved specification. Include concrete files, steps, acceptance coverage and verification commands checked against repository source.
+
+Show the plan file and wait for explicit user approval before publication. If a revision changes the specification, return to specification approval and update the plan to match. Existing managed comments provide context; their presence alone is not approval of the current refinement. Preserve established approvals for unchanged content when they clearly cover the current request.
+
+### Publication approval
+
+Show both reviewed artifacts and the original issue target. Obtain explicit user approval to publish both managed comments on that same issue. Plan approval and publication authorization can share a response only when the request explicitly covers both actions and the exact content. Design approval alone does not authorize publication. An acknowledgment accompanied by a question or scope change is not publication approval: show the revised artifacts and wait for explicit approval.
+
+Before any remote write, check both files exist, contain non-empty Markdown and match the approved versions. Publish or update both artifacts on the original issue:
+
+```bash
+prs tool issue publish-artifacts <number> --spec-file .prs/runs/<run>/spec.md --plan-file .prs/runs/<run>/plan.md --json
+```
+
+### Completion verification
+
+For the original issue, require `managedComments` records with `status: published` for both `<!-- prs:issue-spec -->` and `<!-- prs:issue-plan -->`. Missing artifacts mean incomplete work even when a tool returns `status: ok`. Read `prs tool issue context <number> --json` and confirm both managed artifacts are present; check the published content matches the approved files.
+
+If publication is partial, preserve the known issue number and approved files. Retry `prs tool issue publish-artifacts <number> --spec-file <spec> --plan-file <plan> --json` under existing authorization for those exact artifacts and target. Changed content or targets require renewed approval. If recovery is blocked, report the issue, missing artifact, tool message and next action; do not declare completion.
+
+Report the original issue number, title and URL, plus both verified managed-comment URLs. For a refine-only request, stop after verified publication unless implementation was requested. Refinement alone does not authorize readiness, checkout, implementation, commits or a pull request.
+
 ## Lifecycle
 
-1. Refine the intended outcome and acceptance criteria. Draft the settled specification and implementation plan in a task-specific directory beneath `.prs/runs`.
-2. Obtain explicit user approval before publishing them with `prs tool issue publish-artifacts <number> --spec-file <path> --plan-file <path> --json`.
-3. Run `prs tool issue ready <number> --json` and use its suggested branch and returned run directory. Keep subsequent working notes and evidence in that returned directory.
-4. Prefer a fresh branch or worktree from the updated configured base. If isolation is unavailable, continue in the active workspace and record the fallback.
-5. Implement in small verified steps. Delegate independent tasks only when supported and authorized; otherwise execute sequentially.
-6. Run the repository's relevant verification, including tests for changed behaviour.
-7. Continue with `prs-finish` for deterministic local commit finalization, pull-request creation, GitHub validation, and audit evidence.
+Continue here only when implementation was requested. An implementation request (including `--jdi`, `--auto` or `--unattended`) authorizes the implementation lifecycle; it does not waive specification, plan or publication approval gates. For a refine-only request, follow Refinement and stop.
 
-Do not stop at readiness metadata, treat a missing capability as permission to skip a phase, or publish GitHub content without explicit user approval.
+1. Reconcile the live specification and plan with the requested implementation. Use the Refinement process above if artifacts are missing or need changes. Reuse existing approved, unchanged artifacts; do not republish them just to start implementation.
+2. Run `prs tool issue ready <number> --json` and use its suggested branch and returned run directory. Keep subsequent working notes and evidence in that returned directory.
+3. Prefer a fresh branch or worktree from the updated configured base. If isolation is unavailable, continue in the active workspace and record the fallback.
+4. Implement in small verified steps. Delegate independent tasks only when supported and authorized; otherwise execute sequentially.
+5. Run the repository's relevant verification, including tests for changed behaviour.
+6. Continue with `prs-finish` for deterministic local commit finalization, pull-request creation, GitHub validation, and audit evidence.
+
+For an implementation request, do not stop at readiness metadata. Missing capabilities do not authorize skipping phases, and implementation authorization does not authorize publishing unreviewed GitHub comments.
 
 ## Usage evidence
 

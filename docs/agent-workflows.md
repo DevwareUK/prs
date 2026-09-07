@@ -11,16 +11,21 @@ The portable flow is deliberately split:
 
 These raw files remain ignored and local; never stage or commit them, and never create an alternative repository-local scratch root such as `.prs-work`. Explicitly approved publication commands may publish reviewed specification, plan, or completion content to managed GitHub comments; publication does not make the raw local files repository content.
 
-Codex, Claude Code, and GitHub Copilot should use the same lifecycle and command contract:
+Codex, Claude Code, and GitHub Copilot use the same creation and refinement gates:
 
-1. create approved issue drafts with `prs tool issue create`;
-2. read live state with `prs tool issue context`;
-3. publish approved specification and plan files with `prs tool issue publish-artifacts`;
-4. prepare implementation metadata with `prs tool issue ready`;
-5. work and verify in an isolated branch or worktree when the host supports it;
-6. create a deterministic local commit with `prs issue finalize`;
-7. open or update the pull request through the host's normal GitHub capability;
-8. validate it with `prs tool pr ready` and publish evidence with `prs audit publish`.
+1. Use `superpowers:brainstorming` to settle and write the specification, then show it and wait for explicit approval.
+2. Use `superpowers:writing-plans` to write the implementation plan from the approved specification, then show it and wait for explicit approval.
+3. Show the exact issue draft or existing issue target and both reviewed artifacts. Obtain explicit authorization for creation (when applicable) and publication of both managed comments. Plan approval can share that response only when both actions and exact content are presented. A question or scope addition is not publication approval; show revisions and wait.
+4. Check both approved files exist and contain non-empty Markdown. Use `prs tool issue create` with both `--spec-file` and `--plan-file` for new issues, or `prs tool issue publish-artifacts <number>` with both files for existing-issue refinement.
+5. Inspect both published managed-comment records and read live context with `prs tool issue context <number> --json`. Confirm the specification and plan content match the approved files and report their URLs. Missing artifacts mean incomplete work, even after successful issue creation.
+
+These written artifacts are mandatory even for bounded tasks. PRS locality overrides Superpowers document-path and commit defaults. Missing required Superpowers skills are blockers; do not silently skip phases. For linked-set creation, the approved shared spec and plan cover every stable issue ID and are published to every created or reused issue. See [the command examples](../README.md#workflow).
+
+Refinement is an action of `prs-issue`, starting from the original issue body, discussion and managed artifacts. Preserve the original issue number, URL and request body. Update both managed comments on that same issue; do not create replacement or linked issues from refinement. A refine-only request stops after verified publication. Existing comments provide context, not automatic approval of new content.
+
+If publication fails part-way, retain the issue identities and approved artifacts. Retry `prs tool issue publish-artifacts <number> --spec-file <spec> --plan-file <plan> --json` within authorization for the same files and targets; check live context again. Do not blindly repeat creation after an uncertain response. Changed content or targets need renewed approval. Report unrecovered failures and missing artifacts explicitly.
+
+Only when implementation was requested, continue with approved, unchanged artifacts into `prs tool issue ready`, isolated implementation and verification, `prs issue finalize`, PR creation through the host's GitHub capability, and `prs tool pr ready`. A `prs-issue` implementation request with `--jdi`, `--auto` or `--unattended` follows that lifecycle but retains artifact approval gates. Completion audits use `prs audit publish` after explicit approval of their reviewed content.
 
 If a host cannot create worktrees, it continues in the active workspace. If it cannot delegate, it executes independent tasks sequentially. These fallbacks are part of the contract and must not silently drop lifecycle phases.
 

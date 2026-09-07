@@ -36,7 +36,7 @@ prs skills validate [--json]
 
 Parity validation installs all three host adapters into separate temporary homes, then compares each installed inventory, content hash, and retained operation reference with the canonical pack. It also checks the installed `artifact-locality` instruction (raw workflow artifacts stay under `.prs/runs` and are not staged or committed) and `staged-only-finalization` instruction (the existing index is the commit source while unstaged and untracked files are preserved). The JSON report names the required safeguards and reports passing safeguards or missing-safeguard errors for each host independently. The command reports static installation and instruction parity only; it does not launch host runtimes. End-to-end native host evidence remains manual and separately attributed in [the agent parity guide](agent-parity.md)'s smoke matrix.
 
-The validator also requires `prs-pr`, its existing-PR router entry, and non-empty sections for `review`, `resolve-conflicts`, `address-comments`, and `fix-tests`. Missing instructions are reported in each host's `errors`, even when the installed files match the canonical pack exactly.
+The validator also requires `prs-pr`, its existing-PR router entry, and non-empty sections for `review`, `resolve-conflicts`, `address-comments`, and `fix-tests`. It also independently requires `prs-create` and `prs-issue`, their section-scoped specification, plan, publication and completion rules, and the refine-only identity and stopping boundaries. Missing or weakened instructions are reported in each host's `errors`, even when the installed files match the canonical pack exactly. These conservative text checks cannot prove native approval behavior.
 
 ## Issue tools
 
@@ -51,6 +51,27 @@ The validator also requires `prs-pr`, its existing-PR router entry, and non-empt
 | `prs issue finalize <number>` | Shows deterministic commit text and the exact staged paths, asks for explicit confirmation, and creates one local commit from the existing index. It does not stage files, push, or open a pull request. |
 
 The single-draft Markdown format starts with an H1 title; the remainder becomes the issue body. A linked issue-set manifest contains `version`, `mode`, and `issues`, where each issue has an `id`, `draftFile`, and optional `dependsOn`, `blocks`, and `related` IDs.
+
+### Creation and refinement artifact contract
+
+The low-level creation flags remain optional for compatibility. The `prs-create` skill requires both approved files, explicit authorization for creation and comment publication, and verification of both published artifacts before completion:
+
+```bash
+prs tool issue create --draft-file .prs/runs/<run>/issue.md --spec-file .prs/runs/<run>/spec.md --plan-file .prs/runs/<run>/plan.md --json
+prs tool issue create --issue-set .prs/runs/<run>/issue-set.json --run-dir .prs/runs/<run> --spec-file .prs/runs/<run>/spec.md --plan-file .prs/runs/<run>/plan.md --json
+```
+
+The linked-set command publishes the same approved pair to every created or reused issue; map requirements and tasks to every stable issue ID in those documents. `managedComments` reports published artifacts; missing-artifact entries in `managedCommentHints` mean the skill remains incomplete, even when creation returns `status: ok`.
+
+Refinement through `prs-issue` starts from the existing issue and uses the same specification and plan review gates before publishing both artifacts on that issue:
+
+```bash
+prs tool issue context <number> --json
+prs tool issue publish-artifacts <number> --spec-file .prs/runs/<run>/spec.md --plan-file .prs/runs/<run>/plan.md --json
+prs tool issue context <number> --json
+```
+
+Check files before any write and compare the published content with the reviewed versions. Refinement preserves the original issue identity and body and stops after verified publication unless implementation was requested. The publication command also repairs partial publication on a known issue within existing authorization for unchanged files and targets. It updates existing managed comments; no new issue is needed. If recovery fails, report the remaining artifact and next action. These are skill workflow rules, not additional CLI subcommands or approval flags.
 
 ## Pull request tools
 

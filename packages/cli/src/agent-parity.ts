@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { AGENT_WORKFLOW_CONTRACT, AgentSkillManifest, type AgentHostType } from "@prs/contracts";
 import { installAgentSkills } from "./agent-skills-installer";
+import { validateIssueApprovalInstructions } from "./agent-skill-approval-contract";
 
 const HOSTS: AgentHostType[] = ["codex", "claude-code", "copilot"];
 const REQUIRED_OPERATIONS = [
@@ -161,6 +162,9 @@ export function validateAgentSkillParity(options: {
     }
     // Identical installations can all omit the same workflow. Check its entrypoint
     // and action sections independently of the manifest and combined tool references.
+    for (const name of ["prs-create", "prs-issue"] as const) {
+      errors.push(...validateIssueApprovalInstructions(name, installedContent.get(name)));
+    }
     const prWorkflow = installedContent.get("prs-pr");
     if (!prWorkflow) {
       errors.push("missing workflow skill: prs-pr");

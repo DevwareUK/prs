@@ -55,20 +55,26 @@ For GitHub Copilot, `prs skills install copilot` shares the Codex installation u
 
 Copilot telemetry setup treats empty macOS launch-environment values as unset; conflicting nonempty settings are preserved and stop setup.
 
-`prs skills validate --json` installs each host pack in an isolated temporary home and checks its inventory, hashes, retained operation references, and the named `artifact-locality` and `staged-only-finalization` instructions. It also requires the `prs-pr` skill, its router entry and non-empty sections for all four PR actions, even if every host installs the same incomplete pack. These are static checks: they do not launch a native host runtime. Native behavioral evidence is a separate manual smoke matrix with one independently attributed row for each host; see [the agent parity guide](docs/agent-parity.md).
+`prs skills validate --json` installs each host pack in an isolated temporary home and checks its inventory, hashes, retained operation references, and the named `artifact-locality` and `staged-only-finalization` instructions. It also requires the `prs-pr` skill, its router entry and non-empty sections for all four PR actions, even if every host installs the same incomplete pack. It independently checks the create and refine specification, plan, publication and completion instructions, including refinement on the original issue and its stopping boundary. These are static checks: they do not launch a native host runtime. Native behavioral evidence is a separate manual smoke matrix with one independently attributed row for each host; see [the agent parity guide](docs/agent-parity.md).
 
 All generated workflow artifacts use `.prs/runs/<task-specific-run>/` as their only repository-local root. Use a run directory returned by `prs` when available; otherwise create a task-specific directory beneath `.prs/runs`. This covers issue drafts, linked-set manifests, specifications, plans, working notes, and completion evidence. These raw files remain local: never stage or commit them, and never create an alternative scratch root such as `.prs-work`.
 
 ## Workflow
 
-A normal issue flow is:
+For `prs-create`, the active agent uses Superpowers brainstorming to write a specification, shows it and waits for approval. It then uses Superpowers writing-plans to write the implementation plan, shows it and waits for approval. Both files are required even for bounded work and stay under `.prs/runs`; the PRS locality rules override Superpowers document-path and commit defaults. Missing required skills block the workflow with a next action.
 
-1. The active agent drafts one issue or a linked issue set inside a task-specific directory beneath `.prs/runs`.
-2. After approval, it creates the issue(s) with `prs tool issue create`.
-3. It reads live context with `prs tool issue context` and publishes an approved specification and plan with `prs tool issue publish-artifacts`.
-4. It prepares implementation context with `prs tool issue ready`, then works in an isolated branch or worktree.
-5. The active agent stages only the approved issue changes, verifies them with `git diff --cached --name-status`, and uses `prs issue finalize` to preview and create a deterministic local commit after explicit confirmation.
-6. It opens or updates the pull request through its normal GitHub tooling and publishes evidence with `prs audit publish`.
+After presenting the issue draft or linked set and both reviewed artifacts, the agent obtains explicit authorization for issue creation and publication of both managed comments. Design approval alone does not authorize the GitHub write; a reply that asks a question or changes scope needs revised artifacts and explicit approval. The creation step uses both files:
+
+```bash
+prs tool issue create --draft-file .prs/runs/<run>/issue.md --spec-file .prs/runs/<run>/spec.md --plan-file .prs/runs/<run>/plan.md --json
+prs tool issue create --issue-set .prs/runs/<run>/issue-set.json --run-dir .prs/runs/<run> --spec-file .prs/runs/<run>/spec.md --plan-file .prs/runs/<run>/plan.md --json
+```
+
+For a linked set, the approved shared specification and plan map requirements, tasks and dependencies to every stable issue ID and are published on every created or reused issue. Creation is complete only after both managed comments are verified and their URLs reported. A successful issue creation with missing artifact hints remains incomplete. Recover partial publication against the known issue number with `prs tool issue publish-artifacts <number> --spec-file <spec> --plan-file <plan> --json` within authorization for those exact files and targets; then confirm live context and content with `prs tool issue context <number> --json`.
+
+To refine an existing issue, use `prs-issue` with a refine request. It reads live issue context, follows the same specification, plan and publication approval gates, and publishes or updates both comments on that original issue. It preserves the issue number, URL and request body and creates no replacement issues. A refine-only request stops after verified publication.
+
+When implementation is requested (including a `prs-issue` request with `--jdi`, `--auto` or `--unattended`), the agent reuses approved, unchanged artifacts, prepares context with `prs tool issue ready`, and works in an isolated branch or worktree. Implementation authorization does not waive artifact approval gates. It stages intended changes, inspects `git diff --cached --name-status`, and uses `prs issue finalize` to preview and create a deterministic commit after confirmation. It then opens or updates the PR and publishes reviewed audit evidence only after explicit approval.
 
 For an existing pull request, use `prs-pr`. It locates the main checkout used by your local application and runs `prs tool pr ready` there to check out the actual head branch, synchronize the PR base, run configured local-readiness commands, and return GitHub checks and review-comment context. With no PR selected, it lists actionable PRs with links. With no follow-up action requested, it prepares local testing and offers relevant next steps.
 
