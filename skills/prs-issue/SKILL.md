@@ -51,7 +51,7 @@ Report the original issue number, title and URL, plus both verified managed-comm
 
 ## Lifecycle
 
-Continue here only when implementation was requested. An implementation request (including `--jdi`, `--auto` or `--unattended`) authorizes the implementation lifecycle; it does not waive specification, plan or publication approval gates. For a refine-only request, follow Refinement and stop.
+Continue here only when implementation was requested. An implementation request (including `--jdi`, `--auto` or `--unattended`) authorizes the implementation lifecycle; it does not waive specification or plan approval gates, including publication of those artifacts. Carry the originating implementation request, execution mode and issue/PR targets through the finish handoff; use the audit publication authorization in `prs-finish` for routine completion and token-usage audits. For a refine-only request, follow Refinement and stop.
 
 1. Reconcile the live specification and plan with the requested implementation. Use the Refinement process above if artifacts are missing or need changes. Reuse existing approved, unchanged artifacts; do not republish them just to start implementation.
 2. Run `prs tool issue ready <number> --json` and use its suggested branch and returned run directory. Keep subsequent working notes and evidence in that returned directory.
@@ -72,4 +72,4 @@ Refresh capture using the same output before completion, then run `prs tool toke
 
 Review capture warnings, partial/unpriced results and the checkpoint range. Full-task/subagent coverage is unproven; the final response and later work require a later checkpoint. Model tokens, host counters, credits, host cost estimates and actual charges remain distinct. Adapter fixtures are not native validation. The PRS source's `docs/usage-evidence.md` documents supported formats and optional setup; if the capture command is unavailable, preserve existing evidence and report the limitation.
 
-Obtain explicit user approval before publishing the reviewed Markdown with `prs audit publish --issue <number> --file .prs/runs/<run>/token-usage.md --section token-usage` (or `--pr <number>`). Raw JSON, transcripts and private source paths stay local. Reuse the same report when publishing to an issue and PR.
+Apply the audit publication authorization in `prs-finish` before publishing the reviewed Markdown with `prs audit publish --issue <number> --file .prs/runs/<run>/token-usage.md --section token-usage` (or `--pr <number>`). Raw JSON, transcripts and private source paths stay local. Reuse the same report when publishing to an issue and PR.

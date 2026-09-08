@@ -24,7 +24,7 @@ This covers issue drafts, linked-set manifests, specifications, plans, working n
 
 ## Shared safeguards
 
-- Get explicit user approval immediately before creating issues or publishing GitHub comments.
+- Get explicit user approval immediately before creating issues or publishing GitHub comments. For routine completion and token-usage audits from an explicitly requested JDI issue implementation, apply the audit publication authorization in `prs-finish`; carry its originating request, mode and issue/PR targets through handoffs instead of asking again.
 - Get explicit user approval before destructive cleanup. Never discard uncommitted or unpushed work.
 - For issue implementation, prefer an isolated branch or worktree. If isolation is unavailable, continue in the active workspace and report that fallback. Existing-PR local testing follows `prs-pr` in the main checkout used by the local runtime.
 - Delegate independent work only when the host supports delegation and the user has authorized it. Otherwise execute sequentially.

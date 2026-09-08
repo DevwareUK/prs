@@ -13,6 +13,18 @@ Finish only when the requested outcome is implemented and the working tree conta
 
 This covers issue drafts, linked-set manifests, specifications, plans, working notes, and completion evidence. They are raw workflow artifacts and stay local. Never stage or commit them, and never create another repository-local scratch root such as `.prs-work`.
 
+## Audit publication authorization
+
+An explicit user request for issue implementation with `--jdi`, `--auto` or `--unattended` is upfront authorization to publish routine completion and token-usage audits to that issue and its resulting pull request. Carry this authorization through `prs-issue`, `prs-finish` and `prs-pr`: retain the originating user request, execution mode and issue/PR targets in local run notes. Do not ask for another approval for those audits.
+
+Without that authorization, show the exact reports and obtain explicit user approval before publication. A later user instruction to withhold publication overrides the earlier authorization. A readiness-tool flag alone does not grant audit publication authorization.
+
+In either mode, write and self-review the reports, verify current results and targets, and publish only the completion Markdown and rendered usage Markdown. Keep raw JSON, transcripts and private source paths local. Preserve unavailable, partial and unpriced evidence honestly. Confirm publication before reporting it complete.
+
+This authorization does not cover issue creation, specification or plan publication, discussion comments, PR reviews, merging or destructive cleanup. Those actions retain their existing approval gates.
+
+## Completion
+
 1. Review the diff against the approved issue scope and acceptance criteria.
 2. Run fresh verification. Fix in-scope failures; report inherited or external failures with evidence.
 3. Stage only files that belong to the approved issue and inspect `git diff --cached --name-status`. Run `prs issue finalize <number>`, then approve only after checking its displayed commit message and staged paths.
@@ -21,7 +33,7 @@ The command commits only the existing index and leaves unstaged changes and untr
 
 4. Push the issue branch and open or update its pull request with the host's normal GitHub capability. Keep one issue task per pull request unless the approved plan says otherwise.
 5. Use `prs-pr` to prepare the pull request in the main checkout with `prs tool pr ready <number> --json`, including its checkout and worktree preflight. Resolve local-readiness failures or merge conflicts within the authorized scope and re-run verification.
-6. Write a concise completion artifact in the run directory returned for this task. If none is available, create a task-specific directory beneath `.prs/runs`. Obtain explicit user approval before publishing the reviewed content with `prs audit publish --issue <number> ...` or `prs audit publish --pr <number> ...`.
+6. Write a concise completion artifact in the run directory returned for this task. If none is available, create a task-specific directory beneath `.prs/runs`. Apply the audit publication authorization above when publishing the reviewed content with `prs audit publish --issue <number> ...` or `prs audit publish --pr <number> ...`.
 7. Confirm hosted checks and review state. Clean branches or worktrees only after explicit approval and only when no uncommitted or unpushed work can be lost.
 
 Once the pull request exists, use `prs-pr` for requested pull request testing, review, comment fixes, conflict resolution, or failing-test repairs in the main checkout. Preserve the PR number and authorized scope; readiness alone does not authorize those follow-up actions. Existing PRs with no linked issue use `prs-pr` directly and its normal Git finalization, without returning to this issue-finishing flow.
@@ -38,4 +50,4 @@ Refresh capture using the same output before completion, then run `prs tool toke
 
 Review capture warnings, partial/unpriced results and the checkpoint range. Full-task/subagent coverage is unproven; the final response and later work require a later checkpoint. Model tokens, host counters, credits, host cost estimates and actual charges remain distinct. Adapter fixtures are not native validation. The PRS source's `docs/usage-evidence.md` documents supported formats and optional setup; if the capture command is unavailable, preserve existing evidence and report the limitation.
 
-Obtain explicit user approval before publishing the reviewed Markdown with `prs audit publish --issue <number> --file .prs/runs/<run>/token-usage.md --section token-usage` (or `--pr <number>`). Raw JSON, transcripts and private source paths stay local. Reuse the same report when publishing to an issue and PR.
+Apply the audit publication authorization above when publishing the reviewed Markdown with `prs audit publish --issue <number> --file .prs/runs/<run>/token-usage.md --section token-usage` (or `--pr <number>`). Raw JSON, transcripts and private source paths stay local. Reuse the same report when publishing to an issue and PR.

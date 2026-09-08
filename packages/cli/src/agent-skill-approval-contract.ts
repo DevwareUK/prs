@@ -114,3 +114,31 @@ export function validateIssueApprovalInstructions(
   }
   return errors;
 }
+
+export function validateAuditAuthorizationInstructions(content: Map<string, string>): string[] {
+  const policy = section((content.get("prs-finish") ?? "").replace(/\r\n/g, "\n"), "Audit publication authorization", 2);
+  const required = [
+    "explicit user request for issue implementation",
+    "`--jdi`, `--auto` or `--unattended`",
+    "routine completion and token-usage audits",
+    "originating user request, execution mode and issue/PR targets",
+    "Do not ask for another approval for those audits.",
+    "Without that authorization, show the exact reports and obtain explicit user approval before publication.",
+    "A later user instruction to withhold publication overrides the earlier authorization.",
+    "A readiness-tool flag alone does not grant audit publication authorization.",
+    "This authorization does not cover issue creation, specification or plan publication, discussion comments, PR reviews, merging or destructive cleanup.",
+  ];
+  const errors = required.every(instruction => policy.includes(instruction))
+    ? [] : ["prs-finish: missing audit publication authorization instructions"];
+  for (const name of ["prs", "prs-issue", "prs-pr"]) {
+    if (!content.get(name)?.includes("audit publication authorization in `prs-finish`")) {
+      errors.push(`${name}: missing audit authorization handoff`);
+    }
+  }
+  for (const name of ["prs-finish", "prs-issue", "prs-pr"]) {
+    if (/Obtain explicit user approval before publishing the reviewed (?:Markdown|content|audit) with/.test(content.get(name) ?? "")) {
+      errors.push(`${name}: contradictory audit approval instructions`);
+    }
+  }
+  return errors;
+}
