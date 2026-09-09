@@ -52,7 +52,7 @@ The validator also requires `prs-pr`, its existing-PR router entry, and non-empt
 
 ## GitHub authentication results
 
-GitHub-backed JSON tools report expected authentication states as structured `blocked` results. `.prs/config.local.json` selects the account PRS uses; it never changes the active GitHub CLI account. GitHub CLI owns stored credentials and login or refresh. With a configured account, PRS does not fall back to another account or an inherited token, and never runs `gh auth switch`.
+`prs tool issue list`, `prs tool pr list`, and `prs tool issue create` report expected authentication states as structured `blocked` results. `.prs/config.local.json` selects the account PRS uses; it never changes the active GitHub CLI account. GitHub CLI owns stored credentials and login or refresh. With a configured account, PRS does not fall back to another account or an inherited token, and never runs `gh auth switch`.
 
 | Reason | Next action | Agent response |
 | --- | --- | --- |
