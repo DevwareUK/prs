@@ -4,6 +4,7 @@ import {
   type ActionableIssue,
 } from "./actionable-github";
 import { createGitHubClient, type GitHubClient, type GitHubCommandRunner } from "./github-client";
+import { normalizeGitHubAuthFailure } from "./github-auth-failure";
 import { ISSUE_PLAN_COMMENT_MARKER, startsWithManagedMarker } from "@prs/contracts";
 
 export type IssueListToolResult =
@@ -16,7 +17,7 @@ export type IssueListToolResult =
     }
   | {
       status: "blocked";
-      reason: "github-auth-required" | "not-github";
+      reason: "github-auth-required" | "github-credential-store-inaccessible" | "not-github";
       message: string;
       nextAction: string;
     };
@@ -145,15 +146,19 @@ export async function listIssuesTool(
   const env = options.env ?? process.env;
   const commandRunner = options.runCommand ?? runCommand;
   let client: GitHubClient;
-  const blocked = (detail: string): IssueListToolResult => ({
-    status: "blocked", reason: "github-auth-required",
-    message: `GitHub authentication is required for \`prs tool issue list --actionable --json\`.\n${detail}`,
-    nextAction: "Install gh and authenticate with gh auth login --hostname github.com for the selected account.",
-  });
+  const blocked = (error: unknown, fallbackMessage: string): IssueListToolResult => {
+    const failure = normalizeGitHubAuthFailure(error, fallbackMessage);
+    return {
+      status: "blocked",
+      reason: failure.reason,
+      message: `GitHub authentication is required for \`prs tool issue list --actionable --json\`.\n${failure.message}`,
+      nextAction: failure.nextAction,
+    };
+  };
   try {
     client = createGitHubClient({ env, repoRoot: options.repoRoot, runCommand: options.runGitHubCommand, spawnSync: options.spawnSyncImpl });
   } catch (error) {
-    return blocked(error instanceof Error ? error.message : "GitHub CLI unavailable.");
+    return blocked(error, "GitHub CLI unavailable.");
   }
 
   const remoteUrl = commandRunner("git", ["-C", options.repoRoot, "remote", "get-url", "origin"]);
@@ -172,7 +177,7 @@ export async function listIssuesTool(
   try {
     currentUser = await requestJson<{ login?: string }>(request, "user", "Failed to fetch the authenticated GitHub user");
   } catch (error) {
-    return blocked(error instanceof Error ? error.message : "GitHub authentication failed.");
+    return blocked(error, "GitHub authentication failed.");
   }
   if (!currentUser.login) {
     throw new Error("GitHub user response did not include a login.");

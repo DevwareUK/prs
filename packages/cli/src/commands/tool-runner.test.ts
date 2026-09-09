@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { GitHubAuthFailure } from "../github-auth-failure";
 import { makeUsageFixture } from "../token-usage.test-support";
 const forge = vi.hoisted(() => ({ type: "github", isAuthenticated: vi.fn(), createOrReuseIssue: vi.fn() }));
 const state = vi.hoisted(() => ({ args: ["tool", "issue", "create", "--draft-file", "draft.md", "--json"], root: "/repo", localOnly: false }));
@@ -15,12 +16,40 @@ vi.mock("../cli-context", () => ({
 import { runToolCommand } from "./tool-runner";
 afterEach(() => vi.restoreAllMocks());
 
-it("returns blocked JSON with account guidance when authentication discovery throws", async () => {
-  forge.isAuthenticated.mockImplementation(() => { throw new Error('GitHub account "work" is unavailable. Run gh auth login --hostname github.com for that account.'); });
+it("returns safe login recovery when authentication discovery throws an unknown error", async () => {
+  forge.isAuthenticated.mockImplementation(() => { throw new Error("do-not-expose-auth-diagnostic"); });
   const output: string[] = [];
   vi.spyOn(process.stdout, "write").mockImplementation(chunk => { output.push(String(chunk)); return true; });
   await runToolCommand();
-  expect(JSON.parse(output.join(""))).toMatchObject({ status: "blocked", nextAction: "configure-github-auth", message: expect.stringContaining('account "work"') });
+  expect(JSON.parse(output.join(""))).toEqual({
+    status: "blocked",
+    reason: "github-auth-required",
+    message: "GitHub issue creation requires an installed and authenticated GitHub CLI (gh).",
+    nextAction: "configure-github-auth",
+  });
+  expect(output.join("")).not.toContain("do-not-expose-auth-diagnostic");
+  expect(forge.createOrReuseIssue).not.toHaveBeenCalled();
+});
+
+it("returns credential-store recovery when authentication discovery cannot access a saved credential", async () => {
+  forge.isAuthenticated.mockImplementation(() => {
+    throw new GitHubAuthFailure(
+      "Saved credential is inaccessible.",
+      "github-credential-store-inaccessible",
+      "retry-with-credential-store-access"
+    );
+  });
+  const output: string[] = [];
+  vi.spyOn(process.stdout, "write").mockImplementation(chunk => { output.push(String(chunk)); return true; });
+
+  await runToolCommand();
+
+  expect(JSON.parse(output.join(""))).toEqual({
+    status: "blocked",
+    reason: "github-credential-store-inaccessible",
+    message: "Saved credential is inaccessible.",
+    nextAction: "retry-with-credential-store-access",
+  });
   expect(forge.createOrReuseIssue).not.toHaveBeenCalled();
 });
 

@@ -11,6 +11,7 @@ import {
 } from "../cli-context";
 import { ensureCleanWorkingTree, loadMediaEvidenceForPublication } from "../cli-git";
 import { contextIssueTool } from "../issue-context-tool";
+import { normalizeGitHubAuthFailure } from "../github-auth-failure";
 import { listIssuesTool } from "../issue-list-tool";
 import { publishIssueArtifactsTool } from "../issue-publish-artifacts-tool";
 import { readyIssueTool } from "../issue-ready-tool";
@@ -93,17 +94,20 @@ export async function runToolCommand(): Promise<void> {
       return;
     }
     let authenticated = false;
-    let authMessage = "GitHub issue creation requires an installed and authenticated GitHub CLI (gh).";
+    const fallbackAuthMessage = "GitHub issue creation requires an installed and authenticated GitHub CLI (gh).";
+    let authFailure = normalizeGitHubAuthFailure(undefined, fallbackAuthMessage);
     try {
       authenticated = forge.isAuthenticated();
     } catch (error) {
-      if (error instanceof Error) authMessage = error.message;
+      authFailure = normalizeGitHubAuthFailure(
+        error,
+        fallbackAuthMessage
+      );
     }
     if (!authenticated) {
       writeJson({
         status: "blocked",
-        message: authMessage,
-        nextAction: "configure-github-auth",
+        ...authFailure,
       });
       return;
     }
