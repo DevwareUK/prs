@@ -41,7 +41,7 @@ describe("audit artifacts", () => {
     await publishAuditArtifact(forge, { ...input, sectionName: "checks", content: "Keep this check evidence." });
     expect((await publishAuditArtifact(forge, input)).status).toBe("updated");
     expect(saved!.body.match(/<!-- prs:audit:token-usage:start -->/g)).toHaveLength(1);
-    expect(saved!.body).toContain("Model-token known total: 160");
+    expect(saved!.body).toContain("| Overall | unknown | 160 | 0 | 0 | 0 | 160 | unpriced |");
     expect(saved!.body).toContain("Keep this check evidence.");
   });
   it("renders a managed audit comment with a stable marker and section", () => {

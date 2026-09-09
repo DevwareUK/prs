@@ -22,7 +22,7 @@ function mismatch(row: UsageContribution, rate: UsageRateCard): string | undefin
   if (context !== undefined && (context < rate.contextTier.minTokens || (rate.contextTier.maxTokens !== undefined && context > rate.contextTier.maxTokens))) return "Context length is outside the rate tier";
   const start = Date.parse(row.interval?.start ?? event.observedAt);
   const end = Date.parse(row.interval?.end ?? event.observedAt);
-  if (start < Date.parse(rate.effectiveAt) || (rate.expiresAt && end > Date.parse(rate.expiresAt))) return "Coverage crosses or falls outside the rate effective/expiry window";
+  if (start < Date.parse(rate.effectiveAt) || (rate.expiresAt && end >= Date.parse(rate.expiresAt))) return "Coverage crosses or falls outside the rate effective/expiry window";
 }
 function billingTokens(row: UsageContribution, rate: UsageRateCard): TokenUsage {
   const tokens = { ...row.usage };

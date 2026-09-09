@@ -1,6 +1,6 @@
 # Usage evidence (version 1)
 
-PRS can capture allowlisted usage metadata from one selected native session file or local telemetry export, or consume manually supplied host-export envelopes. It does not search transcript contents, launch models, fetch prices, or use provider credentials. Synthetic fixtures establish mappings, not compatibility with every native host version or provider invoices.
+PRS can capture allowlisted usage metadata from one selected native session file or local telemetry export, or consume manually supplied host-export envelopes. It does not search transcript contents, launch models, fetch prices at runtime, or use provider credentials. Recognized native model IDs can use immutable snapshots from a reviewed checked-in catalogue. Synthetic fixtures establish mappings, not compatibility with every native host version or provider invoices.
 
 ## Native capture
 
@@ -12,7 +12,7 @@ prs tool token-usage capture --host <codex|claude-code|copilot> --output .prs/ru
 
 Repeat with the same output before rendering. First capture defaults to now, excluding earlier work in a reused session. For retrospective capture, supply `--since <ISO-8601-with-offset>` with a known task-start time on the first call. Selection is by response observation/completion timestamp, strictly after the start and through the checkpoint; it is not an exact request-start or billing window. The last assistant response is emitted after its own capture call, so a later checkpoint is needed to include it.
 
-The output binds the host, session, source and start time. Repeated calls retain those values, deduplicate response IDs and update growing Claude output counters. Binding changes, conflicting counters, lost responses, malformed complete JSON records and backwards checkpoints fail without replacing existing evidence. An incomplete final JSONL write is excluded with a partial warning. Use a separate artifact for a different session; do not sum reports that cover the same work. Keep the original artifact across issue/PR readiness handoffs even if the readiness run directory changes. Manually supplied evidence is not overwritten. Existing rate cards are retained.
+The output binds the host, session, source and start time. Repeated calls retain those values, deduplicate response IDs, update growing Claude output counters, and preserve each existing event's model/context/rate-card selection. Newly observed recognized models select the snapshot applicable at their observation time. Binding changes, conflicting counters, lost responses, malformed complete JSON records and backwards checkpoints fail without replacing existing evidence. An incomplete final JSONL write is excluded with a partial warning. Use a separate artifact for a different session; do not sum reports that cover the same work. Keep the original artifact across issue/PR readiness handoffs even if the readiness run directory changes. Manually supplied evidence and referenced or unreferenced rate cards are retained.
 
 Capture requires an existing real run directory and a regular source file no larger than 64 MiB. Source-file symlinks and aliased outputs are rejected. A per-output lock prevents simultaneous writers; after an interrupted process, inspect that no capture is running before removing its `.lock` file. Unknown usage remains unavailable/partial, never zero.
 
@@ -51,7 +51,19 @@ prs audit publish --issue <number> --file .prs/runs/example/token-usage.md --sec
 prs audit publish --pr <number> --file .prs/runs/example/token-usage.md --section token-usage
 ```
 
-Do not publish the JSON result: it contains raw source evidence. Raw artifacts remain ignored under the selected run. Reusing evidence for an issue and PR does not create new usage.
+Published Markdown is intentionally compact. For example:
+
+```text
+| Model | Requests | Uncached input | Cached input/read | Cache write/creation | Output | Known total | Estimated cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| codex / gpt-5.6-sol | 3 | 1200 | 8000 | 0 | 900 | 10100 | USD 0.026 (partial) |
+| copilot / claude-sonnet-5 | 2 | 700 | 3000 | 100 | 400 | 4200 | USD 0.00625 |
+| Overall | 5 | 1900 | 11000 | 100 | 1300 | 14300 | USD 0.03225 (partial) |
+```
+
+Individual event IDs, timestamps, phase/attempt data, coverage intervals, request-level contribution rows, exclusions, allocations, and full rate-card objects remain local in the JSON result. Do not publish that JSON: it contains raw source evidence. Raw artifacts remain ignored under the selected run. Reusing evidence for an issue and PR does not create new usage.
+
+`Requests` is reported only when every contribution in a model row is backed by a stable provider request ID. Cumulative snapshots and mixed evidence render the request count as `unknown`, never as zero.
 
 ## Minimal unavailable envelope
 
@@ -185,14 +197,22 @@ This contributes 250 host-counter units and no model-token cost. PRS does not di
 - Phase changes do not reset counters. Cross-phase intervals are shared/unattributed unless coverage establishes attribution. Retries have their own attempt identity without duplicating earlier work.
 - Stable-ID replays do not change totals. Conflicting accounting fields fail. Rendering is stateless: supply all observations for the run; GitHub comments are not an accounting input.
 
+## Built-in rate catalogue
+
+Native capture resolves only exact, host-aware model IDs and documented aliases. There is no fuzzy or prefix matching. Codex uses [official OpenAI API model pricing](https://developers.openai.com/api/docs/models), Claude Code uses [official Anthropic first-party pricing](https://platform.claude.com/docs/en/about-claude/pricing), and Copilot uses [GitHub's Copilot model pricing](https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing). Each selected card records its source URL, retrieval timestamp, effective window, model, context tier, and token-class rates in the evidence.
+
+Codex and Claude Code amounts are API-equivalent estimates, not subscription charges or invoices. Copilot amounts use GitHub's host-specific token prices; their displayed GitHub AI-credit equivalent uses GitHub's published `1 AI credit = USD 0.01` conversion and remains distinct from reported credit consumption. Provider-reported charges and host-reported estimates are also kept separate.
+
+For bounded rates, capture derives context length only from the three non-overlapping input buckets: uncached input, cached input/read, and cache write/creation. If any is unknown, the tier is unresolved and the event remains unpriced. Unbounded single tiers do not require a fabricated context count. Promotional cards have explicit expiry timestamps. A snapshot without an authoritative historical start is effective no earlier than its reviewed retrieval date, so it cannot silently price earlier work. Regional/compliance uplifts, auto-selection discounts, batch or fast modes, negotiated discounts, taxes, and undisclosed Copilot code-review models remain unpriced unless explicit evidence supplies an applicable card.
+
 ## Pricing, credits, and limitations
 
-Supply immutable rate cards with IDs, provider/model, currency, effective/retrieval timestamps, source URL, context tier (inclusive min/max bounds), and applicable per-million rates. Contributions explicitly select a rate ID. Context-tier names must match; bounded tiers also require per-request context length. Cumulative usage cannot establish that length.
+Recognized native captures automatically embed applicable built-in cards. Manually supplied immutable rate cards remain supported and require IDs, provider/model, currency, effective/retrieval timestamps, source URL, context tier (inclusive min/max bounds), and applicable per-million rates. Contributions explicitly select a rate ID. Context-tier names must match; bounded tiers also require per-request context length. Cumulative usage cannot establish that length.
 
 Use `expiresAt` for promotions. Evidence crossing an effective/expiry boundary is unpriced: supply independently scoped contributions with appropriate cards instead. There is no automatic historical splitting, default price, live pricing call, currency mixing, or invoice reconstruction.
 
 Reasoning measurement and billing each declare included-in-output or separate treatment. Pricing rebuckets explicitly and never bills the same token twice. Missing applicable classes or rates produce visibly partial estimates. Unknown models/cards/tiers and unsupported total-only allocations are unpriced with reasons.
 
-A total-only contribution may supply `allocation: { version: 1, description, provenance: { sourceUrl, retrievedAt }, usage }` with complete non-overlapping classes summing to its provider total. The allocation is displayed and applies only when the contribution matches that total; PRS does not silently scale a cumulative allocation to a different delta. There is no hidden input/output blend.
+A total-only contribution may supply `allocation: { version: 1, description, provenance: { sourceUrl, retrievedAt }, usage }` with complete non-overlapping classes summing to its provider total. The allocation remains in local JSON and applies only when the contribution matches that total; PRS does not silently scale a cumulative allocation to a different delta. There is no hidden input/output blend.
 
 Estimated cost, reported currency charges, credit consumption, credit conversion, and plan entitlements stay separate. Subtotals retain completeness/exclusion metadata. Entitlements are informational and not summed. All-unavailable model usage has a null total, not zero. Fixture tests and static skill parity do not prove native-runtime behavior.

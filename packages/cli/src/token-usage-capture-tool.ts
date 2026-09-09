@@ -40,9 +40,9 @@ function preserve(prior: UsageEvidence, next: UsageEvidence): void {
   for (const old of prior.events.filter(e => e.status !== "unavailable")) {
     const fresh = next.events.find(e => e.eventId === old.eventId);
     if (!fresh) throw new Error("Native source lost previously captured responses (possibly truncated); evidence preserved");
-    const identity = (e: UsageEvent) => stableUsageJson([e.model, e.usage, e.hostEstimatedCost]);
+    const identity = (e: UsageEvent) => stableUsageJson([e.model, e.context, e.rateCardId, e.usage, e.hostEstimatedCost]);
     if (identity(old) === identity(fresh)) continue;
-    const withoutOutput = (e: UsageEvent) => stableUsageJson([e.model, { ...e.usage, outputTokens: undefined, reasoningTokens: undefined }, e.hostEstimatedCost]);
+    const withoutOutput = (e: UsageEvent) => stableUsageJson([e.model, e.context, e.rateCardId, { ...e.usage, outputTokens: undefined, reasoningTokens: undefined }, e.hostEstimatedCost]);
     if (old.host !== "claude-code" || old.adapter.name !== "claude-transcript-v1" || withoutOutput(old) !== withoutOutput(fresh) ||
       (fresh.usage?.outputTokens ?? -1) < (old.usage?.outputTokens ?? -1) || (fresh.usage?.reasoningTokens ?? -1) < (old.usage?.reasoningTokens ?? -1)) throw new Error("Conflicting captured response; evidence preserved");
   }
@@ -82,9 +82,16 @@ export function captureTokenUsageTool(input: Input) {
         warnings.push("Selected native source does not exist yet; capture again after the host writes usage.");
       } else if (sessionId) records = readRecords(source, warnings);
     }
-    const evidence = captureUsage(records, { host: input.host, sessionId: sessionId ?? "not-connected", runId: output.runId, since, capturedAt, warnings });
+    const evidence = captureUsage(records, {
+      host: input.host,
+      sessionId: sessionId ?? "not-connected",
+      runId: output.runId,
+      since,
+      capturedAt,
+      warnings,
+      prior: prior ? { events: prior.events, rateCards: prior.rateCards } : undefined,
+    });
     if (source) evidence.capture!.sourcePath = source;
-    if (prior?.rateCards) evidence.rateCards = prior.rateCards;
     if (prior) preserve(prior, evidence);
     const modelTokens = aggregateUsageEvents(evidence.events).modelTokens;
     const temporary = join(dirname(output.path), ".capture-" + randomUUID() + ".tmp");
