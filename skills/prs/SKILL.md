@@ -22,6 +22,14 @@ Use `prs` as the router for the local GitHub workflow. The active coding agent o
 
 This covers issue drafts, linked-set manifests, specifications, plans, working notes, and completion evidence. They are raw workflow artifacts and stay local. Never stage or commit them, and never create another repository-local scratch root such as `.prs-work`.
 
+## GitHub credential-store recovery
+
+- When `forge.githubAccount` is configured, honor that account without switching the global GitHub account or falling back to another account or an inherited token. Never run `gh auth switch`.
+- If a structured result says `retry-with-credential-store-access`, retry the exact PRS command through the active host's normal permission mechanism. PRS must not elevate itself or invoke a host-specific permission mechanism.
+- Preserve unchanged approval, artifact paths, targets and known issue numbers across the permission-only retry.
+- Ask the user to log in or refresh credentials only after an unrestricted retry still reports missing or rejected credentials.
+- Never print or capture token values, authentication headers, subprocess stderr, credential paths or inherited token variables in diagnostic output.
+
 ## Shared safeguards
 
 - Get explicit user approval immediately before creating issues or publishing GitHub comments. For routine completion and token-usage audits from an explicitly requested JDI issue implementation, apply the audit publication authorization in `prs-finish`; carry its originating request, mode and issue/PR targets through handoffs instead of asking again.

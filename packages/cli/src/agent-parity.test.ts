@@ -7,6 +7,15 @@ import { validateAgentSkillParity } from "./agent-parity";
 
 const EXPECTED_SKILLS = ["prs", "prs-create", "prs-finish", "prs-issue", "prs-orchestrate", "prs-pr"];
 const REQUIRED_SAFEGUARDS = ["artifact-locality", "staged-only-finalization"];
+const GITHUB_CREDENTIAL_STORE_RECOVERY = `## GitHub credential-store recovery
+
+- When \`forge.githubAccount\` is configured, honor that account without switching the global GitHub account or falling back to another account or an inherited token. Never run \`gh auth switch\`.
+- If a structured result says \`retry-with-credential-store-access\`, retry the exact PRS command through the active host's normal permission mechanism. PRS must not elevate itself or invoke a host-specific permission mechanism.
+- Preserve unchanged approval, artifact paths, targets and known issue numbers across the permission-only retry.
+- Ask the user to log in or refresh credentials only after an unrestricted retry still reports missing or rejected credentials.
+- Never print or capture token values, authentication headers, subprocess stderr, credential paths or inherited token variables in diagnostic output.
+`;
+const GITHUB_CREDENTIAL_STORE_RECOVERY_ERROR = "prs: missing GitHub credential-store recovery instructions";
 
 function createSourceFixture(mutate: (content: string) => string): string {
   const sourceRoot = mkdtempSync(join(tmpdir(), "prs-agent-parity-source-"));
@@ -18,6 +27,31 @@ function createSourceFixture(mutate: (content: string) => string): string {
   }
 
   return sourceRoot;
+}
+
+function createGitHubCredentialRecoveryFixture(mutate: (content: string) => string): string {
+  const sourceRoot = createSourceFixture(content => content);
+  const skillPath = join(sourceRoot, "skills", "prs", "SKILL.md");
+  const content = readFileSync(skillPath, "utf8");
+  const recoveryPattern = /^## GitHub credential-store recovery\n[\s\S]*?(?=^## |$(?![\s\S]))/m;
+  const withRecovery = recoveryPattern.test(content)
+    ? content.replace(recoveryPattern, GITHUB_CREDENTIAL_STORE_RECOVERY)
+    : `${content.trimEnd()}\n\n${GITHUB_CREDENTIAL_STORE_RECOVERY}`;
+  const mutated = mutate(withRecovery);
+  expect(mutated, "fixture must remove the intended recovery instruction").not.toBe(withRecovery);
+  writeFileSync(skillPath, mutated, "utf8");
+  return sourceRoot;
+}
+
+function expectGitHubCredentialRecoveryRejected(sourceRoot: string): void {
+  const report = validateAgentSkillParity({ sourceRoot });
+  expect(report.status).toBe("failed");
+  expect(report.hosts.map(row => row.host)).toEqual(["codex", "claude-code", "copilot"]);
+  for (const row of report.hosts) {
+    expect(row.status).toBe("failed");
+    expect(row.errors).toContain(GITHUB_CREDENTIAL_STORE_RECOVERY_ERROR);
+    expect(row.contentHashes).toEqual(report.canonical.contentHashes);
+  }
 }
 
 describe("three-host Agent Skills parity", () => {
@@ -245,6 +279,50 @@ describe("three-host Agent Skills parity", () => {
     expect(report.hosts.find((row) => row.host === "claude-code")?.status).toBe("passed");
     expect(report.hosts.find((row) => row.host === "copilot")?.status).toBe("passed");
     expect(readFileSync(customFile, "utf8")).toBe("custom collision\n");
+  });
+});
+
+describe("GitHub credential-store recovery contract", () => {
+  it.each([
+    [
+      "configured account",
+      "honor that account without switching the global GitHub account or falling back to another account or an inherited token",
+      "use any available GitHub account",
+    ],
+    ["global account switch", "Never run `gh auth switch`", "Run `gh auth switch` before retrying"],
+    [
+      "permission retry",
+      "retry the exact PRS command through the active host's normal permission mechanism. PRS must not elevate itself or invoke a host-specific permission mechanism",
+      "run a different command through PRS elevation",
+    ],
+    [
+      "preserved workflow state",
+      "Preserve unchanged approval, artifact paths, targets and known issue numbers across the permission-only retry",
+      "Recreate workflow state after retrying",
+    ],
+    [
+      "deferred login",
+      "Ask the user to log in or refresh credentials only after an unrestricted retry still reports missing or rejected credentials",
+      "Ask the user to log in immediately",
+    ],
+    [
+      "redacted diagnostics",
+      "Never print or capture token values, authentication headers, subprocess stderr, credential paths or inherited token variables in diagnostic output",
+      "Capture credential diagnostics for troubleshooting",
+    ],
+  ])("rejects identical host packs missing %s guidance", (_label, before, after) => {
+    const sourceRoot = createGitHubCredentialRecoveryFixture(content => content.replace(before, after));
+    expectGitHubCredentialRecoveryRejected(sourceRoot);
+  });
+
+  it("rejects recovery guidance moved outside its canonical section", () => {
+    const sourceRoot = createGitHubCredentialRecoveryFixture(content => {
+      const recovery = content.match(/^## GitHub credential-store recovery\n[\s\S]*?(?=^## |$(?![\s\S]))/m)?.[0];
+      expect(recovery).toBeTruthy();
+      return content.replace(recovery!, "## GitHub credential-store recovery\n\nRecovery details are documented elsewhere.\n") +
+        `\n## Unrelated notes\n\n${recovery}`;
+    });
+    expectGitHubCredentialRecoveryRejected(sourceRoot);
   });
 });
 
