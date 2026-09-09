@@ -54,4 +54,12 @@ Static validation requires the finish policy that carries an explicit JDI issue-
 
 ## GitHub account context
 
-All three hosts use the same GitHub CLI integration when calling `prs`. GitHub-backed commands require installed and authenticated `gh`. Interactive `prs setup` can write a personal account choice to ignored `.prs/config.local.json` (`forge.githubAccount`); preserve that choice and resolve login errors instead of switching the global account. Direct host `gh` commands and Git transport do not read this `prs` setting. When no account is selected, `gh` handles normal authentication, including environment tokens for automation.
+All three hosts use the same GitHub CLI integration when calling `prs`. GitHub-backed commands require installed and authenticated `gh`. Interactive `prs setup` can write a personal account choice to ignored `.prs/config.local.json` (`forge.githubAccount`); it selects PRS's identity without changing the active GitHub CLI account. Direct host `gh` commands and Git transport do not read this setting. When no account is selected, `gh` handles normal authentication, including environment tokens for automation.
+
+## Credential-store recovery parity
+
+When `forge.githubAccount` is configured, each host must honor that account without switching the global GitHub account, falling back to another account, or using an inherited token. Never run `gh auth switch`. GitHub CLI owns credential storage and the login/refresh process.
+
+When a JSON result contains `reason: "github-credential-store-inaccessible"` and `nextAction: "retry-with-credential-store-access"`, retry the exact PRS command through the active host's normal permission mechanism. PRS must not elevate itself or invoke a host-specific permission mechanism. Preserve unchanged approval, artifact paths, targets, and known issue numbers across this permission-only retry. Ask the user to log in or refresh credentials only after an unrestricted retry still reports missing or rejected credentials; that authentication state uses `github-auth-required` and `configure-github-auth`.
+
+The recovery result does not authorize a different target, account change, or another creation attempt after a partial remote write. Host diagnostics must never print or capture token values, authentication headers, subprocess stderr, credential paths, or inherited token variables.

@@ -50,6 +50,17 @@ The validator also requires `prs-pr`, its existing-PR router entry, and non-empt
 | `prs tool issue create --issue-set <path> --json` | Creates or reuses a linked set described by a version-1 JSON manifest. `--run-dir` resolves relative draft paths. |
 | `prs issue finalize <number>` | Shows deterministic commit text and the exact staged paths, asks for explicit confirmation, and creates one local commit from the existing index. It does not stage files, push, or open a pull request. |
 
+## GitHub authentication results
+
+GitHub-backed JSON tools report expected authentication states as structured `blocked` results. `.prs/config.local.json` selects the account PRS uses; it never changes the active GitHub CLI account. GitHub CLI owns stored credentials and login or refresh. With a configured account, PRS does not fall back to another account or an inherited token, and never runs `gh auth switch`.
+
+| Reason | Next action | Agent response |
+| --- | --- | --- |
+| `github-credential-store-inaccessible` | `retry-with-credential-store-access` | Retry the same command through the host permission mechanism; preserve unchanged approvals and targets. |
+| `github-auth-required` | `configure-github-auth` | Authenticate or refresh the selected account, then retry. |
+
+For `retry-with-credential-store-access`, use the active host's normal permission mechanism. PRS must not elevate itself or invoke a host-specific permission mechanism. Keep approval, artifact paths, targets, and known issue numbers unchanged; authenticate or refresh only when the unrestricted retry still reports missing or rejected credentials. Neither condition authorizes printing a token, switching accounts, changing targets, or repeating uncertain creation after a partial remote write. Do not include token values, authentication headers, subprocess stderr, credential paths, or inherited token variables in diagnostics.
+
 The single-draft Markdown format starts with an H1 title; the remainder becomes the issue body. A linked issue-set manifest contains `version`, `mode`, and `issues`, where each issue has an `id`, `draftFile`, and optional `dependsOn`, `blocks`, and `related` IDs.
 
 ### Creation and refinement artifact contract
