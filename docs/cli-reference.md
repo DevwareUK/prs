@@ -36,7 +36,7 @@ prs skills validate [--json]
 
 Parity validation installs all three host adapters into separate temporary homes, then compares each installed inventory, content hash, and retained operation reference with the canonical pack. It also checks the installed `artifact-locality` instruction (raw workflow artifacts stay under `.prs/runs` and are not staged or committed) and `staged-only-finalization` instruction (the existing index is the commit source while unstaged and untracked files are preserved). The JSON report names the required safeguards and reports passing safeguards or missing-safeguard errors for each host independently. The command reports static installation and instruction parity only; it does not launch host runtimes. End-to-end native host evidence remains manual and separately attributed in [the agent parity guide](agent-parity.md)'s smoke matrix.
 
-The validator also requires `prs-pr`, its existing-PR router entry, and non-empty sections for `review`, `resolve-conflicts`, `address-comments`, and `fix-tests`. It also independently requires `prs-create` and `prs-issue`, their section-scoped specification, plan, publication and completion rules, and the refine-only identity and stopping boundaries. Missing or weakened instructions are reported in each host's `errors`, even when the installed files match the canonical pack exactly. These conservative text checks cannot prove native approval behavior.
+The validator also requires `prs-pr`, its existing-PR router entry, and non-empty sections for `review`, `resolve-conflicts`, `address-comments`, and `fix-tests`. It also independently requires `prs-create` and `prs-issue`, their section-scoped artifact preparation, unified approval and completion rules, and the refine-only identity and stopping boundaries. Missing or weakened instructions, contradictory staged approval gates and pre-approval remote-write directives are reported in each host's `errors`, even when the installed files match the canonical pack exactly. These conservative text checks cannot prove native approval behavior.
 
 ## Issue tools
 
@@ -65,7 +65,7 @@ The single-draft Markdown format starts with an H1 title; the remainder becomes 
 
 ### Creation and refinement artifact contract
 
-The low-level creation flags remain optional for compatibility. The `prs-create` skill requires both approved files, explicit authorization for creation and comment publication, and verification of both published artifacts before completion:
+The low-level creation flags remain optional for compatibility. The `prs-create` skill requires the specification and plan to be prepared and self-reviewed without intermediate approval. It then presents both files with the exact issue target/content for one explicit approval that accepts the artifacts and authorizes creation and comment publication, followed by verification of both published artifacts:
 
 ```bash
 prs tool issue create --draft-file .prs/runs/<run>/issue.md --spec-file .prs/runs/<run>/spec.md --plan-file .prs/runs/<run>/plan.md --json
@@ -74,7 +74,7 @@ prs tool issue create --issue-set .prs/runs/<run>/issue-set.json --run-dir .prs/
 
 The linked-set command publishes the same approved pair to every created or reused issue; map requirements and tasks to every stable issue ID in those documents. `managedComments` reports published artifacts; missing-artifact entries in `managedCommentHints` mean the skill remains incomplete, even when creation returns `status: ok`.
 
-Refinement through `prs-issue` starts from the existing issue and uses the same specification and plan review gates before publishing both artifacts on that issue:
+Refinement through `prs-issue` starts from the existing issue and uses the same prepare-then-unified-approval flow before publishing both artifacts on that issue:
 
 ```bash
 prs tool issue context <number> --json
@@ -82,7 +82,7 @@ prs tool issue publish-artifacts <number> --spec-file .prs/runs/<run>/spec.md --
 prs tool issue context <number> --json
 ```
 
-Check files before any write and compare the published content with the reviewed versions. Refinement preserves the original issue identity and body and stops after verified publication unless implementation was requested. The publication command also repairs partial publication on a known issue within existing authorization for unchanged files and targets. It updates existing managed comments; no new issue is needed. If recovery fails, report the remaining artifact and next action. These are skill workflow rules, not additional CLI subcommands or approval flags.
+Check files before any write and compare the published content with the reviewed versions. A question or change to scope, content or target requires a complete revised packet and one fresh approval, not a return to staged spec and plan approvals. Refinement preserves the original issue identity and body and stops after verified publication unless implementation was requested. The publication command also repairs partial publication on a known issue within existing authorization for unchanged files and targets. It updates existing managed comments; no new issue is needed. If recovery fails, report the remaining artifact and next action. These are skill workflow rules, not additional CLI subcommands or approval flags.
 
 ## Pull request tools
 

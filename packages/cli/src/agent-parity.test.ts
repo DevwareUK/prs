@@ -326,7 +326,7 @@ describe("GitHub credential-store recovery contract", () => {
   });
 });
 
-describe("installed create and refine approval gates", () => {
+describe("installed create and refine unified approval contracts", () => {
   function mutateSkill(name: string, mutate: (content: string) => string): string {
     const sourceRoot = createSourceFixture(content => content);
     const path = join(sourceRoot, "skills", name, "SKILL.md");
@@ -360,7 +360,7 @@ describe("installed create and refine approval gates", () => {
       expectRejected(sourceRoot, `missing workflow skill: ${name}`);
     });
 
-    it.each(["Specification approval", "Plan approval", "Publication approval", "Completion verification"])(
+    it.each(["Artifact preparation", "Unified approval", "Completion verification"])(
       `${name}: rejects a missing %s section`, (heading) => {
         const sourceRoot = mutateSkill(name, content => content.replace(
           new RegExp(`^${level} ${heading}\\n[\\s\\S]*?(?=^#{1,${level.length}} |$(?![\\s\\S]))`, "m"), ""
@@ -370,17 +370,27 @@ describe("installed create and refine approval gates", () => {
     );
 
     it.each([
-      ["brainstorming", "superpowers:brainstorming", "omitted-brainstorming", "specification approval"],
-      ["planning", "superpowers:writing-plans", "omitted-planning", "plan approval"],
-      ["spec approval", "Show the specification file and wait for explicit user approval before proceeding to the plan.", "Write a specification and proceed to the plan.", "specification approval"],
-      ["plan approval", "Show the plan file and wait for explicit user approval before", "Finish the plan before", "plan approval"],
-      ["publication approval", "Obtain explicit user approval to", "Proceed to", "publication approval"],
-      ["file preflight", "check both files exist, contain non-empty Markdown and match the approved versions", "check available files", "publication approval"],
-      ["spec flag", "--spec-file", "--omitted-spec", "publication approval"],
-      ["plan flag", "--plan-file", "--omitted-plan", "publication approval"],
+      ["brainstorming", "superpowers:brainstorming", "omitted-brainstorming", "artifact preparation"],
+      ["planning", "superpowers:writing-plans", "omitted-planning", "artifact preparation"],
+      ["specification preparation", "Write and self-review the specification", "Write the specification", "artifact preparation"],
+      ["plan preparation", "write and self-review the implementation plan", "write the implementation plan", "artifact preparation"],
+      ["uninterrupted preparation", "without requesting intermediate approval", "after requesting intermediate approval", "artifact preparation"],
+      ["single approval", "one explicit user approval", "separate explicit user approvals", "unified approval"],
+      ["artifact acceptance", "accepts the specification and plan", "acknowledges the artifacts", "unified approval"],
+      ["exact target", name === "prs-create" ? "Show the exact issue draft or linked set" : "Show the original issue target", "Show some issue context", "unified approval"],
+      ["remote-write authorization", "authorizes the workflow to", "does not authorize the workflow to", "unified approval"],
+      ["complete revision", "complete revised packet", "changed fragment", "unified approval"],
+      ["fresh approval", "one fresh approval", "the previous approval", "unified approval"],
+      ["file preflight", "check both files exist, contain non-empty Markdown and match the displayed, approved versions", "check available files", "unified approval"],
+      ["spec flag", "--spec-file", "--omitted-spec", "unified approval"],
+      ["plan flag", "--plan-file", "--omitted-plan", "unified approval"],
       ["spec marker", "<!-- prs:issue-spec -->", "omitted-spec-marker", "completion verification"],
       ["plan marker", "<!-- prs:issue-plan -->", "omitted-plan-marker", "completion verification"],
       ["incomplete result", "mean incomplete work", "are acceptable", "completion verification"],
+      ["recovery identity", name === "prs-create" ? "preserve the known issue numbers and approved files" : "preserve the known issue number and approved files", "discard the known issue identity", "completion verification"],
+      ["recovery command", "prs tool issue publish-artifacts <number> --spec-file <spec> --plan-file <plan> --json", "omitted-recovery-command", "completion verification"],
+      ["renewed recovery approval", "Changed content or targets require renewed approval", "Changed content may reuse stale approval", "completion verification"],
+      ["verified comment URLs", "both verified managed-comment URLs", "the issue URL", "completion verification"],
       ["mandatory artifacts", "Both written artifacts are required even for bounded work.", "Artifacts are optional for bounded work.", "mandatory written artifacts"],
     ])(`${name}: rejects weakened %s instructions`, (_label, before, after, phase) => {
       expectRejected(mutateSkill(name, content => content.replaceAll(before, after)), `${name}: missing ${phase} instructions`);
@@ -392,12 +402,34 @@ describe("installed create and refine approval gates", () => {
 
     it(`${name}: rejects empty gate bodies even with complete guidance elsewhere`, () => {
       const sourceRoot = mutateSkill(name, content => {
-        const pattern = new RegExp(`^${level} Specification approval\\n([\\s\\S]*?)(?=^#{1,${level.length}} |$(?![\\s\\S]))`, "m");
+        const pattern = new RegExp(`^${level} Artifact preparation\\n([\\s\\S]*?)(?=^#{1,${level.length}} |$(?![\\s\\S]))`, "m");
         const body = pattern.exec(content)?.[1];
         expect(body).toBeTruthy();
-        return content.replace(pattern, `${level} Specification approval\n\n`) + `\n## Unrelated notes\n${body}`;
+        return content.replace(pattern, `${level} Artifact preparation\n\n`) + `\n## Unrelated notes\n${body}`;
       });
-      expectRejected(sourceRoot, `${name}: missing specification approval instructions`);
+      expectRejected(sourceRoot, `${name}: missing artifact preparation instructions`);
+    });
+
+    it.each([
+      "Show the specification file and wait for explicit user approval before proceeding to the plan.",
+      "Show the plan file and wait for explicit user approval before publication.",
+      `${level} Specification approval\n\nApprove the specification before planning.`,
+      `${level} Plan approval\n\nApprove the plan before publication.`,
+    ])(`${name}: rejects contradictory staged approval instruction: %s`, directive => {
+      expectRejected(
+        mutateSkill(name, content => `${content}\n${directive}\n`),
+        `${name}: contradictory staged approval instructions`
+      );
+    });
+
+    it.each([
+      "Create the issue before approval.",
+      "Publish both managed comments before approval.",
+    ])(`${name}: rejects unsafe pre-approval remote write: %s`, directive => {
+      expectRejected(
+        mutateSkill(name, content => `${content}\n${directive}\n`),
+        `${name}: unsafe pre-approval remote-write instructions`
+      );
     });
 
     it(`${name}: requires live context in the completion section itself`, () => {
