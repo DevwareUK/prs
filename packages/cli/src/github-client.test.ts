@@ -35,7 +35,7 @@ describe("GitHub CLI account isolation", () => {
 
   it("classifies inaccessible configured keyring credentials without leaking diagnostics", () => {
     const sentinel = "keyring-sentinel-secret";
-    let rendered = "";
+    let error: unknown;
     try {
       createGitHubClient({ repoRoot: repository("work"), env: { GH_TOKEN: "inherited" }, spawnSync: available,
         runCommand: (_command, args, options) => {
@@ -48,14 +48,15 @@ describe("GitHub CLI account isolation", () => {
           throw new Error("API request must not run");
         },
       });
-    } catch (error) {
-      expect(error).toBeInstanceOf(GitHubAuthFailure);
-      expect(error).toMatchObject({
-        reason: "github-credential-store-inaccessible",
-        nextAction: "retry-with-credential-store-access",
-      });
-      rendered = String(error);
+    } catch (caught) {
+      error = caught;
     }
+    expect(error).toBeInstanceOf(GitHubAuthFailure);
+    expect(error).toMatchObject({
+      reason: "github-credential-store-inaccessible",
+      nextAction: "retry-with-credential-store-access",
+    });
+    const rendered = String(error);
     expect(rendered).not.toContain(sentinel);
     expect(rendered).not.toContain("credential store denied");
   });
@@ -80,6 +81,36 @@ describe("GitHub CLI account isolation", () => {
     expect(error).toMatchObject({ reason: "github-auth-required", nextAction: "configure-github-auth" });
     expect(String(error)).toMatch(/missing.*gh auth login/);
     expect(requests).toBe(0);
+  });
+
+  it.each([
+    ["returns malformed JSON", (sentinel: string) => `not-json-${sentinel}`],
+    ["fails", (sentinel: string) => { throw Object.assign(new Error(`status probe denied: ${sentinel}`), { stderr: `status probe stderr: ${sentinel}` }); }],
+  ])("requires authentication without leaking diagnostics when the account-status probe %s", (_case, statusResult) => {
+    const tokenSentinel = "token-extraction-sentinel";
+    const statusSentinel = "status-probe-sentinel";
+    let error: unknown;
+    try {
+      createGitHubClient({ repoRoot: repository("work"), env: { GH_TOKEN: "inherited" }, spawnSync: available,
+        runCommand: (_command, args) => {
+          if (args[0] === "auth" && args[1] === "token") {
+            throw Object.assign(new Error(`token extraction denied: ${tokenSentinel}`), { stderr: `token stderr: ${tokenSentinel}` });
+          }
+          if (args[0] === "auth" && args[1] === "status") return statusResult(statusSentinel);
+          throw new Error("API request must not run");
+        },
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(GitHubAuthFailure);
+    expect(error).toMatchObject({ reason: "github-auth-required", nextAction: "configure-github-auth" });
+    const rendered = String(error);
+    expect(rendered).toMatch(/work.*gh auth login/);
+    expect(rendered).not.toContain(tokenSentinel);
+    expect(rendered).not.toContain(statusSentinel);
+    expect(rendered).not.toContain("status probe denied");
+    expect(rendered).not.toContain("status probe stderr");
   });
 
   it("requires gh even when an environment token exists", () => {
