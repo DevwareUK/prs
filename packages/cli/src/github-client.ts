@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { loadLocalRepositoryConfig } from "./config";
 import { resolveGitHubCli } from "./github-auth";
+import { GitHubAuthFailure } from "./github-auth-failure";
 
 export type GitHubCommandOptions = {
   env: Record<string, string | undefined>;
@@ -38,6 +39,20 @@ function requireCli(options: GitHubClientOptions) {
   if (!cli.path) throw new Error("Install GitHub CLI (gh), or configure PRS_GH_PATH / forge.githubCliPath, before using GitHub operations.");
   return cli.path;
 }
+type SavedGitHubAccount = { login?: string; state?: string; tokenSource?: string };
+function parseSavedGitHubAccounts(output: string): SavedGitHubAccount[] {
+  const payload = JSON.parse(output) as { hosts?: Record<string, unknown> };
+  const accounts = payload.hosts?.["github.com"];
+  return Array.isArray(accounts) ? accounts.filter((account): account is SavedGitHubAccount => typeof account === "object" && account !== null) : [];
+}
+
+function configuredAccountAuthRequired(account: string) {
+  return new GitHubAuthFailure(
+    `GitHub account "${account}" is unavailable. Run gh auth login --hostname github.com for that account.`,
+    "github-auth-required",
+    "configure-github-auth",
+  );
+}
 
 export function createGitHubClient(options: GitHubClientOptions = {}) {
   const path = requireCli(options);
@@ -52,7 +67,21 @@ export function createGitHubClient(options: GitHubClientOptions = {}) {
       }).trim();
       if (!token) throw new Error("No saved credential");
     } catch {
-      throw new Error(`GitHub account "${account}" is unavailable. Run gh auth login --hostname github.com for that account.`);
+      try {
+        const savedAccount = parseSavedGitHubAccounts(run(path, ["auth", "status", "--hostname", "github.com", "--json", "hosts"], {
+          cwd: options.repoRoot, env: withoutTokens(env),
+        })).find(entry => entry.login === account);
+        if (savedAccount?.state === "success" && savedAccount.tokenSource === "keyring") {
+          throw new GitHubAuthFailure(
+            `GitHub account "${account}" is saved in the OS credential store but is not accessible to this process. Retry the same prs command with host permission to access the credential store; authenticate again only if that unrestricted retry also fails.`,
+            "github-credential-store-inaccessible",
+            "retry-with-credential-store-access",
+          );
+        }
+      } catch (error) {
+        if (error instanceof GitHubAuthFailure) throw error;
+      }
+      throw configuredAccountAuthRequired(account);
     }
     for (const key of tokenVariables) delete env[key];
     env.GH_TOKEN = token;
@@ -85,7 +114,11 @@ export function createGitHubClient(options: GitHubClientOptions = {}) {
       if (!match) throw new Error(`GitHub CLI request failed${loginHint}. Check network access and gh auth login --hostname github.com.`);
       const status = Number(match[1]);
       if (status === 401 && account) {
-        throw new Error(`GitHub credentials for account "${account}" were rejected. Run gh auth login --hostname github.com for that account.`);
+        throw new GitHubAuthFailure(
+          `GitHub credentials for account "${account}" were rejected. Run gh auth login --hostname github.com for that account.`,
+          "github-auth-required",
+          "configure-github-auth",
+        );
       }
       return new Response([204, 205, 304].includes(status) ? null : output.slice(match[0].length), {
         status, statusText: match[2] ?? "",
@@ -104,8 +137,7 @@ export function listGitHubAccounts(options: GitHubClientOptions = {}): { account
     const output = (options.runCommand ?? execute)(path, ["auth", "status", "--hostname", "github.com", "--json", "hosts"], {
       cwd: options.repoRoot, env: withoutTokens(options.env ?? process.env),
     });
-    const payload = JSON.parse(output) as { hosts?: Record<string, Array<{ login?: string; state?: string }>> };
-    const accounts = [...new Set((payload.hosts?.["github.com"] ?? [])
+    const accounts = [...new Set(parseSavedGitHubAccounts(output)
       .filter(entry => entry.state === "success" && entry.login)
       .map(entry => entry.login as string))];
     return { accounts, guidance: accounts.length ? undefined : "No saved GitHub accounts. Run gh auth login --hostname github.com, then rerun prs setup." };
