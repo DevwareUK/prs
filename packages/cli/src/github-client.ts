@@ -39,11 +39,16 @@ function requireCli(options: GitHubClientOptions) {
   if (!cli.path) throw new Error("Install GitHub CLI (gh), or configure PRS_GH_PATH / forge.githubCliPath, before using GitHub operations.");
   return cli.path;
 }
-type SavedGitHubAccount = { login?: string; state?: string; tokenSource?: string };
+type SavedGitHubAccount = { login: string; state: string; tokenSource: string };
 function parseSavedGitHubAccounts(output: string): SavedGitHubAccount[] {
   const payload = JSON.parse(output) as { hosts?: Record<string, unknown> };
   const accounts = payload.hosts?.["github.com"];
-  return Array.isArray(accounts) ? accounts.filter((account): account is SavedGitHubAccount => typeof account === "object" && account !== null) : [];
+  return Array.isArray(accounts) ? accounts.filter((account): account is SavedGitHubAccount =>
+    typeof account === "object" && account !== null &&
+    typeof (account as Record<string, unknown>).login === "string" &&
+    typeof (account as Record<string, unknown>).state === "string" &&
+    typeof (account as Record<string, unknown>).tokenSource === "string"
+  ) : [];
 }
 
 function configuredAccountAuthRequired(account: string) {
@@ -71,9 +76,9 @@ export function createGitHubClient(options: GitHubClientOptions = {}) {
         const savedAccount = parseSavedGitHubAccounts(run(path, ["auth", "status", "--hostname", "github.com", "--json", "hosts"], {
           cwd: options.repoRoot, env: withoutTokens(env),
         })).find(entry => entry.login === account);
-        if (savedAccount?.state === "success" && savedAccount.tokenSource === "keyring") {
+        if (savedAccount) {
           throw new GitHubAuthFailure(
-            `GitHub account "${account}" is saved in the OS credential store but is not accessible to this process. Retry the same prs command with host permission to access the credential store; authenticate again only if that unrestricted retry also fails.`,
+            `GitHub account "${account}" is saved by GitHub CLI but its credential is not accessible to this process. Retry the same prs command with host permission to access the credential store; authenticate again only if that unrestricted retry also fails.`,
             "github-credential-store-inaccessible",
             "retry-with-credential-store-access",
           );

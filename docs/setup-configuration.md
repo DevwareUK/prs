@@ -55,7 +55,7 @@ Creating issues and publishing comments require authentication. Readiness and co
 
 ### Credential-store access recovery
 
-GitHub CLI owns stored credentials and its login or refresh flow. When the selected account has a valid credential in the operating system's credential store but the current host process cannot read it, affected JSON tools return a blocked result with `reason: "github-credential-store-inaccessible"` and `nextAction: "retry-with-credential-store-access"`. This does not mean the credential is missing or expired.
+GitHub CLI owns stored credentials and its login or refresh flow. When GitHub CLI still lists the selected account but the current host process cannot read its credential, affected JSON tools return a blocked result with `reason: "github-credential-store-inaccessible"` and `nextAction: "retry-with-credential-store-access"`. The same recovery applies when the restricted status check is indeterminate because it cannot reach the credential store or GitHub. This result does not by itself mean the credential is missing or expired.
 
 Retry the exact PRS command through the active host's normal permission mechanism. PRS must not elevate itself or invoke a host-specific permission mechanism. Preserve unchanged approval, artifact paths, targets, and known issue numbers during this permission-only retry. Ask the user to log in or refresh the selected account only if the unrestricted retry still reports missing or rejected credentials; those states return `reason: "github-auth-required"` and `nextAction: "configure-github-auth"`.
 
