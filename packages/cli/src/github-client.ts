@@ -71,9 +71,9 @@ export function createGitHubClient(options: GitHubClientOptions = {}) {
         const savedAccount = parseSavedGitHubAccounts(run(path, ["auth", "status", "--hostname", "github.com", "--json", "hosts"], {
           cwd: options.repoRoot, env: withoutTokens(env),
         })).find(entry => entry.login === account);
-        if (savedAccount?.state === "success" && savedAccount.tokenSource === "keyring") {
+        if (savedAccount) {
           throw new GitHubAuthFailure(
-            `GitHub account "${account}" is saved in the OS credential store but is not accessible to this process. Retry the same prs command with host permission to access the credential store; authenticate again only if that unrestricted retry also fails.`,
+            `GitHub account "${account}" is saved by GitHub CLI but its credential is not accessible to this process. Retry the same prs command with host permission to access the credential store; authenticate again only if that unrestricted retry also fails.`,
             "github-credential-store-inaccessible",
             "retry-with-credential-store-access",
           );

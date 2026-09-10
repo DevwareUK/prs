@@ -61,6 +61,53 @@ describe("GitHub CLI account isolation", () => {
     expect(rendered).not.toContain("credential store denied");
   });
 
+  it("treats a selected saved account with indeterminate status as credential-store inaccessible", () => {
+    const sentinel = "status-network-sentinel";
+    let error: unknown;
+    try {
+      createGitHubClient({ repoRoot: repository("work"), env: { GH_TOKEN: "inherited" }, spawnSync: available,
+        runCommand: (_command, args) => {
+          if (args[0] === "auth" && args[1] === "token") throw new Error("credential store denied");
+          if (args[0] === "auth" && args[1] === "status") {
+            return JSON.stringify({
+              hosts: {
+                "github.com": [
+                  {
+                    active: true,
+                    error: `Get https://api.github.com: ${sentinel}`,
+                    host: "github.com",
+                    login: "work",
+                    scopes: "",
+                    state: "error",
+                    tokenSource: "default",
+                  },
+                  {
+                    active: false,
+                    error: "another account is unavailable",
+                    host: "github.com",
+                    login: "personal",
+                    scopes: "",
+                    state: "error",
+                    tokenSource: "default",
+                  },
+                ],
+              },
+            });
+          }
+          throw new Error("API request must not run");
+        },
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(GitHubAuthFailure);
+    expect(error).toMatchObject({
+      reason: "github-credential-store-inaccessible",
+      nextAction: "retry-with-credential-store-access",
+    });
+    expect(String(error)).not.toContain(sentinel);
+  });
+
   it("requires authentication for a missing configured account without running an API request or leaking errors", () => {
     let requests = 0;
     let error: unknown;
