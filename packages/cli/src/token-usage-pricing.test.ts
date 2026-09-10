@@ -34,6 +34,13 @@ describe("snapshot-based usage pricing", () => {
     expect(result.estimates).toEqual([]);
     expect(result.unpriced).toHaveLength(1);
   });
+  it("treats the exact expiry instant as outside a manual rate card", () => {
+    const input = makeUsageFixture("priced-cache");
+    input.rateCards[0].expiresAt = "2026-09-03T10:01:00Z";
+    const result = price(input);
+    expect(result.estimates).toEqual([]);
+    expect(result.unpriced).toHaveLength(1);
+  });
   it("marks incomplete token breakdowns and absent class rates as partial", () => {
     const input = makeUsageFixture("priced-cache");
     delete input.events[0].usage!.cacheWriteTokens;

@@ -17,6 +17,22 @@ const otlp = (spans = [span()]) => ({ resourceSpans: [{ resource: { attributes: 
 const total = (evidence: UsageEvidence) => aggregateUsageEvents(evidence.events).modelTokens;
 
 describe("native usage capture", () => {
+  it("embeds the applicable immutable rate snapshot for a recognized model", () => {
+    const result = captureUsage([
+      { ...meta, payload: { ...meta.payload, timestamp: "2026-09-08T10:00:00Z" } },
+      { ...context, payload: { ...context.payload, model: "gpt-5.6" } },
+      { ...codex(), timestamp: "2026-09-08T10:00:01Z" },
+    ], { ...options, since: "2026-09-08T10:00:00Z", capturedAt: "2026-09-08T10:01:00Z" });
+    expect(result.events[0]).toMatchObject({
+      model: { provider: "openai", name: "gpt-5.6-sol" },
+      context: { tier: "default", tokens: 100 },
+      rateCardId: expect.stringMatching(/^openai:gpt-5\.6-sol:/),
+      raw: { nativeModel: "gpt-5.6" },
+    });
+    expect(result.rateCards).toHaveLength(1);
+    expect(result.rateCards[0].id).toBe(result.events[0].rateCardId);
+  });
+
   it("replays the recorded Codex probe totals without model calls", () => {
     // Sanitized from the authorized 2026-09-04 probe (0.153.0-alpha.5).
     // IDs are synthetic; counts retain the seven observed response records.

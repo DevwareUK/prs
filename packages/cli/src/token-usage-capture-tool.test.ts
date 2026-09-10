@@ -21,6 +21,70 @@ function fixture() {
 afterEach(() => { for (const p of roots.splice(0)) rmSync(p, { force: true, recursive: true }); });
 
 describe("native capture local IO", () => {
+  it("preserves manual pricing enrichment when native capture has no model label", () => {
+    const f = fixture();
+    writeFileSync(f.sourcePath, jsonl(header, record()));
+    captureTokenUsageTool(f);
+    const prior = JSON.parse(readFileSync(f.outputFilePath, "utf8"));
+    const manual = {
+      id: "manual:unknown-native:default", provider: "manual", model: "resolved-model", currency: "USD",
+      effectiveAt: "2026-09-01T00:00:00Z", retrievedAt: "2026-09-04T00:00:00Z",
+      sourceUrl: "https://example.com/manual-rate", contextTier: { name: "default", minTokens: 0 },
+      reasoningBilling: "included-in-output",
+      perMillion: { uncachedInputTokens: 1, cachedInputTokens: 0.1, cacheWriteTokens: 0, outputTokens: 2 },
+    };
+    prior.events[0].model = { provider: manual.provider, name: manual.model };
+    prior.events[0].context = { tier: "default", tokens: 100 };
+    prior.events[0].rateCardId = manual.id;
+    prior.rateCards = [manual];
+    writeFileSync(f.outputFilePath, JSON.stringify(prior, null, 2) + "\n");
+    captureTokenUsageTool(f);
+    const next = JSON.parse(readFileSync(f.outputFilePath, "utf8"));
+    expect(next.events[0]).toMatchObject({ model: prior.events[0].model, context: prior.events[0].context, rateCardId: manual.id });
+    expect(next.rateCards).toEqual([manual]);
+  });
+
+  it("keeps historical event pricing selections and unreferenced manual cards on recapture", () => {
+    const f = fixture();
+    const currentSince = "2026-09-08T10:00:00Z", currentNow = "2026-09-08T10:02:00Z";
+    const currentHeader = { ...header, payload: { ...header.payload, timestamp: currentSince } };
+    const currentContext = { ...context, payload: { ...context.payload, model: "gpt-5.6-sol" } };
+    const currentRecord = (id: string, at: string) => ({ ...record(id, at), timestamp: at });
+    writeFileSync(f.sourcePath, jsonl(currentHeader, currentContext, currentRecord("r1", "2026-09-08T10:01:00Z")));
+    captureTokenUsageTool({ ...f, since: currentSince, now: () => currentNow });
+
+    const prior = JSON.parse(readFileSync(f.outputFilePath, "utf8"));
+    const manual = {
+      ...prior.rateCards[0], id: "manual:gpt-5.6-sol:default",
+      sourceUrl: "https://example.com/manual-rate", retrievedAt: "2026-09-08T09:00:00Z",
+    };
+    const unreferenced = {
+      ...manual, id: "manual:future-model:default", model: "future-model",
+    };
+    prior.events[0].rateCardId = manual.id;
+    prior.events[0].context = { tier: "default", tokens: 100 };
+    prior.rateCards = [manual, unreferenced];
+    writeFileSync(f.outputFilePath, JSON.stringify(prior, null, 2) + "\n");
+    const stableSelection = JSON.stringify({
+      model: prior.events[0].model, context: prior.events[0].context,
+      rateCardId: prior.events[0].rateCardId, rateCard: manual,
+    });
+
+    writeFileSync(f.sourcePath, jsonl(currentHeader, currentContext,
+      currentRecord("r1", "2026-09-08T10:01:00Z"), currentRecord("r2", "2026-09-08T10:01:30Z")));
+    captureTokenUsageTool({ ...f, sessionId: undefined, sourcePath: undefined, since: undefined, now: () => "2026-09-08T10:03:00Z" });
+    const next = JSON.parse(readFileSync(f.outputFilePath, "utf8"));
+    expect(JSON.stringify({
+      model: next.events[0].model, context: next.events[0].context,
+      rateCardId: next.events[0].rateCardId,
+      rateCard: next.rateCards.find((rate: { id: string }) => rate.id === manual.id),
+    })).toBe(stableSelection);
+    expect(next.events[1].rateCardId).toMatch(/^openai:gpt-5\.6-sol:/);
+    expect(next.rateCards.map((rate: { id: string }) => rate.id)).toEqual(expect.arrayContaining([
+      manual.id, unreferenced.id, next.events[1].rateCardId,
+    ]));
+  });
+
   it("does not replace evidence when combined totals overflow", () => {
     const f = fixture(); captureTokenUsageTool(f);
     const before = readFileSync(f.outputFilePath, "utf8");

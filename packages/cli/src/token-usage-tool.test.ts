@@ -20,7 +20,10 @@ describe("local token usage render tool", () => {
     const result = renderTokenUsageTool(input);
     expect(result.status).toBe("rendered");
     expect(result.totals.modelTokens.totalTokens).toBe(1150);
-    expect(readFileSync(input.outputFilePath, "utf8")).toContain("0.00195");
+    expect(result.totals.contributions[0].eventIds).toEqual(["e1"]);
+    const markdown = readFileSync(input.outputFilePath, "utf8");
+    expect(markdown).toContain("0.00195");
+    expect(markdown).not.toContain("| e1 |");
     expect(renderTokenUsageTool(input)).toEqual(result);
   });
   it("accepts repository-relative paths and nested output directories", () => {
