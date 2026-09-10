@@ -15,25 +15,19 @@ This covers issue drafts, linked-set manifests, specifications, plans, working n
 
 PRS artifact locality overrides the Superpowers default document paths and commit instructions. Both written artifacts are required even for bounded work. If either required Superpowers skill is unavailable, report the blocker and next action; do not skip a phase.
 
-## Specification approval
+## Artifact preparation
 
-Use `superpowers:brainstorming` to inspect repository behavior and clarify decisions that materially affect scope, data, access, rollout or acceptance criteria. Write and self-review the specification in the task-specific run directory.
-
-Show the specification file and wait for explicit user approval before proceeding to the plan. If the user requests changes, revise and show the specification again; wait for approval of the revised content.
-
-## Plan approval
-
-Use `superpowers:writing-plans` to write and self-review the implementation plan from the approved specification. Include concrete files, steps, acceptance coverage and verification commands checked against repository source.
-
-Show the plan file and wait for explicit user approval before issue creation or publication. If a revision changes the specification, return to specification approval and update the plan to match.
-
-## Publication approval
+Use `superpowers:brainstorming` to inspect repository behavior and settle decisions that materially affect scope, data, access, rollout or acceptance criteria. Write and self-review the specification in the task-specific run directory. Then use `superpowers:writing-plans` to write and self-review the implementation plan from that candidate specification without requesting intermediate approval. Include concrete files, steps, acceptance coverage and verification commands checked against repository source.
 
 Draft an H1-titled Markdown issue in the same run directory. For multiple tasks, keep one draft per issue plus a version-1 linked-set manifest with stable IDs and dependency links. The set-level specification and plan must map requirements, tasks and dependencies to every stable issue ID; the creation tool publishes the shared pair on every issue.
 
-Show the exact issue draft or linked set and both reviewed artifacts. Obtain explicit user approval to create or reuse the issues and publish both managed comments. Plan approval and publication authorization can share a response only when the request explicitly covers both actions and the exact content. Design approval alone does not authorize publication. An acknowledgment accompanied by a question or scope change is not publication approval: show the revised artifacts and wait for explicit approval.
+## Unified approval
 
-Before any remote write, check both files exist, contain non-empty Markdown and match the approved versions. Always pass both artifact files:
+Show the exact issue draft or linked set and both reviewed artifacts together as one complete approval packet. Obtain one explicit user approval that accepts the specification and plan and authorizes the workflow to create or reuse the displayed issues and publish both managed comments. Design approval alone does not authorize publication, and no remote write may happen before this approval.
+
+A question, qualification, scope change, content change or target change is not approval. Update every affected artifact, ensure the packet is internally consistent, show the complete revised packet, and request one fresh approval rather than restarting staged approval gates.
+
+Before any remote write, check both files exist, contain non-empty Markdown and match the displayed, approved versions. Always pass both artifact files:
 
 ```bash
 prs tool issue create --draft-file .prs/runs/<run>/issue.md --spec-file .prs/runs/<run>/spec.md --plan-file .prs/runs/<run>/plan.md --json
