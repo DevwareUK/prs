@@ -39,11 +39,16 @@ function requireCli(options: GitHubClientOptions) {
   if (!cli.path) throw new Error("Install GitHub CLI (gh), or configure PRS_GH_PATH / forge.githubCliPath, before using GitHub operations.");
   return cli.path;
 }
-type SavedGitHubAccount = { login?: string; state?: string; tokenSource?: string };
+type SavedGitHubAccount = { login: string; state: string; tokenSource: string };
 function parseSavedGitHubAccounts(output: string): SavedGitHubAccount[] {
   const payload = JSON.parse(output) as { hosts?: Record<string, unknown> };
   const accounts = payload.hosts?.["github.com"];
-  return Array.isArray(accounts) ? accounts.filter((account): account is SavedGitHubAccount => typeof account === "object" && account !== null) : [];
+  return Array.isArray(accounts) ? accounts.filter((account): account is SavedGitHubAccount =>
+    typeof account === "object" && account !== null &&
+    typeof (account as Record<string, unknown>).login === "string" &&
+    typeof (account as Record<string, unknown>).state === "string" &&
+    typeof (account as Record<string, unknown>).tokenSource === "string"
+  ) : [];
 }
 
 function configuredAccountAuthRequired(account: string) {

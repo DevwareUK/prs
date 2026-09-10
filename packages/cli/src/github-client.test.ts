@@ -132,6 +132,9 @@ describe("GitHub CLI account isolation", () => {
 
   it.each([
     ["returns malformed JSON", (sentinel: string) => `not-json-${sentinel}`],
+    ["returns a structurally malformed matching account", (sentinel: string) => JSON.stringify({
+      hosts: { "github.com": [{ login: "work", error: sentinel }] },
+    })],
     ["fails", (sentinel: string) => { throw Object.assign(new Error(`status probe denied: ${sentinel}`), { stderr: `status probe stderr: ${sentinel}` }); }],
   ])("requires authentication without leaking diagnostics when the account-status probe %s", (_case, statusResult) => {
     const tokenSentinel = "token-extraction-sentinel";
