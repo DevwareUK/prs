@@ -47,8 +47,16 @@ On a rerun, press Enter to keep the current account. Choose `0` to clear the acc
 
 Account configuration is read from the resolved repository root even when a command starts in a subdirectory. Each linked worktree has its own `.prs/config.local.json`; select the account there if it needs an explicit choice.
 
-A configured account takes precedence over inherited `GH_TOKEN`/`GITHUB_TOKEN`, applies to every `prs` GitHub operation, and never switches the global `gh` account. Missing credentials fail with login guidance instead of using another identity. Different projects can run concurrently with different account selections.
+A configured account takes precedence over inherited `GH_TOKEN`/`GITHUB_TOKEN`, applies to every `prs` GitHub operation, and never switches the global `gh` account. `.prs/config.local.json` selects the identity PRS uses; it does not change the active GitHub CLI account, and PRS never runs `gh auth switch`. Missing credentials fail with login guidance instead of using another identity. Different projects can run concurrently with different account selections.
 
 When no account is configured, GitHub CLI handles its usual authentication, including environment tokens for automation. `prs` has no separate token fallback: installing `gh` is required even when supplying a token. This configuration does not change directly invoked `gh` commands, Git author identity, or Git transport credentials.
 
 Creating issues and publishing comments require authentication. Readiness and context tools return a clear blocked result when the forge is disabled or required GitHub access is unavailable.
+
+### Credential-store access recovery
+
+GitHub CLI owns stored credentials and its login or refresh flow. When the selected account has a valid credential in the operating system's credential store but the current host process cannot read it, affected JSON tools return a blocked result with `reason: "github-credential-store-inaccessible"` and `nextAction: "retry-with-credential-store-access"`. This does not mean the credential is missing or expired.
+
+Retry the exact PRS command through the active host's normal permission mechanism. PRS must not elevate itself or invoke a host-specific permission mechanism. Preserve unchanged approval, artifact paths, targets, and known issue numbers during this permission-only retry. Ask the user to log in or refresh the selected account only if the unrestricted retry still reports missing or rejected credentials; those states return `reason: "github-auth-required"` and `nextAction: "configure-github-auth"`.
+
+Neither recovery state authorizes switching accounts, falling back to another account or an inherited token, changing targets, or repeating an uncertain create operation after a partial remote write. Diagnostic output must never include token values, authentication headers, subprocess stderr, credential paths, or inherited token variables.

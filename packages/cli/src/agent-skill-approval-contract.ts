@@ -142,3 +142,23 @@ export function validateAuditAuthorizationInstructions(content: Map<string, stri
   }
   return errors;
 }
+
+export function validateGitHubCredentialAccessInstructions(content: string | undefined): string[] {
+  const recovery = section(
+    (content ?? "").replace(/\r\n/g, "\n"),
+    "GitHub credential-store recovery",
+    2
+  );
+  const requirements = [
+    /`forge\.githubAccount`[\s\S]*honor that account[\s\S]*without switching the global GitHub account[\s\S]*falling back to another account or an inherited token/i,
+    /Never run `gh auth switch`/i,
+    /`retry-with-credential-store-access`[\s\S]*retry the exact PRS command through the active host's normal permission mechanism/i,
+    /PRS must not elevate itself or invoke a host-specific permission mechanism/i,
+    /Preserve unchanged approval, artifact paths, targets and known issue numbers across the permission-only retry/i,
+    /log in or refresh credentials only after an unrestricted retry still reports missing or rejected credentials/i,
+    /Never print or capture token values, authentication headers, subprocess stderr, credential paths or inherited token variables in diagnostic output/i,
+  ];
+  return requirements.every(requirement => requirement.test(recovery))
+    ? []
+    : ["prs: missing GitHub credential-store recovery instructions"];
+}

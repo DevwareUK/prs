@@ -2,6 +2,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { GitHubAuthFailure } from "./github-auth-failure";
 import { createGitHubClient, listGitHubAccounts, type GitHubCommandOptions } from "./github-client";
 
 const available = () => ({ status: 0 });
@@ -32,12 +33,84 @@ describe("GitHub CLI account isolation", () => {
     expect(env).toEqual({ GH_TOKEN: "inherited", GITHUB_TOKEN: "other", GH_DEBUG: "api" });
   });
 
-  it("fails on an unavailable configured account without running an API request or leaking errors", () => {
+  it("classifies inaccessible configured keyring credentials without leaking diagnostics", () => {
+    const sentinel = "keyring-sentinel-secret";
+    let error: unknown;
+    try {
+      createGitHubClient({ repoRoot: repository("work"), env: { GH_TOKEN: "inherited" }, spawnSync: available,
+        runCommand: (_command, args, options) => {
+          if (args[0] === "auth" && args[1] === "token") throw Object.assign(new Error(sentinel), { stderr: `credential store denied: ${sentinel}` });
+          if (args[0] === "auth" && args[1] === "status") {
+            expect(args).toEqual(["auth", "status", "--hostname", "github.com", "--json", "hosts"]);
+            expect(options.env.GH_TOKEN).toBeUndefined();
+            return JSON.stringify({ hosts: { "github.com": [{ login: "work", state: "success", tokenSource: "keyring" }] } });
+          }
+          throw new Error("API request must not run");
+        },
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(GitHubAuthFailure);
+    expect(error).toMatchObject({
+      reason: "github-credential-store-inaccessible",
+      nextAction: "retry-with-credential-store-access",
+    });
+    const rendered = String(error);
+    expect(rendered).not.toContain(sentinel);
+    expect(rendered).not.toContain("credential store denied");
+  });
+
+  it("requires authentication for a missing configured account without running an API request or leaking errors", () => {
     let requests = 0;
-    expect(() => createGitHubClient({ repoRoot: repository("missing"), env: { GH_TOKEN: "secret" }, spawnSync: available,
-      runCommand: (_command, args) => { if (args[0] !== "auth") requests++; throw new Error("credential secret"); },
-    })).toThrow(/missing.*gh auth login/);
+    let error: unknown;
+    try {
+      createGitHubClient({ repoRoot: repository("missing"), env: { GH_TOKEN: "secret" }, spawnSync: available,
+        runCommand: (_command, args) => {
+          if (args[0] === "auth" && args[1] === "status") {
+            return JSON.stringify({ hosts: { "github.com": [{ login: "work", state: "success", tokenSource: "keyring" }] } });
+          }
+          if (args[0] !== "auth") requests++;
+          throw new Error("credential secret");
+        },
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(GitHubAuthFailure);
+    expect(error).toMatchObject({ reason: "github-auth-required", nextAction: "configure-github-auth" });
+    expect(String(error)).toMatch(/missing.*gh auth login/);
     expect(requests).toBe(0);
+  });
+
+  it.each([
+    ["returns malformed JSON", (sentinel: string) => `not-json-${sentinel}`],
+    ["fails", (sentinel: string) => { throw Object.assign(new Error(`status probe denied: ${sentinel}`), { stderr: `status probe stderr: ${sentinel}` }); }],
+  ])("requires authentication without leaking diagnostics when the account-status probe %s", (_case, statusResult) => {
+    const tokenSentinel = "token-extraction-sentinel";
+    const statusSentinel = "status-probe-sentinel";
+    let error: unknown;
+    try {
+      createGitHubClient({ repoRoot: repository("work"), env: { GH_TOKEN: "inherited" }, spawnSync: available,
+        runCommand: (_command, args) => {
+          if (args[0] === "auth" && args[1] === "token") {
+            throw Object.assign(new Error(`token extraction denied: ${tokenSentinel}`), { stderr: `token stderr: ${tokenSentinel}` });
+          }
+          if (args[0] === "auth" && args[1] === "status") return statusResult(statusSentinel);
+          throw new Error("API request must not run");
+        },
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(GitHubAuthFailure);
+    expect(error).toMatchObject({ reason: "github-auth-required", nextAction: "configure-github-auth" });
+    const rendered = String(error);
+    expect(rendered).toMatch(/work.*gh auth login/);
+    expect(rendered).not.toContain(tokenSentinel);
+    expect(rendered).not.toContain(statusSentinel);
+    expect(rendered).not.toContain("status probe denied");
+    expect(rendered).not.toContain("status probe stderr");
   });
 
   it("requires gh even when an environment token exists", () => {
@@ -111,12 +184,20 @@ it("does not include subprocess stderr or credentials in failed command messages
   try { client.run(["pr", "create"], "Unable to create PR"); } catch (error) { expect(String(error)).not.toContain("do-not-expose"); }
 });
 
-it("names the selected account and login step when a saved credential is rejected", async () => {
+it("classifies a rejected saved credential for the selected account", async () => {
   const client = createGitHubClient({ repoRoot: repository("expired"), env: {}, spawnSync: available,
     runCommand: (_command, args) => {
       if (args[0] === "auth") return "expired-secret";
       throw Object.assign(new Error("expired-secret"), { stdout: 'HTTP/2.0 401 Unauthorized\n\n{"message":"Bad credentials"}' });
     },
   });
-  await expect(client.request("repos/org/repo")).rejects.toThrow(/expired.*gh auth login/);
+  let error: unknown;
+  try {
+    await client.request("repos/org/repo");
+  } catch (caught) {
+    error = caught;
+  }
+  expect(error).toBeInstanceOf(GitHubAuthFailure);
+  expect(error).toMatchObject({ reason: "github-auth-required", nextAction: "configure-github-auth" });
+  expect(String(error)).toMatch(/expired.*gh auth login/);
 });

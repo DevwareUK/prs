@@ -1,5 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { listIssuesTool } from "./issue-list-tool";
+
+function repository(account: string) {
+  const root = mkdtempSync(join(tmpdir(), "prs-issue-list-account-"));
+  mkdirSync(join(root, ".prs"));
+  writeFileSync(join(root, ".prs/config.local.json"), JSON.stringify({ forge: { githubAccount: account } }));
+  return root;
+}
 
 beforeEach(() => vi.stubGlobal("fetch", () => { throw new Error("Direct HTTP must not be used"); }));
 afterEach(() => vi.unstubAllGlobals());
@@ -30,9 +40,58 @@ describe("issue list tool", () => {
         "GitHub authentication is required for `prs tool issue list --actionable --json`."
       ),
       nextAction:
-        "Install gh and authenticate with gh auth login --hostname github.com for the selected account.",
+        "configure-github-auth",
     });
     expect(request).not.toHaveBeenCalled();
+  });
+
+  it("returns credential-store recovery when the selected account is saved but inaccessible", async () => {
+    const request = vi.fn();
+
+    await expect(
+      listIssuesTool({
+        actionable: true,
+        env: { GH_TOKEN: "inherited" },
+        request,
+        repoRoot: repository("work"),
+        runCommand: () => "git@github.com:DevwareUK/prs.git",
+        spawnSyncImpl: () => ({ status: 0 }),
+        runGitHubCommand: (_command, args) => {
+          if (args[0] === "auth" && args[1] === "status") {
+            return JSON.stringify({
+              hosts: {
+                "github.com": [{ login: "work", state: "success", tokenSource: "keyring" }],
+              },
+            });
+          }
+          throw new Error("saved credential unavailable");
+        },
+      })
+    ).resolves.toMatchObject({
+      status: "blocked",
+      reason: "github-credential-store-inaccessible",
+      nextAction: "retry-with-credential-store-access",
+    });
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("uses safe login recovery when the authenticated-user request throws an unknown error", async () => {
+    const result = await listIssuesTool({
+      actionable: true,
+      env: { GH_TOKEN: "token" },
+      request: async () => { throw new Error("do-not-expose-auth-diagnostic"); },
+      repoRoot: "/repo",
+      runCommand: () => "git@github.com:DevwareUK/prs.git",
+      spawnSyncImpl: () => ({ status: 0 }),
+    });
+
+    expect(result).toEqual({
+      status: "blocked",
+      reason: "github-auth-required",
+      message: "GitHub authentication is required for `prs tool issue list --actionable --json`.\nGitHub authentication failed.",
+      nextAction: "configure-github-auth",
+    });
+    expect(JSON.stringify(result)).not.toContain("do-not-expose-auth-diagnostic");
   });
 
   it("lists and filters actionable issues for the authenticated user", async () => {
@@ -221,9 +280,6 @@ describe("issue list tool", () => {
 });
 
 it("uses the project account for both viewer identity and actionable filtering", async () => {
-  const { mkdtempSync, mkdirSync, writeFileSync } = await import("node:fs");
-  const { tmpdir } = await import("node:os");
-  const { join } = await import("node:path");
   const root = mkdtempSync(join(tmpdir(), "prs-list-account-"));
   mkdirSync(join(root, ".prs"));
   writeFileSync(join(root, ".prs/config.local.json"), JSON.stringify({ forge: { githubAccount: "work" } }));
