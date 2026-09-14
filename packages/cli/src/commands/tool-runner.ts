@@ -20,10 +20,11 @@ import { listPullRequestsTool } from "../pr-list-tool";
 import { readyPullRequestTool } from "../pr-ready-tool";
 import { parsePrsToolCommandArgs } from "../prs-tool-command";
 import { ensureVerificationCommandAvailable } from "../workflow-preflights";
-import { publishManagedCommentsFromArtifacts, ensurePrsManagedIssueBody } from "../workflows/issue/artifacts";
+import { publishLinkedIssueArtifacts, publishManagedCommentsFromArtifacts, ensurePrsManagedIssueBody } from "../workflows/issue/artifacts";
 import { createIssueDraftSetWithRecords } from "../workflows/issue/create-set";
 import { parseIssueDraftDocument } from "../workflows/issue/draft-parser";
 import { loadIssueDraftSet } from "../workflows/issue/draft-set";
+import { ensureIssueHierarchy } from "../workflows/issue/hierarchy";
 
 function writeJson(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
@@ -156,25 +157,33 @@ export async function runToolCommand(): Promise<void> {
     const runDir = command.runDir
       ? resolve(repoRoot, command.runDir)
       : dirname(issueSetFilePath);
+    const issueSet = loadIssueDraftSet({ repoRoot, runDir, issueSetFilePath });
     const issues = await createIssueDraftSetWithRecords({
-      issueSet: loadIssueDraftSet({ repoRoot, runDir, issueSetFilePath }),
+      issueSet,
       forge,
       labels: command.labels,
       forcePrsManaged: command.forcePrsManaged,
+      receiptFilePath: resolve(runDir, "issue-set-receipt.json"),
     });
-    const managed = await publishManagedCommentsFromArtifacts({
-      repoRoot,
+    const managed = await publishLinkedIssueArtifacts({
       forge,
+      issueSet,
       issues,
-      specFilePath: command.specFilePath,
-      planFilePath: command.planFilePath,
     });
+    const hierarchy = await ensureIssueHierarchy({ forge, issueSet, issues });
+    const incomplete = managed.managedCommentFailures.length > 0 ||
+      hierarchy.relationships.some((relationship) => relationship.status !== "verified");
+    if (incomplete) process.exitCode = 1;
     writeJson({
-      status: "ok",
+      status: incomplete ? "partial" : "ok",
       mode: "multiple",
       issues,
       createdIssues: issues,
       ...managed,
+      hierarchy,
+      ...(incomplete ? {
+        nextAction: "Retry the same approved issue-set creation command after addressing the reported comment or hierarchy failures.",
+      } : {}),
     });
     return;
   }

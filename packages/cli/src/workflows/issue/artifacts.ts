@@ -10,6 +10,7 @@ import type {
   RepositoryComment,
   RepositoryForge,
 } from "../../forge";
+import type { ParsedIssueDraftSet } from "./draft-set";
 
 export const PRS_MANAGED_ISSUE_MARKER = "<!-- prs:managed-issue -->";
 
@@ -58,6 +59,15 @@ export type ManagedCommentPublication = {
   file: string;
   id: number;
   url: string;
+};
+
+export type ManagedCommentFailure = {
+  issueNumber: number;
+  marker: typeof ISSUE_SPEC_COMMENT_MARKER | typeof ISSUE_PLAN_COMMENT_MARKER;
+  status: "incomplete";
+  file: string;
+  message: string;
+  nextAction: string;
 };
 
 function resolveApprovedArtifact(
@@ -151,4 +161,93 @@ export async function publishManagedCommentsFromArtifacts(input: {
   }
 
   return { managedComments, managedCommentHints };
+}
+
+export async function publishLinkedIssueArtifacts(input: {
+  forge: RepositoryForge;
+  issueSet: ParsedIssueDraftSet;
+  issues: Array<CreatedIssueRecord & { id?: string }>;
+}): Promise<{
+  managedComments: ManagedCommentPublication[];
+  managedCommentHints: ManagedCommentHint[];
+  managedCommentFailures: ManagedCommentFailure[];
+}> {
+  const issuesById = new Map(
+    input.issues
+      .filter((issue): issue is CreatedIssueRecord & { id: string } => Boolean(issue.id))
+      .map((issue) => [issue.id, issue])
+  );
+  const managedComments: ManagedCommentPublication[] = [];
+  const managedCommentFailures: ManagedCommentFailure[] = [];
+
+  for (const artifact of input.issueSet.issues) {
+    const issue = issuesById.get(artifact.id);
+    if (!issue) {
+      throw new Error(`Created issue record for linked issue "${artifact.id}" is missing.`);
+    }
+
+    try {
+      const existingSpec = findLatestIssueSpecComment(
+        await input.forge.fetchIssueComments(issue.number)
+      );
+      const spec = existingSpec
+        ? await input.forge.updateIssueComment(
+            existingSpec.id,
+            formatSuperpowersSpecArtifactComment(artifact.specMarkdown)
+          )
+        : await input.forge.createIssuePlanComment(
+            issue.number,
+            formatSuperpowersSpecArtifactComment(artifact.specMarkdown)
+          );
+      managedComments.push({
+        issueNumber: issue.number,
+        marker: ISSUE_SPEC_COMMENT_MARKER,
+        status: "published",
+        file: artifact.specFilePath,
+        id: spec.id,
+        url: spec.url,
+      });
+    } catch (error) {
+      managedCommentFailures.push({
+        issueNumber: issue.number,
+        marker: ISSUE_SPEC_COMMENT_MARKER,
+        status: "incomplete",
+        file: artifact.specFilePath,
+        message: error instanceof Error ? error.message : String(error),
+        nextAction: "Retry the same approved issue-set creation command to update this managed comment in place.",
+      });
+    }
+
+    try {
+      const existingPlan = await input.forge.fetchIssuePlanComment(issue.number);
+      const plan = existingPlan
+        ? await input.forge.updateIssuePlanComment(
+            existingPlan.id,
+            formatSuperpowersPlanArtifactComment(artifact.planMarkdown)
+          )
+        : await input.forge.createIssuePlanComment(
+            issue.number,
+            formatSuperpowersPlanArtifactComment(artifact.planMarkdown)
+          );
+      managedComments.push({
+        issueNumber: issue.number,
+        marker: ISSUE_PLAN_COMMENT_MARKER,
+        status: "published",
+        file: artifact.planFilePath,
+        id: plan.id,
+        url: plan.url,
+      });
+    } catch (error) {
+      managedCommentFailures.push({
+        issueNumber: issue.number,
+        marker: ISSUE_PLAN_COMMENT_MARKER,
+        status: "incomplete",
+        file: artifact.planFilePath,
+        message: error instanceof Error ? error.message : String(error),
+        nextAction: "Retry the same approved issue-set creation command to update this managed comment in place.",
+      });
+    }
+  }
+
+  return { managedComments, managedCommentHints: [], managedCommentFailures };
 }

@@ -40,6 +40,16 @@ describe("contextIssueTool", () => {
           state: "open" as const,
         },
       ]),
+      fetchIssueParent: vi.fn(async () => ({
+        id: 300,
+        number: 300,
+        url: "https://github.com/DevwareUK/prs/issues/300",
+      })),
+      fetchIssueChildren: vi.fn(async () => [{
+        id: 325,
+        number: 325,
+        url: "https://github.com/DevwareUK/prs/issues/325",
+      }]),
     };
 
     await expect(contextIssueTool({ issueNumber: 324, forge })).resolves.toEqual({
@@ -75,12 +85,26 @@ describe("contextIssueTool", () => {
           state: "open",
         },
       ],
+      hierarchy: {
+        parent: {
+          id: 300,
+          number: 300,
+          url: "https://github.com/DevwareUK/prs/issues/300",
+        },
+        children: [{
+          id: 325,
+          number: 325,
+          url: "https://github.com/DevwareUK/prs/issues/325",
+        }],
+      },
     });
 
     expect(forge.fetchIssueDetails).toHaveBeenCalledOnce();
     expect(forge.fetchIssueComments).toHaveBeenCalledOnce();
     expect(forge.fetchIssuePlanComment).toHaveBeenCalledOnce();
     expect(forge.fetchIssueLinkedPullRequests).toHaveBeenCalledOnce();
+    expect(forge.fetchIssueParent).toHaveBeenCalledOnce();
+    expect(forge.fetchIssueChildren).toHaveBeenCalledOnce();
   });
 
   it("blocks before reads when repository forge support is disabled", async () => {
@@ -91,6 +115,8 @@ describe("contextIssueTool", () => {
       fetchIssueComments: vi.fn(),
       fetchIssuePlanComment: vi.fn(),
       fetchIssueLinkedPullRequests: vi.fn(),
+      fetchIssueParent: vi.fn(),
+      fetchIssueChildren: vi.fn(),
     };
 
     await expect(contextIssueTool({ issueNumber: 324, forge })).resolves.toEqual({
