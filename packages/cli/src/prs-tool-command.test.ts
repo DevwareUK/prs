@@ -42,6 +42,12 @@ describe("provider-free prs tool command parser", () => {
     });
   });
 
+  it("rejects global artifacts for linked sets", () => {
+    expect(() => parsePrsToolCommandArgs([
+      "issue", "create", "--issue-set=set.json", "--spec-file=shared-spec.md", "--plan-file=shared-plan.md", "--json",
+    ])).toThrow(/linked.*specFile.*planFile/i);
+  });
+
   it("requires JSON and rejects removed provider-backed commands", () => {
     expect(() => parsePrsToolCommandArgs(["issue", "context", "151"])).toThrow("Usage:");
     expect(() => parsePrsToolCommandArgs(["issue", "estimate", "151", "--json"])).toThrow("Usage:");

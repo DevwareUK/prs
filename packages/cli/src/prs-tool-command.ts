@@ -35,8 +35,8 @@ export function renderPrsToolCommandHelp(): string {
     "  prs tool issue context <issue-number> --json",
     "  prs tool issue ready <issue-number> [--unattended|--auto|--jdi] --json",
     "  prs tool issue publish-artifacts <issue-number> --spec-file <path> --plan-file <path> --json",
-    "  prs tool issue create (--draft-file <path>|--issue-set <path>) --json",
-    "                        [--run-dir <path>] [--spec-file <path>] [--plan-file <path>] [--media-manifest <path>]",
+    "  prs tool issue create --draft-file <path> [--spec-file <path>] [--plan-file <path>] [--media-manifest <path>] --json",
+    "  prs tool issue create --issue-set <path> [--run-dir <path>] --json",
     "                        [--label <name>] [--labels <a,b>] [--force-prs-managed]",
     "  prs tool pr list [--actionable] --json",
     "  prs tool pr ready <pr-number> [--unattended|--auto|--jdi] --json",
@@ -220,6 +220,11 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
     }
     if (Boolean(draftFilePath) === Boolean(issueSetFilePath)) {
       throw new Error(`Provide exactly one of --draft-file or --issue-set. ${renderPrsToolCommandHelp()}`);
+    }
+    if (issueSetFilePath && (specFilePath || planFilePath)) {
+      throw new Error(
+        "Linked issue sets require a specFile and planFile on every version 2 manifest entry; global --spec-file/--plan-file values are not allowed."
+      );
     }
     return {
       kind: "issue-create",
