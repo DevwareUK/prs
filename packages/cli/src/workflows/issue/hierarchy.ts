@@ -3,10 +3,10 @@ import type { ParsedIssueDraftSet } from "./draft-set";
 import type { ToolCreatedIssueRecord } from "./create-set";
 
 export type IssueHierarchyRelationship = {
-  parentId: number;
+  parentId?: number;
   parentNumber: number;
   parentUrl: string;
-  childId: number;
+  childId?: number;
   childNumber: number;
   childUrl: string;
   status: "verified" | "conflict" | "incomplete";
@@ -70,15 +70,53 @@ export async function ensureIssueHierarchy(input: {
   if (!parentRecord) {
     throw new Error(`Issue record for orchestrator "${input.issueSet.orchestration.orchestratorId}" is missing.`);
   }
-  const parent = await input.forge.fetchIssueIdentity(parentRecord.number);
   const relationships: IssueHierarchyRelationship[] = [];
+  let parent: IssueIdentity;
+  try {
+    parent = await input.forge.fetchIssueIdentity(parentRecord.number);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    for (const entry of input.issueSet.issues.filter((issue) => issue.parentId)) {
+      const childRecord = recordsById.get(entry.id);
+      if (!childRecord) continue;
+      relationships.push({
+        parentNumber: parentRecord.number,
+        parentUrl: parentRecord.url,
+        childNumber: childRecord.number,
+        childUrl: childRecord.url,
+        status: "incomplete",
+        message,
+        nextAction: "Check GitHub issue permissions and retry the same approved issue-set creation command.",
+      });
+    }
+    return {
+      mode: "parent",
+      orchestratorId: input.issueSet.orchestration.orchestratorId,
+      relationships,
+    };
+  }
 
   for (const entry of input.issueSet.issues.filter((issue) => issue.parentId)) {
     const childRecord = recordsById.get(entry.id);
     if (!childRecord) {
       throw new Error(`Issue record for child "${entry.id}" is missing.`);
     }
-    const child = await input.forge.fetchIssueIdentity(childRecord.number);
+    let child: IssueIdentity;
+    try {
+      child = await input.forge.fetchIssueIdentity(childRecord.number);
+    } catch (error) {
+      relationships.push({
+        parentId: parent.id,
+        parentNumber: parent.number,
+        parentUrl: parent.url,
+        childNumber: childRecord.number,
+        childUrl: childRecord.url,
+        status: "incomplete",
+        message: error instanceof Error ? error.message : String(error),
+        nextAction: "Check GitHub issue permissions and retry the same approved issue-set creation command.",
+      });
+      continue;
+    }
     try {
       const currentParent = await input.forge.fetchIssueParent(child.number);
       if (currentParent && currentParent.id !== parent.id) {

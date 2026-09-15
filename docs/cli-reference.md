@@ -43,11 +43,11 @@ The validator also requires `prs-pr`, its existing-PR router entry, and non-empt
 | Command | Behaviour |
 | --- | --- |
 | `prs tool issue list [--actionable] --json` | Lists open GitHub issues. The actionable filter uses the authenticated account's assignments. |
-| `prs tool issue context <number> --json` | Returns repository identity, issue body, comments, managed spec/plan presence, and linked pull requests without changing state. |
+| `prs tool issue context <number> --json` | Returns repository identity, issue body, comments, managed spec/plan presence, native parent/children, and linked pull requests without changing state. |
 | `prs tool issue ready <number> [--unattended\|--auto\|--jdi] --json` | Writes issue metadata under `.prs/runs`, including the suggested branch and managed artifact status. It does not create the branch. |
 | `prs tool issue publish-artifacts <number> --spec-file <path> --plan-file <path> --json` | Validates approved non-empty Markdown and creates or updates the managed specification and plan comments. |
 | `prs tool issue create --draft-file <path> --json` | Creates or reuses one issue from an approved Markdown draft. Optional labels, managed markers, spec/plan files, and a media manifest are supported. |
-| `prs tool issue create --issue-set <path> --json` | Creates or reuses a linked set described by a version-1 JSON manifest. `--run-dir` resolves relative draft paths. |
+| `prs tool issue create --issue-set <path> --json` | Creates or reuses a version-2 linked set with per-issue artifacts and explicit parent or flat orchestration. `--run-dir` constrains all artifact paths. |
 | `prs issue finalize <number>` | Shows deterministic commit text and the exact staged paths, asks for explicit confirmation, and creates one local commit from the existing index. It does not stage files, push, or open a pull request. |
 
 ## GitHub authentication results
@@ -61,7 +61,7 @@ The validator also requires `prs-pr`, its existing-PR router entry, and non-empt
 
 For `retry-with-credential-store-access`, use the active host's normal permission mechanism. PRS must not elevate itself or invoke a host-specific permission mechanism. Keep approval, artifact paths, targets, and known issue numbers unchanged; authenticate or refresh only when the unrestricted retry still reports missing or rejected credentials. Neither condition authorizes printing a token, switching accounts, changing targets, or repeating uncertain creation after a partial remote write. Do not include token values, authentication headers, subprocess stderr, credential paths, or inherited token variables in diagnostics.
 
-The single-draft Markdown format starts with an H1 title; the remainder becomes the issue body. A linked issue-set manifest contains `version`, `mode`, and `issues`, where each issue has an `id`, `draftFile`, and optional `dependsOn`, `blocks`, and `related` IDs.
+The single-draft Markdown format starts with an H1 title; the remainder becomes the issue body. A linked manifest uses `version: 2`, `mode: "multiple"`, an explicit `orchestration` choice, and at least two issues. Every issue has `id`, `draftFile`, `specFile`, `planFile`, and dependency arrays; `issueNumber` explicitly reuses an existing issue. Parent mode names `orchestratorId`, requires every child to name that issue in `parentId`, and creates native GitHub hierarchy using resolved database IDs. Flat mode requires a reason and forbids `parentId`. Version-1 linked manifests return an upgrade error before mutation.
 
 ### Creation and refinement artifact contract
 
@@ -69,10 +69,10 @@ The low-level creation flags remain optional for compatibility. The `prs-create`
 
 ```bash
 prs tool issue create --draft-file .prs/runs/<run>/issue.md --spec-file .prs/runs/<run>/spec.md --plan-file .prs/runs/<run>/plan.md --json
-prs tool issue create --issue-set .prs/runs/<run>/issue-set.json --run-dir .prs/runs/<run> --spec-file .prs/runs/<run>/spec.md --plan-file .prs/runs/<run>/plan.md --json
+prs tool issue create --issue-set .prs/runs/<run>/issue-set.json --run-dir .prs/runs/<run> --json
 ```
 
-The linked-set command publishes the same approved pair to every created or reused issue; map requirements and tasks to every stable issue ID in those documents. `managedComments` reports published artifacts; missing-artifact entries in `managedCommentHints` mean the skill remains incomplete, even when creation returns `status: ok`.
+The linked-set command preflights every file before a remote write, publishes each issue's own approved pair, updates existing managed comment IDs in place, and returns native relationship status under `hierarchy`. `status: "partial"`, `managedCommentFailures`, or any relationship not `verified` produces a non-zero exit. The run-directory receipt preserves known issue identities for an idempotent retry. PRS never force-reparents a child that already belongs to an unrelated parent.
 
 Refinement through `prs-issue` starts from the existing issue and uses the same specification and plan review gates before publishing both artifacts on that issue:
 

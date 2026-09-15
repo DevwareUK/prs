@@ -21,14 +21,14 @@ const GATES = [
     heading: "Plan approval",
     requirements: [
       /Use `superpowers:writing-plans`/,
-      /write and self-review the implementation plan from the approved specification/i,
+      /write and self-review (?:each|the) implementation plan from (?:its|the) approved specification/i,
       /Show the plan file and wait for explicit user approval before (?:issue creation or )?publication/i,
     ],
   },
   {
     heading: "Publication approval",
     requirements: [
-      /Show[^\n]*both reviewed artifacts/i,
+      /Show[^\n]*(?:both|every) reviewed artifacts?/i,
       /Obtain explicit user approval to [^.\n]*publish both managed comments/i,
       /Design approval alone does not authorize publication/i,
       /question or scope change is not publication approval/i,
@@ -84,10 +84,24 @@ export function validateIssueApprovalInstructions(
     const body = section(workflow, gate.heading, level);
     let valid = gate.requirements.every(requirement => requirement.test(body));
     if (gate.heading === "Publication approval") {
-      const commands = name === "prs-create"
-        ? ["prs tool issue create --draft-file", "prs tool issue create --issue-set"]
-        : ["prs tool issue publish-artifacts <number>"];
-      valid &&= commands.every(command => hasArtifactCommand(body, command));
+      if (name === "prs-create") {
+        const linkedCommand = body.split("\n").find(line =>
+          line.includes("prs tool issue create --issue-set")
+        );
+        valid &&= hasArtifactCommand(body, "prs tool issue create --draft-file") &&
+          Boolean(linkedCommand?.includes("--json")) &&
+          !linkedCommand?.includes("--spec-file") &&
+          !linkedCommand?.includes("--plan-file") &&
+          /version-2 linked-set manifest/i.test(body) &&
+          body.includes("specFile") &&
+          body.includes("planFile") &&
+          body.includes("orchestratorId") &&
+          body.includes("parentId") &&
+          /flat/i.test(body) &&
+          /native hierarchy/i.test(body);
+      } else {
+        valid &&= hasArtifactCommand(body, "prs tool issue publish-artifacts <number>");
+      }
     }
     if (gate.heading === "Completion verification") {
       valid &&= name === "prs-create"

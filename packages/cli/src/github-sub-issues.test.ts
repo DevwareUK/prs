@@ -147,4 +147,39 @@ describe("GitHub native sub-issues", () => {
     });
     expect(result.relationships[0]).toMatchObject({ status: "verified", parentNumber: 7, childNumber: 42 });
   });
+
+  it("preserves known targets when database identity lookup fails", async () => {
+    const forge = {
+      fetchIssueIdentity: vi.fn(async (number: number) => {
+        if (number === 42) throw new Error("identity permission denied");
+        return { id: 1007, number, url: `https://example.test/issues/${number}` };
+      }),
+      fetchIssueParent: vi.fn(),
+      fetchIssueChildren: vi.fn(),
+      addIssueChild: vi.fn(),
+    } as unknown as RepositoryForge;
+    const result = await ensureIssueHierarchy({
+      forge,
+      issueSet: {
+        mode: "multiple",
+        orchestration: { mode: "parent", orchestratorId: "parent" },
+        issues: [
+          { id: "parent", draftFilePath: "", specFilePath: "", planFilePath: "", title: "Parent", body: "", specMarkdown: "", planMarkdown: "", dependsOn: [], blocks: [], related: [] },
+          { id: "child", parentId: "parent", draftFilePath: "", specFilePath: "", planFilePath: "", title: "Child", body: "", specMarkdown: "", planMarkdown: "", dependsOn: [], blocks: [], related: [] },
+        ],
+      },
+      issues: [
+        { id: "parent", number: 7, title: "Parent", url: "https://example.test/issues/7", status: "created" },
+        { id: "child", number: 42, title: "Child", url: "https://example.test/issues/42", status: "created" },
+      ],
+    });
+
+    expect(result.relationships[0]).toMatchObject({
+      status: "incomplete",
+      parentNumber: 7,
+      childNumber: 42,
+      message: "identity permission denied",
+    });
+    expect(forge.addIssueChild).not.toHaveBeenCalled();
+  });
 });
