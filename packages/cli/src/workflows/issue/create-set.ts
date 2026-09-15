@@ -1,4 +1,5 @@
 import type { CreatedIssueRecord, RepositoryForge } from "../../forge";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { ensurePrsManagedIssueBody } from "./artifacts";
 import type { ParsedIssueDraftSet, ParsedIssueDraftSetIssue } from "./draft-set";
 
@@ -60,16 +61,54 @@ export async function createIssueDraftSetWithRecords(input: {
   forge: RepositoryForge;
   labels: string[];
   forcePrsManaged: boolean;
+  receiptFilePath?: string;
 }): Promise<ToolCreatedIssueRecord[]> {
   const created: ToolCreatedIssueRecord[] = [];
+  const baseBodyById = new Map<string, string>();
+  const receiptIssues = input.receiptFilePath && existsSync(input.receiptFilePath)
+    ? ((JSON.parse(readFileSync(input.receiptFilePath, "utf8")) as { issues?: ToolCreatedIssueRecord[] }).issues ?? [])
+    : [];
+  const receiptById = new Map(
+    receiptIssues
+      .filter((issue): issue is ToolCreatedIssueRecord & { id: string } => Boolean(issue.id))
+      .map((issue) => [issue.id, issue])
+  );
+  const persistReceipt = (): void => {
+    if (!input.receiptFilePath) return;
+    writeFileSync(input.receiptFilePath, `${JSON.stringify({ version: 1, issues: created }, null, 2)}\n`, "utf8");
+  };
   for (const issue of input.issueSet.issues) {
+    const knownIssueNumber = issue.issueNumber ?? receiptById.get(issue.id)?.number;
+    if (knownIssueNumber !== undefined) {
+      const existing = await input.forge.fetchIssueDetails(knownIssueNumber);
+      baseBodyById.set(issue.id, existing.body);
+      created.push({
+        id: issue.id,
+        number: knownIssueNumber,
+        title: existing.title,
+        url: existing.url,
+        status: "existing",
+      });
+      persistReceipt();
+      continue;
+    }
     const body = input.forcePrsManaged
       ? ensurePrsManagedIssueBody(issue.body)
       : issue.body;
+    const record = await input.forge.createOrReuseIssue(issue.title, body, input.labels);
+    if (record.status === "existing") {
+      const existing = await input.forge.fetchIssueDetails(record.number);
+      baseBodyById.set(issue.id, existing.body);
+      record.title = existing.title;
+      record.url = existing.url;
+    } else {
+      baseBodyById.set(issue.id, issue.body);
+    }
     created.push({
-      ...(await input.forge.createOrReuseIssue(issue.title, body, input.labels)),
+      ...record,
       id: issue.id,
     });
+    persistReceipt();
   }
 
   const createdById = new Map<string, LinkedIssue>();
@@ -78,13 +117,13 @@ export async function createIssueDraftSetWithRecords(input: {
   }
   for (const issue of input.issueSet.issues) {
     const record = created.find((candidate) => candidate.id === issue.id);
-    if (!record || record.status !== "created") continue;
+    if (!record) continue;
     const updated = await input.forge.updateIssue(
       record.number,
-      issue.title,
+      record.title,
       buildLinkedIssueBody(
         input.issueSet,
-        issue,
+        { ...issue, body: baseBodyById.get(issue.id) ?? issue.body },
         createdById,
         input.forcePrsManaged
       )

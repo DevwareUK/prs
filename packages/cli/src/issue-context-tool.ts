@@ -3,6 +3,7 @@ import type {
   IssueDetails,
   IssueLinkedPullRequest,
   IssuePlanComment,
+  IssueIdentity,
   RepositoryComment,
   RepositoryForge,
   RepositoryIdentity,
@@ -16,6 +17,8 @@ type IssueContextForge = Pick<
   | "fetchIssueComments"
   | "fetchIssuePlanComment"
   | "fetchIssueLinkedPullRequests"
+  | "fetchIssueParent"
+  | "fetchIssueChildren"
 >;
 
 export type IssueContextToolResult =
@@ -26,6 +29,7 @@ export type IssueContextToolResult =
       comments: RepositoryComment[];
       managed: { spec: "missing" | "present"; plan: "missing" | "present" };
       linkedPullRequests: IssueLinkedPullRequest[];
+      hierarchy: { parent: IssueIdentity | null; children: IssueIdentity[] };
     }
   | { status: "blocked"; message: string; nextAction: string };
 
@@ -41,16 +45,20 @@ export async function contextIssueTool(input: {
     };
   }
 
-  const [issue, comments, planComment, linkedPullRequests] = await Promise.all([
+  const [issue, comments, planComment, linkedPullRequests, parent, children] = await Promise.all([
     input.forge.fetchIssueDetails(input.issueNumber),
     input.forge.fetchIssueComments(input.issueNumber),
     input.forge.fetchIssuePlanComment(input.issueNumber),
     input.forge.fetchIssueLinkedPullRequests(input.issueNumber),
+    input.forge.fetchIssueParent(input.issueNumber),
+    input.forge.fetchIssueChildren(input.issueNumber),
   ] satisfies [
     Promise<IssueDetails>,
     Promise<RepositoryComment[]>,
     Promise<IssuePlanComment | undefined>,
     Promise<IssueLinkedPullRequest[]>,
+    Promise<IssueIdentity | null>,
+    Promise<IssueIdentity[]>,
   ]);
 
   return {
@@ -67,5 +75,6 @@ export async function contextIssueTool(input: {
       plan: planComment ? "present" : "missing",
     },
     linkedPullRequests,
+    hierarchy: { parent, children },
   };
 }

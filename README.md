@@ -63,14 +63,42 @@ All generated workflow artifacts use `.prs/runs/<task-specific-run>/` as their o
 
 For `prs-create`, the active agent uses Superpowers brainstorming to write a specification, shows it and waits for approval. It then uses Superpowers writing-plans to write the implementation plan, shows it and waits for approval. Both files are required even for bounded work and stay under `.prs/runs`; the PRS locality rules override Superpowers document-path and commit defaults. Missing required skills block the workflow with a next action.
 
-After presenting the issue draft or linked set and both reviewed artifacts, the agent obtains explicit authorization for issue creation and publication of both managed comments. Design approval alone does not authorize the GitHub write; a reply that asks a question or changes scope needs revised artifacts and explicit approval. The creation step uses both files:
+After presenting the issue draft or linked set and all reviewed artifacts, the agent obtains explicit authorization for issue creation, managed-comment publication, and any native hierarchy mutations. Design approval alone does not authorize the GitHub write; a reply that asks a question or changes scope needs revised artifacts and explicit approval. Single-issue creation passes both files directly. Linked creation reads one `specFile` and `planFile` per issue from a version-2 manifest:
 
 ```bash
 prs tool issue create --draft-file .prs/runs/<run>/issue.md --spec-file .prs/runs/<run>/spec.md --plan-file .prs/runs/<run>/plan.md --json
-prs tool issue create --issue-set .prs/runs/<run>/issue-set.json --run-dir .prs/runs/<run> --spec-file .prs/runs/<run>/spec.md --plan-file .prs/runs/<run>/plan.md --json
+prs tool issue create --issue-set .prs/runs/<run>/issue-set.json --run-dir .prs/runs/<run> --json
 ```
 
-For a linked set, the approved shared specification and plan map requirements, tasks and dependencies to every stable issue ID and are published on every created or reused issue. Creation is complete only after both managed comments are verified and their URLs reported. A successful issue creation with missing artifact hints remains incomplete. Recover partial publication against the known issue number with `prs tool issue publish-artifacts <number> --spec-file <spec> --plan-file <plan> --json` within authorization for those exact files and targets; then confirm live context and content with `prs tool issue context <number> --json`.
+For a linked set, every issue owns its approved specification and plan. Parent mode names a designated orchestrator and explicit `parentId` values; PRS creates native GitHub sub-issue relationships after resolving real database IDs. Dependency edges remain separate. Flat mode records why no parent is required and performs no hierarchy mutation. Creation is complete only when both managed comments per issue and every requested native relationship are verified. Partial runs retain `issue-set-receipt.json`; retry the same approved linked command to reconcile known issues, comments and links without force-reparenting. Version-1 linked manifests fail preflight with upgrade guidance. Single-issue comment recovery still uses `prs tool issue publish-artifacts`.
+
+```json
+{
+  "version": 2,
+  "mode": "multiple",
+  "orchestration": { "mode": "parent", "orchestratorId": "delivery" },
+  "issues": [
+    {
+      "id": "delivery",
+      "issueNumber": 123,
+      "draftFile": ".prs/runs/<run>/delivery.md",
+      "specFile": ".prs/runs/<run>/delivery-spec.md",
+      "planFile": ".prs/runs/<run>/delivery-plan.md",
+      "dependsOn": [], "blocks": [], "related": []
+    },
+    {
+      "id": "contract",
+      "parentId": "delivery",
+      "draftFile": ".prs/runs/<run>/contract.md",
+      "specFile": ".prs/runs/<run>/contract-spec.md",
+      "planFile": ".prs/runs/<run>/contract-plan.md",
+      "dependsOn": [], "blocks": [], "related": []
+    }
+  ]
+}
+```
+
+Omit `issueNumber` to create an issue. A flat manifest uses `"orchestration": { "mode": "flat", "reason": "Independent tasks" }` and omits `parentId`.
 
 To refine an existing issue, use `prs-issue` with a refine request. It reads live issue context, follows the same specification, plan and publication approval gates, and publishes or updates both comments on that original issue. It preserves the issue number, URL and request body and creates no replacement issues. A refine-only request stops after verified publication.
 
@@ -95,10 +123,10 @@ prs tool issue list [--actionable] --json
 prs tool issue context <issue-number> --json
 prs tool issue ready <issue-number> [--unattended|--auto|--jdi] --json
 prs tool issue publish-artifacts <issue-number> --spec-file <path> --plan-file <path> --json
-prs tool issue create (--draft-file <path>|--issue-set <path>) --json
-                      [--run-dir <path>] [--spec-file <path>] [--plan-file <path>]
-                      [--media-manifest <path>] [--label <name>] [--labels <a,b>]
-                      [--force-prs-managed]
+prs tool issue create --draft-file <path> [--spec-file <path>] [--plan-file <path>]
+                      [--media-manifest <path>] [--label <name>] [--labels <a,b>] [--force-prs-managed] --json
+prs tool issue create --issue-set <path> [--run-dir <path>]
+                      [--label <name>] [--labels <a,b>] [--force-prs-managed] --json
 prs issue finalize <issue-number>
 
 prs tool pr list [--actionable] --json

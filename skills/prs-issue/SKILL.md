@@ -53,7 +53,7 @@ Report the original issue number, title and URL, plus both verified managed-comm
 
 Continue here only when implementation was requested. An implementation request (including `--jdi`, `--auto` or `--unattended`) authorizes the implementation lifecycle; it does not waive specification or plan approval gates, including publication of those artifacts. Carry the originating implementation request, execution mode and issue/PR targets through the finish handoff; use the audit publication authorization in `prs-finish` for routine completion and token-usage audits. For a refine-only request, follow Refinement and stop.
 
-1. Reconcile the live specification and plan with the requested implementation. Use the Refinement process above if artifacts are missing or need changes. Reuse existing approved, unchanged artifacts; do not republish them just to start implementation.
+1. Reconcile the live specification and plan with the requested implementation. For a linked set, consume this issue's own approved pair rather than a parent or sibling plan; native parent membership does not imply a dependency. Use the Refinement process above if artifacts are missing or need changes. Reuse existing approved, unchanged artifacts; do not republish them just to start implementation.
 2. Run `prs tool issue ready <number> --json` and use its suggested branch and returned run directory. Keep subsequent working notes and evidence in that returned directory.
 3. Prefer a fresh branch or worktree from the updated configured base. If isolation is unavailable, continue in the active workspace and record the fallback.
 4. Implement in small verified steps. Delegate independent tasks only when supported and authorized; otherwise execute sequentially.

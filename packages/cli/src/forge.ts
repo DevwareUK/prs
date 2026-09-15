@@ -128,6 +128,12 @@ export type CreatedIssueRecord = {
   status: "created" | "existing";
 };
 
+export type IssueIdentity = {
+  number: number;
+  id: number;
+  url: string;
+};
+
 export interface CreatePullRequestInput {
   branchName: string;
   baseBranch: string;
@@ -146,6 +152,10 @@ export interface RepositoryForge {
   getRepositoryIdentity(): RepositoryIdentity;
   isAuthenticated(): boolean;
   fetchIssueDetails(issueNumber: number): Promise<IssueDetails>;
+  fetchIssueIdentity(issueNumber: number): Promise<IssueIdentity>;
+  fetchIssueParent(issueNumber: number): Promise<IssueIdentity | null>;
+  fetchIssueChildren(issueNumber: number): Promise<IssueIdentity[]>;
+  addIssueChild(parentNumber: number, childDatabaseId: number): Promise<void>;
   fetchIssueComments(issueNumber: number): Promise<RepositoryComment[]>;
   fetchIssuePlanComment(issueNumber: number): Promise<IssuePlanComment | undefined>;
   fetchIssueLinkedPullRequests(issueNumber: number): Promise<IssueLinkedPullRequest[]>;
@@ -198,6 +208,30 @@ class NoopRepositoryForge implements RepositoryForge {
   }
 
   async fetchIssueDetails(): Promise<IssueDetails> {
+    throw new Error(
+      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
+    );
+  }
+
+  async fetchIssueIdentity(): Promise<IssueIdentity> {
+    throw new Error(
+      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
+    );
+  }
+
+  async fetchIssueParent(): Promise<IssueIdentity | null> {
+    throw new Error(
+      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
+    );
+  }
+
+  async fetchIssueChildren(): Promise<IssueIdentity[]> {
+    throw new Error(
+      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
+    );
+  }
+
+  async addIssueChild(): Promise<void> {
     throw new Error(
       "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
     );

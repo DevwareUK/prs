@@ -38,7 +38,7 @@ The regression fixtures mutate the canonical pack before installing it for all t
 For separately authorized native smoke runs, include these scenarios in the local companion evidence:
 
 - Request a specification revision, withhold plan approval, and approve design without approving publication. Verify no issue or artifact write occurs before the relevant approval. Include an acknowledgment with a question or scope addition; the agent must present revisions and wait.
-- Create a linked set with shared approved spec/plan documents that map every stable ID; verify both comments on every created or reused issue.
+- Create a version-2 linked set with a designated parent, distinct approved spec/plan documents for every stable ID, and native sub-issues; verify each issue's own comments plus hierarchy in both directions. Also exercise explicit flat mode and confirm it performs no parent mutation.
 - Refine an existing issue without requesting implementation. Verify its number, URL and body are retained, both updated managed comments match approved content, and no replacement issue, readiness or implementation occurs.
 - Supply a missing or empty artifact and interrupt after one comment publishes. Verify preflight prevents an invalid write, and recovery retains the known issue number and uses approved files. Missing artifacts must leave the workflow visibly incomplete.
 

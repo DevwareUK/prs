@@ -5,7 +5,7 @@ description: Use when a linked GitHub issue set needs dependency-aware coordinat
 
 # Orchestrate a prs issue set
 
-Keep each issue independently reviewable while one coordinator owns dependency order and final validation.
+Keep each issue independently reviewable while one designated parent owns coordination, integration and final acceptance. Dependency order is separate from parent hierarchy and native parent/child membership.
 
 ## Local artifacts
 
@@ -13,16 +13,16 @@ Keep each issue independently reviewable while one coordinator owns dependency o
 
 This covers issue drafts, linked-set manifests, specifications, plans, working notes, and completion evidence. They are raw workflow artifacts and stay local. Never stage or commit them, and never create another repository-local scratch root such as `.prs-work`.
 
-1. Load every issue with `prs tool issue context <number> --json`. Build the dependency graph from explicit links and acceptance criteria.
-2. Refine and plan each issue before implementation. Keep each child issue's specification, plan, and working notes in its own task-specific run directory. Obtain explicit user approval before publishing any GitHub artifacts.
+1. Load every issue with `prs tool issue context <number> --json`. Confirm the designated parent and children from native hierarchy, but build execution readiness only from explicit dependency links and acceptance criteria. Never infer a parent from order, title or dependency edges.
+2. Consume each issue's own approved, issue-specific specification and plan. Keep each child's artifacts and working notes in its own task-specific run directory. Reuse established approval for unchanged published content; refine and obtain explicit user approval only when an issue's content must change.
 3. Prefer a separate branch or worktree per issue. If isolation is unavailable, execute in the active workspace one issue at a time.
 4. Delegate only independent ready issues when the host supports it and the user authorized delegation. Otherwise execute sequentially. Never parallelize tasks that share unmerged state.
 5. For each issue: run `prs tool issue ready`, implement, verify, use `prs-finish`, and keep its pull request separate.
 6. Merge dependency pull requests in order. Refresh the base before starting a dependent issue.
-7. After all children are integrated, run the full repository verification suite and the cross-host or product acceptance checks required by the parent issue. Keep coordinator notes and final evidence in the parent's task-specific run directory.
+7. After all children are integrated, the designated parent performs the full repository verification suite, integration checks and cross-issue final acceptance. Keep coordinator notes and final evidence in the parent's task-specific run directory.
 8. Publish the final audit only with explicit user approval. Report each issue, pull request, merge result, verification result, and any capability fallback.
 
-Do not use one successful child or one host's result as evidence for another required row. Before destructive cleanup, obtain separate explicit user approval.
+An explicitly flat set has no parent mutation or implied coordinator; orchestrate it only when the user separately requests coordination. Creating a set never starts agents or merges pull requests. Do not hardcode a model, branch or merge policy. Do not use one successful child or one host's result as evidence for another required row. Before destructive cleanup, obtain separate explicit user approval.
 
 ## Usage evidence
 

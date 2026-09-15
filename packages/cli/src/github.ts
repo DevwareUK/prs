@@ -7,6 +7,7 @@ import type {
   CreatedPullRequestRecord,
   CreatedIssueRecord,
   IssueDetails,
+  IssueIdentity,
   IssueLinkedPullRequest,
   IssuePlanComment,
   OpenPullRequestChange,
@@ -994,6 +995,89 @@ class GitHubRepositoryForge implements RepositoryForge {
   async fetchIssueDetails(issueNumber: number): Promise<IssueDetails> {
     const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
     return fetchIssueWithApi(owner, repo, issueNumber, this.repoRoot);
+  }
+
+  private parseIssueIdentity(payload: unknown, context: string): IssueIdentity {
+    const issue = payload as { id?: number; number?: number; html_url?: string };
+    if (!issue.id || !issue.number || !issue.html_url) {
+      throw new Error(`${context} returned an incomplete issue identity.`);
+    }
+    return { id: issue.id, number: issue.number, url: issue.html_url };
+  }
+
+  async fetchIssueIdentity(issueNumber: number): Promise<IssueIdentity> {
+    const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
+    const response = await requestGitHub(
+      this.repoRoot,
+      `repos/${owner}/${repo}/issues/${issueNumber}`
+    );
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch GitHub issue identity for #${issueNumber} (${response.status} ${response.statusText}).`
+      );
+    }
+    return this.parseIssueIdentity(
+      await response.json(),
+      `GitHub issue #${issueNumber}`
+    );
+  }
+
+  async fetchIssueParent(issueNumber: number): Promise<IssueIdentity | null> {
+    const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
+    const response = await requestGitHub(
+      this.repoRoot,
+      `repos/${owner}/${repo}/issues/${issueNumber}/parent`
+    );
+    if (response.status === 404) {
+      await this.fetchIssueIdentity(issueNumber);
+      return null;
+    }
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch the parent of GitHub issue #${issueNumber} (${response.status} ${response.statusText}).`
+      );
+    }
+    return this.parseIssueIdentity(
+      await response.json(),
+      `GitHub parent for issue #${issueNumber}`
+    );
+  }
+
+  async fetchIssueChildren(issueNumber: number): Promise<IssueIdentity[]> {
+    const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
+    const children: IssueIdentity[] = [];
+    for (let page = 1; ; page += 1) {
+      const suffix = page === 1 ? "" : `&page=${page}`;
+      const response = await requestGitHub(
+        this.repoRoot,
+        `repos/${owner}/${repo}/issues/${issueNumber}/sub_issues?per_page=100${suffix}`
+      );
+      if (!response.ok) {
+        throw new Error(
+          `Failed to list sub-issues for GitHub issue #${issueNumber} (${response.status} ${response.statusText}).`
+        );
+      }
+      const payload = await response.json() as unknown[];
+      const pageChildren = payload.map((issue) =>
+        this.parseIssueIdentity(issue, `GitHub sub-issue of #${issueNumber}`)
+      );
+      children.push(...pageChildren);
+      if (pageChildren.length < 100) return children;
+    }
+  }
+
+  async addIssueChild(parentNumber: number, childDatabaseId: number): Promise<void> {
+    const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
+    const response = await requestGitHub(
+      this.repoRoot,
+      `repos/${owner}/${repo}/issues/${parentNumber}/sub_issues`,
+      { method: "POST", body: JSON.stringify({ sub_issue_id: childDatabaseId }) }
+    );
+    if (!response.ok) {
+      throw new Error(
+        `Failed to attach database issue ${childDatabaseId} to GitHub issue #${parentNumber} (${response.status} ${response.statusText}).`
+      );
+    }
   }
 
   async fetchIssuePlanComment(issueNumber: number): Promise<IssuePlanComment | undefined> {

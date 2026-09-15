@@ -11,10 +11,23 @@ describe("create and refine approval instructions", () => {
     for (const reference of ["superpowers:brainstorming", "superpowers:writing-plans", "prs tool issue context", "prs tool issue publish-artifacts"]) {
       expect(skill).toContain(reference);
     }
-    for (const mode of ["--draft-file", "--issue-set"]) {
-      expect(skill.split("\n").some(line => line.includes(`prs tool issue create ${mode}`) && line.includes("--spec-file") && line.includes("--plan-file"))).toBe(true);
-    }
+    expect(skill.split("\n").some(line => line.includes("prs tool issue create --draft-file") && line.includes("--spec-file") && line.includes("--plan-file"))).toBe(true);
+    expect(skill.split("\n").some(line => line.includes("prs tool issue create --issue-set") && !line.includes("--spec-file") && !line.includes("--plan-file"))).toBe(true);
     expect(skill).not.toContain("artifacts when available");
+  });
+
+  it("requires issue-specific linked artifacts and explicit native hierarchy", () => {
+    const create = readFileSync("skills/prs-create/SKILL.md", "utf8");
+    const orchestrate = readFileSync("skills/prs-orchestrate/SKILL.md", "utf8");
+    for (const reference of ["\"version\": 2", "specFile", "planFile", "orchestration", "orchestratorId", "parentId", "native", "flat"]) {
+      expect(create).toContain(reference);
+    }
+    expect(create).toMatch(/every issue.{0,120}(?:own|issue-specific).{0,120}specification.{0,120}plan/is);
+    expect(create).toMatch(/explicit user approval.{0,240}hierarchy/is);
+    expect(create).not.toMatch(/publishes the shared pair on every issue/i);
+    expect(orchestrate).toMatch(/designated parent.{0,160}coordination.{0,160}final acceptance/is);
+    expect(orchestrate).toMatch(/issue-specific.{0,160}specification.{0,160}plan/is);
+    expect(orchestrate).toMatch(/dependency.{0,80}separate.{0,80}(?:parent|hierarchy)/is);
   });
 
   it("keeps refinement on the original issue and gates implementation separately", () => {

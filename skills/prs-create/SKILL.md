@@ -17,34 +17,62 @@ PRS artifact locality overrides the Superpowers default document paths and commi
 
 ## Specification approval
 
-Use `superpowers:brainstorming` to inspect repository behavior and clarify decisions that materially affect scope, data, access, rollout or acceptance criteria. Write and self-review the specification in the task-specific run directory.
+Use `superpowers:brainstorming` to inspect repository behavior and clarify decisions that materially affect scope, data, access, rollout or acceptance criteria. Write and self-review the specification in the task-specific run directory. For a linked implementation set, every issue gets its own issue-specific specification; children reference shared architecture and prerequisites without copying sibling scope.
 
 Show the specification file and wait for explicit user approval before proceeding to the plan. If the user requests changes, revise and show the specification again; wait for approval of the revised content.
 
 ## Plan approval
 
-Use `superpowers:writing-plans` to write and self-review the implementation plan from the approved specification. Include concrete files, steps, acceptance coverage and verification commands checked against repository source.
+Use `superpowers:writing-plans` to write and self-review each implementation plan from its approved specification. Include concrete files, steps, acceptance coverage and verification commands checked against repository source. The designated parent's plan owns coordination, integration and final acceptance; each child plan owns only that child's implementation.
 
 Show the plan file and wait for explicit user approval before issue creation or publication. If a revision changes the specification, return to specification approval and update the plan to match.
 
 ## Publication approval
 
-Draft an H1-titled Markdown issue in the same run directory. For multiple tasks, keep one draft per issue plus a version-1 linked-set manifest with stable IDs and dependency links. The set-level specification and plan must map requirements, tasks and dependencies to every stable issue ID; the creation tool publishes the shared pair on every issue.
+Draft an H1-titled Markdown issue in the same run directory. For multiple tasks, keep one draft, specification and plan per issue plus a version-2 linked-set manifest. Recommend a designated parent/orchestrator for coordination, integration and final acceptance. Reuse a parent only when the user explicitly designates its `issueNumber`; never infer one from title, order or dependency links. When orchestration is unnecessary, record the user's explicit flat choice and reason. Parent membership and dependency order are separate: `parentId` establishes native GitHub hierarchy while `dependsOn` and `blocks` govern readiness.
 
-Show the exact issue draft or linked set and both reviewed artifacts. Obtain explicit user approval to create or reuse the issues and publish both managed comments. Plan approval and publication authorization can share a response only when the request explicitly covers both actions and the exact content. Design approval alone does not authorize publication. An acknowledgment accompanied by a question or scope change is not publication approval: show the revised artifacts and wait for explicit approval.
+```json
+{
+  "version": 2,
+  "mode": "multiple",
+  "orchestration": { "mode": "parent", "orchestratorId": "delivery" },
+  "issues": [
+    {
+      "id": "delivery",
+      "issueNumber": 123,
+      "draftFile": ".prs/runs/<run>/delivery.md",
+      "specFile": ".prs/runs/<run>/delivery-spec.md",
+      "planFile": ".prs/runs/<run>/delivery-plan.md",
+      "dependsOn": [], "blocks": [], "related": []
+    },
+    {
+      "id": "contract",
+      "parentId": "delivery",
+      "draftFile": ".prs/runs/<run>/contract.md",
+      "specFile": ".prs/runs/<run>/contract-spec.md",
+      "planFile": ".prs/runs/<run>/contract-plan.md",
+      "dependsOn": [], "blocks": [], "related": []
+    }
+  ]
+}
+```
 
-Before any remote write, check both files exist, contain non-empty Markdown and match the approved versions. Always pass both artifact files:
+Flat sets use `"orchestration": { "mode": "flat", "reason": "..." }` and omit every `parentId`. Version-1 linked manifests receive upgrade guidance; do not work around it with one shared artifact pair.
+
+Show every reviewed artifact: each exact issue draft, its own specification and plan, dependency links, explicit parent/flat choice, and intended native hierarchy. Obtain explicit user approval to create or reuse the issues, publish both managed comments per issue, and apply the hierarchy mutations. Plan approval and publication authorization can share a response only when the request explicitly covers both actions and the exact content. Design approval alone does not authorize publication. An acknowledgment accompanied by a question or scope change is not publication approval: show the revised artifacts and wait for explicit approval.
+
+Before any remote write, for each issue check both files exist, contain non-empty Markdown and match the approved versions; also check the draft and every artifact stay inside the selected run directory after symlink resolution. Single-issue creation keeps the global artifact flags; linked creation reads `specFile` and `planFile` from each manifest entry:
 
 ```bash
 prs tool issue create --draft-file .prs/runs/<run>/issue.md --spec-file .prs/runs/<run>/spec.md --plan-file .prs/runs/<run>/plan.md --json
-prs tool issue create --issue-set .prs/runs/<run>/issue-set.json --run-dir .prs/runs/<run> --spec-file .prs/runs/<run>/spec.md --plan-file .prs/runs/<run>/plan.md --json
+prs tool issue create --issue-set .prs/runs/<run>/issue-set.json --run-dir .prs/runs/<run> --json
 ```
 
 ## Completion verification
 
-For every created or reused issue, require `managedComments` records with `status: published` for both `<!-- prs:issue-spec -->` and `<!-- prs:issue-plan -->`. Missing artifacts reported in `managedCommentHints` mean incomplete work even when creation returns `status: ok`. Read `prs tool issue context <number> --json` and confirm both managed artifacts are present; check the published content matches the approved files.
+For every created or reused issue, require `managedComments` records with `status: published` for both `<!-- prs:issue-spec -->` and `<!-- prs:issue-plan -->`. Read `prs tool issue context <number> --json` and confirm both managed artifacts are present; check the published content matches the approved files. For parent mode, also require every requested `hierarchy.relationships` entry to have `status: verified`, then confirm both hierarchy directions. Flat mode must report its reason and perform no parent mutation. Missing or incomplete comments or relationships mean incomplete work even when some issues were created.
 
-If publication is partial, preserve the known issue numbers and approved files. Recover with `prs tool issue publish-artifacts <number> --spec-file <spec> --plan-file <plan> --json` under existing authorization for those exact artifacts and targets. Do not repeat creation blindly after an uncertain response. Changed content or targets require renewed approval. If recovery is blocked, report the issue, missing artifact, tool message and next action; do not declare completion.
+If linked publication is partial, preserve the known issue numbers and approved files, plus `issue-set-receipt.json` and relationship results. Retry the same approved linked creation command; it reconciles recorded identities, updates managed comments in place and verifies native links without force-reparenting. For a single issue, recover with `prs tool issue publish-artifacts <number> --spec-file <spec> --plan-file <plan> --json`. Changed content or targets require renewed approval. If recovery is blocked, report the issue or relationship, tool message and next action; do not declare completion or substitute Markdown links for native hierarchy.
 
 Report every created or reused issue by number, title and URL, plus both verified managed-comment URLs. Issue creation alone is not completion. Keep raw prompts and working notes local. Before destructive cleanup, obtain separate explicit user approval.
 
