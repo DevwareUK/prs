@@ -15,19 +15,13 @@ This covers issue drafts, linked-set manifests, specifications, plans, working n
 
 PRS artifact locality overrides the Superpowers default document paths and commit instructions. Both written artifacts are required even for bounded work. If either required Superpowers skill is unavailable, report the blocker and next action; do not skip a phase.
 
-## Specification approval
+## Artifact preparation
 
-Use `superpowers:brainstorming` to inspect repository behavior and clarify decisions that materially affect scope, data, access, rollout or acceptance criteria. Write and self-review the specification in the task-specific run directory. For a linked implementation set, every issue gets its own issue-specific specification; children reference shared architecture and prerequisites without copying sibling scope.
+Use `superpowers:brainstorming` to inspect repository behavior and clarify decisions that materially affect scope, data, access, rollout or acceptance criteria. Write and self-review each specification in the task-specific run directory. For a linked implementation set, every issue gets its own issue-specific specification; children reference shared architecture and prerequisites without copying sibling scope.
 
-Show the specification file and wait for explicit user approval before proceeding to the plan. If the user requests changes, revise and show the specification again; wait for approval of the revised content.
+Use `superpowers:writing-plans` to write and self-review each implementation plan from its candidate specification. Include concrete files, steps, acceptance coverage and verification commands checked against repository source. The designated parent's plan owns coordination, integration and final acceptance; each child plan owns only that child's implementation. Prepare both artifacts without requesting intermediate approval between the specification and plan.
 
-## Plan approval
-
-Use `superpowers:writing-plans` to write and self-review each implementation plan from its approved specification. Include concrete files, steps, acceptance coverage and verification commands checked against repository source. The designated parent's plan owns coordination, integration and final acceptance; each child plan owns only that child's implementation.
-
-Show the plan file and wait for explicit user approval before issue creation or publication. If a revision changes the specification, return to specification approval and update the plan to match.
-
-## Publication approval
+## Unified approval
 
 Draft an H1-titled Markdown issue in the same run directory. For multiple tasks, keep one draft, specification and plan per issue plus a version-2 linked-set manifest. Recommend a designated parent/orchestrator for coordination, integration and final acceptance. Reuse a parent only when the user explicitly designates its `issueNumber`; never infer one from title, order or dependency links. When orchestration is unnecessary, record the user's explicit flat choice and reason. Parent membership and dependency order are separate: `parentId` establishes native GitHub hierarchy while `dependsOn` and `blocks` govern readiness.
 
@@ -59,9 +53,11 @@ Draft an H1-titled Markdown issue in the same run directory. For multiple tasks,
 
 Flat sets use `"orchestration": { "mode": "flat", "reason": "..." }` and omit every `parentId`. Version-1 linked manifests receive upgrade guidance; do not work around it with one shared artifact pair.
 
-Show every reviewed artifact: each exact issue draft, its own specification and plan, dependency links, explicit parent/flat choice, and intended native hierarchy. Obtain explicit user approval to create or reuse the issues, publish both managed comments per issue, and apply the hierarchy mutations. Plan approval and publication authorization can share a response only when the request explicitly covers both actions and the exact content. Design approval alone does not authorize publication. An acknowledgment accompanied by a question or scope change is not publication approval: show the revised artifacts and wait for explicit approval.
+Show the exact issue draft or linked set and every reviewed artifact together: each issue's own specification and plan, dependency links, explicit parent/flat choice, and intended native hierarchy. Obtain one explicit user approval that accepts every specification and plan and authorizes the workflow to create or reuse the issues, publish both managed comments per issue, and apply the hierarchy mutations. Design approval alone does not authorize publication. No remote write may happen before this approval.
 
-Before any remote write, for each issue check both files exist, contain non-empty Markdown and match the approved versions; also check the draft and every artifact stay inside the selected run directory after symlink resolution. Single-issue creation keeps the global artifact flags; linked creation reads `specFile` and `planFile` from each manifest entry:
+An acknowledgment accompanied by a question, qualification, scope change, content change or target change is not approval. Update every affected artifact and relationship, recheck the packet for consistency, and show one complete revised packet for one fresh approval. Unchanged material may be reused while revising, but any later content or target change invalidates the previous authorization.
+
+Before any remote write, for each issue check both files exist, contain non-empty Markdown and match the displayed, approved versions; also check the draft and every artifact stay inside the selected run directory after symlink resolution. Single-issue creation keeps the global artifact flags; linked creation reads `specFile` and `planFile` from each manifest entry:
 
 ```bash
 prs tool issue create --draft-file .prs/runs/<run>/issue.md --spec-file .prs/runs/<run>/spec.md --plan-file .prs/runs/<run>/plan.md --json

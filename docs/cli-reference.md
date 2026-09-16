@@ -36,7 +36,7 @@ prs skills validate [--json]
 
 Parity validation installs all three host adapters into separate temporary homes, then compares each installed inventory, content hash, and retained operation reference with the canonical pack. It also checks the installed `artifact-locality` instruction (raw workflow artifacts stay under `.prs/runs` and are not staged or committed) and `staged-only-finalization` instruction (the existing index is the commit source while unstaged and untracked files are preserved). The JSON report names the required safeguards and reports passing safeguards or missing-safeguard errors for each host independently. The command reports static installation and instruction parity only; it does not launch host runtimes. End-to-end native host evidence remains manual and separately attributed in [the agent parity guide](agent-parity.md)'s smoke matrix.
 
-The validator also requires `prs-pr`, its existing-PR router entry, and non-empty sections for `review`, `resolve-conflicts`, `address-comments`, and `fix-tests`. It also independently requires `prs-create` and `prs-issue`, their section-scoped specification, plan, publication and completion rules, and the refine-only identity and stopping boundaries. Missing or weakened instructions are reported in each host's `errors`, even when the installed files match the canonical pack exactly. These conservative text checks cannot prove native approval behavior.
+The validator also requires `prs-pr`, its existing-PR router entry, and non-empty sections for `review`, `resolve-conflicts`, `address-comments`, and `fix-tests`. It also independently requires `prs-create` and `prs-issue`, their section-scoped artifact-preparation, unified-approval and completion rules, and the refine-only identity and stopping boundaries. It rejects restored staged gates and pre-approval remote writes. Missing or weakened instructions are reported in each host's `errors`, even when the installed files match the canonical pack exactly. These conservative text checks cannot prove native approval behavior.
 
 ## Issue tools
 
@@ -65,7 +65,7 @@ The single-draft Markdown format starts with an H1 title; the remainder becomes 
 
 ### Creation and refinement artifact contract
 
-The low-level creation flags remain optional for compatibility. The `prs-create` skill requires both approved files, explicit authorization for creation and comment publication, and verification of both published artifacts before completion:
+The low-level creation flags remain optional for compatibility. The `prs-create` skill requires preparation and self-review of every specification and plan without intermediate approval, followed by one approval of the complete displayed packet. That approval authorizes creation or reuse, comment publication and any native hierarchy mutations. Both approved files per issue and verification of every published artifact remain mandatory before completion:
 
 ```bash
 prs tool issue create --draft-file .prs/runs/<run>/issue.md --spec-file .prs/runs/<run>/spec.md --plan-file .prs/runs/<run>/plan.md --json
@@ -74,7 +74,7 @@ prs tool issue create --issue-set .prs/runs/<run>/issue-set.json --run-dir .prs/
 
 The linked-set command preflights every file before a remote write, publishes each issue's own approved pair, updates existing managed comment IDs in place, and returns native relationship status under `hierarchy`. `status: "partial"`, `managedCommentFailures`, or any relationship not `verified` produces a non-zero exit. The run-directory receipt preserves known issue identities for an idempotent retry. PRS never force-reparents a child that already belongs to an unrelated parent.
 
-Refinement through `prs-issue` starts from the existing issue and uses the same specification and plan review gates before publishing both artifacts on that issue:
+Refinement through `prs-issue` starts from the existing issue, prepares and self-reviews the specification and plan without intermediate approval, and presents both with the original target for one approval before publishing both artifacts on that issue:
 
 ```bash
 prs tool issue context <number> --json

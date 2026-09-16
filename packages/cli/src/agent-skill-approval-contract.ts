@@ -8,31 +8,30 @@ function section(text: string, heading: string, level: number): string {
   return pattern.exec(text)?.[1]?.trim() ?? "";
 }
 
-const GATES = [
+const PHASES = [
   {
-    heading: "Specification approval",
+    heading: "Artifact preparation",
     requirements: [
-      /Use `superpowers:brainstorming`/,
-      /Write and self-review the specification/i,
-      /Show the specification file and wait for explicit user approval before proceeding to the plan/i,
+      /use `superpowers:brainstorming`/i,
+      /Write and self-review (?:each|the) specification/i,
+      /use `superpowers:writing-plans`/i,
+      /write and self-review (?:each|the) implementation plan/i,
+      /without requesting intermediate approval/i,
     ],
   },
   {
-    heading: "Plan approval",
+    heading: "Unified approval",
     requirements: [
-      /Use `superpowers:writing-plans`/,
-      /write and self-review (?:each|the) implementation plan from (?:its|the) approved specification/i,
-      /Show the plan file and wait for explicit user approval before (?:issue creation or )?publication/i,
-    ],
-  },
-  {
-    heading: "Publication approval",
-    requirements: [
-      /Show[^\n]*(?:both|every) reviewed artifacts?/i,
-      /Obtain explicit user approval to [^.\n]*publish both managed comments/i,
+      /Show[^\n]*(?:both|every) reviewed artifacts?[^\n]*together/i,
+      /one explicit user approval/i,
+      /accepts (?:every|the) specification and plan/i,
+      /authorizes[^.\n]*publish both managed comments/i,
       /Design approval alone does not authorize publication/i,
-      /question or scope change is not publication approval/i,
-      /check both files exist, contain non-empty Markdown and match the approved versions/i,
+      /no remote write may happen before this approval/i,
+      /question, qualification, scope change, content change or target change is not approval/i,
+      /complete revised packet/i,
+      /one fresh approval/i,
+      /check both files exist, contain non-empty Markdown and match the displayed, approved versions/i,
     ],
   },
   {
@@ -80,10 +79,10 @@ export function validateIssueApprovalInstructions(
 
   const workflow = name === "prs-create" ? text : section(text, "Refinement", 2);
   const level = name === "prs-create" ? 2 : 3;
-  for (const gate of GATES) {
-    const body = section(workflow, gate.heading, level);
-    let valid = gate.requirements.every(requirement => requirement.test(body));
-    if (gate.heading === "Publication approval") {
+  for (const phase of PHASES) {
+    const body = section(workflow, phase.heading, level);
+    let valid = phase.requirements.every(requirement => requirement.test(body));
+    if (phase.heading === "Unified approval") {
       if (name === "prs-create") {
         const linkedCommand = body.split("\n").find(line =>
           line.includes("prs tool issue create --issue-set")
@@ -98,17 +97,63 @@ export function validateIssueApprovalInstructions(
           body.includes("orchestratorId") &&
           body.includes("parentId") &&
           /flat/i.test(body) &&
-          /native hierarchy/i.test(body);
+          /native hierarchy/i.test(body) &&
+          /Show the exact issue draft or linked set/.test(body) &&
+          /authorizes[^.\n]*create or reuse/i.test(body) &&
+          /authorizes[^.\n]*hierarchy mutations/i.test(body);
       } else {
-        valid &&= hasArtifactCommand(body, "prs tool issue publish-artifacts <number>");
+        valid &&= hasArtifactCommand(body, "prs tool issue publish-artifacts <number>") &&
+          /show the original issue target/i.test(body) &&
+          /on that same issue/.test(body);
       }
     }
-    if (gate.heading === "Completion verification") {
+    if (phase.heading === "Completion verification") {
       valid &&= name === "prs-create"
-        ? /For every created or reused issue/.test(body)
+        ? /For every created or reused issue/.test(body) &&
+          /require every requested `hierarchy\.relationships` entry to have `status: verified`/.test(body) &&
+          /confirm both hierarchy directions/.test(body) &&
+          /Flat mode[^.\n]*perform no parent mutation/.test(body) &&
+          /`issue-set-receipt\.json`/.test(body) &&
+          /relationship results/.test(body) &&
+          /Retry the same approved linked creation command/.test(body) &&
+          /without force-reparenting/.test(body)
         : /For the original issue/.test(body);
     }
-    if (!valid) missing(gate.heading.toLowerCase());
+    if (!valid) missing(phase.heading.toLowerCase());
+  }
+
+  const oldGateHeading = new RegExp(
+    `^${"#".repeat(level)} (?:Specification|Plan|Publication) approval$`,
+    "im"
+  );
+  const stagedApprovalPatterns = [
+    /(?:specification|plan)[^.\n]*(?:wait for|obtain|request|require)[^.\n]*approval[^.\n]*before[^.\n]*(?:plan|planning|publication|issue creation)/i,
+    /(?:wait for|obtain|request|require)[^.\n]*approval[^.\n]*(?:before|,?\s*then)[^.\n]*(?:writ(?:e|ing)|prepar(?:e|ing)|draft(?:ing)?|creat(?:e|ing))[^.\n]*(?:specification|plan)/i,
+    /approval[^.\n]*(?:is|required to be|must be)[^.\n]*(?:required|obtained|requested)[^.\n]*before[^.\n]*(?:writ(?:e|ing)|prepar(?:e|ing)|draft(?:ing)?|creat(?:e|ing))[^.\n]*(?:specification|plan)/i,
+  ];
+  const stagedApprovalText = [
+    /\b(?:never|do not|must not|may not|cannot|can't)\b[^.;\n]*?\b(?:wait for|obtain|request|require)\b[^.;\n]*?\bapproval\b[^.;\n]*?\bbefore\b[^.;\n]*?\b(?:writ(?:e|ing)|prepar(?:e|ing)|draft(?:ing)?|creat(?:e|ing))\b[^.;\n]*?\b(?:specification|plan)\b/gi,
+    /\bapproval\b[^.;\n]*?\b(?:is|are)\s+not\s+(?:required|obtained|requested)\b[^.;\n]*?\bbefore\b[^.;\n]*?\b(?:writ(?:e|ing)|prepar(?:e|ing)|draft(?:ing)?|creat(?:e|ing))\b[^.;\n]*?\b(?:specification|plan)\b/gi,
+  ].reduce((value, pattern) => value.replace(pattern, ""), text);
+  const stagedApproval = stagedApprovalPatterns.some(pattern => pattern.test(stagedApprovalText));
+  if (oldGateHeading.test(text) || stagedApproval) {
+    errors.push(`${name}: contradictory staged approval instructions`);
+  }
+  const unsafeEarlyWritePatterns = [
+    /(?:create|reuse|publish|update)[^.\n]*(?:issue|managed comments?)[^.\n]*before (?:the )?(?:unified |explicit |user )*approval/i,
+    /before (?:the )?(?:unified |explicit |user )*approval[^.\n]*(?:create|reuse|publish|update)[^.\n]*(?:issue|managed comments?)/i,
+    /(?:issues?|managed comments?)[^.\n]*(?:may|must|should|can|will)\s+be\s+(?:created|reused|published|updated)[^.\n]*before (?:the )?(?:unified |explicit |user )*approval/i,
+    /before (?:the )?(?:unified |explicit |user )*approval[^.\n]*(?:issues?|managed comments?)[^.\n]*(?:may|must|should|can|will)\s+be\s+(?:created|reused|published|updated)/i,
+  ];
+  const unsafeEarlyWriteText = [
+    /\b(?:never|do not|must not|may not|cannot|can't)\b[^.;\n]*?\b(?:create|reuse|publish|update)\b[^.;\n]*?\b(?:issues?|managed comments?)\b[^.;\n]*?\bbefore\b[^.;\n]*?\bapproval\b/gi,
+    /\bbefore\b[^.;\n]*?\bapproval\b[^.;\n]*?\b(?:never|do not|must not|may not|cannot|can't)\b[^.;\n]*?\b(?:create|reuse|publish|update)\b[^.;\n]*?\b(?:issues?|managed comments?)\b/gi,
+    /\b(?:issues?|managed comments?)\b[^.;\n]*?\b(?:may|must|should|can|will)\s+not\s+be\s+(?:created|reused|published|updated)\b[^.;\n]*?\bbefore\b[^.;\n]*?\bapproval\b/gi,
+    /\bbefore\b[^.;\n]*?\bapproval\b[^.;\n]*?\b(?:issues?|managed comments?)\b[^.;\n]*?\b(?:may|must|should|can|will)\s+not\s+be\s+(?:created|reused|published|updated)\b/gi,
+  ].reduce((value, pattern) => value.replace(pattern, ""), text);
+  const unsafeEarlyWrite = unsafeEarlyWritePatterns.some(pattern => pattern.test(unsafeEarlyWriteText));
+  if (unsafeEarlyWrite) {
+    errors.push(`${name}: unsafe pre-approval remote-write instructions`);
   }
 
   if (name === "prs-issue") {
