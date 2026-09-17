@@ -2,7 +2,7 @@ import { closeSync, mkdtempSync, mkdirSync, openSync, rmSync, symlinkSync, trunc
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { readNativeUsageSource } from "./token-usage-source-reader";
+import { readNativeUsageSource, readNativeUsageSourceWithLimits } from "./token-usage-source-reader";
 import { captureUsage } from "./token-usage-capture";
 import { aggregateUsageEvents } from "./token-usage-aggregate";
 
@@ -37,15 +37,15 @@ describe("native usage source reader", () => {
   });
 
   it("rejects a Copilot JSONL record larger than 8 MiB", () => {
-    const path = join(root(), "usage.jsonl");
-    writeFileSync(path, JSON.stringify({ ...span("session-1"), padding: "x".repeat(8 * 1024 * 1024) }) + "\n");
+    const path = join(root(), "usage.jsonl"), fd = openSync(path, "w");
+    try { writeSync(fd, Buffer.from("{"), 0, 1, 0); writeSync(fd, Buffer.from("\n"), 0, 1, 8 * 1024 * 1024 + 1); } finally { closeSync(fd); }
     expect(() => readNativeUsageSource({ host: "copilot", sessionId: "session-1", sourcePath: path })).toThrow(/8 MiB/);
   });
 
   it("rejects more than 100,000 retained Copilot records", () => {
-    const path = join(root(), "usage.jsonl"), fd = openSync(path, "w"), batch = Buffer.from(line(span("session-1")).repeat(1000));
-    try { for (let count = 0; count < 101; count++) writeSync(fd, batch); } finally { closeSync(fd); }
-    expect(() => readNativeUsageSource({ host: "copilot", sessionId: "session-1", sourcePath: path })).toThrow(/100,000/);
+    const minimal = { type: "span", data: { spanId: "s", attributes: { "gen_ai.operation.name": "chat", "gen_ai.conversation.id": "session-1" } } };
+    const path = join(root(), "usage.jsonl"); writeFileSync(path, line(minimal).repeat(3));
+    expect(() => readNativeUsageSourceWithLimits({ host: "copilot", sessionId: "session-1", sourcePath: path }, { maxCopilotRecord: 8 * 1024 * 1024, maxMatchingRecords: 2 })).toThrow(/100,000/);
   });
 
   it("preserves malformed-complete and trailing-partial semantics", () => {
@@ -56,6 +56,12 @@ describe("native usage source reader", () => {
     const result = readNativeUsageSource({ host: "copilot", sessionId: "session-1", sourcePath: path });
     expect(result.records).toHaveLength(1);
     expect(result.warnings.join(" ")).toMatch(/Incomplete trailing JSON/);
+  });
+
+  it("keeps JSON arrays on the generic bounded path after long leading whitespace", () => {
+    const path = join(root(), "usage.json");
+    writeFileSync(path, " ".repeat(70 * 1024) + JSON.stringify([span("session-1")]));
+    expect(readNativeUsageSource({ host: "copilot", sessionId: "session-1", sourcePath: path }).records).toHaveLength(1);
   });
 
   it("rejects symlinks, directories, and generic sources over 64 MiB", () => {

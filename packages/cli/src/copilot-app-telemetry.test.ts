@@ -100,6 +100,14 @@ describe("opt-in Copilot app launch environment", () => {
     for (const action of ["enable", "disable"] as const) expect(() => manageCopilotAppTelemetry(action, f)).toThrow(/custom|changed/i);
     expect(readFileSync(file, "utf8")).toBe("customized");
   });
+  it("validates transient binding ownership before disabling any managed settings", () => {
+    const f = fixture(); manageCopilotAppTelemetry("enable", f);
+    mkdirSync(join(f.root, "bindings"), { mode: 0o755 });
+    expect(() => manageCopilotAppTelemetry("disable", f)).toThrow(/binding.*unsafe/i);
+    expect(f.values.size).toBe(3);
+    expect(readdirSync(f.agents)).toHaveLength(3);
+    expect(existsSync(join(f.home, ".copilot/hooks/prs-token-usage.json"))).toBe(true);
+  });
   it("migrates version-1 state and repairs the newly managed hook without changing prior ownership", () => {
     const f = fixture(); manageCopilotAppTelemetry("enable", f);
     const statePath = join(f.root, "state.json"), prior = JSON.parse(readFileSync(statePath, "utf8"));

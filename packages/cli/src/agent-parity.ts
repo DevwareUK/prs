@@ -23,6 +23,12 @@ const REQUIRED_OPERATIONS = [
   "prs tool token-usage render",
   "prs tool token-usage capture",
 ];
+const COPILOT_CAPTURE_SKILLS = ["prs-create", "prs-issue", "prs-finish", "prs-pr", "prs-orchestrate"] as const;
+const COPILOT_CAPTURE_CONTRACT = [
+  "fresh managed session binding",
+  "Explicit `--session` and `--source` values remain authoritative",
+  "hosted Copilot coding-agent evidence remains unsupported",
+] as const;
 const RAW_WORKFLOW_ARTIFACTS = /\braw workflow artifacts\b/i;
 const ARTIFACT_PROHIBITION = /\b(?:must not|never)\s+(?:stage|commit)(?:\s+(?:or|and)\s+(?:stage|commit))?\s+(?:raw workflow artifacts|them)\b/i;
 const UNSAFE_ARTIFACT_DIRECTIVE = /\b(?:always|must|should)\s+(?:stage|commit)(?:\s+(?:or|and)\s+(?:stage|commit))?\s+raw workflow artifacts\b/i;
@@ -171,6 +177,10 @@ export function validateAgentSkillParity(options: {
     }
     errors.push(...validateAuditAuthorizationInstructions(installedContent));
     errors.push(...validateGitHubCredentialAccessInstructions(installedContent.get("prs")));
+    for (const name of COPILOT_CAPTURE_SKILLS) {
+      const content = installedContent.get(name) ?? "";
+      if (COPILOT_CAPTURE_CONTRACT.some(statement => !content.includes(statement))) errors.push(`${name}: missing managed Copilot capture instructions`);
+    }
     const prWorkflow = installedContent.get("prs-pr");
     if (!prWorkflow) {
       errors.push("missing workflow skill: prs-pr");

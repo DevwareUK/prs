@@ -86,7 +86,7 @@ export function manageCopilotAppTelemetry(action: "enable" | "disable" | "status
     return value;
   };
   const statusResult = (state?: State): CopilotTelemetryResult => ({ status: state?.status ?? "not-configured", outputFile,
-    message: state?.status === "enabled" ? "Copilot app usage export is configured. Fully quit and reopen Copilot normally. Live export/session attribution is not yet verified."
+    message: state?.status === "enabled" ? "Copilot app usage export and exact-session bridge are configured. Fully quit and reopen Copilot normally."
       : state?.status === "pending" ? "Copilot telemetry setup is incomplete; rerun with --copilot-telemetry enable or disable."
         : "Copilot app usage export is not enabled by PRS." });
   if (action === "status") {
@@ -106,6 +106,7 @@ export function manageCopilotAppTelemetry(action: "enable" | "disable" | "status
       if (existsSync(job.path) && (!prior || readFileSync(job.path, "utf8") !== job.body)) throw new Error("Managed login job is custom or changed; refusing to replace or remove it");
     }
     if (existsSync(expectedHook.path) && (!prior?.managedHook || readFileSync(expectedHook.path, "utf8") !== prior.managedHook.content)) throw new Error("Managed Copilot hook is custom or changed; refusing to replace or remove it");
+    if (existsSync(bindings) && (!lstatSync(bindings).isDirectory() || lstatSync(bindings).isSymbolicLink() || (lstatSync(bindings).mode & 0o077) !== 0)) throw new Error("Managed Copilot binding state is custom or unsafe; refusing to remove it");
     if (action === "disable") {
       if (prior!.status === "disabled") return { status: "disabled", outputFile, message: "Copilot app telemetry is already disabled; usage logs were retained." };
       for (const job of jobs) env.unload(job.label);
@@ -117,10 +118,7 @@ export function manageCopilotAppTelemetry(action: "enable" | "disable" | "status
       }
       for (const job of jobs) if (existsSync(job.path)) unlinkSync(job.path);
       if (prior!.managedHook && existsSync(expectedHook.path)) unlinkSync(expectedHook.path);
-      if (existsSync(bindings)) {
-        if (!lstatSync(bindings).isDirectory() || lstatSync(bindings).isSymbolicLink() || (lstatSync(bindings).mode & 0o077) !== 0) throw new Error("Managed Copilot binding state is custom or unsafe; refusing to remove it");
-        rmSync(bindings, { recursive: true });
-      }
+      if (existsSync(bindings)) rmSync(bindings, { recursive: true });
       atomicJson(stateFile, { ...prior!, status: "disabled" });
       return { status: "disabled", outputFile, message: "Removed PRS's three login jobs and exact-session hook; retained usage logs and pre-existing or subsequently changed settings. Restart Copilot. " + (preserved.length ? "Preserved keys: " + preserved.join(", ") : "") };
     }

@@ -49,6 +49,15 @@ describe("canonical agent skill pack", () => {
     expect(combined).toContain("unavailable");
   });
 
+  it("keeps every active workflow explicit about managed local Copilot capture", () => {
+    for (const name of ["prs-create", "prs-issue", "prs-finish", "prs-pr", "prs-orchestrate"]) {
+      const content = readFileSync(resolve("skills", name, "SKILL.md"), "utf8");
+      expect(content, name).toContain("fresh managed session binding");
+      expect(content, name).toMatch(/Explicit `--session` and `--source` values remain authoritative/);
+      expect(content, name).toMatch(/hosted Copilot coding-agent evidence remains unsupported/);
+    }
+  });
+
   it("requires deliberate staging before issue finalization", () => {
     const finish = readFileSync(resolve("skills/prs-finish/SKILL.md"), "utf8");
     expect(finish).toContain("Stage only files that belong to the approved issue");

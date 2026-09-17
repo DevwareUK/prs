@@ -68,6 +68,12 @@ describe("three-host Agent Skills parity", () => {
     expect(report.status).toBe("failed");
     for (const host of report.hosts) expect(host.errors).toContain("missing operation reference: prs tool token-usage render");
   });
+  it("rejects installed workflow guidance that drops managed Copilot capture", () => {
+    const sourceRoot = createSourceFixture(content => content.replaceAll("fresh managed session binding", "manual session lookup"));
+    const report = validateAgentSkillParity({ sourceRoot });
+    expect(report.status).toBe("failed");
+    for (const host of report.hosts) expect(host.errors).toEqual(expect.arrayContaining([expect.stringMatching(/missing managed Copilot capture instructions/)]));
+  });
   it("rejects a canonical pack that omits prs-pr even when all hosts install identical files", () => {
     const sourceRoot = createSourceFixture((content) => content);
     const manifestPath = join(sourceRoot, "skills", "manifest.json");
