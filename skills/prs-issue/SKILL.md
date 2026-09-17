@@ -19,23 +19,19 @@ PRS artifact locality overrides the Superpowers default document paths and commi
 
 Start from `prs tool issue context <number> --json`: reconcile the existing issue body, discussion, managed artifacts, linked pull requests and repository behavior with the requested changes. Preserve the original issue number, URL and request body. Never create a replacement issue or linked set from refinement; splitting work is a separate user request. Ask clarification questions in the active session; publishing discussion comments requires explicit authorization.
 
-### Specification approval
+### Artifact preparation
 
 Use `superpowers:brainstorming` to settle the intended outcome and acceptance criteria. Write and self-review the specification in the task-specific run directory.
 
-Show the specification file and wait for explicit user approval before proceeding to the plan. If the user requests changes, revise and show the specification again; wait for approval of the revised content.
+Use `superpowers:writing-plans` to write and self-review the implementation plan from the candidate specification. Include concrete files, steps, acceptance coverage and verification commands checked against repository source. Prepare both artifacts without requesting intermediate approval between the specification and plan. Existing managed comments provide context, not approval of the current refinement.
 
-### Plan approval
+### Unified approval
 
-Use `superpowers:writing-plans` to write and self-review the implementation plan from the approved specification. Include concrete files, steps, acceptance coverage and verification commands checked against repository source.
+Show both reviewed artifacts together and show the original issue target, preserving its number, URL and request body. Obtain one explicit user approval that accepts the specification and plan and authorizes the workflow to publish both managed comments on that same issue. Design approval alone does not authorize publication. No remote write may happen before this approval.
 
-Show the plan file and wait for explicit user approval before publication. If a revision changes the specification, return to specification approval and update the plan to match. Existing managed comments provide context; their presence alone is not approval of the current refinement. Preserve established approvals for unchanged content when they clearly cover the current request.
+An acknowledgment accompanied by a question, qualification, scope change, content change or target change is not approval. Update every affected artifact, recheck the packet for consistency, and show one complete revised packet for one fresh approval. Unchanged material may be reused while revising, but any later content or target change invalidates the previous authorization.
 
-### Publication approval
-
-Show both reviewed artifacts and the original issue target. Obtain explicit user approval to publish both managed comments on that same issue. Plan approval and publication authorization can share a response only when the request explicitly covers both actions and the exact content. Design approval alone does not authorize publication. An acknowledgment accompanied by a question or scope change is not publication approval: show the revised artifacts and wait for explicit approval.
-
-Before any remote write, check both files exist, contain non-empty Markdown and match the approved versions. Publish or update both artifacts on the original issue:
+Before any remote write, check both files exist, contain non-empty Markdown and match the displayed, approved versions. Publish or update both artifacts on the original issue:
 
 ```bash
 prs tool issue publish-artifacts <number> --spec-file .prs/runs/<run>/spec.md --plan-file .prs/runs/<run>/plan.md --json
@@ -51,7 +47,7 @@ Report the original issue number, title and URL, plus both verified managed-comm
 
 ## Lifecycle
 
-Continue here only when implementation was requested. An implementation request (including `--jdi`, `--auto` or `--unattended`) authorizes the implementation lifecycle; it does not waive specification or plan approval gates, including publication of those artifacts. Carry the originating implementation request, execution mode and issue/PR targets through the finish handoff; use the audit publication authorization in `prs-finish` for routine completion and token-usage audits. For a refine-only request, follow Refinement and stop.
+Continue here only when implementation was requested. An implementation request (including `--jdi`, `--auto` or `--unattended`) authorizes the implementation lifecycle; it does not waive the unified approval of the specification, plan and exact publication target. Carry the originating implementation request, execution mode and issue/PR targets through the finish handoff; use the audit publication authorization in `prs-finish` for routine completion and token-usage audits. For a refine-only request, follow Refinement and stop.
 
 1. Reconcile the live specification and plan with the requested implementation. For a linked set, consume this issue's own approved pair rather than a parent or sibling plan; native parent membership does not imply a dependency. Use the Refinement process above if artifacts are missing or need changes. Reuse existing approved, unchanged artifacts; do not republish them just to start implementation.
 2. Run `prs tool issue ready <number> --json` and use its suggested branch and returned run directory. Keep subsequent working notes and evidence in that returned directory.
