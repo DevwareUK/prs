@@ -51,6 +51,12 @@ describe("opt-in Copilot app launch environment", () => {
       expect(plist).toContain("<key>RunAtLoad</key><true/>");
       expect(plist).not.toContain("/bin/sh");
     }
+    const hookPath = join(f.home, ".copilot/hooks/prs-token-usage.json");
+    const hook = JSON.parse(readFileSync(hookPath, "utf8"));
+    expect(hook).toMatchObject({ version: 1, hooks: { preToolUse: [{ type: "command", matcher: "bash|powershell", exec: process.execPath, timeoutSec: 5 }] } });
+    expect(hook.hooks.preToolUse[0].args.slice(-4)).toEqual(["tool", "token-usage", "bind-copilot-session", "--json"]);
+    expect(statSync(hookPath).mode & 0o777).toBe(0o600);
+    expect(JSON.parse(readFileSync(join(f.root, "state.json"), "utf8"))).toMatchObject({ version: 2, managedHook: { version: 1, path: hookPath } });
   });
   it("keeps repeat enable idempotent and disables only owned settings while retaining logs", () => {
     const f = fixture(); manageCopilotAppTelemetry("enable", f);
@@ -64,6 +70,8 @@ describe("opt-in Copilot app launch environment", () => {
     expect(f.values.has("COPILOT_OTEL_EXPORTER_TYPE")).toBe(false);
     expect(readFileSync(join(f.root, "usage.jsonl"), "utf8")).toBe("saved usage\n");
     expect(readdirSync(f.agents)).toEqual([]);
+    expect(existsSync(join(f.home, ".copilot/hooks/prs-token-usage.json"))).toBe(false);
+    expect(existsSync(join(f.root, "bindings"))).toBe(false);
     expect(f.unloaded).toHaveLength(3);
     expect(manageCopilotAppTelemetry("disable", f).status).toBe("disabled");
   });
@@ -85,6 +93,21 @@ describe("opt-in Copilot app launch environment", () => {
     for (const action of ["enable", "disable"] as const) expect(() => manageCopilotAppTelemetry(action, f)).toThrow(/custom|changed/i);
     expect(readFileSync(file, "utf8")).toBe("customized");
     expect(f.values.has(exporter)).toBe(true);
+  });
+  it("preserves a customized managed hook on enable and disable", () => {
+    const f = fixture(); manageCopilotAppTelemetry("enable", f);
+    const file = join(f.home, ".copilot/hooks/prs-token-usage.json"); writeFileSync(file, "customized");
+    for (const action of ["enable", "disable"] as const) expect(() => manageCopilotAppTelemetry(action, f)).toThrow(/custom|changed/i);
+    expect(readFileSync(file, "utf8")).toBe("customized");
+  });
+  it("migrates version-1 state and repairs the newly managed hook without changing prior ownership", () => {
+    const f = fixture(); manageCopilotAppTelemetry("enable", f);
+    const statePath = join(f.root, "state.json"), prior = JSON.parse(readFileSync(statePath, "utf8"));
+    writeFileSync(statePath, JSON.stringify({ version: 1, status: prior.status, preexisting: prior.preexisting }, null, 2) + "\n");
+    rmSync(join(f.home, ".copilot/hooks/prs-token-usage.json"));
+    expect(manageCopilotAppTelemetry("enable", f).status).toBe("enabled");
+    expect(JSON.parse(readFileSync(statePath, "utf8"))).toMatchObject({ version: 2, status: "enabled", preexisting: prior.preexisting });
+    expect(existsSync(join(f.home, ".copilot/hooks/prs-token-usage.json"))).toBe(true);
   });
   it("does not follow a symlinked configuration directory", () => {
     const f = fixture(), elsewhere = join(f.home, "elsewhere"); mkdirSync(elsewhere); symlinkSync(elsewhere, join(f.home, "Library"));
