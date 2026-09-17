@@ -9,6 +9,7 @@ import { label, timestamp } from "./token-usage-capture-shared";
 import { aggregateUsageEvents } from "./token-usage-aggregate";
 import { resolveCopilotCaptureBinding } from "./copilot-session-bridge";
 import { resolveManagedCopilotTelemetrySource } from "./copilot-app-telemetry";
+import { readNativeUsageSource } from "./token-usage-source-reader";
 
 type Input = { repoRoot: string; host: UsageEvent["host"]; outputFilePath: string; sessionId?: string; sourcePath?: string; since?: string; now?: () => string; env?: NodeJS.ProcessEnv; home?: string; platform?: string };
 function discover(root: string, depth: number, matches: (name: string) => boolean): string[] {
@@ -19,24 +20,6 @@ function discover(root: string, depth: number, matches: (name: string) => boolea
     else if (item.isDirectory() && depth > 0) found.push(...discover(join(root, item.name), depth - 1, matches));
   }
   return found;
-}
-function readRecords(path: string, warnings: string[]): unknown[] {
-  const stat = lstatSync(path);
-  if (stat.isSymbolicLink()) throw new Error("Native source must not be a symlink");
-  if (!stat.isFile() || stat.size > 64 * 1024 * 1024) throw new Error("Native source must be a regular file no larger than 64 MiB");
-  const content = readFileSync(path, "utf8");
-  if (!content.trim()) return [];
-  try { const value: unknown = JSON.parse(content); return Array.isArray(value) ? value : [value]; } catch { /* JSONL */ }
-  const lines = content.split("\n"), records: unknown[] = [];
-  for (const [index, line] of lines.entries()) {
-    if (!line.trim()) continue;
-    try { records.push(JSON.parse(line)); }
-    catch {
-      if (index === lines.length - 1 && line.trimStart().startsWith("{")) { warnings.push("Incomplete trailing JSON record was excluded; capture again after the host finishes writing."); break; }
-      throw new Error("Invalid JSON in native source; previous evidence was preserved");
-    }
-  }
-  return records;
 }
 function preserve(prior: UsageEvidence, next: UsageEvidence): void {
   for (const old of prior.events.filter(e => e.status !== "unavailable")) {
@@ -93,7 +76,10 @@ export function captureTokenUsageTool(input: Input) {
       if (!existsSync(source)) {
         if (binding?.sourcePath) throw new Error("Previously bound native source is missing; evidence preserved");
         warnings.push("Selected native source does not exist yet; capture again after the host writes usage.");
-      } else if (sessionId) records = readRecords(source, warnings);
+      } else if (sessionId) {
+        const native = readNativeUsageSource({ host: input.host, sessionId, sourcePath: source });
+        records = native.records; warnings.push(...native.warnings);
+      }
     }
     const evidence = captureUsage(records, {
       host: input.host,
