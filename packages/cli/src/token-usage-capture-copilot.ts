@@ -1,5 +1,12 @@
 import { type AdapterResult, attributes, inclusiveUsage, label, object, otelTime, telemetry } from "./token-usage-capture-shared";
 
+export function isCopilotSessionRecord(record: unknown, sessionId: string): boolean {
+  return telemetry([record], "Spans").some(row => {
+    const values = attributes(row.attributes);
+    return values["gen_ai.operation.name"] === "chat" && values["gen_ai.conversation.id"] === sessionId;
+  });
+}
+
 export function captureCopilot(records: unknown[], sessionId: string): AdapterResult {
   const result: AdapterResult = { observations: [], warnings: [], format: "copilot-otel-spans-v1" };
   for (const row of telemetry(records, "Spans")) {

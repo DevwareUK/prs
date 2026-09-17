@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { renderTokenUsageTool } from "../token-usage-tool";
 import { captureTokenUsageTool } from "../token-usage-capture-tool";
+import { recordCopilotCaptureBinding, type CopilotBridgeOptions } from "../copilot-session-bridge";
 import { dirname, resolve } from "node:path";
 import {
   getCliArgs,
@@ -30,9 +31,26 @@ function writeJson(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
-export async function runToolCommand(): Promise<void> {
+async function readBoundedJson(stream: NodeJS.ReadableStream): Promise<unknown> {
+  const chunks: Buffer[] = []; let total = 0;
+  for await (const chunk of stream as AsyncIterable<Buffer | string>) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    total += buffer.length;
+    if (total > 1024 * 1024) throw new Error("Copilot hook payload exceeds 1 MiB");
+    chunks.push(buffer);
+  }
+  if (total === 0) throw new Error("Copilot hook payload is required");
+  try { return JSON.parse(Buffer.concat(chunks).toString("utf8")); }
+  catch { throw new Error("Copilot hook payload must be valid JSON"); }
+}
+
+export async function runToolCommand(options: { stdin?: NodeJS.ReadableStream; copilotBridge?: CopilotBridgeOptions } = {}): Promise<void> {
   const repoRoot = getDefaultRepoRoot();
   const command = parsePrsToolCommandArgs(getCliArgs().slice(1));
+  if (command.kind === "token-usage-bind-copilot-session") {
+    writeJson(recordCopilotCaptureBinding(await readBoundedJson(options.stdin ?? process.stdin), options.copilotBridge));
+    return;
+  }
   if (command.kind === "token-usage-capture") {
     writeJson(captureTokenUsageTool({ repoRoot, ...command }));
     return;

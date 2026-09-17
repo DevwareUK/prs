@@ -1,6 +1,7 @@
 export type PrsToolCommand =
   | { kind: "token-usage-render"; filePath: string; outputFilePath: string; json: true }
   | { kind: "token-usage-capture"; host: "codex" | "claude-code" | "copilot"; outputFilePath: string; sessionId?: string; sourcePath?: string; since?: string; json: true }
+  | { kind: "token-usage-bind-copilot-session"; json: true }
   | { kind: "issue-list"; actionable: boolean; json: true }
   | { kind: "issue-context"; issueNumber: number; json: true }
   | { kind: "issue-ready"; issueNumber: number; unattended: boolean; json: true }
@@ -92,6 +93,11 @@ export function parsePrsToolCommandArgs(args: string[]): PrsToolCommand {
   const optionTail = [numberOrOption, ...tail].filter(
     (arg): arg is string => arg !== undefined
   );
+
+  if (scope === "token-usage" && command === "bind-copilot-session") {
+    if (requireJson(optionTail).length > 0) throw new Error(renderPrsToolCommandHelp());
+    return { kind: "token-usage-bind-copilot-session", json: true };
+  }
 
   if (scope === "token-usage" && command === "capture") {
     const options = requireJson(optionTail), values = new Map<string, string>();

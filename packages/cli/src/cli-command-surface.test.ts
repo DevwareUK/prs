@@ -37,4 +37,13 @@ describe("provider-free CLI command surface", () => {
     expect(readme).toContain("refuses an empty index");
     expect(readme).toContain("unstaged and untracked files untouched");
   });
+
+  it("documents automatic local Copilot capture without implying hosted-agent support", () => {
+    for (const path of ["README.md", "docs/cli-reference.md", "docs/github-copilot.md", "docs/usage-evidence.md"]) {
+      const content = readFileSync(resolve(process.cwd(), path), "utf8");
+      expect(content, path).toMatch(/fresh managed (?:session )?binding/i);
+      expect(content, path).toMatch(/explicit .*--session.*--source.*authoritative/i);
+      expect(content, path).toMatch(/hosted Copilot coding.agent.*unsupported/i);
+    }
+  });
 });

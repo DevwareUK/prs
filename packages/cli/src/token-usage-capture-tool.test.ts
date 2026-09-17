@@ -3,6 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { captureTokenUsageTool } from "./token-usage-capture-tool";
+import { execFileSync } from "node:child_process";
+import { manageCopilotAppTelemetry, type LaunchEnvironment } from "./copilot-app-telemetry";
+import { recordCopilotCaptureBinding } from "./copilot-session-bridge";
 
 const roots: string[] = [];
 const since = "2026-09-04T10:00:00Z", now = "2026-09-04T10:02:00Z";
@@ -13,10 +16,19 @@ const record = (id = "r1", at = "2026-09-04T10:01:00Z") => ({ type: "token_usage
 const jsonl = (...rows: unknown[]) => rows.map(row => JSON.stringify(row)).join("\n") + "\n";
 function fixture() {
   const repoRoot = mkdtempSync(join(tmpdir(), "prs-capture-")); roots.push(repoRoot);
+  execFileSync("git", ["init", "-q", repoRoot]);
   mkdirSync(join(repoRoot, ".prs/runs/run-1"), { recursive: true });
   const sourcePath = join(repoRoot, "source.jsonl"), outputFilePath = join(repoRoot, ".prs/runs/run-1/usage-evidence.json");
   writeFileSync(sourcePath, jsonl(header, context, record()));
   return { repoRoot, sourcePath, outputFilePath, host: "codex" as const, sessionId: "s1", since, now: () => now, env: {} };
+}
+function enableManagedCopilot(f: ReturnType<typeof fixture>, observedAt: string, sessionId = "bridge-session") {
+  const home = join(f.repoRoot, "home"); mkdirSync(home);
+  const values = new Map<string, string>();
+  const launchEnvironment: LaunchEnvironment = { get: key => values.get(key), set: (key, value) => { values.set(key, value); }, unset: key => { values.delete(key); }, unload: () => undefined };
+  const telemetry = manageCopilotAppTelemetry("enable", { home, platform: "darwin", launchEnvironment });
+  recordCopilotCaptureBinding({ sessionId, timestamp: Date.parse(observedAt), cwd: f.repoRoot, toolName: "bash", toolArgs: { command: "prs tool token-usage capture --host copilot --output .prs/runs/run-1/usage-evidence.json --json" } }, { home, now: () => observedAt });
+  return { home, sourcePath: telemetry.outputFile! };
 }
 afterEach(() => { for (const p of roots.splice(0)) rmSync(p, { force: true, recursive: true }); });
 
@@ -159,6 +171,41 @@ describe("native capture local IO", () => {
     expect(result.status).toBe("unavailable");
     expect(result.capture.warnings.join(" ")).toMatch(/PRS_USAGE_SESSION_ID/);
     expect(result.capture.warnings.join(" ")).toMatch(/COPILOT_OTEL_FILE_EXPORTER_PATH/);
+  });
+  it("uses a fresh managed Copilot identity and verified exporter for the bare command", () => {
+    const f = fixture(), observedAt = "2026-09-17T12:23:49Z", managed = enableManagedCopilot(f, observedAt);
+    const result = captureTokenUsageTool({ ...f, host: "copilot", sessionId: undefined, sourcePath: undefined, home: managed.home, platform: "darwin", now: () => observedAt });
+    expect(result.capture).toMatchObject({ sessionId: "bridge-session", since: "2026-09-04T10:00:00.000Z" });
+    const evidence = JSON.parse(readFileSync(f.outputFilePath, "utf8"));
+    expect(evidence.capture.sourcePath).toBe(managed.sourcePath);
+    expect(JSON.stringify(result)).not.toContain(managed.sourcePath);
+  });
+  it("keeps explicit values and environment values ahead of managed Copilot state", () => {
+    for (const mode of ["explicit", "environment"] as const) {
+      const f = fixture(), observedAt = "2026-09-17T12:23:49Z", managed = enableManagedCopilot(f, observedAt);
+      const alternate = join(f.repoRoot, mode + ".jsonl"); writeFileSync(alternate, "");
+      const result = captureTokenUsageTool({ ...f, host: "copilot", sessionId: mode === "explicit" ? "explicit-session" : undefined, sourcePath: mode === "explicit" ? alternate : undefined,
+        env: mode === "environment" ? { PRS_USAGE_SESSION_ID: "environment-session", PRS_USAGE_SOURCE: alternate } : {}, home: managed.home, platform: "darwin", now: () => observedAt });
+      expect(result.capture.sessionId).toBe(mode + "-session");
+      expect(JSON.parse(readFileSync(f.outputFilePath, "utf8")).capture.sourcePath).toBe(alternate);
+    }
+  });
+  it("keeps a connected binding ahead of a newer bridge and upgrades not-connected evidence without moving since", () => {
+    const observedAt = "2026-09-17T12:23:49Z", f = fixture(), managed = enableManagedCopilot(f, observedAt, "first-session");
+    captureTokenUsageTool({ ...f, host: "copilot", sessionId: undefined, sourcePath: undefined, home: managed.home, platform: "darwin", now: () => observedAt });
+    recordCopilotCaptureBinding({ sessionId: "second-session", timestamp: Date.parse(observedAt) + 1000, cwd: f.repoRoot, toolName: "bash", toolArgs: { command: "prs tool token-usage capture --host copilot --output .prs/runs/run-1/usage-evidence.json --json" } }, { home: managed.home, now: () => "2026-09-17T12:23:50Z" });
+    expect(captureTokenUsageTool({ ...f, host: "copilot", sessionId: undefined, sourcePath: undefined, home: managed.home, platform: "darwin", now: () => "2026-09-17T12:23:50Z" }).capture.sessionId).toBe("first-session");
+
+    const second = fixture(), first = captureTokenUsageTool({ ...second, host: "copilot", sessionId: undefined, sourcePath: undefined, since: undefined, home: join(second.repoRoot, "missing-home"), platform: "darwin" });
+    const secondManaged = enableManagedCopilot(second, observedAt, "upgraded-session");
+    const upgraded = captureTokenUsageTool({ ...second, host: "copilot", sessionId: undefined, sourcePath: undefined, since: undefined, home: secondManaged.home, platform: "darwin", now: () => observedAt });
+    expect(upgraded.capture).toMatchObject({ sessionId: "upgraded-session", since: first.capture.since });
+  });
+  it("keeps stale managed identity unavailable with a distinct warning", () => {
+    const f = fixture(), managed = enableManagedCopilot(f, "2026-09-17T12:23:49Z");
+    const result = captureTokenUsageTool({ ...f, host: "copilot", sessionId: undefined, sourcePath: undefined, since: undefined, home: managed.home, platform: "darwin", now: () => "2026-09-17T12:24:50Z" });
+    expect(result.capture.sessionId).toBe("not-connected");
+    expect(result.capture.warnings.join(" ")).toMatch(/older than 60 seconds/i);
   });
   it("rejects output traversal, symlink escape, source aliases and source symlinks", () => {
     const f = fixture();

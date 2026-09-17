@@ -7,8 +7,11 @@ import { selectedRun, assertRealContainment } from "./token-usage-tool";
 import { captureUsage } from "./token-usage-capture";
 import { label, timestamp } from "./token-usage-capture-shared";
 import { aggregateUsageEvents } from "./token-usage-aggregate";
+import { resolveCopilotCaptureBinding } from "./copilot-session-bridge";
+import { resolveManagedCopilotTelemetrySource } from "./copilot-app-telemetry";
+import { readNativeUsageSource } from "./token-usage-source-reader";
 
-type Input = { repoRoot: string; host: UsageEvent["host"]; outputFilePath: string; sessionId?: string; sourcePath?: string; since?: string; now?: () => string; env?: NodeJS.ProcessEnv };
+type Input = { repoRoot: string; host: UsageEvent["host"]; outputFilePath: string; sessionId?: string; sourcePath?: string; since?: string; now?: () => string; env?: NodeJS.ProcessEnv; home?: string; platform?: string };
 function discover(root: string, depth: number, matches: (name: string) => boolean): string[] {
   if (!existsSync(root) || lstatSync(root).isSymbolicLink()) return [];
   const found: string[] = [];
@@ -17,24 +20,6 @@ function discover(root: string, depth: number, matches: (name: string) => boolea
     else if (item.isDirectory() && depth > 0) found.push(...discover(join(root, item.name), depth - 1, matches));
   }
   return found;
-}
-function readRecords(path: string, warnings: string[]): unknown[] {
-  const stat = lstatSync(path);
-  if (stat.isSymbolicLink()) throw new Error("Native source must not be a symlink");
-  if (!stat.isFile() || stat.size > 64 * 1024 * 1024) throw new Error("Native source must be a regular file no larger than 64 MiB");
-  const content = readFileSync(path, "utf8");
-  if (!content.trim()) return [];
-  try { const value: unknown = JSON.parse(content); return Array.isArray(value) ? value : [value]; } catch { /* JSONL */ }
-  const lines = content.split("\n"), records: unknown[] = [];
-  for (const [index, line] of lines.entries()) {
-    if (!line.trim()) continue;
-    try { records.push(JSON.parse(line)); }
-    catch {
-      if (index === lines.length - 1 && line.trimStart().startsWith("{")) { warnings.push("Incomplete trailing JSON record was excluded; capture again after the host finishes writing."); break; }
-      throw new Error("Invalid JSON in native source; previous evidence was preserved");
-    }
-  }
-  return records;
 }
 function preserve(prior: UsageEvidence, next: UsageEvidence): void {
   for (const old of prior.events.filter(e => e.status !== "unavailable")) {
@@ -59,13 +44,24 @@ export function captureTokenUsageTool(input: Input) {
     if (prior && (!prior.capture || prior.runId !== output.runId)) throw new Error("Existing evidence has no matching capture binding");
     const binding = prior?.capture, capturedAt = timestamp((input.now ?? (() => new Date().toISOString()))());
     const since = timestamp(input.since ?? binding?.since ?? capturedAt);
-    const sessionId = input.sessionId ?? (binding?.sessionId !== "not-connected" ? binding?.sessionId : undefined) ?? env.PRS_USAGE_SESSION_ID ?? (input.host === "codex" ? env.CODEX_THREAD_ID : undefined);
+    if (binding && (binding.host !== input.host || binding.since !== since)) throw new Error("Capture binding cannot change; choose a new run artifact");
+    const warnings: string[] = [];
+    let sessionId = input.sessionId ?? (binding?.sessionId !== "not-connected" ? binding?.sessionId : undefined) ?? env.PRS_USAGE_SESSION_ID ?? (input.host === "codex" ? env.CODEX_THREAD_ID : undefined);
+    if (!sessionId && input.host === "copilot") {
+      const managed = resolveCopilotCaptureBinding(input.repoRoot, { home: input.home, now: () => capturedAt });
+      if (managed.status === "resolved") sessionId = managed.sessionId;
+      else warnings.push(managed.warning);
+    }
     if (sessionId && !label(sessionId)) throw new Error("Invalid capture session identity");
     let source = input.sourcePath ? resolve(input.repoRoot, input.sourcePath) : binding?.sourcePath;
-    if (binding && (binding.host !== input.host || binding.since !== since || (binding.sessionId !== "not-connected" && binding.sessionId !== sessionId) || (binding.sourcePath && source !== binding.sourcePath))) throw new Error("Capture binding cannot change; choose a new run artifact");
+    if (binding && ((binding.sessionId !== "not-connected" && binding.sessionId !== sessionId) || (binding.sourcePath && source !== binding.sourcePath))) throw new Error("Capture binding cannot change; choose a new run artifact");
     if (binding && capturedAt < binding.capturedAt) throw new Error("Capture checkpoint cannot move backwards");
-    const warnings: string[] = [];
     source ??= env.PRS_USAGE_SOURCE ?? (input.host === "copilot" ? env.COPILOT_OTEL_FILE_EXPORTER_PATH : undefined);
+    if (!source && input.host === "copilot") {
+      const managed = resolveManagedCopilotTelemetrySource({ home: input.home, platform: input.platform });
+      if (managed.status === "resolved") source = managed.sourcePath;
+      else warnings.push(managed.warning);
+    }
     if (!source && sessionId) {
       const candidates = input.host === "codex" ? discover(join(env.CODEX_HOME ?? join(homedir(), ".codex"), "sessions"), 3, name => name.endsWith("-" + sessionId + ".jsonl")) : input.host === "claude-code" ? discover(join(homedir(), ".claude/projects"), 1, name => name === sessionId + ".jsonl") : [];
       if (candidates.length > 1) throw new Error("Multiple native sources match; select one with --source");
@@ -80,7 +76,10 @@ export function captureTokenUsageTool(input: Input) {
       if (!existsSync(source)) {
         if (binding?.sourcePath) throw new Error("Previously bound native source is missing; evidence preserved");
         warnings.push("Selected native source does not exist yet; capture again after the host writes usage.");
-      } else if (sessionId) records = readRecords(source, warnings);
+      } else if (sessionId) {
+        const native = readNativeUsageSource({ host: input.host, sessionId, sourcePath: source });
+        records = native.records; warnings.push(...native.warnings);
+      }
     }
     const evidence = captureUsage(records, {
       host: input.host,
