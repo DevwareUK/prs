@@ -12,7 +12,7 @@ export type CopilotCaptureBinding = {
   purpose: "token-usage-capture";
 };
 
-type BridgeOptions = { home?: string; now?: () => string };
+export type CopilotBridgeOptions = { home?: string; now?: () => string };
 type Resolution =
   | { status: "resolved"; sessionId: string }
   | { status: "missing" | "stale" | "ambiguous" | "invalid"; warning: string };
@@ -106,7 +106,7 @@ function isBinding(value: unknown): value is CopilotCaptureBinding {
     && Number.isFinite(Date.parse(row.observedAt));
 }
 
-export function recordCopilotCaptureBinding(payload: unknown, options: BridgeOptions = {}): { status: "recorded" | "ignored" } {
+export function recordCopilotCaptureBinding(payload: unknown, options: CopilotBridgeOptions = {}): { status: "recorded" | "ignored" } {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return { status: "ignored" };
   const row = payload as Record<string, unknown>, command = parseToolCommand(row);
   if (!validSessionId(row.sessionId) || typeof row.cwd !== "string" || typeof row.timestamp !== "number" || !Number.isFinite(row.timestamp) || !command || !isCaptureCommand(command)) return { status: "ignored" };
@@ -125,9 +125,9 @@ export function recordCopilotCaptureBinding(payload: unknown, options: BridgeOpt
   return { status: "recorded" };
 }
 
-export function resolveCopilotCaptureBinding(repoRoot: string, options: BridgeOptions = {}): Resolution {
-  const home = realpathSync(options.home ?? homedir()), root = bridgeRoot(home), bindings = join(root, "bindings");
+export function resolveCopilotCaptureBinding(repoRoot: string, options: CopilotBridgeOptions = {}): Resolution {
   try {
+    const home = realpathSync(options.home ?? homedir()), root = bridgeRoot(home), bindings = join(root, "bindings");
     for (const path of [root, bindings]) assertSafePath(home, path);
     if (!existsSync(bindings)) return { status: "missing", warning: "No fresh managed Copilot session binding is available for this repository." };
     if (!privateDirectory(root) || !privateDirectory(bindings)) throw new Error("state directories are not private");

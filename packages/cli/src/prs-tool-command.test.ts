@@ -57,6 +57,11 @@ describe("provider-free prs tool command parser", () => {
 });
 
 describe("local usage command", () => {
+  it("parses only the bounded internal Copilot binding command", () => {
+    expect(parsePrsToolCommandArgs(["token-usage", "bind-copilot-session", "--json"])).toEqual({ kind: "token-usage-bind-copilot-session", json: true });
+    expect(() => parsePrsToolCommandArgs(["token-usage", "bind-copilot-session"])).toThrow();
+    expect(() => parsePrsToolCommandArgs(["token-usage", "bind-copilot-session", "--source", "x", "--json"])).toThrow();
+  });
   it("parses required file paths and advertises the deterministic route", () => {
     expect(parsePrsToolCommandArgs(["token-usage", "render", "--file=input.json", "--output", "output.md", "--json"])).toEqual({
       kind: "token-usage-render", filePath: "input.json", outputFilePath: "output.md", json: true,

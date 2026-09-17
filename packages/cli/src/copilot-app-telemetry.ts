@@ -146,3 +146,32 @@ export function manageCopilotAppTelemetry(action: "enable" | "disable" | "status
     return statusResult(state);
   } finally { unlinkSync(lock); }
 }
+
+export function resolveManagedCopilotTelemetrySource(options: Pick<CopilotTelemetryOptions, "home" | "platform"> = {}):
+  | { status: "resolved"; sourcePath: string }
+  | { status: "unavailable"; warning: string } {
+  if ((options.platform ?? process.platform) !== "darwin") return { status: "unavailable", warning: "Managed Copilot telemetry setup is unavailable on this platform; pass --source explicitly." };
+  try {
+    const home = realpathSync(options.home ?? homedir()), root = join(home, "Library/Application Support/prs/copilot-usage");
+    const stateFile = join(root, "state.json"), outputFile = join(root, "usage.jsonl"), agents = join(home, "Library/LaunchAgents"), expectedHook = hookDefinition(home);
+    const values: Record<string, string> = { COPILOT_OTEL_FILE_EXPORTER_PATH: outputFile, COPILOT_OTEL_EXPORTER_TYPE: "file", OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: "false" };
+    const jobs = Object.entries(values).map(([key, value], index) => {
+      const label = PREFIX + "." + index;
+      const body = '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict><key>Label</key><string>' + label + '</string><key>ProgramArguments</key><array>' + ["/bin/launchctl", "setenv", key, value].map(v => "<string>" + xml(v) + "</string>").join("") + '</array><key>RunAtLoad</key><true/></dict></plist>\n';
+      return { path: join(agents, label + ".plist"), body };
+    });
+    for (const path of [root, stateFile, outputFile, expectedHook.path, ...jobs.map(job => job.path)]) safePath(home, path);
+    if (!existsSync(stateFile)) return { status: "unavailable", warning: "Managed Copilot telemetry is not configured; enable it or pass --source explicitly." };
+    const state = JSON.parse(readFileSync(stateFile, "utf8")) as State;
+    if (state.version !== 2 || state.status !== "enabled") return { status: "unavailable", warning: "Managed Copilot telemetry is not enabled; repair setup or pass --source explicitly." };
+    if (!state.managedHook || state.managedHook.version !== 1 || state.managedHook.path !== expectedHook.path || state.managedHook.content !== expectedHook.content) throw new Error("invalid hook state");
+    if (!existsSync(expectedHook.path) || readFileSync(expectedHook.path, "utf8") !== expectedHook.content) throw new Error("missing or changed hook");
+    if (jobs.some(job => !existsSync(job.path) || readFileSync(job.path, "utf8") !== job.body)) throw new Error("missing or changed login job");
+    const rootStat = lstatSync(root), stateStat = lstatSync(stateFile), outputStat = lstatSync(outputFile), hookStat = lstatSync(expectedHook.path);
+    if (!rootStat.isDirectory() || (rootStat.mode & 0o077) !== 0 || !stateStat.isFile() || stateStat.nlink !== 1 || (stateStat.mode & 0o077) !== 0
+      || !outputStat.isFile() || outputStat.nlink !== 1 || (outputStat.mode & 0o077) !== 0 || !hookStat.isFile() || hookStat.nlink !== 1 || (hookStat.mode & 0o077) !== 0) throw new Error("unsafe managed files");
+    return { status: "resolved", sourcePath: outputFile };
+  } catch {
+    return { status: "unavailable", warning: "Managed Copilot telemetry state is invalid or unsafe; repair setup or pass --source explicitly." };
+  }
+}
