@@ -2,6 +2,8 @@ import { afterEach, expect, it, vi } from "vitest";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { Readable } from "node:stream";
+import { execFileSync } from "node:child_process";
 import { GitHubAuthFailure } from "../github-auth-failure";
 import { makeUsageFixture } from "../token-usage.test-support";
 const forge = vi.hoisted(() => ({
@@ -96,6 +98,25 @@ it("captures locally without loading forge configuration or authentication", asy
   try {
     await runToolCommand();
     expect(JSON.parse(output.join(""))).toMatchObject({ status: "unavailable", capture: { sessionId: "test" } });
+  } finally {
+    state.root = "/repo"; state.localOnly = false;
+    state.args = ["tool", "issue", "create", "--draft-file", "draft.md", "--json"];
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+it("records a bounded Copilot hook payload without loading forge configuration", async () => {
+  const root = mkdtempSync(join(tmpdir(), "prs-copilot-hook-runner-")), home = join(root, "home"), repo = join(root, "repo");
+  mkdirSync(home); mkdirSync(repo); execFileSync("git", ["init", "-q", repo]);
+  state.root = repo; state.localOnly = true;
+  state.args = ["tool", "token-usage", "bind-copilot-session", "--json"];
+  const output: string[] = [];
+  vi.spyOn(process.stdout, "write").mockImplementation(chunk => { output.push(String(chunk)); return true; });
+  const payload = { sessionId: "runner-session", timestamp: Date.parse("2026-09-17T12:23:49Z"), cwd: repo, toolName: "bash", toolArgs: { command: "prs tool token-usage capture --host copilot --output .prs/runs/run/usage-evidence.json --json" } };
+  try {
+    await runToolCommand({ stdin: Readable.from([JSON.stringify(payload)]), copilotBridge: { home, now: () => "2026-09-17T12:23:49Z" } });
+    expect(JSON.parse(output.join(""))).toEqual({ status: "recorded" });
+    await expect(runToolCommand({ stdin: Readable.from(["x".repeat(1024 * 1024 + 1)]), copilotBridge: { home } })).rejects.toThrow(/1 MiB/);
   } finally {
     state.root = "/repo"; state.localOnly = false;
     state.args = ["tool", "issue", "create", "--draft-file", "draft.md", "--json"];
