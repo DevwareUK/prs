@@ -1,5 +1,6 @@
 import type { ResolvedRepositoryConfigType } from "@prs/contracts";
 import { createGitHubRepositoryForge } from "./github";
+import type { IssueStartGitHubResult } from "./issue-start-github";
 
 export type IssueDetails = {
   title: string;
@@ -152,6 +153,7 @@ export interface RepositoryForge {
   getRepositoryIdentity(): RepositoryIdentity;
   isAuthenticated(): boolean;
   fetchIssueDetails(issueNumber: number): Promise<IssueDetails>;
+  startIssueWork(issueNumber: number): Promise<IssueStartGitHubResult>;
   fetchIssueIdentity(issueNumber: number): Promise<IssueIdentity>;
   fetchIssueParent(issueNumber: number): Promise<IssueIdentity | null>;
   fetchIssueChildren(issueNumber: number): Promise<IssueIdentity[]>;
@@ -208,6 +210,12 @@ class NoopRepositoryForge implements RepositoryForge {
   }
 
   async fetchIssueDetails(): Promise<IssueDetails> {
+    throw new Error(
+      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
+    );
+  }
+
+  async startIssueWork(): Promise<IssueStartGitHubResult> {
     throw new Error(
       "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
     );

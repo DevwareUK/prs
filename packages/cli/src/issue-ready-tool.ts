@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { ISSUE_SPEC_COMMENT_MARKER, startsWithManagedMarker } from "@prs/contracts";
 import type { IssueDetails, IssuePlanComment, RepositoryComment, RepositoryForge } from "./forge";
+import type { IssueStartGitHubResult } from "./issue-start-github";
 
 type IssuePlanStatus =
   | { status: "present"; url: string; updatedAt: string }
@@ -20,6 +21,7 @@ export type IssueReadyToolResult =
       spec: IssueSpecStatus;
       plan: IssuePlanStatus;
       comments: { count: number };
+      githubUpdate: IssueStartGitHubResult;
       suggestedBranchName: string;
       runDir: string;
       metadataFilePath: string;
@@ -35,7 +37,7 @@ export type IssueReadyToolResult =
 
 type IssueReadyForge = Pick<
   RepositoryForge,
-  "type" | "fetchIssueDetails" | "fetchIssueComments" | "fetchIssuePlanComment"
+  "type" | "fetchIssueDetails" | "fetchIssueComments" | "fetchIssuePlanComment" | "startIssueWork"
 >;
 
 type IssueReadyToolOptions = {
@@ -112,9 +114,17 @@ function renderSpecStatus(comments: RepositoryComment[]): IssueSpecStatus {
   };
 }
 
+function unavailableGitHubUpdate(reason: string): IssueStartGitHubResult {
+  return {
+    assignee: { status: "unavailable", reason },
+    issueStatus: { status: "unavailable", reason },
+  };
+}
+
 function writeMetadata(input: {
   unattended: boolean;
   comments: RepositoryComment[];
+  githubUpdate: IssueStartGitHubResult;
   issue: IssueDetails;
   issueNumber: number;
   metadataFilePath: string;
@@ -138,6 +148,7 @@ function writeMetadata(input: {
         comments: {
           count: input.comments.length,
         },
+        githubUpdate: input.githubUpdate,
       },
       null,
       2
@@ -177,12 +188,23 @@ export async function readyIssueTool(
   const relativeRunDir = toRepoRelativePath(options.repoRoot, runDir);
   const spec = renderSpecStatus(comments);
   const plan = renderPlanStatus(planComment);
+  let githubUpdate: IssueStartGitHubResult;
+  if (spec.status === "present" && plan.status === "present") {
+    try {
+      githubUpdate = await options.forge.startIssueWork(options.issueNumber);
+    } catch {
+      githubUpdate = unavailableGitHubUpdate("Could not start GitHub issue work (request setup failed)");
+    }
+  } else {
+    githubUpdate = unavailableGitHubUpdate("Managed specification and plan are required before starting GitHub issue work");
+  }
 
   writeMetadata({
     unattended,
     comments,
     issue,
     issueNumber: options.issueNumber,
+    githubUpdate,
     metadataFilePath,
     planComment,
     runDir: relativeRunDir,
@@ -199,6 +221,7 @@ export async function readyIssueTool(
     comments: {
       count: comments.length,
     },
+    githubUpdate,
     suggestedBranchName,
     runDir: relativeRunDir,
     metadataFilePath: toRepoRelativePath(options.repoRoot, metadataFilePath),
