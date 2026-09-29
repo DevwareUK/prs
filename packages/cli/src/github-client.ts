@@ -12,7 +12,7 @@ export type GitHubCommandRunner = (command: string, args: string[], options: Git
 export type GitHubClientOptions = Parameters<typeof resolveGitHubCli>[0] & {
   runCommand?: GitHubCommandRunner;
 };
-export type GitHubRequestOptions = { method?: string; body?: string };
+export type GitHubRequestOptions = { method?: string; body?: string; headers?: Record<string, string> };
 export type GitHubClient = ReturnType<typeof createGitHubClient>;
 
 const tokenVariables = ["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"];
@@ -109,6 +109,7 @@ export function createGitHubClient(options: GitHubClientOptions = {}) {
       if (endpoint.startsWith("/") || endpoint.includes("://")) throw new Error("Expected a GitHub API endpoint path.");
       const args = ["api", endpoint, "--hostname", "github.com", "--include", "--method", init.method ?? "GET"];
       if (init.body !== undefined) args.push("--input", "-");
+      for (const [name, value] of Object.entries(init.headers ?? {})) args.push("--header", `${name}: ${value}`);
       let output: string;
       try { output = invoke(args, init.body); } catch (error) {
         // gh exits nonzero for HTTP and GraphQL errors, but --include preserves the response.
