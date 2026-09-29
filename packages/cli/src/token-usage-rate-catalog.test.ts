@@ -3,6 +3,44 @@ import { resolveUsageRate } from "./token-usage-rate-catalog";
 
 describe("built-in token usage rate catalog", () => {
   it.each([
+    ["codex", "openai", "gpt-6-luna", [0.1, 0.01, 0.125, 0.5], [0.2, 0.02, 0.25, 0.75]],
+    ["codex", "openai", "gpt-6-sol", [2, 0.2, 2.5, 10], [4, 0.4, 5, 15]],
+    ["copilot", "github", "gpt-6-luna", [0.1, 0.01, 0.125, 0.5], [0.2, 0.02, 0.25, 0.75]],
+    ["copilot", "github", "gpt-6-sol", [2, 0.2, 2.5, 10], [4, 0.4, 5, 15]],
+  ] as const)("prices %s %s %s at both GPT-6 context tiers", (host, provider, model, standard, long) => {
+    for (const [inputTokens, tier, prices] of [
+      [272000, "default", standard],
+      [272001, "long", long],
+    ] as const) {
+      expect(resolveUsageRate({
+        host, provider, model,
+        usage: { uncachedInputTokens: inputTokens, cachedInputTokens: 0, cacheWriteTokens: 0, outputTokens: 1 },
+        observedAt: "2026-09-24T12:00:00Z",
+      })).toMatchObject({
+        status: "resolved",
+        model: { provider: "openai", name: model },
+        context: { tier, tokens: inputTokens },
+        rateCard: { perMillion: {
+          uncachedInputTokens: prices[0], cachedInputTokens: prices[1],
+          cacheWriteTokens: prices[2], outputTokens: prices[3],
+        } },
+      });
+    }
+  });
+
+  it("prices GPT-6 Codex usage from its published release and Copilot usage from its reviewed snapshot", () => {
+    const usage = { uncachedInputTokens: 1, cachedInputTokens: 0, cacheWriteTokens: 0, outputTokens: 1 };
+    expect(resolveUsageRate({ host: "codex", provider: "openai", model: "gpt-6-sol", usage,
+      observedAt: "2026-09-21T23:59:59Z" }).status).toBe("unpriced");
+    expect(resolveUsageRate({ host: "codex", provider: "openai", model: "gpt-6-sol", usage,
+      observedAt: "2026-09-22T00:00:00Z" }).status).toBe("resolved");
+    expect(resolveUsageRate({ host: "copilot", provider: "github", model: "gpt-6-sol", usage,
+      observedAt: "2026-09-23T23:59:59Z" }).status).toBe("unpriced");
+    expect(resolveUsageRate({ host: "copilot", provider: "github", model: "gpt-6-sol", usage,
+      observedAt: "2026-09-24T00:00:00Z" }).status).toBe("resolved");
+  });
+
+  it.each([
     ["codex", "openai", "gpt-5-mini"], ["codex", "openai", "gpt-5.3-codex"],
     ["codex", "openai", "gpt-5.4"], ["codex", "openai", "gpt-5.4-mini"], ["codex", "openai", "gpt-5.4-nano"],
     ["codex", "openai", "gpt-5.5"], ["codex", "openai", "gpt-5.6-luna"], ["codex", "openai", "gpt-5.6-sol"],

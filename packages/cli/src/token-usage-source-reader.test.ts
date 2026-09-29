@@ -20,6 +20,42 @@ function span(sessionId: string, spanId = "span-1") {
 const line = (value: unknown) => JSON.stringify(value) + "\n";
 
 describe("native usage source reader", () => {
+  it("captures Codex usage from a session file larger than 64 MiB without retaining transcript content", () => {
+    const path = join(root(), "session.jsonl"), fd = openSync(path, "w");
+    const meta = { type: "session_meta", payload: { id: "session-1" } };
+    const context = { type: "turn_context", payload: { turn_id: "turn-1", model: "gpt-6-sol" } };
+    const usage = (id: string) => ({ type: "token_usage_record", timestamp: "2026-09-24T10:00:00Z", payload: {
+      thread_id: "session-1", turn_id: "turn-1", response_id: id,
+      usage: { input_tokens: 100, cached_input_tokens: 60, cache_write_input_tokens: 0, output_tokens: 10, total_tokens: 110 },
+    } });
+    try {
+      writeSync(fd, line(meta) + line(context) + line(usage("first")));
+      const unrelated = line({ type: "event_msg", payload: { type: "agent_message", message: "PRIVATE_CONTENT" + "x".repeat(900) } });
+      const batch = Buffer.from(unrelated.repeat(1024));
+      for (let written = 0; written < 66 * 1024 * 1024; written += batch.length) writeSync(fd, batch);
+      writeSync(fd, line(usage("last")));
+    } finally { closeSync(fd); }
+    const result = readNativeUsageSource({ host: "codex", sessionId: "session-1", sourcePath: path });
+    expect(result.records).toHaveLength(4);
+    expect(JSON.stringify(result.records)).not.toContain("PRIVATE_CONTENT");
+    const evidence = captureUsage(result.records, { host: "codex", sessionId: "session-1", runId: "large", since: "2026-09-24T00:00:00Z", capturedAt: "2026-09-25T00:00:00Z" });
+    expect(aggregateUsageEvents(evidence.events).modelTokens.totalTokens).toBe(220);
+  });
+
+  it("skips a large Codex transcript record while retaining nearby usage metadata", () => {
+    const path = join(root(), "session.jsonl");
+    writeFileSync(path, line({ type: "session_meta", payload: { id: "session-1" } })
+      + line({ type: "event_msg", payload: { message: "PRIVATE_CONTENT" + "x".repeat(9 * 1024 * 1024) } })
+      + line({ type: "turn_context", payload: { turn_id: "turn-1", model: "gpt-6-sol" } })
+      + line({ type: "token_usage_record", timestamp: "2026-09-24T10:00:00Z", payload: {
+        thread_id: "session-1", turn_id: "turn-1", response_id: "first",
+        usage: { input_tokens: 100, cached_input_tokens: 60, cache_write_input_tokens: 0, output_tokens: 10, total_tokens: 110 },
+      } }));
+    const result = readNativeUsageSource({ host: "codex", sessionId: "session-1", sourcePath: path });
+    expect(result.records).toHaveLength(3);
+    expect(JSON.stringify(result.records)).not.toContain("PRIVATE_CONTENT");
+  });
+
   it("streams a Copilot JSONL export larger than 64 MiB and retains only exact-session chat records", () => {
     const path = join(root(), "usage.jsonl"), fd = openSync(path, "w");
     try {
@@ -45,7 +81,7 @@ describe("native usage source reader", () => {
   it("rejects more than 100,000 retained Copilot records", () => {
     const minimal = { type: "span", data: { spanId: "s", attributes: { "gen_ai.operation.name": "chat", "gen_ai.conversation.id": "session-1" } } };
     const path = join(root(), "usage.jsonl"); writeFileSync(path, line(minimal).repeat(3));
-    expect(() => readNativeUsageSourceWithLimits({ host: "copilot", sessionId: "session-1", sourcePath: path }, { maxCopilotRecord: 8 * 1024 * 1024, maxMatchingRecords: 2 })).toThrow(/100,000/);
+    expect(() => readNativeUsageSourceWithLimits({ host: "copilot", sessionId: "session-1", sourcePath: path }, { maxJsonlRecord: 8 * 1024 * 1024, maxMatchingRecords: 2 })).toThrow(/100,000/);
   });
 
   it("preserves malformed-complete and trailing-partial semantics", () => {
@@ -70,6 +106,6 @@ describe("native usage source reader", () => {
     expect(() => readNativeUsageSource({ host: "copilot", sessionId: "session-1", sourcePath: link })).toThrow(/symlink/i);
     expect(() => readNativeUsageSource({ host: "copilot", sessionId: "session-1", sourcePath: directory })).toThrow(/regular file/i);
     truncateSync(path, 64 * 1024 * 1024 + 1);
-    expect(() => readNativeUsageSource({ host: "codex", sessionId: "session-1", sourcePath: path })).toThrow(/64 MiB/);
+    expect(() => readNativeUsageSource({ host: "claude-code", sessionId: "session-1", sourcePath: path })).toThrow(/64 MiB/);
   });
 });

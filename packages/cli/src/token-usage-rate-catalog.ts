@@ -28,6 +28,7 @@ const OPENAI_SOURCE = "https://developers.openai.com/api/docs/models";
 const ANTHROPIC_SOURCE = "https://platform.claude.com/docs/en/about-claude/pricing";
 const COPILOT_SOURCE = "https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing";
 const SNAPSHOT = "2026-09-08T00:00:00Z";
+const GPT6_SNAPSHOT = "2026-09-24T00:00:00Z";
 
 function makeEntry(input: {
   host: UsageEvent["host"];
@@ -39,14 +40,18 @@ function makeEntry(input: {
   aliases?: readonly string[];
   tiers: readonly Tier[];
   expiresAt?: string;
+  effectiveAt?: string;
+  retrievedAt?: string;
 }): CatalogEntry {
+  const effectiveAt = input.effectiveAt ?? SNAPSHOT;
+  const retrievedAt = input.retrievedAt ?? SNAPSHOT;
   const cards = input.tiers.map(tier => UsageRateCard.parse({
-    id: `${input.sourceName}:${input.model}:2026-09-08:${tier.name}`,
+    id: `${input.sourceName}:${input.model}:${retrievedAt.slice(0, 10)}:${tier.name}`,
     provider: input.provider,
     model: input.model,
     currency: "USD",
-    effectiveAt: SNAPSHOT,
-    retrievedAt: SNAPSHOT,
+    effectiveAt,
+    retrievedAt,
     ...(input.expiresAt ? { expiresAt: input.expiresAt } : {}),
     sourceUrl: input.sourceUrl,
     contextTier: { name: tier.name, minTokens: tier.minTokens, ...(tier.maxTokens === undefined ? {} : { maxTokens: tier.maxTokens }) },
@@ -80,6 +85,27 @@ const anthropic = (model: string, prices: Prices, aliases?: readonly string[]) =
   host: "claude-code", sourceName: "anthropic", sourceUrl: ANTHROPIC_SOURCE, provider: "anthropic", model, aliases,
   tiers: single(prices),
 });
+
+const gpt6 = (host: "codex" | "copilot", model: string, prices: readonly [Prices, Prices]) => makeEntry({
+  host,
+  sourceName: host === "codex" ? "openai" : "github-copilot",
+  sourceUrl: host === "codex" ? `${OPENAI_SOURCE}/${model}` : COPILOT_SOURCE,
+  provider: "openai",
+  observedProviders: host === "copilot" ? ["openai", "github", "github-copilot"] : ["openai"],
+  model,
+  tiers: tiers(272000, prices[0], prices[1]),
+  effectiveAt: host === "codex" ? "2026-09-22T00:00:00Z" : GPT6_SNAPSHOT,
+  retrievedAt: GPT6_SNAPSHOT,
+});
+
+const GPT6_LUNA: readonly [Prices, Prices] = [
+  { uncachedInputTokens: 0.1, cachedInputTokens: 0.01, cacheWriteTokens: 0.125, outputTokens: 0.5 },
+  { uncachedInputTokens: 0.2, cachedInputTokens: 0.02, cacheWriteTokens: 0.25, outputTokens: 0.75 },
+];
+const GPT6_SOL: readonly [Prices, Prices] = [
+  { uncachedInputTokens: 2, cachedInputTokens: 0.2, cacheWriteTokens: 2.5, outputTokens: 10 },
+  { uncachedInputTokens: 4, cachedInputTokens: 0.4, cacheWriteTokens: 5, outputTokens: 15 },
+];
 
 const COPILOT_ANTHROPIC: Array<[string, Prices]> = [
   ["claude-haiku-4.5", { uncachedInputTokens: 1, cachedInputTokens: 0.1, cacheWriteTokens: 1.25, outputTokens: 5 }],
@@ -121,6 +147,8 @@ const CATALOG: readonly CatalogEntry[] = [
     { uncachedInputTokens: 10, cachedInputTokens: 1, cacheWriteTokens: 12.5, outputTokens: 50 },
     { uncachedInputTokens: 20, cachedInputTokens: 2, cacheWriteTokens: 25, outputTokens: 75 },
   ]),
+  gpt6("codex", "gpt-6-luna", GPT6_LUNA),
+  gpt6("codex", "gpt-6-sol", GPT6_SOL),
 
   anthropic("claude-fable-5-1", { uncachedInputTokens: 10, cachedInputTokens: 0.25, cacheWriteTokens: 12.5, outputTokens: 50 }),
   anthropic("claude-mythos-5-1", { uncachedInputTokens: 10, cachedInputTokens: 0.25, cacheWriteTokens: 12.5, outputTokens: 50 }),
@@ -156,6 +184,8 @@ const CATALOG: readonly CatalogEntry[] = [
   copilot("openai", "gpt-6-astra", tiers(272000,
     { uncachedInputTokens: 10, cachedInputTokens: 1, cacheWriteTokens: 12.5, outputTokens: 50 },
     { uncachedInputTokens: 20, cachedInputTokens: 2, cacheWriteTokens: 25, outputTokens: 75 })),
+  gpt6("copilot", "gpt-6-luna", GPT6_LUNA),
+  gpt6("copilot", "gpt-6-sol", GPT6_SOL),
   ...COPILOT_ANTHROPIC.map(([model, prices]) => copilot("anthropic", model, single(prices))),
   copilot("google", "gemini-3.5-flash", single({ uncachedInputTokens: 1.5, cachedInputTokens: 0.15, outputTokens: 9 })),
   ...["gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.8-flash"].map(model => copilot("google", model,
