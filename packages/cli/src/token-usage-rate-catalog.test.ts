@@ -3,6 +3,36 @@ import { resolveUsageRate } from "./token-usage-rate-catalog";
 
 describe("built-in token usage rate catalog", () => {
   it.each([
+    [272000, "default", 2, 0.1, 2.5, 10],
+    [272001, "long", 4, 0.2, 5, 15],
+  ] as const)("prices GPT-6.1 Sol at %s input tokens", (tokens, tier, input, cached, write, output) => {
+    expect(resolveUsageRate({
+      host: "codex", provider: "openai", model: "gpt-6.1-sol",
+      usage: { uncachedInputTokens: 1000, cachedInputTokens: tokens - 1000, cacheWriteTokens: 0, outputTokens: 1 },
+      observedAt: "2026-09-29T00:00:00Z",
+    })).toMatchObject({
+      status: "resolved", model: { provider: "openai", name: "gpt-6.1-sol" },
+      context: { tier, tokens },
+      rateCard: {
+        id: `openai:gpt-6.1-sol:2026-10-01:${tier}`,
+        effectiveAt: "2026-09-29T00:00:00Z", retrievedAt: "2026-10-01T00:00:00Z",
+        sourceUrl: "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
+        perMillion: { uncachedInputTokens: input, cachedInputTokens: cached, cacheWriteTokens: write, outputTokens: output },
+      },
+    });
+  });
+
+  it("leaves GPT-6.1 Sol unpriced before release or without context evidence", () => {
+    const base = { host: "codex" as const, provider: "openai", model: "gpt-6.1-sol" };
+    expect(resolveUsageRate({ ...base,
+      usage: { uncachedInputTokens: 1, cachedInputTokens: 0, cacheWriteTokens: 0, outputTokens: 1 },
+      observedAt: "2026-09-28T23:59:59Z",
+    })).toMatchObject({ status: "unpriced", reason: expect.stringMatching(/applicable/i) });
+    expect(resolveUsageRate({ ...base, usage: { uncachedInputTokens: 1 }, observedAt: "2026-10-01T00:00:00Z" }))
+      .toMatchObject({ status: "unpriced", reason: expect.stringMatching(/context/i) });
+  });
+
+  it.each([
     ["codex", "openai", "gpt-6-luna", [0.1, 0.01, 0.125, 0.5], [0.2, 0.02, 0.25, 0.75]],
     ["codex", "openai", "gpt-6-sol", [2, 0.2, 2.5, 10], [4, 0.4, 5, 15]],
     ["copilot", "github", "gpt-6-luna", [0.1, 0.01, 0.125, 0.5], [0.2, 0.02, 0.25, 0.75]],

@@ -149,6 +149,14 @@ const CATALOG: readonly CatalogEntry[] = [
   ]),
   gpt6("codex", "gpt-6-luna", GPT6_LUNA),
   gpt6("codex", "gpt-6-sol", GPT6_SOL),
+  makeEntry({
+    host: "codex", sourceName: "openai", provider: "openai", model: "gpt-6.1-sol",
+    sourceUrl: `${OPENAI_SOURCE}/gpt-6.1-sol`,
+    effectiveAt: "2026-09-29T00:00:00Z", retrievedAt: "2026-10-01T00:00:00Z",
+    tiers: tiers(272000,
+      { uncachedInputTokens: 2, cachedInputTokens: 0.1, cacheWriteTokens: 2.5, outputTokens: 10 },
+      { uncachedInputTokens: 4, cachedInputTokens: 0.2, cacheWriteTokens: 5, outputTokens: 15 }),
+  }),
 
   anthropic("claude-fable-5-1", { uncachedInputTokens: 10, cachedInputTokens: 0.25, cacheWriteTokens: 12.5, outputTokens: 50 }),
   anthropic("claude-mythos-5-1", { uncachedInputTokens: 10, cachedInputTokens: 0.25, cacheWriteTokens: 12.5, outputTokens: 50 }),
