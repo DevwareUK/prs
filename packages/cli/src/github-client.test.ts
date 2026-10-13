@@ -226,6 +226,21 @@ it.each(["GET", "PATCH"])("preserves REST %s method and query parameters", async
   expect(await (await client.request("repos/org/repo/issues/1?per_page=100&page=2", { method, ...(method === "PATCH" ? { body: JSON.stringify({ body: "updated\ncomment" }) } : {}) })).json()).toEqual({ number: 1 });
 });
 
+it("passes an explicit API version header to issue-field requests", async () => {
+  const client = createGitHubClient({ env: {}, spawnSync: available,
+    runCommand: (_command, args) => {
+      expect(args).toEqual([
+        "api", "orgs/example/issue-fields", "--hostname", "github.com", "--include", "--method", "GET",
+        "--header", "X-GitHub-Api-Version: 2026-03-10",
+      ]);
+      return "HTTP/2.0 200 OK\n\n[]";
+    },
+  });
+  expect(await (await client.request("orgs/example/issue-fields", {
+    headers: { "X-GitHub-Api-Version": "2026-03-10" },
+  })).json()).toEqual([]);
+});
+
 it("does not include subprocess stderr or credentials in failed command messages", () => {
   const client = createGitHubClient({ env: { GH_TOKEN: "do-not-expose" }, spawnSync: available,
     runCommand: () => { throw Object.assign(new Error("do-not-expose"), { stderr: "Authorization: Bearer do-not-expose" }); },

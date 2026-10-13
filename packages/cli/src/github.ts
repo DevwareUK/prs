@@ -20,6 +20,7 @@ import type {
 } from "./forge";
 import { AUDIT_COMMENT_MARKER } from "./audit-artifacts";
 import { createGitHubClient, requestGitHub } from "./github-client";
+import { startIssueWork as updateIssueAtStart } from "./issue-start-github";
 import { ISSUE_PLAN_COMMENT_MARKER, startsWithManagedMarker } from "@prs/contracts";
 
 function runCommand(
@@ -995,6 +996,16 @@ class GitHubRepositoryForge implements RepositoryForge {
   async fetchIssueDetails(issueNumber: number): Promise<IssueDetails> {
     const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
     return fetchIssueWithApi(owner, repo, issueNumber, this.repoRoot);
+  }
+
+  async startIssueWork(issueNumber: number) {
+    const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
+    return updateIssueAtStart({
+      owner,
+      repo,
+      issueNumber,
+      request: createGitHubClient({ repoRoot: this.repoRoot }).request,
+    });
   }
 
   private parseIssueIdentity(payload: unknown, context: string): IssueIdentity {
