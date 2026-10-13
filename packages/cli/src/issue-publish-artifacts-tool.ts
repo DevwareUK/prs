@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import type { RepositoryForge } from "./forge";
+import type { IssueTracker } from "./issue-tracker";
 import {
   findLatestIssueSpecComment,
   formatSuperpowersPlanArtifactComment,
@@ -8,8 +8,8 @@ import {
   type ManagedCommentPublication,
 } from "./workflows/issue/artifacts";
 
-type IssueArtifactForge = Pick<
-  RepositoryForge,
+type IssueArtifactTracker = Pick<
+  IssueTracker,
   | "fetchIssueDetails"
   | "fetchIssueComments"
   | "fetchIssuePlanComment"
@@ -34,7 +34,7 @@ export async function publishIssueArtifactsTool(input: {
   repoRoot: string;
   specFilePath: string;
   planFilePath: string;
-  forge: IssueArtifactForge;
+  tracker: IssueArtifactTracker;
 }): Promise<{
   status: "ok";
   issueNumber: number;
@@ -45,27 +45,27 @@ export async function publishIssueArtifactsTool(input: {
   const specMarkdown = readApprovedMarkdown(specFilePath, "Specification");
   const planMarkdown = readApprovedMarkdown(planFilePath, "Plan");
 
-  await input.forge.fetchIssueDetails(input.issueNumber);
+  await input.tracker.fetchIssueDetails(input.issueNumber);
   const [comments, planComment] = await Promise.all([
-    input.forge.fetchIssueComments(input.issueNumber),
-    input.forge.fetchIssuePlanComment(input.issueNumber),
+    input.tracker.fetchIssueComments(input.issueNumber),
+    input.tracker.fetchIssuePlanComment(input.issueNumber),
   ]);
   const specComment = findLatestIssueSpecComment(comments);
   const publishedSpec = specComment
-    ? await input.forge.updateIssueComment(
+    ? await input.tracker.updateIssueComment(
         specComment.id,
         formatSuperpowersSpecArtifactComment(specMarkdown)
       )
-    : await input.forge.createIssuePlanComment(
+    : await input.tracker.createIssuePlanComment(
         input.issueNumber,
         formatSuperpowersSpecArtifactComment(specMarkdown)
       );
   const publishedPlan = planComment
-    ? await input.forge.updateIssuePlanComment(
+    ? await input.tracker.updateIssuePlanComment(
         planComment.id,
         formatSuperpowersPlanArtifactComment(planMarkdown)
       )
-    : await input.forge.createIssuePlanComment(
+    : await input.tracker.createIssuePlanComment(
         input.issueNumber,
         formatSuperpowersPlanArtifactComment(planMarkdown)
       );

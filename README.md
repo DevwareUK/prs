@@ -4,7 +4,7 @@
 
 The agent does the reasoning and implementation. `prs` provides the repeatable local operations around it: loading issue context, publishing approved artifacts, preparing a branch, validating a pull request, and publishing an audit trail.
 
-The repository does not execute a model, require an AI-provider API key, or distribute GitHub Actions. Codex, Claude Code, and GitHub Copilot can all call the same local JSON tools. GitHub is the supported forge.
+The repository does not execute a model, require an AI-provider API key, or distribute GitHub Actions. Codex, Claude Code, and GitHub Copilot can all call the same local JSON tools. Issue tracking and repository collaboration use separate integrations. GitHub is currently supported for both: the issue tracker owns issues, hierarchy and issue artifacts; the forge owns pull requests, reviews and checks.
 
 ## Install
 
@@ -13,7 +13,7 @@ Prerequisites:
 - Node.js 20 or later
 - pnpm 10.7
 - Git
-- GitHub CLI (`gh`), authenticated for GitHub-backed commands; local setup and disabled-forge workflows can run without it
+- GitHub CLI (`gh`), authenticated for GitHub-backed commands; local setup and workflows with both integrations disabled can run without it
 
 From this repository:
 
@@ -102,7 +102,7 @@ Omit `issueNumber` to create an issue. A flat manifest uses `"orchestration": { 
 
 To refine an existing issue, use `prs-issue` with a refine request. It reads live issue context, prepares and self-reviews both artifacts without intermediate approval, then presents them with the original issue target for the same single approval before publishing or updating both comments. It preserves the issue number, URL and request body and creates no replacement issues. A refine-only request stops after verified publication.
 
-When implementation is requested (including a `prs-issue` request with `--jdi`, `--auto` or `--unattended`), the agent reuses approved, unchanged artifacts, prepares context with `prs tool issue ready`, and works in an isolated branch or worktree. When both managed artifacts are present, readiness adds the PRS-selected GitHub account to the issue's assignees and sets an existing organization issue field `Status` to its `In Progress` option. It preserves other assignees and fields, reports each outcome in JSON and local metadata, and keeps local readiness available if an update cannot be made. If either managed artifact is missing, it skips both GitHub updates. The organization must have that field and option for the status update; GitHub's Project Status and labels are not changed. Because readiness now writes to GitHub, call it only when starting implementation is authorized. Implementation authorization does not waive the unified artifact approval gate. It stages intended changes, inspects `git diff --cached --name-status`, and uses `prs issue finalize` to preview and create a deterministic commit after confirmation. It then opens or updates the PR. An explicit JDI issue-implementation request is upfront authorization to publish routine completion and token-usage audits to that issue and its resulting PR, carried through `prs-finish` and `prs-pr` without another prompt. The agent still writes and reviews the reports, verifies results and targets, and keeps raw evidence private. Interactive runs without that authorization show the reports and wait for publication approval.
+When implementation is requested (including a `prs-issue` request with `--jdi`, `--auto` or `--unattended`), the agent reuses approved, unchanged artifacts, prepares context with `prs tool issue ready`, and works in an isolated branch or worktree. When both managed artifacts are present, readiness uses the issue tracker to add the PRS-selected GitHub account to the issue's assignees and set an existing organization issue field `Status` to its `In Progress` option. It preserves other assignees and fields, reports each outcome in JSON and local metadata, and keeps local readiness available if an update cannot be made. If either managed artifact is missing, it skips both GitHub updates. The organization must have that field and option for the status update; GitHub's Project Status and labels are not changed. Because readiness now writes to GitHub, call it only when starting implementation is authorized. Implementation authorization does not waive the unified artifact approval gate. It stages intended changes, inspects `git diff --cached --name-status`, and uses `prs issue finalize` to preview and create a deterministic commit after confirmation. It then opens or updates the PR. An explicit JDI issue-implementation request is upfront authorization to publish routine completion and token-usage audits to that issue and its resulting PR, carried through `prs-finish` and `prs-pr` without another prompt. The agent still writes and reviews the reports, verifies results and targets, and keeps raw evidence private. Interactive runs without that authorization show the reports and wait for publication approval.
 
 For an existing pull request, use `prs-pr`. It locates the main checkout used by your local application and runs `prs tool pr ready` there to check out the actual head branch, synchronize the PR base, run configured local-readiness commands, and return GitHub checks and review-comment context. With no PR selected, it lists actionable PRs with links. With no follow-up action requested, it prepares local testing and offers relevant next steps.
 
@@ -161,6 +161,7 @@ Cumulative snapshots are differenced, never added as independent phase totals. M
   "baseBranch": "main",
   "buildCommand": ["pnpm", "build"],
   "forge": { "type": "github" },
+  "issueTracker": { "type": "github" },
   "aiContext": {
     "excludePaths": ["fixtures/**"]
   },
@@ -190,6 +191,17 @@ For a personal account choice, run `gh auth login --hostname github.com` for eac
 The configured account applies to every GitHub operation performed by `prs` and takes precedence over inherited token variables. `.prs/config.local.json` selects that identity for PRS; it does not change the globally active GitHub CLI account, and PRS never uses `gh auth switch`. GitHub CLI owns the stored credential and its login or refresh process. Without a local account choice, `gh` uses its normal authentication, including `GH_TOKEN`/`GITHUB_TOKEN` for automation. GitHub CLI is required even when a token is supplied; `prs` no longer makes direct GitHub HTTP requests. A linked worktree has its own local account file.
 
 For `prs tool issue list`, `prs tool pr list`, and `prs tool issue create`, a configured account that GitHub CLI still knows about but whose credential cannot be read by the host process returns `github-credential-store-inaccessible` with `retry-with-credential-store-access`. This includes status checks that become indeterminate because the restricted process cannot reach the credential store or GitHub. Retry the exact command through the host's normal permission mechanism, preserving approvals, artifact paths, targets, and any known issue number; PRS does not elevate itself or invoke a host-specific mechanism. Only after that unrestricted retry still reports missing or rejected credentials should the selected account be logged in or refreshed. A missing or rejected credential returns `github-auth-required` with `configure-github-auth`. Neither result authorizes exposing credentials, switching accounts, changing targets, or repeating an uncertain creation after a partial remote write. See [setup configuration](docs/setup-configuration.md) and [the CLI reference](docs/cli-reference.md#github-authentication-results).
+
+Configure `forge.type` for pull request workflows and `issueTracker.type` for issue workflows; each accepts `github` or `none`. If the tracker type is omitted, it inherits the effective forge type, preserving existing configurations. Setup writes both effective types explicitly. Both GitHub integrations use the same origin repository and existing `forge.githubCliPath` / local `forge.githubAccount` settings.
+
+| Forge | Issue tracker | Available workflows |
+|---|---|---|
+| `github` | `github` | Issues, PRs and native issue–PR links |
+| `github` | `none` | PR listing, readiness, reviews, checks and PR audits |
+| `none` | `github` | Issue creation, listing, context, readiness, hierarchy, managed artifacts and issue audits |
+| `none` | `none` | Local setup, usage evidence and staged-only local finalization |
+
+Issue context and ordinary issue listing report unavailable linked-PR evidence explicitly when the forge is disabled. `issue list --actionable` blocks without that evidence. Issue-to-PR completion needs both integrations enabled. GitHub issue arguments remain numeric; additional trackers and separate tracker accounts/repositories are not yet supported.
 
 See [the CLI reference](docs/cli-reference.md), [setup configuration](docs/setup-configuration.md), [agent parity guide](docs/agent-parity.md), [migration guide](docs/migration.md), and [development guide](docs/development.md).
 

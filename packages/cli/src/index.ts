@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { getCliArgs, getDefaultRepoRoot, getRepositoryForge } from "./cli-context";
+import { getCliArgs, getDefaultRepoRoot, getIssueTracker } from "./cli-context";
 import { TOP_LEVEL_HELP } from "./cli-notices";
 import { promptForLine } from "./cli-prompts";
 import { runAuditCommand } from "./commands/audit-runner";
@@ -50,7 +50,7 @@ export async function run(): Promise<void> {
   const result = await finalizeIssueChanges({
     repoRoot: getDefaultRepoRoot(),
     issueNumber: issue.issueNumber,
-    forge: getRepositoryForge(getDefaultRepoRoot()),
+    tracker: getIssueTracker(getDefaultRepoRoot()),
     confirm: async (preview) => {
       process.stdout.write(formatIssueFinalizePreview(preview) + "\n\n");
       const answer = (await promptForLine("Create this commit? [y/N]: ")).trim().toLowerCase();

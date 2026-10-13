@@ -1,4 +1,4 @@
-import type { AuditTarget, RepositoryComment, RepositoryForge } from "./forge";
+import type { AuditTarget, RepositoryComment } from "./integration-types";
 import {
   applyGitHubOutputFraming,
   type GitHubOutputMode,
@@ -127,15 +127,22 @@ function replaceOrInsertLocalRun(body: string, localRun?: string): string {
   return `${body.trim()}\n\n${localRunLine}\n`;
 }
 
+export interface AuditCommentStore {
+  isAuthenticated(): boolean;
+  fetchAuditComment(target: AuditTarget): Promise<RepositoryComment | undefined>;
+  createAuditComment(target: AuditTarget, body: string): Promise<RepositoryComment>;
+  updateComment(commentId: number, body: string): Promise<RepositoryComment>;
+}
+
 export async function publishAuditArtifact(
-  forge: RepositoryForge,
+  store: AuditCommentStore,
   input: PublishAuditArtifactInput
 ): Promise<PublishAuditArtifactResult> {
-  if (!forge.isAuthenticated()) {
+  if (!store.isAuthenticated()) {
     throw new Error("GitHub authentication is required to publish prs audit artifacts.");
   }
 
-  const existing = await forge.fetchAuditComment(input.target);
+  const existing = await store.fetchAuditComment(input.target);
   const section = { name: input.sectionName, content: input.content };
 
   if (!existing) {
@@ -147,13 +154,13 @@ export async function publishAuditArtifact(
     });
     return {
       status: "created",
-      comment: await forge.createAuditComment(input.target, body),
+      comment: await store.createAuditComment(input.target, body),
     };
   }
 
   return {
     status: "updated",
-    comment: await forge.updateIssueComment(
+    comment: await store.updateComment(
       existing.id,
       applyGitHubOutputFraming(
         replaceOrInsertLocalRun(

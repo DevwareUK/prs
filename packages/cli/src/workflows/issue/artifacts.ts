@@ -8,8 +8,8 @@ import { resolve } from "node:path";
 import type {
   CreatedIssueRecord,
   RepositoryComment,
-  RepositoryForge,
-} from "../../forge";
+  IssueTracker,
+} from "../../issue-tracker";
 import type { ParsedIssueDraftSet } from "./draft-set";
 
 export const PRS_MANAGED_ISSUE_MARKER = "<!-- prs:managed-issue -->";
@@ -87,7 +87,7 @@ function resolveApprovedArtifact(
 
 export async function publishManagedCommentsFromArtifacts(input: {
   repoRoot: string;
-  forge: RepositoryForge;
+  tracker: IssueTracker;
   issues: CreatedIssueRecord[];
   specFilePath?: string;
   planFilePath?: string;
@@ -103,14 +103,14 @@ export async function publishManagedCommentsFromArtifacts(input: {
   for (const issue of input.issues) {
     if (spec) {
       const existing = findLatestIssueSpecComment(
-        await input.forge.fetchIssueComments(issue.number)
+        await input.tracker.fetchIssueComments(issue.number)
       );
       const comment = existing
-        ? await input.forge.updateIssueComment(
+        ? await input.tracker.updateIssueComment(
             existing.id,
             formatSuperpowersSpecArtifactComment(spec.markdown)
           )
-        : await input.forge.createIssuePlanComment(
+        : await input.tracker.createIssuePlanComment(
             issue.number,
             formatSuperpowersSpecArtifactComment(spec.markdown)
           );
@@ -132,13 +132,13 @@ export async function publishManagedCommentsFromArtifacts(input: {
     }
 
     if (plan) {
-      const existing = await input.forge.fetchIssuePlanComment(issue.number);
+      const existing = await input.tracker.fetchIssuePlanComment(issue.number);
       const comment = existing
-        ? await input.forge.updateIssuePlanComment(
+        ? await input.tracker.updateIssuePlanComment(
             existing.id,
             formatSuperpowersPlanArtifactComment(plan.markdown)
           )
-        : await input.forge.createIssuePlanComment(
+        : await input.tracker.createIssuePlanComment(
             issue.number,
             formatSuperpowersPlanArtifactComment(plan.markdown)
           );
@@ -164,7 +164,7 @@ export async function publishManagedCommentsFromArtifacts(input: {
 }
 
 export async function publishLinkedIssueArtifacts(input: {
-  forge: RepositoryForge;
+  tracker: IssueTracker;
   issueSet: ParsedIssueDraftSet;
   issues: Array<CreatedIssueRecord & { id?: string }>;
 }): Promise<{
@@ -188,14 +188,14 @@ export async function publishLinkedIssueArtifacts(input: {
 
     try {
       const existingSpec = findLatestIssueSpecComment(
-        await input.forge.fetchIssueComments(issue.number)
+        await input.tracker.fetchIssueComments(issue.number)
       );
       const spec = existingSpec
-        ? await input.forge.updateIssueComment(
+        ? await input.tracker.updateIssueComment(
             existingSpec.id,
             formatSuperpowersSpecArtifactComment(artifact.specMarkdown)
           )
-        : await input.forge.createIssuePlanComment(
+        : await input.tracker.createIssuePlanComment(
             issue.number,
             formatSuperpowersSpecArtifactComment(artifact.specMarkdown)
           );
@@ -219,13 +219,13 @@ export async function publishLinkedIssueArtifacts(input: {
     }
 
     try {
-      const existingPlan = await input.forge.fetchIssuePlanComment(issue.number);
+      const existingPlan = await input.tracker.fetchIssuePlanComment(issue.number);
       const plan = existingPlan
-        ? await input.forge.updateIssuePlanComment(
+        ? await input.tracker.updateIssuePlanComment(
             existingPlan.id,
             formatSuperpowersPlanArtifactComment(artifact.planMarkdown)
           )
-        : await input.forge.createIssuePlanComment(
+        : await input.tracker.createIssuePlanComment(
             issue.number,
             formatSuperpowersPlanArtifactComment(artifact.planMarkdown)
           );

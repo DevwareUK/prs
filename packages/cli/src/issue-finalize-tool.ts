@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
-import type { IssueDetails, RepositoryForge } from "./forge";
+import type { IssueDetails, IssueTracker } from "./issue-tracker";
 
-type IssueFinalizeForge = Pick<RepositoryForge, "type" | "fetchIssueDetails">;
+type IssueFinalizeTracker = Pick<IssueTracker, "type" | "fetchIssueDetails">;
 
 export type IssueFinalizeStagedChange = {
   status: string;
@@ -76,7 +76,7 @@ export function formatIssueFinalizePreview(preview: IssueFinalizePreview): strin
 export async function finalizeIssueChanges(input: {
   repoRoot: string;
   issueNumber: number;
-  forge: IssueFinalizeForge;
+  tracker: IssueFinalizeTracker;
   confirm(preview: IssueFinalizePreview): Promise<boolean>;
 }): Promise<{ status: "committed" | "skipped"; commit?: string; message: string }> {
   const stagedChanges = readStagedChanges(input.repoRoot);
@@ -86,9 +86,9 @@ export async function finalizeIssueChanges(input: {
       message: "No staged changes are available to finalize. Stage the intended issue changes and retry.",
     };
   }
-  const issue = input.forge.type === "none"
+  const issue = input.tracker.type === "none"
     ? undefined
-    : await input.forge.fetchIssueDetails(input.issueNumber);
+    : await input.tracker.fetchIssueDetails(input.issueNumber);
   const message = buildIssueCommitMessage(input.issueNumber, issue);
   if (!(await input.confirm({ commitMessage: message, stagedChanges }))) {
     return {

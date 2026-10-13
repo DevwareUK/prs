@@ -114,6 +114,7 @@ export async function runSetupCommand(options: {
     baseBranch: migration.config.baseBranch ?? detectBaseBranch(options.repoRoot),
     buildCommand: migration.config.buildCommand ?? detectBuildCommand(options.repoRoot),
     forge: migration.config.forge ?? { type: "github" },
+    issueTracker: { type: migration.config.issueTracker?.type ?? migration.config.forge?.type ?? "github" },
   };
   const configPath = getRepositoryConfigPath(options.repoRoot);
   mkdirSync(resolve(options.repoRoot, ".prs"), { recursive: true });
@@ -125,7 +126,7 @@ export async function runSetupCommand(options: {
     : [];
   writeFileSync(ignorePath, `${[...new Set([...existingIgnores, ...requiredIgnores])].join("\n")}\n`, "utf8");
 
-  if (interactive && (config.forge?.type ?? "github") === "github") {
+  if (interactive && ((config.forge?.type ?? "github") === "github" || config.issueTracker?.type === "github")) {
     const local = loadLocalRepositoryConfig(options.repoRoot);
     const current = local.forge?.githubAccount;
     const { accounts, guidance } = (options.discoverAccounts ?? listGitHubAccounts)({ repoRoot: options.repoRoot });
@@ -156,6 +157,7 @@ export async function runSetupCommand(options: {
   console.log(`Configured base branch: ${config.baseBranch}.`);
   console.log(`Configured verification command: ${config.buildCommand?.join(" ")}.`);
   console.log(`Configured forge integration: ${config.forge?.type}.`);
+  console.log(`Configured issue tracker: ${config.issueTracker?.type}.`);
   for (const notice of migration.notices) console.log(`Migration: ${notice}`);
   const installSkills = options.installSkills ?? ((host) => installAgentSkills({ host }));
   for (const host of selectedSkillHosts(skillSelection)) {

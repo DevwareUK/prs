@@ -7,7 +7,7 @@ import { readyIssueTool } from "./issue-ready-tool";
 describe("issue ready tool", () => {
   it("writes issue readiness metadata and the verified GitHub update", async () => {
     const repoRoot = mkdtempSync(join(tmpdir(), "prs-issue-ready-"));
-    const forge = {
+    const tracker = {
       type: "github" as const,
       isAuthenticated: vi.fn(() => true),
       fetchIssueDetails: vi.fn().mockResolvedValue({
@@ -42,7 +42,7 @@ describe("issue ready tool", () => {
       unattended: false,
       issueNumber: 151,
       repoRoot,
-      forge,
+      tracker,
       now: () => new Date("2026-05-12T09:30:00.000Z"),
     });
     if (result.status !== "ready") throw new Error("Expected issue readiness");
@@ -71,10 +71,9 @@ describe("issue ready tool", () => {
         issueStatus: { status: "updated", value: "In Progress" },
       },
     });
-    expect(forge.fetchIssueDetails).toHaveBeenCalledWith(151);
-    expect(forge.fetchIssueComments).toHaveBeenCalledWith(151);
-    expect(forge.fetchIssuePlanComment).toHaveBeenCalledWith(151);
-    expect(forge.startIssueWork).toHaveBeenCalledWith(151);
+    expect(tracker.fetchIssueDetails).toHaveBeenCalledWith(151);
+    expect(tracker.fetchIssueComments).toHaveBeenCalledWith(151);
+    expect(tracker.fetchIssuePlanComment).toHaveBeenCalledWith(151);
 
     const metadata = JSON.parse(readFileSync(join(repoRoot, result.metadataFilePath), "utf8"));
     expect(metadata).toMatchObject({
@@ -88,21 +87,21 @@ describe("issue ready tool", () => {
       },
     });
 
-    forge.startIssueWork.mockResolvedValueOnce({
+    tracker.startIssueWork.mockResolvedValueOnce({
       assignee: { status: "already-set", value: "james" },
       issueStatus: { status: "unavailable", reason: "Status issue field is not configured" },
     });
     const partial = await readyIssueTool({
-      issueNumber: 151, repoRoot, forge,
+      issueNumber: 151, repoRoot, tracker,
       now: () => new Date("2026-05-12T09:31:00.000Z"),
     });
     if (partial.status !== "ready") throw new Error("Expected issue readiness");
     expect(partial.githubUpdate.issueStatus).toEqual({ status: "unavailable", reason: "Status issue field is not configured" });
     expect(JSON.parse(readFileSync(join(repoRoot, partial.metadataFilePath), "utf8")).githubUpdate).toEqual(partial.githubUpdate);
 
-    forge.startIssueWork.mockRejectedValueOnce(new Error("credential-store-secret"));
+    tracker.startIssueWork.mockRejectedValueOnce(new Error("credential-store-secret"));
     const setupFailure = await readyIssueTool({
-      issueNumber: 151, repoRoot, forge,
+      issueNumber: 151, repoRoot, tracker,
       now: () => new Date("2026-05-12T09:32:00.000Z"),
     });
     if (setupFailure.status !== "ready") throw new Error("Expected issue readiness");
@@ -116,7 +115,7 @@ describe("issue ready tool", () => {
 
   it("keeps issue readiness ready when managed specification and plan comments are missing", async () => {
     const repoRoot = mkdtempSync(join(tmpdir(), "prs-issue-ready-missing-artifacts-"));
-    const forge = {
+    const tracker = {
       type: "github" as const,
       isAuthenticated: vi.fn(() => true),
       fetchIssueDetails: vi.fn().mockResolvedValue({
@@ -146,7 +145,7 @@ describe("issue ready tool", () => {
       unattended: true,
       issueNumber: 233,
       repoRoot,
-      forge,
+      tracker,
       now: () => new Date("2026-05-12T09:30:00.000Z"),
     });
     if (result.status !== "ready") throw new Error("Expected issue readiness");
@@ -165,13 +164,13 @@ describe("issue ready tool", () => {
     expect(result.message).toContain(
       "Missing managed refinement artifacts will be generated and published during issue preparation"
     );
-    expect(forge.startIssueWork).not.toHaveBeenCalled();
+    expect(tracker.startIssueWork).not.toHaveBeenCalled();
     expect(JSON.parse(readFileSync(join(repoRoot, result.metadataFilePath), "utf8")).githubUpdate).toEqual(result.githubUpdate);
   });
 
   it("ignores issue specifications nested inside audit comments", async () => {
     const repoRoot = mkdtempSync(join(tmpdir(), "prs-issue-ready-audit-spec-"));
-    const forge = {
+    const tracker = {
       type: "github" as const,
       isAuthenticated: vi.fn(() => true),
       fetchIssueDetails: vi.fn().mockResolvedValue({
@@ -217,7 +216,7 @@ describe("issue ready tool", () => {
       unattended: true,
       issueNumber: 255,
       repoRoot,
-      forge,
+      tracker,
       now: () => new Date("2026-05-28T19:30:00.000Z"),
     });
     if (result.status !== "ready") throw new Error("Expected issue readiness");

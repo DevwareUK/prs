@@ -54,7 +54,7 @@ Static validation requires the finish policy that carries an explicit JDI issue-
 
 ## GitHub account context
 
-All three hosts use the same GitHub CLI integration when calling `prs`. GitHub-backed commands require installed and authenticated `gh`. Interactive `prs setup` can write a personal account choice to ignored `.prs/config.local.json` (`forge.githubAccount`); it selects PRS's identity without changing the active GitHub CLI account. Direct host `gh` commands and Git transport do not read this setting. When no account is selected, `gh` handles normal authentication, including environment tokens for automation.
+All three hosts use the same GitHub CLI infrastructure for separate issue-tracker and forge integrations when calling `prs`. Both share the origin repository, CLI path and personal account selection. GitHub-backed commands require installed and authenticated `gh`. Interactive `prs setup` can write a personal account choice to ignored `.prs/config.local.json` (`forge.githubAccount`); it selects PRS's identity without changing the active GitHub CLI account. Direct host `gh` commands and Git transport do not read this setting. When no account is selected, `gh` handles normal authentication, including environment tokens for automation.
 
 ## Credential-store recovery parity
 

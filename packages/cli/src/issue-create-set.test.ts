@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { mkdtempSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import type { RepositoryForge } from "./forge";
+import type { IssueTracker } from "./issue-tracker";
 import { createIssueDraftSetWithRecords } from "./workflows/issue/create-set";
 import { publishLinkedIssueArtifacts } from "./workflows/issue/artifacts";
 import { formatIssueDraftSetPreview, loadIssueDraftSet } from "./workflows/issue/draft-set";
@@ -22,10 +22,10 @@ describe("deterministic linked issue creation", () => {
       url: `https://example.test/issues/${issueNumber}`,
       status: "created" as const,
     }));
-    const forge = { createOrReuseIssue, updateIssue } as unknown as RepositoryForge;
+    const tracker = { createOrReuseIssue, updateIssue } as unknown as IssueTracker;
 
     const result = await createIssueDraftSetWithRecords({
-      forge,
+      tracker,
       labels: ["prs"],
       forcePrsManaged: true,
       issueSet: {
@@ -130,7 +130,7 @@ describe("deterministic linked issue creation", () => {
 
   it("publishes each issue's artifacts by stable id and preserves managed comment ids", async () => {
     const updatedComments: Array<{ id: number; body: string }> = [];
-    const forge = {
+    const tracker = {
       fetchIssueComments: vi.fn(async (issueNumber: number) => [{
         id: issueNumber * 10,
         body: "<!-- prs:issue-spec -->\nOld spec",
@@ -154,7 +154,7 @@ describe("deterministic linked issue creation", () => {
         updatedComments.push({ id, body });
         return { id, body, url: `https://example.test/comments/${id}`, updatedAt: "2026-09-02T00:00:00Z" };
       }),
-    } as unknown as RepositoryForge;
+    } as unknown as IssueTracker;
     const issueSet = {
       mode: "multiple" as const,
       orchestration: { mode: "parent" as const, orchestratorId: "parent" },
@@ -165,7 +165,7 @@ describe("deterministic linked issue creation", () => {
     };
 
     const result = await publishLinkedIssueArtifacts({
-      forge,
+      tracker,
       issueSet,
       issues: [
         { id: "child", number: 42, title: "Child", url: "https://example.test/issues/42", status: "created" },
@@ -184,14 +184,14 @@ describe("deterministic linked issue creation", () => {
 
   it("reuses an explicitly numbered issue and only replaces its generated links", async () => {
     const updateIssue = vi.fn(async (number: number, title: string, body: string) => ({ number, title, body, url: `https://example.test/issues/${number}`, status: "existing" as const }));
-    const forge = {
+    const tracker = {
       fetchIssueDetails: vi.fn(async () => ({ title: "Existing parent", body: "Keep this text\n\n## Linked Issues\n\n- Old generated link\n\n## Notes\n\nKeep notes", url: "https://example.test/issues/7" })),
       createOrReuseIssue: vi.fn(async (title: string) => ({ number: 8, title, url: "https://example.test/issues/8", status: "created" as const })),
       updateIssue,
-    } as unknown as RepositoryForge;
+    } as unknown as IssueTracker;
 
     const result = await createIssueDraftSetWithRecords({
-      forge,
+      tracker,
       labels: [],
       forcePrsManaged: false,
       issueSet: {
@@ -205,7 +205,7 @@ describe("deterministic linked issue creation", () => {
     });
 
     expect(result[0]).toMatchObject({ id: "parent", number: 7, status: "existing" });
-    expect(forge.createOrReuseIssue).toHaveBeenCalledTimes(1);
+    expect(tracker.createOrReuseIssue).toHaveBeenCalledTimes(1);
     expect(updateIssue).toHaveBeenCalledWith(7, "Existing parent", expect.stringContaining("Keep this text"));
     expect(updateIssue.mock.calls[0]?.[2]).toContain("## Notes\n\nKeep notes");
     expect(updateIssue.mock.calls[0]?.[2]).not.toContain("Old generated link");
@@ -221,11 +221,11 @@ describe("deterministic linked issue creation", () => {
       if (attempt === 2) throw new Error("temporary failure");
       return { number: attempt === 1 ? 41 : 42, title, url: `https://example.test/issues/${attempt === 1 ? 41 : 42}`, status: "created" as const };
     });
-    const forge = {
+    const tracker = {
       createOrReuseIssue,
       fetchIssueDetails: vi.fn(async (number: number) => ({ title: "Parent", body: "Parent body", url: `https://example.test/issues/${number}` })),
       updateIssue: vi.fn(async (number: number, title: string) => ({ number, title, url: `https://example.test/issues/${number}`, status: "existing" as const })),
-    } as unknown as RepositoryForge;
+    } as unknown as IssueTracker;
     const issueSet = {
       mode: "multiple" as const,
       orchestration: { mode: "parent" as const, orchestratorId: "parent" },
@@ -235,23 +235,23 @@ describe("deterministic linked issue creation", () => {
       ],
     };
 
-    await expect(createIssueDraftSetWithRecords({ forge, labels: [], forcePrsManaged: false, issueSet, receiptFilePath }))
+    await expect(createIssueDraftSetWithRecords({ tracker, labels: [], forcePrsManaged: false, issueSet, receiptFilePath }))
       .rejects.toThrow("temporary failure");
     expect(JSON.parse(readFileSync(receiptFilePath, "utf8"))).toMatchObject({ issues: [{ id: "parent", number: 41 }] });
 
-    const retried = await createIssueDraftSetWithRecords({ forge, labels: [], forcePrsManaged: false, issueSet, receiptFilePath });
+    const retried = await createIssueDraftSetWithRecords({ tracker, labels: [], forcePrsManaged: false, issueSet, receiptFilePath });
     expect(retried.map(({ id, number }) => ({ id, number }))).toEqual([{ id: "parent", number: 41 }, { id: "child", number: 42 }]);
     expect(createOrReuseIssue).toHaveBeenCalledTimes(3);
   });
 
   it("returns completed comment identities when a later artifact publication fails", async () => {
-    const forge = {
+    const tracker = {
       fetchIssueComments: vi.fn(async () => []),
       createIssuePlanComment: vi.fn()
         .mockResolvedValueOnce({ id: 10, body: "spec", url: "https://example.test/comments/10", updatedAt: "2026-09-01T00:00:00Z" })
         .mockRejectedValueOnce(new Error("permission denied")),
       fetchIssuePlanComment: vi.fn(async () => undefined),
-    } as unknown as RepositoryForge;
+    } as unknown as IssueTracker;
     const issueSet = {
       mode: "multiple" as const,
       orchestration: { mode: "flat" as const, reason: "Independent" },
@@ -261,7 +261,7 @@ describe("deterministic linked issue creation", () => {
     };
 
     const result = await publishLinkedIssueArtifacts({
-      forge,
+      tracker,
       issueSet,
       issues: [{ id: "one", number: 7, title: "One", url: "https://example.test/issues/7", status: "created" }],
     });

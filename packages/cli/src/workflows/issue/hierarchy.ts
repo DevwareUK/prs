@@ -1,4 +1,4 @@
-import type { IssueIdentity, RepositoryForge } from "../../forge";
+import type { IssueIdentity, IssueTracker } from "../../issue-tracker";
 import type { ParsedIssueDraftSet } from "./draft-set";
 import type { ToolCreatedIssueRecord } from "./create-set";
 
@@ -37,19 +37,19 @@ function relationship(
 }
 
 async function verifyBothDirections(
-  forge: RepositoryForge,
+  tracker: IssueTracker,
   parent: IssueIdentity,
   child: IssueIdentity
 ): Promise<boolean> {
   const [actualParent, children] = await Promise.all([
-    forge.fetchIssueParent(child.number),
-    forge.fetchIssueChildren(parent.number),
+    tracker.fetchIssueParent(child.number),
+    tracker.fetchIssueChildren(parent.number),
   ]);
   return actualParent?.id === parent.id && children.some((candidate) => candidate.id === child.id);
 }
 
 export async function ensureIssueHierarchy(input: {
-  forge: RepositoryForge;
+  tracker: IssueTracker;
   issueSet: ParsedIssueDraftSet;
   issues: ToolCreatedIssueRecord[];
 }): Promise<IssueHierarchyResult> {
@@ -73,7 +73,7 @@ export async function ensureIssueHierarchy(input: {
   const relationships: IssueHierarchyRelationship[] = [];
   let parent: IssueIdentity;
   try {
-    parent = await input.forge.fetchIssueIdentity(parentRecord.number);
+    parent = await input.tracker.fetchIssueIdentity(parentRecord.number);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     for (const entry of input.issueSet.issues.filter((issue) => issue.parentId)) {
@@ -103,7 +103,7 @@ export async function ensureIssueHierarchy(input: {
     }
     let child: IssueIdentity;
     try {
-      child = await input.forge.fetchIssueIdentity(childRecord.number);
+      child = await input.tracker.fetchIssueIdentity(childRecord.number);
     } catch (error) {
       relationships.push({
         parentId: parent.id,
@@ -118,7 +118,7 @@ export async function ensureIssueHierarchy(input: {
       continue;
     }
     try {
-      const currentParent = await input.forge.fetchIssueParent(child.number);
+      const currentParent = await input.tracker.fetchIssueParent(child.number);
       if (currentParent && currentParent.id !== parent.id) {
         relationships.push(relationship(parent, child, "conflict", {
           message: `Child #${child.number} already belongs to unrelated parent #${currentParent.number}; it was not reparented.`,
@@ -129,13 +129,13 @@ export async function ensureIssueHierarchy(input: {
 
       if (!currentParent) {
         try {
-          await input.forge.addIssueChild(parent.number, child.id);
+          await input.tracker.addIssueChild(parent.number, child.id);
         } catch {
           // The response may have been lost after GitHub applied the relationship.
         }
       }
 
-      if (await verifyBothDirections(input.forge, parent, child)) {
+      if (await verifyBothDirections(input.tracker, parent, child)) {
         relationships.push(relationship(parent, child, "verified"));
       } else {
         relationships.push(relationship(parent, child, "incomplete", {

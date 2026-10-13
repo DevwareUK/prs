@@ -25,7 +25,7 @@ This authorization does not cover issue creation, specification or plan publicat
 
 ## Completion
 
-1. Review the diff against the approved issue scope and acceptance criteria.
+1. Preflight the forge for PR publication and the tracker for any required issue reads/audits before committing or remote mutations; disabling an unrelated integration does not block PR-only work. Review the diff against the approved issue scope and acceptance criteria.
 2. Run fresh verification. Fix in-scope failures; report inherited or external failures with evidence.
 3. Stage only files that belong to the approved issue and inspect `git diff --cached --name-status`. Run `prs issue finalize <number>`, then approve only after checking its displayed commit message and staged paths.
 

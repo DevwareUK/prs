@@ -1,166 +1,43 @@
+import type { PullRequestListToolResult } from "./pr-list-tool";
 import type { ResolvedRepositoryConfigType } from "@prs/contracts";
+import type {
+  RepositoryIdentity,
+  RepositoryComment,
+  AuditTarget,
+  PullRequestDetails,
+  PullRequestCheckSignal,
+  OpenPullRequestChange,
+  PullRequestReviewComment,
+  PullRequestReviewThreadDetails,
+  CreatePullRequestReviewInput,
+  CreatedPullRequestReviewRecord,
+  CreatePullRequestInput,
+  CreatedPullRequestRecord,
+} from "./integration-types";
 import { createGitHubRepositoryForge } from "./github";
-import type { IssueStartGitHubResult } from "./issue-start-github";
-
-export type IssueDetails = {
-  title: string;
-  body: string;
-  url: string;
-};
-
-export type RepositoryIdentity = {
-  owner: string;
-  name: string;
-  url: string;
-};
-
-export type IssueLinkedPullRequest = {
-  number: number;
-  title: string;
-  url: string;
-  state: "open" | "closed" | "merged";
-};
-
-export type IssuePlanComment = {
-  id: number;
-  body: string;
-  url: string;
-  updatedAt: string;
-};
-
-export type RepositoryComment = {
-  id: number;
-  body: string;
-  url: string;
-  createdAt: string;
-  updatedAt: string;
-  author: string;
-  isBot: boolean;
-};
-
-export type AuditTarget = {
-  type: "issue" | "pull-request";
-  number: number;
-};
-
-export type PullRequestDetails = {
-  number: number;
-  title: string;
-  body: string;
-  url: string;
-  baseRefName: string;
-  headRefName: string;
-  headSha?: string;
-  isDraft?: boolean;
-  mergeable?: boolean | null;
-  mergeableState?: string | null;
-};
-
-export type PullRequestCheckSignal = {
-  name: string;
-  status: "queued" | "in-progress" | "completed" | "pending" | "unknown";
-  conclusion?: "success" | "failure" | "neutral" | "cancelled" | "skipped" | "timed-out" | "action-required" | "unknown";
-  url?: string;
-};
-
-export type OpenPullRequestChange = {
-  number: number;
-  title: string;
-  url: string;
-  baseRefName: string;
-  headRefName: string;
-  files: string[];
-};
-
-export type PullRequestReviewComment = {
-  id: number;
-  body: string;
-  path: string;
-  line?: number;
-  originalLine?: number;
-  startLine?: number;
-  originalStartLine?: number;
-  side?: string;
-  startSide?: string;
-  diffHunk?: string;
-  url: string;
-  author: string;
-  authorIsBot?: boolean;
-  createdAt: string;
-  updatedAt: string;
-  inReplyToId?: number;
-  commitOid?: string;
-};
-
-export type PullRequestReviewThreadDetails = {
-  threadId: number;
-  nodeId: string;
-  isResolved: boolean;
-  isOutdated: boolean;
-  comments: PullRequestReviewComment[];
-};
-
-export type PullRequestInlineReviewCommentInput = {
-  path: string;
-  line: number;
-  side: "RIGHT";
-  body: string;
-};
-
-export type PullRequestReviewEvent = "APPROVE" | "COMMENT" | "REQUEST_CHANGES";
-
-export type CreatePullRequestReviewInput = {
-  prNumber: number;
-  commitSha?: string;
-  event: PullRequestReviewEvent;
-  body: string;
-  comments: PullRequestInlineReviewCommentInput[];
-};
-
-export type CreatedPullRequestReviewRecord = {
-  id?: number;
-  url?: string;
-};
-
-export type CreatedIssueRecord = {
-  number: number;
-  title: string;
-  url: string;
-  status: "created" | "existing";
-};
-
-export type IssueIdentity = {
-  number: number;
-  id: number;
-  url: string;
-};
-
-export interface CreatePullRequestInput {
-  branchName: string;
-  baseBranch: string;
-  title: string;
-  body: string;
-  bodyFilePath?: string;
-  outputLogPath: string;
-}
-
-export type CreatedPullRequestRecord = {
-  url?: string;
-};
+export type {
+  RepositoryIdentity,
+  IssueLinkedPullRequest,
+  RepositoryComment,
+  AuditTarget,
+  PullRequestDetails,
+  PullRequestCheckSignal,
+  OpenPullRequestChange,
+  PullRequestReviewComment,
+  PullRequestReviewThreadDetails,
+  PullRequestInlineReviewCommentInput,
+  PullRequestReviewEvent,
+  CreatePullRequestReviewInput,
+  CreatedPullRequestReviewRecord,
+  CreatePullRequestInput,
+  CreatedPullRequestRecord,
+} from "./integration-types";
 
 export interface RepositoryForge {
   readonly type: "github" | "none";
+  listPullRequests(options: {actionable: boolean}): Promise<PullRequestListToolResult>;
   getRepositoryIdentity(): RepositoryIdentity;
   isAuthenticated(): boolean;
-  fetchIssueDetails(issueNumber: number): Promise<IssueDetails>;
-  startIssueWork(issueNumber: number): Promise<IssueStartGitHubResult>;
-  fetchIssueIdentity(issueNumber: number): Promise<IssueIdentity>;
-  fetchIssueParent(issueNumber: number): Promise<IssueIdentity | null>;
-  fetchIssueChildren(issueNumber: number): Promise<IssueIdentity[]>;
-  addIssueChild(parentNumber: number, childDatabaseId: number): Promise<void>;
-  fetchIssueComments(issueNumber: number): Promise<RepositoryComment[]>;
-  fetchIssuePlanComment(issueNumber: number): Promise<IssuePlanComment | undefined>;
-  fetchIssueLinkedPullRequests(issueNumber: number): Promise<IssueLinkedPullRequest[]>;
   fetchAuditComment(target: AuditTarget): Promise<RepositoryComment | undefined>;
   fetchPullRequestDetails(prNumber: number): Promise<PullRequestDetails>;
   fetchPullRequestChecks(prNumber: number): Promise<PullRequestCheckSignal[]>;
@@ -176,22 +53,16 @@ export interface RepositoryForge {
     input: CreatePullRequestReviewInput
   ): Promise<CreatedPullRequestReviewRecord>;
   markPullRequestReadyForReview?(prNumber: number): Promise<void>;
-  createIssuePlanComment(issueNumber: number, body: string): Promise<IssuePlanComment>;
   createAuditComment(target: AuditTarget, body: string): Promise<RepositoryComment>;
-  updateIssuePlanComment(commentId: number, body: string): Promise<IssuePlanComment>;
-  updateIssueComment(commentId: number, body: string): Promise<RepositoryComment>;
-  createDraftIssue(title: string, body: string): Promise<string>;
-  updateIssue(issueNumber: number, title: string, body: string): Promise<CreatedIssueRecord>;
-  createOrReuseIssue(
-    title: string,
-    body: string,
-    labels: string[]
-  ): Promise<CreatedIssueRecord>;
+  updateComment(commentId: number, body: string): Promise<RepositoryComment>;
   createPullRequest(input: CreatePullRequestInput): Promise<CreatedPullRequestRecord>;
 }
 
 class NoopRepositoryForge implements RepositoryForge {
   readonly type = "none" as const;
+  async listPullRequests(): Promise<PullRequestListToolResult> {
+    return {status: "blocked", reason: "forge-disabled", message: "Repository forge support is disabled by .prs/config.json.", nextAction: "configure-forge"};
+  }
 
   isAuthenticated(): boolean {
     return false;
@@ -199,67 +70,13 @@ class NoopRepositoryForge implements RepositoryForge {
 
   getRepositoryIdentity(): RepositoryIdentity {
     throw new Error(
-      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
-    );
-  }
-
-  async fetchIssueLinkedPullRequests(): Promise<IssueLinkedPullRequest[]> {
-    throw new Error(
-      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
-    );
-  }
-
-  async fetchIssueDetails(): Promise<IssueDetails> {
-    throw new Error(
-      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
-    );
-  }
-
-  async startIssueWork(): Promise<IssueStartGitHubResult> {
-    throw new Error(
-      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
-    );
-  }
-
-  async fetchIssueIdentity(): Promise<IssueIdentity> {
-    throw new Error(
-      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
-    );
-  }
-
-  async fetchIssueParent(): Promise<IssueIdentity | null> {
-    throw new Error(
-      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
-    );
-  }
-
-  async fetchIssueChildren(): Promise<IssueIdentity[]> {
-    throw new Error(
-      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
-    );
-  }
-
-  async addIssueChild(): Promise<void> {
-    throw new Error(
-      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
-    );
-  }
-
-  async fetchIssuePlanComment(): Promise<IssuePlanComment | undefined> {
-    throw new Error(
-      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
+      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable pull request workflows."
     );
   }
 
   async fetchAuditComment(): Promise<RepositoryComment | undefined> {
     throw new Error(
       "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable audit workflows."
-    );
-  }
-
-  async fetchIssueComments(): Promise<RepositoryComment[]> {
-    throw new Error(
-      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
     );
   }
 
@@ -293,45 +110,15 @@ class NoopRepositoryForge implements RepositoryForge {
     );
   }
 
-  async createIssuePlanComment(): Promise<IssuePlanComment> {
-    throw new Error(
-      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
-    );
-  }
-
   async createAuditComment(): Promise<RepositoryComment> {
     throw new Error(
       "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable audit workflows."
     );
   }
 
-  async updateIssuePlanComment(): Promise<IssuePlanComment> {
+  async updateComment(): Promise<RepositoryComment> {
     throw new Error(
-      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
-    );
-  }
-
-  async updateIssueComment(): Promise<RepositoryComment> {
-    throw new Error(
-      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
-    );
-  }
-
-  async createDraftIssue(): Promise<string> {
-    throw new Error(
-      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue creation."
-    );
-  }
-
-  async updateIssue(): Promise<CreatedIssueRecord> {
-    throw new Error(
-      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue workflows."
-    );
-  }
-
-  async createOrReuseIssue(): Promise<CreatedIssueRecord> {
-    throw new Error(
-      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable issue creation."
+      "Repository forge support is disabled by .prs/config.json. Configure `forge.type` to enable pull request workflows."
     );
   }
 
@@ -342,13 +129,6 @@ class NoopRepositoryForge implements RepositoryForge {
   }
 }
 
-export function createRepositoryForge(
-  repoRoot: string,
-  config: ResolvedRepositoryConfigType
-): RepositoryForge {
-  if (config.forge.type === "none") {
-    return new NoopRepositoryForge();
-  }
-
-  return createGitHubRepositoryForge(repoRoot);
+export function createRepositoryForge(repoRoot: string, config: ResolvedRepositoryConfigType): RepositoryForge {
+  return config.forge.type === "none" ? new NoopRepositoryForge() : createGitHubRepositoryForge(repoRoot);
 }

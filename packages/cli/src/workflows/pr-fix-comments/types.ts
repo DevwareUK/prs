@@ -1,4 +1,4 @@
-import type { IssueDetails, PullRequestReviewComment } from "../../forge";
+import type { IssueDetails, PullRequestReviewComment } from "../../integration-types";
 
 export type PullRequestFixWorkspace = {
   runDir: string;

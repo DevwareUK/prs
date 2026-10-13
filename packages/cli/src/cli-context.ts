@@ -1,3 +1,5 @@
+import { createIssuePullRequestLinks } from "./issue-pr-links";
+import { createIssueTracker } from "./issue-tracker";
 import { resolve } from "node:path";
 import dotenv from "dotenv";
 import { loadResolvedRepositoryConfig } from "./config";
@@ -22,4 +24,12 @@ export function getRepositoryConfig(repoRoot = getDefaultRepoRoot()) {
 
 export function getRepositoryForge(repoRoot = getDefaultRepoRoot()): RepositoryForge {
   return createRepositoryForge(repoRoot, getRepositoryConfig(repoRoot));
+}
+
+export function getIssueTracker(repoRoot = getDefaultRepoRoot()) {
+  return createIssueTracker(repoRoot, getRepositoryConfig(repoRoot));
+}
+
+export function getIssuePullRequestLinks(repoRoot = getDefaultRepoRoot()) {
+  return createIssuePullRequestLinks(repoRoot, getRepositoryConfig(repoRoot));
 }

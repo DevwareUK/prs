@@ -1,4 +1,4 @@
-import type { AuditTarget } from "../forge";
+import type { AuditTarget } from "../integration-types";
 
 function parseTargetNumber(rawValue: string | undefined): number {
   if (!rawValue || !/^\d+$/.test(rawValue)) {

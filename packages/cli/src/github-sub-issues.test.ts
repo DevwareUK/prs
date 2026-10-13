@@ -5,8 +5,8 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("node:child_process", () => ({ execFileSync: vi.fn(), spawnSync: vi.fn() }));
-import { createGitHubRepositoryForge } from "./github";
-import type { RepositoryForge } from "./forge";
+import { createGitHubIssueTracker } from "./github-issue-tracker";
+import type { IssueTracker } from "./issue-tracker";
 import { ensureIssueHierarchy } from "./workflows/issue/hierarchy";
 
 const execMock = vi.mocked(execFileSync);
@@ -48,10 +48,10 @@ describe("GitHub native sub-issues", () => {
       }
       return http({}, 201, "Created");
     };
-    const forge = createGitHubRepositoryForge(root);
+    const tracker = createGitHubIssueTracker(root);
 
-    const child = await forge.fetchIssueIdentity(42);
-    await forge.addIssueChild(7, child.id);
+    const child = await tracker.fetchIssueIdentity(42);
+    await tracker.addIssueChild(7, child.id);
 
     expect(requests).toContainEqual({
       endpoint: "repos/DevwareUK/prs/issues/7/sub_issues",
@@ -64,7 +64,7 @@ describe("GitHub native sub-issues", () => {
     respond = endpoint => endpoint.endsWith("/parent")
       ? http({ message: "Not Found" }, 404, "Not Found")
       : http({ id: 1042, number: 42, html_url: "https://github.com/DevwareUK/prs/issues/42" });
-    await expect(createGitHubRepositoryForge(root).fetchIssueParent(42)).resolves.toBeNull();
+    await expect(createGitHubIssueTracker(root).fetchIssueParent(42)).resolves.toBeNull();
   });
 
   it("paginates children and returns real issue identities", async () => {
@@ -73,7 +73,7 @@ describe("GitHub native sub-issues", () => {
       ? http([issue(142)])
       : http(Array.from({ length: 100 }, (_, index) => issue(index + 1)));
 
-    const children = await createGitHubRepositoryForge(root).fetchIssueChildren(7);
+    const children = await createGitHubIssueTracker(root).fetchIssueChildren(7);
 
     expect(children).toHaveLength(101);
     expect(children.at(-1)).toEqual({ id: 1142, number: 142, url: "https://github.com/DevwareUK/prs/issues/142" });
@@ -86,7 +86,7 @@ describe("GitHub native sub-issues", () => {
   it("does not mutate explicitly flat sets", async () => {
     const addIssueChild = vi.fn();
     const result = await ensureIssueHierarchy({
-      forge: { addIssueChild } as unknown as RepositoryForge,
+      tracker: { addIssueChild } as unknown as IssueTracker,
       issueSet: { mode: "multiple", orchestration: { mode: "flat", reason: "Independent" }, issues: [] },
       issues: [],
     });
@@ -96,14 +96,14 @@ describe("GitHub native sub-issues", () => {
 
   it("reports a foreign parent conflict without reparenting", async () => {
     const addIssueChild = vi.fn();
-    const forge = {
+    const tracker = {
       fetchIssueIdentity: vi.fn(async (number: number) => ({ id: number + 1000, number, url: `https://example.test/issues/${number}` })),
       fetchIssueParent: vi.fn(async () => ({ id: 1099, number: 99, url: "https://example.test/issues/99" })),
       fetchIssueChildren: vi.fn(async () => []),
       addIssueChild,
-    } as unknown as RepositoryForge;
+    } as unknown as IssueTracker;
     const result = await ensureIssueHierarchy({
-      forge,
+      tracker,
       issueSet: {
         mode: "multiple",
         orchestration: { mode: "parent", orchestratorId: "parent" },
@@ -124,14 +124,14 @@ describe("GitHub native sub-issues", () => {
 
   it("reconciles an uncertain add response by reading both directions", async () => {
     let added = false;
-    const forge = {
+    const tracker = {
       fetchIssueIdentity: vi.fn(async (number: number) => ({ id: number + 1000, number, url: `https://example.test/issues/${number}` })),
       fetchIssueParent: vi.fn(async (number: number) => added && number === 42 ? ({ id: 1007, number: 7, url: "https://example.test/issues/7" }) : null),
       fetchIssueChildren: vi.fn(async () => added ? [{ id: 1042, number: 42, url: "https://example.test/issues/42" }] : []),
       addIssueChild: vi.fn(async () => { added = true; throw new Error("connection lost"); }),
-    } as unknown as RepositoryForge;
+    } as unknown as IssueTracker;
     const result = await ensureIssueHierarchy({
-      forge,
+      tracker,
       issueSet: {
         mode: "multiple",
         orchestration: { mode: "parent", orchestratorId: "parent" },
@@ -149,7 +149,7 @@ describe("GitHub native sub-issues", () => {
   });
 
   it("preserves known targets when database identity lookup fails", async () => {
-    const forge = {
+    const tracker = {
       fetchIssueIdentity: vi.fn(async (number: number) => {
         if (number === 42) throw new Error("identity permission denied");
         return { id: 1007, number, url: `https://example.test/issues/${number}` };
@@ -157,9 +157,9 @@ describe("GitHub native sub-issues", () => {
       fetchIssueParent: vi.fn(),
       fetchIssueChildren: vi.fn(),
       addIssueChild: vi.fn(),
-    } as unknown as RepositoryForge;
+    } as unknown as IssueTracker;
     const result = await ensureIssueHierarchy({
-      forge,
+      tracker,
       issueSet: {
         mode: "multiple",
         orchestration: { mode: "parent", orchestratorId: "parent" },
@@ -180,6 +180,6 @@ describe("GitHub native sub-issues", () => {
       childNumber: 42,
       message: "identity permission denied",
     });
-    expect(forge.addIssueChild).not.toHaveBeenCalled();
+    expect(tracker.addIssueChild).not.toHaveBeenCalled();
   });
 });
