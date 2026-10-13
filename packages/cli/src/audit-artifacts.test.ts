@@ -1,3 +1,4 @@
+import type { AuditCommentStore } from "./audit-artifacts";
 import { describe, expect, it } from "vitest";
 import { UNATTENDED_GITHUB_OUTPUT_NOTE } from "@prs/contracts";
 import { makeUsageFixture } from "./token-usage.test-support";
@@ -5,7 +6,7 @@ import { normalizeUsageEvidence } from "./token-usage-normalize";
 import { aggregateUsageEvents } from "./token-usage-aggregate";
 import { priceUsage } from "./token-usage-pricing";
 import { renderUsageMarkdown } from "./token-usage-render";
-import type { AuditTarget, RepositoryForge, RepositoryComment } from "./forge";
+import type { AuditTarget, RepositoryComment } from "./integration-types";
 import {
   AUDIT_COMMENT_MARKER,
   publishAuditArtifact,
@@ -34,8 +35,8 @@ describe("audit artifacts", () => {
       type: "github", isAuthenticated: () => true,
       fetchAuditComment: async () => saved,
       createAuditComment: async (_target: AuditTarget, body: string) => { saved = comment(body); return saved; },
-      updateIssueComment: async (_id: number, body: string) => { saved = comment(body); return saved; },
-    } as unknown as RepositoryForge;
+      updateComment: async (_id: number, body: string) => { saved = comment(body); return saved; },
+    } as unknown as AuditCommentStore;
     const input = { target: { type: type === "pr" ? "pull-request" : "issue", number: 350 } as AuditTarget, sectionName: "token-usage", content };
     expect((await publishAuditArtifact(forge, input)).status).toBe("created");
     await publishAuditArtifact(forge, { ...input, sectionName: "checks", content: "Keep this check evidence." });
@@ -103,7 +104,7 @@ describe("audit artifacts", () => {
         calls.push(body);
         return comment(body);
       },
-    } as unknown as RepositoryForge;
+    } as unknown as AuditCommentStore;
 
     const result = await publishAuditArtifact(forge, {
       target: { type: "issue", number: 42 },
@@ -127,11 +128,11 @@ describe("audit artifacts", () => {
       type: "github",
       isAuthenticated: () => true,
       fetchAuditComment: async () => comment(existing),
-      updateIssueComment: async (_commentId: number, body: string) => {
+      updateComment: async (_commentId: number, body: string) => {
         updatedBody = body;
         return comment(body);
       },
-    } as unknown as RepositoryForge;
+    } as unknown as AuditCommentStore;
 
     const result = await publishAuditArtifact(forge, {
       target: { type: "issue", number: 42 },
@@ -158,11 +159,11 @@ describe("audit artifacts", () => {
       type: "github",
       isAuthenticated: () => true,
       fetchAuditComment: async () => comment(existing),
-      updateIssueComment: async (_commentId: number, body: string) => {
+      updateComment: async (_commentId: number, body: string) => {
         updatedBody = body;
         return comment(body);
       },
-    } as unknown as RepositoryForge;
+    } as unknown as AuditCommentStore;
 
     await publishAuditArtifact(forge, {
       target: { type: "issue", number: 42 },
@@ -173,4 +174,17 @@ describe("audit artifacts", () => {
     expect(updatedBody).toContain("New plan");
     expect(updatedBody).not.toContain(UNATTENDED_GITHUB_OUTPUT_NOTE);
   });
+});
+
+it("updates an existing audit using a domain-neutral comment store", async () => {
+  let saved = comment("<!-- prs:audit -->\n# Pull request #42 audit\n");
+  const store = {
+    isAuthenticated: () => true,
+    fetchAuditComment: async () => saved,
+    createAuditComment: async (_target: AuditTarget, body: string) => (saved = comment(body)),
+    updateComment: async (_id: number, body: string) => (saved = comment(body)),
+  };
+  const result = await publishAuditArtifact(store, {target: {type: "pull-request", number: 42}, sectionName: "checks", content: "Tests passed"});
+  expect(result.status).toBe("updated");
+  expect(saved.body).toContain("Tests passed");
 });

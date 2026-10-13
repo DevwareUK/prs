@@ -4,7 +4,7 @@
 
 The agent does the reasoning and implementation. `prs` provides the repeatable local operations around it: loading issue context, publishing approved artifacts, preparing a branch, validating a pull request, and publishing an audit trail.
 
-The repository does not execute a model, require an AI-provider API key, or distribute GitHub Actions. Codex, Claude Code, and GitHub Copilot can all call the same local JSON tools. GitHub is the supported forge.
+The repository does not execute a model, require an AI-provider API key, or distribute GitHub Actions. Codex, Claude Code, and GitHub Copilot can all call the same local JSON tools. Issue tracking and repository collaboration use separate integrations. GitHub is currently supported for both: the issue tracker owns issues, hierarchy and issue artifacts; the forge owns pull requests, reviews and checks.
 
 ## Install
 
@@ -13,7 +13,7 @@ Prerequisites:
 - Node.js 20 or later
 - pnpm 10.7
 - Git
-- GitHub CLI (`gh`), authenticated for GitHub-backed commands; local setup and disabled-forge workflows can run without it
+- GitHub CLI (`gh`), authenticated for GitHub-backed commands; local setup and workflows with both integrations disabled can run without it
 
 From this repository:
 
@@ -161,6 +161,7 @@ Cumulative snapshots are differenced, never added as independent phase totals. M
   "baseBranch": "main",
   "buildCommand": ["pnpm", "build"],
   "forge": { "type": "github" },
+  "issueTracker": { "type": "github" },
   "aiContext": {
     "excludePaths": ["fixtures/**"]
   },
@@ -190,6 +191,17 @@ For a personal account choice, run `gh auth login --hostname github.com` for eac
 The configured account applies to every GitHub operation performed by `prs` and takes precedence over inherited token variables. `.prs/config.local.json` selects that identity for PRS; it does not change the globally active GitHub CLI account, and PRS never uses `gh auth switch`. GitHub CLI owns the stored credential and its login or refresh process. Without a local account choice, `gh` uses its normal authentication, including `GH_TOKEN`/`GITHUB_TOKEN` for automation. GitHub CLI is required even when a token is supplied; `prs` no longer makes direct GitHub HTTP requests. A linked worktree has its own local account file.
 
 For `prs tool issue list`, `prs tool pr list`, and `prs tool issue create`, a configured account that GitHub CLI still knows about but whose credential cannot be read by the host process returns `github-credential-store-inaccessible` with `retry-with-credential-store-access`. This includes status checks that become indeterminate because the restricted process cannot reach the credential store or GitHub. Retry the exact command through the host's normal permission mechanism, preserving approvals, artifact paths, targets, and any known issue number; PRS does not elevate itself or invoke a host-specific mechanism. Only after that unrestricted retry still reports missing or rejected credentials should the selected account be logged in or refreshed. A missing or rejected credential returns `github-auth-required` with `configure-github-auth`. Neither result authorizes exposing credentials, switching accounts, changing targets, or repeating an uncertain creation after a partial remote write. See [setup configuration](docs/setup-configuration.md) and [the CLI reference](docs/cli-reference.md#github-authentication-results).
+
+Configure `forge.type` for pull request workflows and `issueTracker.type` for issue workflows; each accepts `github` or `none`. If the tracker type is omitted, it inherits the effective forge type, preserving existing configurations. Setup writes both effective types explicitly. Both GitHub integrations use the same origin repository and existing `forge.githubCliPath` / local `forge.githubAccount` settings.
+
+| Forge | Issue tracker | Available workflows |
+|---|---|---|
+| `github` | `github` | Issues, PRs and native issue–PR links |
+| `github` | `none` | PR listing, readiness, reviews, checks and PR audits |
+| `none` | `github` | Issue creation, listing, context, readiness, hierarchy, managed artifacts and issue audits |
+| `none` | `none` | Local setup, usage evidence and staged-only local finalization |
+
+Issue context and ordinary issue listing report unavailable linked-PR evidence explicitly when the forge is disabled. `issue list --actionable` blocks without that evidence. Issue-to-PR completion needs both integrations enabled. GitHub issue arguments remain numeric; additional trackers and separate tracker accounts/repositories are not yet supported.
 
 See [the CLI reference](docs/cli-reference.md), [setup configuration](docs/setup-configuration.md), [agent parity guide](docs/agent-parity.md), [migration guide](docs/migration.md), and [development guide](docs/development.md).
 

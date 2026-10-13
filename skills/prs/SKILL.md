@@ -16,6 +16,12 @@ Use `prs` as the router for the local GitHub workflow. The active coding agent o
 - Existing pull request: use `prs-pr` for main-checkout readiness, review, conflict resolution, comment fixes, or failing-test repairs; preserve the PR number and requested action.
 - No selected issue or pull request: run `prs tool issue list --actionable --json` or `prs tool pr list --actionable --json` and show number, title, and URL.
 
+## Integration boundaries
+
+Issue workflows and issue audits use `issueTracker.type`; PR workflows and PR audits use `forge.type`. GitHub is currently the only enabled provider for either. An omitted tracker type inherits the forge type for compatibility. Both GitHub integrations share the existing `forge.githubCliPath` and local `forge.githubAccount` settings.
+
+Check `linkedPullRequestsStatus` in issue context/list results. `unavailable` means the link evidence is unknown; never treat an empty array or false linked-PR flag as proof of no PR in that state. Actionable issue listing blocks without link evidence. Before starting an issue-to-PR implementation lifecycle, verify both integrations are enabled; tracker-only creation/refinement and forge-only PR work remain independent.
+
 ## Local artifacts
 
 `.prs/runs/<task-specific-run>/` is the only repository-local root for generated workflow artifacts. Use a run directory returned by `prs` when available; otherwise create a task-specific directory beneath `.prs/runs`.

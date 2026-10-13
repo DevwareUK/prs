@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { listIssuesTool } from "./issue-list-tool";
+import { listGitHubIssues } from "./github-issue-list";
 
 function repository(account: string) {
   const root = mkdtempSync(join(tmpdir(), "prs-issue-list-account-"));
@@ -19,7 +19,7 @@ describe("issue list tool", () => {
     const request = vi.fn();
 
     await expect(
-      listIssuesTool({
+      listGitHubIssues({
         actionable: true,
         env: {},
         request,
@@ -49,7 +49,7 @@ describe("issue list tool", () => {
     const request = vi.fn();
 
     await expect(
-      listIssuesTool({
+      listGitHubIssues({
         actionable: true,
         env: { GH_TOKEN: "inherited" },
         request,
@@ -76,7 +76,7 @@ describe("issue list tool", () => {
   });
 
   it("uses safe login recovery when the authenticated-user request throws an unknown error", async () => {
-    const result = await listIssuesTool({
+    const result = await listGitHubIssues({
       actionable: true,
       env: { GH_TOKEN: "token" },
       request: async () => { throw new Error("do-not-expose-auth-diagnostic"); },
@@ -145,16 +145,6 @@ describe("issue list tool", () => {
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: vi.fn().mockResolvedValue([
-          {
-            number: 9,
-            title: "Implementation PR",
-            body: "Fixes #2",
-          },
-        ]),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
         json: vi.fn().mockResolvedValue([]),
       })
       .mockResolvedValueOnce({
@@ -174,8 +164,9 @@ describe("issue list tool", () => {
       });
 
     await expect(
-      listIssuesTool({
+      listGitHubIssues({
         actionable: true,
+        links: {findLinkedPullRequests: async issue => ({status: "available", pullRequests: issue.key === "2" ? [{number: 9, title: "Implementation PR", url: "https://github.com/DevwareUK/prs/pull/9", state: "open"}] : []}), formatClosingReference: () => undefined},
         env: { GH_TOKEN: "token" },
         request,
         spawnSyncImpl: () => ({ status: 0 }),
@@ -259,8 +250,9 @@ describe("issue list tool", () => {
       });
 
     await expect(
-      listIssuesTool({
+      listGitHubIssues({
         actionable: false,
+        links: {findLinkedPullRequests: async () => ({status: "available", pullRequests: []}), formatClosingReference: () => undefined},
         env: { GH_TOKEN: "token" },
         request,
         spawnSyncImpl: () => ({ status: 0 }),
@@ -283,7 +275,8 @@ it("uses the project account for both viewer identity and actionable filtering",
   const root = mkdtempSync(join(tmpdir(), "prs-list-account-"));
   mkdirSync(join(root, ".prs"));
   writeFileSync(join(root, ".prs/config.local.json"), JSON.stringify({ forge: { githubAccount: "work" } }));
-  const result = await listIssuesTool({ actionable: true, repoRoot: root,
+  const result = await listGitHubIssues({ actionable: true, repoRoot: root,
+    links: {findLinkedPullRequests: async () => ({status: "available", pullRequests: []}), formatClosingReference: () => undefined},
     env: { GH_TOKEN: "personal-secret" }, spawnSyncImpl: () => ({ status: 0 }),
     runCommand: () => "git@github.com:DevwareUK/prs.git",
     runGitHubCommand: (_command, args, options) => {
@@ -296,4 +289,32 @@ it("uses the project account for both viewer identity and actionable filtering",
     },
   });
   expect(result).toMatchObject({ status: "ready", currentUser: "work", issues: [{ number: 1, author: "work" }] });
+});
+
+it.each([false, true])("reports unavailable linking for tracker-only listing (actionable=%s)", async actionable => {
+  const request = async (endpoint: string) => ({ok: true, json: async () => endpoint === "user" ? {login: "me"} :
+    endpoint.includes("/issues?") ? [{number: 373, title: "Split", html_url: "https://github.com/DevwareUK/prs/issues/373", user: {login: "me"}, updated_at: "2026-10-13T00:00:00Z"}] : []});
+  const result = await listGitHubIssues({actionable, repoRoot: "/unused", env: {GH_TOKEN: "fixture"}, spawnSyncImpl: () => ({status: 0}),
+    runCommand: () => "git@github.com:DevwareUK/prs.git", request,
+    links: {findLinkedPullRequests: async () => ({status: "unavailable", reason: "forge-disabled"}), formatClosingReference: () => undefined}});
+  expect(result).toMatchObject(actionable ? {status: "blocked", reason: "issue-pr-links-unavailable"} : {
+    status: "ready", issues: [{number: 373}], linkedPullRequestsStatus: {status: "unavailable", reason: "forge-disabled"}});
+});
+
+it("preflights disabled PR linking before actionable listing accesses GitHub", async () => {
+  const root = repository("work");
+  writeFileSync(join(root, ".prs/config.json"), JSON.stringify({forge: {type: "none"}, issueTracker: {type: "github"}}));
+  const request = vi.fn(async () => {throw new Error("Must not query GitHub");});
+  expect(await listGitHubIssues({actionable: true, repoRoot: root, request, spawnSyncImpl: () => ({status: 1})}))
+    .toMatchObject({status: "blocked", reason: "issue-pr-links-unavailable"});
+  expect(request).not.toHaveBeenCalled();
+});
+
+it("reports disabled link evidence even when ordinary issue listing is empty", async () => {
+  const root = mkdtempSync(join(tmpdir(), "prs-empty-list-"));
+  mkdirSync(join(root, ".prs"));
+  writeFileSync(join(root, ".prs/config.json"), JSON.stringify({forge: {type: "none"}, issueTracker: {type: "github"}}));
+  const request = async (endpoint: string) => ({ok: true, json: async () => endpoint === "user" ? {login: "me"} : []});
+  expect(await listGitHubIssues({actionable: false, repoRoot: root, request, env: {GH_TOKEN: "fixture"}, spawnSyncImpl: () => ({status: 0}), runCommand: () => "git@github.com:DevwareUK/prs.git"}))
+    .toMatchObject({status: "ready", issues: [], linkedPullRequestsStatus: {status: "unavailable", reason: "forge-disabled"}});
 });

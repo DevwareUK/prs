@@ -22,7 +22,7 @@ describe("publishIssueArtifactsTool", () => {
     writeFileSync(specFilePath, "# Approved specification\n", "utf8");
     writeFileSync(planFilePath, "# Approved plan\n", "utf8");
 
-    const forge = {
+    const tracker = {
       fetchIssueDetails: vi.fn(async () => ({
         title: "Publish approved artifacts",
         body: "Use marker-based comments.",
@@ -53,7 +53,7 @@ describe("publishIssueArtifactsTool", () => {
       repoRoot,
       specFilePath,
       planFilePath,
-      forge,
+      tracker,
     });
 
     expect(result.managedComments.map(({ marker, url }) => ({ marker, url }))).toEqual([
@@ -66,18 +66,18 @@ describe("publishIssueArtifactsTool", () => {
         url: "https://github.com/DevwareUK/prs/issues/324#issuecomment-21",
       },
     ]);
-    expect(forge.createIssuePlanComment).toHaveBeenNthCalledWith(
+    expect(tracker.createIssuePlanComment).toHaveBeenNthCalledWith(
       1,
       324,
       "<!-- prs:issue-spec -->\n# Approved specification\n"
     );
-    expect(forge.createIssuePlanComment).toHaveBeenNthCalledWith(
+    expect(tracker.createIssuePlanComment).toHaveBeenNthCalledWith(
       2,
       324,
       "<!-- prs:issue-plan -->\n# Approved plan\n"
     );
-    expect(forge.updateIssueComment).not.toHaveBeenCalled();
-    expect(forge.updateIssuePlanComment).not.toHaveBeenCalled();
+    expect(tracker.updateIssueComment).not.toHaveBeenCalled();
+    expect(tracker.updateIssuePlanComment).not.toHaveBeenCalled();
   });
 
   it("updates existing managed comments from caller-approved Markdown", async () => {
@@ -88,7 +88,7 @@ describe("publishIssueArtifactsTool", () => {
     writeFileSync(specFilePath, "# Approved specification\n", "utf8");
     writeFileSync(planFilePath, "# Approved plan\n", "utf8");
 
-    const forge = {
+    const tracker = {
       fetchIssueDetails: vi.fn(async () => ({
         title: "Publish approved artifacts",
         body: "Use marker-based comments.",
@@ -134,7 +134,7 @@ describe("publishIssueArtifactsTool", () => {
       repoRoot,
       specFilePath,
       planFilePath,
-      forge,
+      tracker,
     });
 
     expect(result).toEqual({
@@ -159,15 +159,15 @@ describe("publishIssueArtifactsTool", () => {
         },
       ],
     });
-    expect(forge.updateIssueComment).toHaveBeenCalledWith(
+    expect(tracker.updateIssueComment).toHaveBeenCalledWith(
       20,
       "<!-- prs:issue-spec -->\n# Approved specification\n"
     );
-    expect(forge.updateIssuePlanComment).toHaveBeenCalledWith(
+    expect(tracker.updateIssuePlanComment).toHaveBeenCalledWith(
       21,
       "<!-- prs:issue-plan -->\n# Approved plan\n"
     );
-    expect(forge.createIssuePlanComment).not.toHaveBeenCalled();
+    expect(tracker.createIssuePlanComment).not.toHaveBeenCalled();
   });
 
   it("rejects empty artifacts before making GitHub writes", async () => {
@@ -177,7 +177,7 @@ describe("publishIssueArtifactsTool", () => {
     const planFilePath = resolve(repoRoot, "plan.md");
     writeFileSync(specFilePath, "  \n", "utf8");
     writeFileSync(planFilePath, "# Approved plan\n", "utf8");
-    const forge = {
+    const tracker = {
       fetchIssueDetails: vi.fn(),
       fetchIssueComments: vi.fn(),
       fetchIssuePlanComment: vi.fn(),
@@ -192,10 +192,10 @@ describe("publishIssueArtifactsTool", () => {
         repoRoot,
         specFilePath,
         planFilePath,
-        forge,
+        tracker,
       })
     ).rejects.toThrow("Specification artifact must contain non-empty Markdown");
-    expect(forge.fetchIssueDetails).not.toHaveBeenCalled();
-    expect(forge.updateIssueComment).not.toHaveBeenCalled();
+    expect(tracker.fetchIssueDetails).not.toHaveBeenCalled();
+    expect(tracker.updateIssueComment).not.toHaveBeenCalled();
   });
 });

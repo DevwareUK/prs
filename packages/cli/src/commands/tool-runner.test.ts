@@ -27,7 +27,7 @@ vi.mock("../cli-context", () => ({
   getCliArgs: () => state.args,
   getDefaultRepoRoot: () => state.root,
   getRepositoryConfig: () => { if (state.localOnly) throw new Error("Local render must not require forge config"); return {}; },
-  getRepositoryForge: () => { if (state.localOnly) throw new Error("Local render must not request a forge"); return forge; },
+  getIssueTracker: () => { if (state.localOnly) throw new Error("Local render must not request a forge"); return forge; },
   loadRepoEnv: () => undefined,
 }));
 import { runToolCommand } from "./tool-runner";

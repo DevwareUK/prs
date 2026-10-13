@@ -50,11 +50,12 @@ Report the original issue number, title and URL, plus both verified managed-comm
 Continue here only when implementation was requested. An implementation request (including `--jdi`, `--auto` or `--unattended`) authorizes the implementation lifecycle; it does not waive the unified approval of the specification, plan and exact publication target. Carry the originating implementation request, execution mode and issue/PR targets through the finish handoff; use the audit publication authorization in `prs-finish` for routine completion and token-usage audits. For a refine-only request, follow Refinement and stop.
 
 1. Reconcile the live specification and plan with the requested implementation. For a linked set, consume this issue's own approved pair rather than a parent or sibling plan; native parent membership does not imply a dependency. Use the Refinement process above if artifacts are missing or need changes. Reuse existing approved, unchanged artifacts; do not republish them just to start implementation.
-2. Run `prs tool issue ready <number> --json` and use its suggested branch and returned run directory. Keep subsequent working notes and evidence in that returned directory.
-3. Prefer a fresh branch or worktree from the updated configured base. If isolation is unavailable, continue in the active workspace and record the fallback.
-4. Implement in small verified steps. Delegate independent tasks only when supported and authorized; otherwise execute sequentially.
-5. Run the repository's relevant verification, including tests for changed behaviour.
-6. Continue with `prs-finish` for deterministic local commit finalization, pull-request creation, GitHub validation, and audit evidence.
+2. For an implementation lifecycle that will produce a PR, preflight both `issueTracker.type` and `forge.type` before branch, commit or remote mutations. An omitted tracker type inherits the forge type. Unavailable issue–PR link evidence must not be treated as an empty set of PRs. Tracker-only readiness provides read-only metadata, not permission to skip a required PR integration.
+3. Run `prs tool issue ready <number> --json` and use its suggested branch and returned run directory. Keep subsequent working notes and evidence in that returned directory.
+4. Prefer a fresh branch or worktree from the updated configured base. If isolation is unavailable, continue in the active workspace and record the fallback.
+5. Implement in small verified steps. Delegate independent tasks only when supported and authorized; otherwise execute sequentially.
+6. Run the repository's relevant verification, including tests for changed behaviour.
+7. Continue with `prs-finish` for deterministic local commit finalization, pull-request creation, GitHub validation, and audit evidence.
 
 For an implementation request, do not stop at readiness metadata. Missing capabilities do not authorize skipping phases, and implementation authorization does not authorize publishing unreviewed GitHub comments.
 

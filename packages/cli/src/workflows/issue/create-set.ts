@@ -1,4 +1,4 @@
-import type { CreatedIssueRecord, RepositoryForge } from "../../forge";
+import type { CreatedIssueRecord, IssueTracker } from "../../issue-tracker";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { ensurePrsManagedIssueBody } from "./artifacts";
 import type { ParsedIssueDraftSet, ParsedIssueDraftSetIssue } from "./draft-set";
@@ -58,7 +58,7 @@ function buildLinkedIssueBody(
 
 export async function createIssueDraftSetWithRecords(input: {
   issueSet: ParsedIssueDraftSet;
-  forge: RepositoryForge;
+  tracker: IssueTracker;
   labels: string[];
   forcePrsManaged: boolean;
   receiptFilePath?: string;
@@ -80,7 +80,7 @@ export async function createIssueDraftSetWithRecords(input: {
   for (const issue of input.issueSet.issues) {
     const knownIssueNumber = issue.issueNumber ?? receiptById.get(issue.id)?.number;
     if (knownIssueNumber !== undefined) {
-      const existing = await input.forge.fetchIssueDetails(knownIssueNumber);
+      const existing = await input.tracker.fetchIssueDetails(knownIssueNumber);
       baseBodyById.set(issue.id, existing.body);
       created.push({
         id: issue.id,
@@ -95,9 +95,9 @@ export async function createIssueDraftSetWithRecords(input: {
     const body = input.forcePrsManaged
       ? ensurePrsManagedIssueBody(issue.body)
       : issue.body;
-    const record = await input.forge.createOrReuseIssue(issue.title, body, input.labels);
+    const record = await input.tracker.createOrReuseIssue(issue.title, body, input.labels);
     if (record.status === "existing") {
-      const existing = await input.forge.fetchIssueDetails(record.number);
+      const existing = await input.tracker.fetchIssueDetails(record.number);
       baseBodyById.set(issue.id, existing.body);
       record.title = existing.title;
       record.url = existing.url;
@@ -118,7 +118,7 @@ export async function createIssueDraftSetWithRecords(input: {
   for (const issue of input.issueSet.issues) {
     const record = created.find((candidate) => candidate.id === issue.id);
     if (!record) continue;
-    const updated = await input.forge.updateIssue(
+    const updated = await input.tracker.updateIssue(
       record.number,
       record.title,
       buildLinkedIssueBody(

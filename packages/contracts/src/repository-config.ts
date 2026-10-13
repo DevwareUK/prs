@@ -15,8 +15,10 @@ export const RepositoryForgeConfig = z
 
 export type RepositoryForgeConfigType = z.infer<typeof RepositoryForgeConfig>;
 
+export const RepositoryIssueTrackerType = z.enum(["github", "none"]);
+
 export const RepositoryIssueTrackerConfig = z.object({
-  type: RepositoryForgeType.optional(),
+  type: RepositoryIssueTrackerType.optional(),
 }).strict();
 export type RepositoryIssueTrackerConfigType = z.infer<typeof RepositoryIssueTrackerConfig>;
 
@@ -133,7 +135,7 @@ export const ResolvedRepositoryConfig = z
         githubCliPath: z.string().trim().min(1).optional(),
       })
       .strict(),
-    issueTracker: z.object({ type: RepositoryForgeType }).strict(),
+    issueTracker: z.object({ type: RepositoryIssueTrackerType }).strict(),
     localRuntime: RepositoryLocalRuntimeConfig.optional(),
     prReadiness: z
       .object({

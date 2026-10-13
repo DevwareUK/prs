@@ -1,3 +1,4 @@
+import type { IssuePullRequestLinks, LinkedPullRequestsResult } from "./issue-pr-links";
 import { ISSUE_SPEC_COMMENT_MARKER, startsWithManagedMarker } from "@prs/contracts";
 import type {
   IssueDetails,
@@ -5,18 +6,18 @@ import type {
   IssuePlanComment,
   IssueIdentity,
   RepositoryComment,
-  RepositoryForge,
+  IssueTracker,
   RepositoryIdentity,
-} from "./forge";
+} from "./issue-tracker";
 
-type IssueContextForge = Pick<
-  RepositoryForge,
+type IssueContextTracker = Pick<
+  IssueTracker,
   | "type"
   | "getRepositoryIdentity"
   | "fetchIssueDetails"
   | "fetchIssueComments"
   | "fetchIssuePlanComment"
-  | "fetchIssueLinkedPullRequests"
+  | "getIssueReference"
   | "fetchIssueParent"
   | "fetchIssueChildren"
 >;
@@ -29,41 +30,43 @@ export type IssueContextToolResult =
       comments: RepositoryComment[];
       managed: { spec: "missing" | "present"; plan: "missing" | "present" };
       linkedPullRequests: IssueLinkedPullRequest[];
+      linkedPullRequestsStatus: {status: "available"} | {status: "unavailable"; reason: string};
       hierarchy: { parent: IssueIdentity | null; children: IssueIdentity[] };
     }
   | { status: "blocked"; message: string; nextAction: string };
 
 export async function contextIssueTool(input: {
   issueNumber: number;
-  forge: IssueContextForge;
+  tracker: IssueContextTracker;
+  links: IssuePullRequestLinks;
 }): Promise<IssueContextToolResult> {
-  if (input.forge.type === "none") {
+  if (input.tracker.type === "none") {
     return {
       status: "blocked",
-      message: "Repository forge support is disabled by .prs/config.json.",
-      nextAction: "configure-forge",
+      message: "Issue tracker support is disabled by .prs/config.json.",
+      nextAction: "configure-issue-tracker",
     };
   }
 
   const [issue, comments, planComment, linkedPullRequests, parent, children] = await Promise.all([
-    input.forge.fetchIssueDetails(input.issueNumber),
-    input.forge.fetchIssueComments(input.issueNumber),
-    input.forge.fetchIssuePlanComment(input.issueNumber),
-    input.forge.fetchIssueLinkedPullRequests(input.issueNumber),
-    input.forge.fetchIssueParent(input.issueNumber),
-    input.forge.fetchIssueChildren(input.issueNumber),
+    input.tracker.fetchIssueDetails(input.issueNumber),
+    input.tracker.fetchIssueComments(input.issueNumber),
+    input.tracker.fetchIssuePlanComment(input.issueNumber),
+    input.links.findLinkedPullRequests(input.tracker.getIssueReference(input.issueNumber)),
+    input.tracker.fetchIssueParent(input.issueNumber),
+    input.tracker.fetchIssueChildren(input.issueNumber),
   ] satisfies [
     Promise<IssueDetails>,
     Promise<RepositoryComment[]>,
     Promise<IssuePlanComment | undefined>,
-    Promise<IssueLinkedPullRequest[]>,
+    Promise<LinkedPullRequestsResult>,
     Promise<IssueIdentity | null>,
     Promise<IssueIdentity[]>,
   ]);
 
   return {
     status: "ready",
-    repository: input.forge.getRepositoryIdentity(),
+    repository: input.tracker.getRepositoryIdentity(),
     issue: { number: input.issueNumber, ...issue },
     comments,
     managed: {
@@ -74,7 +77,8 @@ export async function contextIssueTool(input: {
         : "missing",
       plan: planComment ? "present" : "missing",
     },
-    linkedPullRequests,
+    linkedPullRequests: linkedPullRequests.status === "available" ? linkedPullRequests.pullRequests : [],
+    linkedPullRequestsStatus: linkedPullRequests.status === "available" ? {status: "available"} : linkedPullRequests,
     hierarchy: { parent, children },
   };
 }

@@ -1,7 +1,7 @@
 import { existsSync,readFileSync } from "node:fs";
 import { isAbsolute,resolve } from "node:path";
 import { publishAuditArtifact } from "../audit-artifacts";
-import { getCliArgs,getDefaultRepoRoot,getRepositoryForge } from "../cli-context";
+import { getCliArgs,getDefaultRepoRoot,getRepositoryForge,getIssueTracker } from "../cli-context";
 import { loadMediaEvidenceForPublication } from "../cli-git";
 import { appendMediaEvidenceSection } from "../media-evidence";
 import { parseAuditCommandArgs } from "./audit";
@@ -17,7 +17,7 @@ export async function runAuditCommand(): Promise<void> {
     throw new Error(`Audit artifact file does not exist: ${command.filePath}`);
   }
 
-  const forge = getRepositoryForge(repoRoot);
+  const store = command.target.type === "issue" ? issueAuditStore(repoRoot) : forgeAuditStore(repoRoot);
   const content = readFileSync(artifactPath, "utf8").trim();
   if (!content) {
     throw new Error(`Audit artifact file is empty: ${command.filePath}`);
@@ -28,7 +28,7 @@ export async function runAuditCommand(): Promise<void> {
     heading: "Visual Evidence",
   });
 
-  const result = await publishAuditArtifact(forge, {
+  const result = await publishAuditArtifact(store, {
     target: command.target,
     sectionName: command.sectionName,
     content: contentWithMedia,
@@ -36,4 +36,20 @@ export async function runAuditCommand(): Promise<void> {
   });
 
   console.log(`Audit artifact ${result.status}: ${result.comment.url}`);
+}
+
+function issueAuditStore(repoRoot: string) {
+  const tracker = getIssueTracker(repoRoot);
+  if (tracker.type === "none") throw new Error("Configure issueTracker.type before publishing issue audits.");
+  return {
+    isAuthenticated: () => tracker.isAuthenticated(),
+    fetchAuditComment: tracker.fetchAuditComment.bind(tracker),
+    createAuditComment: tracker.createAuditComment.bind(tracker),
+    updateComment: tracker.updateIssueComment.bind(tracker),
+  };
+}
+function forgeAuditStore(repoRoot: string) {
+  const forge = getRepositoryForge(repoRoot);
+  if (forge.type === "none") throw new Error("Configure forge.type before publishing PR audits.");
+  return forge;
 }

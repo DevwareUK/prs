@@ -7,7 +7,7 @@ import { readyIssueTool } from "./issue-ready-tool";
 describe("issue ready tool", () => {
   it("writes issue readiness metadata without mutating git or GitHub", async () => {
     const repoRoot = mkdtempSync(join(tmpdir(), "prs-issue-ready-"));
-    const forge = {
+    const tracker = {
       type: "github" as const,
       isAuthenticated: vi.fn(() => true),
       fetchIssueDetails: vi.fn().mockResolvedValue({
@@ -38,7 +38,7 @@ describe("issue ready tool", () => {
       unattended: false,
       issueNumber: 151,
       repoRoot,
-      forge,
+      tracker,
       now: () => new Date("2026-05-12T09:30:00.000Z"),
     });
 
@@ -62,9 +62,9 @@ describe("issue ready tool", () => {
       runDir: ".prs/runs/20260512T093000000Z-issue-151-ready",
       nextAction: "start-superpowers-worktree",
     });
-    expect(forge.fetchIssueDetails).toHaveBeenCalledWith(151);
-    expect(forge.fetchIssueComments).toHaveBeenCalledWith(151);
-    expect(forge.fetchIssuePlanComment).toHaveBeenCalledWith(151);
+    expect(tracker.fetchIssueDetails).toHaveBeenCalledWith(151);
+    expect(tracker.fetchIssueComments).toHaveBeenCalledWith(151);
+    expect(tracker.fetchIssuePlanComment).toHaveBeenCalledWith(151);
 
     const metadata = JSON.parse(readFileSync(join(repoRoot, result.metadataFilePath), "utf8"));
     expect(metadata).toMatchObject({
@@ -77,7 +77,7 @@ describe("issue ready tool", () => {
 
   it("keeps issue readiness ready when managed specification and plan comments are missing", async () => {
     const repoRoot = mkdtempSync(join(tmpdir(), "prs-issue-ready-missing-artifacts-"));
-    const forge = {
+    const tracker = {
       type: "github" as const,
       isAuthenticated: vi.fn(() => true),
       fetchIssueDetails: vi.fn().mockResolvedValue({
@@ -103,7 +103,7 @@ describe("issue ready tool", () => {
       unattended: true,
       issueNumber: 233,
       repoRoot,
-      forge,
+      tracker,
       now: () => new Date("2026-05-12T09:30:00.000Z"),
     });
 
@@ -121,7 +121,7 @@ describe("issue ready tool", () => {
 
   it("ignores issue specifications nested inside audit comments", async () => {
     const repoRoot = mkdtempSync(join(tmpdir(), "prs-issue-ready-audit-spec-"));
-    const forge = {
+    const tracker = {
       type: "github" as const,
       isAuthenticated: vi.fn(() => true),
       fetchIssueDetails: vi.fn().mockResolvedValue({
@@ -163,7 +163,7 @@ describe("issue ready tool", () => {
       unattended: true,
       issueNumber: 255,
       repoRoot,
-      forge,
+      tracker,
       now: () => new Date("2026-05-28T19:30:00.000Z"),
     });
 

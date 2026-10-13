@@ -42,7 +42,7 @@ The validator also requires `prs-pr`, its existing-PR router entry, and non-empt
 
 | Command | Behaviour |
 | --- | --- |
-| `prs tool issue list [--actionable] --json` | Lists open GitHub issues. The actionable filter uses the authenticated account's assignments. |
+| `prs tool issue list [--actionable] --json` | Lists open GitHub issues through the issue tracker. The actionable filter uses the authenticated account's assignments and requires available PR-link evidence. |
 | `prs tool issue context <number> --json` | Returns repository identity, issue body, comments, managed spec/plan presence, native parent/children, and linked pull requests without changing state. |
 | `prs tool issue ready <number> [--unattended\|--auto\|--jdi] --json` | Writes issue metadata under `.prs/runs`, including the suggested branch and managed artifact status. It does not create the branch. |
 | `prs tool issue publish-artifacts <number> --spec-file <path> --plan-file <path> --json` | Validates approved non-empty Markdown and creates or updates the managed specification and plan comments. |
@@ -114,6 +114,12 @@ The rendered Markdown contains one subtotal per host/model, an overall row, mate
 
 `prs audit publish (--issue <number>|--pr <number>) --file <path> --section <name>` publishes or updates a marker-managed audit section on GitHub. `--local-run` adds a local run reference. `--media-manifest` appends validated image or video evidence.
 
+## Integration routing
+
+Issue commands and `audit publish --issue` use `issueTracker.type`; PR commands and `audit publish --pr` use `forge.type`. Each supports `github` or `none`, with an omitted tracker type inheriting the forge type. GitHub issue arguments and existing JSON fields remain unchanged.
+
+Issue context and non-actionable listing include `linkedPullRequestsStatus` (`available`, or `unavailable` with a reason). When unavailable, the linked-PR array or flag is not proof that there is no PR. Actionable issue listing blocks with `issue-pr-links-unavailable`. Disabled listing returns `issue-tracker-disabled` or `forge-disabled` for its own integration. Tracker-only readiness prepares read-only issue metadata; completing that issue as a PR requires the forge as well. Local staged-only finalization remains available without a tracker lookup when the tracker is disabled.
+
 ## Exit behaviour
 
-Invalid arguments, missing files, invalid configuration, unavailable authentication, and failed local commands produce a non-zero exit. JSON tools return structured `blocked` results for expected forge or readiness states where the caller needs a next action.
+Invalid arguments, missing files, invalid configuration, unavailable authentication, and failed local commands produce a non-zero exit. JSON tools return structured `blocked` results for expected integration or readiness states where the caller needs a next action.

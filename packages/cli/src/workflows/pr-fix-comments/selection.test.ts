@@ -5,7 +5,7 @@ import {
   filterActionablePullRequestReviewThreads,
   parsePullRequestReviewSelection,
 } from "./selection";
-import type { PullRequestReviewComment } from "../../forge";
+import type { PullRequestReviewComment } from "../../integration-types";
 import type { PullRequestReviewThread } from "./types";
 
 function createComment(

@@ -42,7 +42,7 @@ function noForge() {
   return {
     type: "none" as const,
     fetchIssueDetails: vi.fn(async () => {
-      throw new Error("forge lookup must not run");
+      throw new Error("tracker lookup must not run");
     }),
   };
 }
@@ -80,7 +80,7 @@ describe("deterministic issue finalization", () => {
     const result = await finalizeIssueChanges({
       repoRoot: root,
       issueNumber: 345,
-      forge: noForge(),
+      tracker: noForge(),
       confirm: async (value) => { preview = value; return true; },
     });
 
@@ -111,7 +111,7 @@ describe("deterministic issue finalization", () => {
     await finalizeIssueChanges({
       repoRoot: root,
       issueNumber: 345,
-      forge: noForge(),
+      tracker: noForge(),
       confirm: async (value) => { preview = value; return true; },
     });
 
@@ -126,24 +126,24 @@ describe("deterministic issue finalization", () => {
     expect(git(root, ["status", "--porcelain"])).toBe("");
   });
 
-  it("skips an empty index before forge lookup or confirmation", async () => {
+  it("skips an empty index before tracker lookup or confirmation", async () => {
     const root = createRepository();
     writeFileSync(join(root, "unstaged.txt"), "unstaged\n");
     writeFileSync(join(root, "untracked.log"), "untracked\n");
     const headBefore = git(root, ["rev-parse", "HEAD"]);
     const statusBefore = gitRaw(root, ["status", "--porcelain"]);
-    const forge = noForge();
+    const tracker = noForge();
     const confirm = vi.fn(async () => true);
 
     const result = await finalizeIssueChanges({
-      repoRoot: root, issueNumber: 345, forge, confirm,
+      repoRoot: root, issueNumber: 345, tracker, confirm,
     });
 
     expect(result).toEqual({
       status: "skipped",
       message: "No staged changes are available to finalize. Stage the intended issue changes and retry.",
     });
-    expect(forge.fetchIssueDetails).not.toHaveBeenCalled();
+    expect(tracker.fetchIssueDetails).not.toHaveBeenCalled();
     expect(confirm).not.toHaveBeenCalled();
     expect(git(root, ["rev-parse", "HEAD"])).toBe(headBefore);
     expect(gitRaw(root, ["status", "--porcelain"])).toBe(statusBefore);
@@ -165,7 +165,7 @@ describe("deterministic issue finalization", () => {
     const result = await finalizeIssueChanges({
       repoRoot: root,
       issueNumber: 345,
-      forge: noForge(),
+      tracker: noForge(),
       confirm: async () => false,
     });
 

@@ -1,3 +1,5 @@
+import { createIssuePullRequestLinks } from "./issue-pr-links";
+import { resolveRepositoryConfig } from "@prs/core";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -5,6 +7,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("node:child_process", () => ({ execFileSync: vi.fn(), spawnSync: vi.fn() }));
+import { createGitHubIssueTracker } from "./github-issue-tracker";
 import { createGitHubRepositoryForge, listIssueLinkedPullRequestsForRepoRoot } from "./github";
 
 const execMock = vi.mocked(execFileSync);
@@ -59,7 +62,7 @@ describe("GitHub operations through the selected CLI account", () => {
 
   it("creates an issue with exact multiline content and reuses it without a second write", async () => {
     respond = (_endpoint, body) => body ? { number: 88, title: "Example", html_url: "https://github.com/DevwareUK/prs/issues/88" } : [];
-    const forge = createGitHubRepositoryForge(root);
+    const forge = createGitHubIssueTracker(root);
     const body = "First line\n\nLiteral `code` and $(text)";
     expect(await forge.createOrReuseIssue("Example", body, ["bug"])).toMatchObject({ number: 88, status: "created" });
     expect(await forge.createOrReuseIssue("Example", body, ["bug"])).toMatchObject({ number: 88, status: "existing" });
@@ -91,4 +94,22 @@ it("accepts installation credentials for repo access without requiring a user pr
     throw new Error("Installation token has no user profile");
   });
   try { expect(createGitHubRepositoryForge(root).isAuthenticated()).toBe(true); } finally { vi.unstubAllEnvs(); }
+});
+
+it("propagates a failed link query rather than returning empty evidence", async () => {
+  respond = () => {throw new Error("API unavailable");};
+  const links = createIssuePullRequestLinks(root, resolveRepositoryConfig());
+  await expect(links.findLinkedPullRequests({provider: "github", scope: "DevwareUK/prs", key: "373", url: "https://github.com/DevwareUK/prs/issues/373"})).rejects.toThrow(/request failed/i);
+});
+
+it("keeps PRs with the same number in different repositories distinct", async () => {
+  const event = (scope: string, state: "open" | "closed") => ({event: "cross-referenced", source: {issue: {
+    number: 42, title: `${scope} PR`, html_url: `https://github.com/${scope}/pull/42`, state, pull_request: {merged_at: null},
+  }}});
+  respond = () => [event("DevwareUK/prs", "open"), event("Other/repo", "closed")];
+  const links = createIssuePullRequestLinks(root, resolveRepositoryConfig());
+  expect(await links.findLinkedPullRequests({provider: "github", scope: "DevwareUK/prs", key: "373", url: "https://github.com/DevwareUK/prs/issues/373"})).toEqual({status: "available", pullRequests: [
+    {number: 42, title: "DevwareUK/prs PR", url: "https://github.com/DevwareUK/prs/pull/42", state: "open"},
+    {number: 42, title: "Other/repo PR", url: "https://github.com/Other/repo/pull/42", state: "closed"},
+  ]});
 });

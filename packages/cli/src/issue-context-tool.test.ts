@@ -3,8 +3,9 @@ import { contextIssueTool } from "./issue-context-tool";
 
 describe("contextIssueTool", () => {
   it("returns complete read-only issue context for the active repository", async () => {
-    const forge = {
+    const tracker = {
       type: "github" as const,
+      getIssueReference: (number: number) => ({provider: "github", scope: "DevwareUK/prs", key: String(number), url: `https://github.com/DevwareUK/prs/issues/${number}`}),
       getRepositoryIdentity: vi.fn(() => ({
         owner: "DevwareUK",
         name: "prs",
@@ -52,7 +53,7 @@ describe("contextIssueTool", () => {
       }]),
     };
 
-    await expect(contextIssueTool({ issueNumber: 324, forge })).resolves.toEqual({
+    await expect(contextIssueTool({ issueNumber: 324, tracker, links: {findLinkedPullRequests: async () => ({status: "available", pullRequests: await tracker.fetchIssueLinkedPullRequests(324)}), formatClosingReference: () => "#324"} })).resolves.toEqual({
       status: "ready",
       repository: {
         owner: "DevwareUK",
@@ -77,6 +78,7 @@ describe("contextIssueTool", () => {
         },
       ],
       managed: { spec: "present", plan: "present" },
+      linkedPullRequestsStatus: {status: "available"},
       linkedPullRequests: [
         {
           number: 400,
@@ -99,17 +101,18 @@ describe("contextIssueTool", () => {
       },
     });
 
-    expect(forge.fetchIssueDetails).toHaveBeenCalledOnce();
-    expect(forge.fetchIssueComments).toHaveBeenCalledOnce();
-    expect(forge.fetchIssuePlanComment).toHaveBeenCalledOnce();
-    expect(forge.fetchIssueLinkedPullRequests).toHaveBeenCalledOnce();
-    expect(forge.fetchIssueParent).toHaveBeenCalledOnce();
-    expect(forge.fetchIssueChildren).toHaveBeenCalledOnce();
+    expect(tracker.fetchIssueDetails).toHaveBeenCalledOnce();
+    expect(tracker.fetchIssueComments).toHaveBeenCalledOnce();
+    expect(tracker.fetchIssuePlanComment).toHaveBeenCalledOnce();
+    expect(tracker.fetchIssueLinkedPullRequests).toHaveBeenCalledOnce();
+    expect(tracker.fetchIssueParent).toHaveBeenCalledOnce();
+    expect(tracker.fetchIssueChildren).toHaveBeenCalledOnce();
   });
 
-  it("blocks before reads when repository forge support is disabled", async () => {
-    const forge = {
+  it("blocks before reads when repository tracker support is disabled", async () => {
+    const tracker = {
       type: "none" as const,
+      getIssueReference: (number: number) => ({provider: "github", scope: "DevwareUK/prs", key: String(number), url: `https://github.com/DevwareUK/prs/issues/${number}`}),
       getRepositoryIdentity: vi.fn(),
       fetchIssueDetails: vi.fn(),
       fetchIssueComments: vi.fn(),
@@ -119,11 +122,50 @@ describe("contextIssueTool", () => {
       fetchIssueChildren: vi.fn(),
     };
 
-    await expect(contextIssueTool({ issueNumber: 324, forge })).resolves.toEqual({
+    await expect(contextIssueTool({ issueNumber: 324, tracker, links: {findLinkedPullRequests: async () => ({status: "available", pullRequests: await tracker.fetchIssueLinkedPullRequests(324)}), formatClosingReference: () => "#324"} })).resolves.toEqual({
       status: "blocked",
-      message: "Repository forge support is disabled by .prs/config.json.",
-      nextAction: "configure-forge",
+      message: "Issue tracker support is disabled by .prs/config.json.",
+      nextAction: "configure-issue-tracker",
     });
-    expect(forge.fetchIssueDetails).not.toHaveBeenCalled();
+    expect(tracker.fetchIssueDetails).not.toHaveBeenCalled();
   });
+});
+
+it("returns tracker context with unavailable PR evidence when the forge is disabled", async () => {
+  const tracker = {
+    type: "github" as const,
+    getRepositoryIdentity: () => ({owner: "DevwareUK", name: "prs", url: "https://github.com/DevwareUK/prs"}),
+    getIssueReference: () => ({provider: "github", scope: "DevwareUK/prs", key: "373", url: "https://github.com/DevwareUK/prs/issues/373"}),
+    fetchIssueDetails: async () => ({title: "Split", body: "Approved", url: "https://github.com/DevwareUK/prs/issues/373"}),
+    fetchIssueComments: async () => [], fetchIssuePlanComment: async () => undefined,
+    fetchIssueParent: async () => null, fetchIssueChildren: async () => [],
+  };
+  const links = {
+    findLinkedPullRequests: async () => ({status: "unavailable" as const, reason: "forge-disabled"}),
+    formatClosingReference: () => undefined,
+  };
+  expect(await contextIssueTool({issueNumber: 373, tracker, links})).toMatchObject({
+    status: "ready", issue: {number: 373, title: "Split"}, linkedPullRequests: [],
+    linkedPullRequestsStatus: {status: "unavailable", reason: "forge-disabled"},
+  });
+});
+
+it("passes opaque provider-qualified references through the context linking boundary", async () => {
+  const reference = {provider: "fake", scope: "project-a", key: "PROJ-123", url: "https://example.test/PROJ-123"};
+  const tracker = {
+    type: "github" as const,
+    getRepositoryIdentity: () => ({owner: "test", name: "project-a", url: "https://example.test"}),
+    getIssueReference: () => reference,
+    fetchIssueDetails: async () => ({title: "External", body: "", url: reference.url}),
+    fetchIssueComments: async () => [], fetchIssuePlanComment: async () => undefined,
+    fetchIssueParent: async () => null, fetchIssueChildren: async () => [],
+  };
+  const links = {
+    findLinkedPullRequests: async (actual: typeof reference) => {
+      if (actual.provider !== "fake" || actual.scope !== "project-a" || actual.key !== "PROJ-123") throw new Error("Reference was changed");
+      return {status: "available" as const, pullRequests: [{number: 7, title: "Implementation", url: "https://github.com/test/project/pull/7", state: "open" as const}]};
+    }, formatClosingReference: () => undefined,
+  };
+  const result = await contextIssueTool({issueNumber: 123, tracker, links});
+  expect(result).toMatchObject({status: "ready", linkedPullRequests: [{number: 7}], linkedPullRequestsStatus: {status: "available"}});
 });

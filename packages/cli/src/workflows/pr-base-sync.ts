@@ -1,4 +1,4 @@
-import type { PullRequestDetails } from "../forge";
+import type { PullRequestDetails } from "../integration-types";
 import {
   runTrackedCommand as runTrackedCommandBase,
   runTrackedCommandAndCapture as runTrackedCommandAndCaptureBase,

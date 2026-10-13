@@ -1,7 +1,7 @@
 import type {
   PullRequestReviewComment,
   PullRequestReviewThreadDetails,
-} from "../../forge";
+} from "../../integration-types";
 import type { PullRequestReviewTask, PullRequestReviewThread } from "./types";
 
 const PRS_INLINE_REVIEW_METADATA_PATTERN =

@@ -17,8 +17,9 @@ Personal skill installation is intentionally machine-local. It is not recorded i
 
 - `baseBranch`: branch used as the default integration base; defaults to `main`.
 - `buildCommand`: command segments used for verification preflight; defaults to `pnpm build`.
-- `forge.type`: `github` or `none`; defaults to `github`.
-- `forge.githubCliPath`: optional explicit GitHub CLI path.
+- `forge.type`: `github` or `none` for PR collaboration; defaults to `github`.
+- `issueTracker.type`: `github` or `none` for issue tracking; when omitted, inherits `forge.type` (including `none`). Setup writes the effective tracker type explicitly.
+- `forge.githubCliPath`: optional explicit GitHub CLI path shared by both GitHub integrations.
 - `aiContext.excludePaths`: paths omitted from agent-facing repository context. This is context filtering, not model configuration.
 - `localRuntime`: optional local application readiness commands and URL.
 - `prReadiness.commands`: ordered local validation/setup steps for `prs tool pr ready`.
@@ -41,7 +42,7 @@ Interactive `prs setup` lists saved, signed-in GitHub accounts plus **Use the de
 
 The local file accepts only the optional `forge.githubAccount` username. Shared workflow settings remain in `.prs/config.json`; credentials remain managed by GitHub CLI. Setup adds `config.local.json` to `.prs/.gitignore` while preserving existing ignore rules. In an existing repository, rerun setup to add the ignore rule before creating this file manually.
 
-On a rerun, press Enter to keep the current account. Choose `0` to clear the account choice and use normal GitHub CLI authentication. With no explicit choice, no local file is needed. An unavailable previous choice is retained with login guidance. If GitHub CLI or saved accounts are unavailable, setup provides guidance and finishes without changing your choice. Disabled-forge setup skips account discovery.
+On a rerun, press Enter to keep the current account. Choose `0` to clear the account choice and use normal GitHub CLI authentication. With no explicit choice, no local file is needed. An unavailable previous choice is retained with login guidance. If GitHub CLI or saved accounts are unavailable, setup provides guidance and finishes without changing your choice. Setup skips account discovery when both the forge and issue tracker are disabled.
 
 `prs setup --skills all` (or another explicit skills selection) and non-interactive setup never prompt for an account or select one automatically. With no `--skills` and no interactive input, setup skips skill installation too. Existing local account settings are preserved.
 
@@ -51,7 +52,11 @@ A configured account takes precedence over inherited `GH_TOKEN`/`GITHUB_TOKEN`, 
 
 When no account is configured, GitHub CLI handles its usual authentication, including environment tokens for automation. `prs` has no separate token fallback: installing `gh` is required even when supplying a token. This configuration does not change directly invoked `gh` commands, Git author identity, or Git transport credentials.
 
-Creating issues and publishing comments require authentication. Readiness and context tools return a clear blocked result when the forge is disabled or required GitHub access is unavailable.
+Creating issues and publishing comments require authentication. Issue tools require an enabled issue tracker; PR tools require an enabled forge. Both GitHub integrations use the origin repository and share the legacy `forge.githubCliPath` and local `forge.githubAccount` settings. Account selection still overrides inherited tokens for every GitHub request.
+
+Explicit `forge: { "type": "none" }` with `issueTracker: { "type": "github" }` enables tracker-only workflows; the reverse enables PR-only workflows. Both `github` enables the full lifecycle, while both `none` keeps local tools available. Existing configurations without `issueTracker.type` retain their previous behavior. Separate tracker accounts/repositories and non-GitHub trackers are not supported.
+
+Issue context and ordinary listing return `linkedPullRequestsStatus: { "status": "unavailable", "reason": "forge-disabled" }` when PR linking is disabled. An empty linked-PR array in that state does not prove there are no PRs. Actionable issue listing returns `reason: "issue-pr-links-unavailable"` instead of guessing. Issue-to-PR workflows must preflight both integrations before mutations.
 
 ### Credential-store access recovery
 

@@ -8,6 +8,8 @@ import {
   getDefaultRepoRoot,
   getRepositoryConfig,
   getRepositoryForge,
+  getIssueTracker,
+  getIssuePullRequestLinks,
   loadRepoEnv,
 } from "../cli-context";
 import { ensureCleanWorkingTree, loadMediaEvidenceForPublication } from "../cli-git";
@@ -71,7 +73,8 @@ export async function runToolCommand(options: { stdin?: NodeJS.ReadableStream; c
     writeJson(
       await contextIssueTool({
         issueNumber: command.issueNumber,
-        forge: getRepositoryForge(repoRoot),
+        tracker: getIssueTracker(repoRoot),
+        links: getIssuePullRequestLinks(repoRoot),
       })
     );
     return;
@@ -83,7 +86,7 @@ export async function runToolCommand(options: { stdin?: NodeJS.ReadableStream; c
         unattended: command.unattended,
         issueNumber: command.issueNumber,
         repoRoot,
-        forge: getRepositoryForge(repoRoot),
+        tracker: getIssueTracker(repoRoot),
       })
     );
     return;
@@ -96,19 +99,19 @@ export async function runToolCommand(options: { stdin?: NodeJS.ReadableStream; c
         repoRoot,
         specFilePath: command.specFilePath,
         planFilePath: command.planFilePath,
-        forge: getRepositoryForge(repoRoot),
+        tracker: getIssueTracker(repoRoot),
       })
     );
     return;
   }
 
   if (command.kind === "issue-create") {
-    const forge = getRepositoryForge(repoRoot);
-    if (forge.type === "none") {
+    const tracker = getIssueTracker(repoRoot);
+    if (tracker.type === "none") {
       writeJson({
         status: "blocked",
-        message: "Repository forge support is disabled by .prs/config.json.",
-        nextAction: "configure-forge",
+        message: "Issue tracker support is disabled by .prs/config.json.",
+        nextAction: "configure-issue-tracker",
       });
       return;
     }
@@ -116,7 +119,7 @@ export async function runToolCommand(options: { stdin?: NodeJS.ReadableStream; c
     const fallbackAuthMessage = "GitHub issue creation requires an installed and authenticated GitHub CLI (gh).";
     let authFailure = normalizeGitHubAuthFailure(undefined, fallbackAuthMessage);
     try {
-      authenticated = forge.isAuthenticated();
+      authenticated = tracker.isAuthenticated();
     } catch (error) {
       authFailure = normalizeGitHubAuthFailure(
         error,
@@ -139,7 +142,7 @@ export async function runToolCommand(options: { stdin?: NodeJS.ReadableStream; c
           loadMediaEvidenceForPublication(repoRoot, command.mediaManifestFilePath)
         )
       );
-      const issue = await forge.createOrReuseIssue(
+      const issue = await tracker.createOrReuseIssue(
         parsed.title,
         command.forcePrsManaged
           ? ensurePrsManagedIssueBody(parsed.body)
@@ -148,7 +151,7 @@ export async function runToolCommand(options: { stdin?: NodeJS.ReadableStream; c
       );
       const managed = await publishManagedCommentsFromArtifacts({
         repoRoot,
-        forge,
+        tracker,
         issues: [issue],
         specFilePath: command.specFilePath,
         planFilePath: command.planFilePath,
@@ -178,17 +181,17 @@ export async function runToolCommand(options: { stdin?: NodeJS.ReadableStream; c
     const issueSet = loadIssueDraftSet({ repoRoot, runDir, issueSetFilePath });
     const issues = await createIssueDraftSetWithRecords({
       issueSet,
-      forge,
+      tracker,
       labels: command.labels,
       forcePrsManaged: command.forcePrsManaged,
       receiptFilePath: resolve(runDir, "issue-set-receipt.json"),
     });
     const managed = await publishLinkedIssueArtifacts({
-      forge,
+      tracker,
       issueSet,
       issues,
     });
-    const hierarchy = await ensureIssueHierarchy({ forge, issueSet, issues });
+    const hierarchy = await ensureIssueHierarchy({ tracker, issueSet, issues });
     const incomplete = managed.managedCommentFailures.length > 0 ||
       hierarchy.relationships.some((relationship) => relationship.status !== "verified");
     if (incomplete) process.exitCode = 1;

@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { ISSUE_SPEC_COMMENT_MARKER, startsWithManagedMarker } from "@prs/contracts";
-import type { IssueDetails, IssuePlanComment, RepositoryComment, RepositoryForge } from "./forge";
+import type { IssueDetails, IssuePlanComment, RepositoryComment, IssueTracker } from "./issue-tracker";
 
 type IssuePlanStatus =
   | { status: "present"; url: string; updatedAt: string }
@@ -33,8 +33,8 @@ export type IssueReadyToolResult =
       nextAction: string;
     };
 
-type IssueReadyForge = Pick<
-  RepositoryForge,
+type IssueReadyTracker = Pick<
+  IssueTracker,
   "type" | "fetchIssueDetails" | "fetchIssueComments" | "fetchIssuePlanComment"
 >;
 
@@ -42,7 +42,7 @@ type IssueReadyToolOptions = {
   unattended?: boolean;
   issueNumber: number;
   repoRoot: string;
-  forge: IssueReadyForge;
+  tracker: IssueReadyTracker;
   now?: () => Date;
 };
 
@@ -148,12 +148,12 @@ function writeMetadata(input: {
 export async function readyIssueTool(
   options: IssueReadyToolOptions
 ): Promise<IssueReadyToolResult> {
-  if (options.forge.type === "none") {
+  if (options.tracker.type === "none") {
     return {
       status: "blocked",
       reason: "not-github",
-      message: "Repository forge support is disabled by .prs/config.json.",
-      nextAction: "Configure `forge.type` to `github` before using issue readiness tools.",
+      message: "Issue tracker support is disabled by .prs/config.json.",
+      nextAction: "Configure `issueTracker.type` to `github` before using issue readiness tools.",
     };
   }
 
@@ -168,9 +168,9 @@ export async function readyIssueTool(
   mkdirSync(runDir, { recursive: true });
 
   const [issue, comments, planComment] = await Promise.all([
-    options.forge.fetchIssueDetails(options.issueNumber),
-    options.forge.fetchIssueComments(options.issueNumber),
-    options.forge.fetchIssuePlanComment(options.issueNumber),
+    options.tracker.fetchIssueDetails(options.issueNumber),
+    options.tracker.fetchIssueComments(options.issueNumber),
+    options.tracker.fetchIssuePlanComment(options.issueNumber),
   ]);
   const suggestedBranchName = createIssueBranchName(options.issueNumber, issue.title);
   const metadataFilePath = resolve(runDir, "metadata.json");

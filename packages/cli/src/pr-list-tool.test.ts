@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { listPullRequestsTool } from "./pr-list-tool";
+import { listGitHubPullRequests } from "./github-pr-list";
 
 function repository(account: string) {
   const root = mkdtempSync(join(tmpdir(), "prs-pr-list-account-"));
@@ -19,7 +19,7 @@ describe("PR list tool", () => {
     const request = vi.fn();
 
     await expect(
-      listPullRequestsTool({
+      listGitHubPullRequests({
         actionable: true,
         env: {},
         request,
@@ -49,7 +49,7 @@ describe("PR list tool", () => {
     const request = vi.fn();
 
     await expect(
-      listPullRequestsTool({
+      listGitHubPullRequests({
         actionable: true,
         env: { GH_TOKEN: "inherited" },
         request,
@@ -76,7 +76,7 @@ describe("PR list tool", () => {
   });
 
   it("uses safe login recovery when the authenticated-user request throws an unknown error", async () => {
-    const result = await listPullRequestsTool({
+    const result = await listGitHubPullRequests({
       actionable: true,
       env: { GH_TOKEN: "token" },
       request: async () => { throw new Error("do-not-expose-auth-diagnostic"); },
@@ -144,7 +144,7 @@ describe("PR list tool", () => {
       });
 
     await expect(
-      listPullRequestsTool({
+      listGitHubPullRequests({
         actionable: true,
         env: { GITHUB_TOKEN: "token" },
         request,
@@ -221,7 +221,7 @@ describe("PR list tool", () => {
       });
 
     await expect(
-      listPullRequestsTool({
+      listGitHubPullRequests({
         actionable: false,
         env: { GITHUB_TOKEN: "token" },
         request,
