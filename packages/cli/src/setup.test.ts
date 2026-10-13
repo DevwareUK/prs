@@ -154,3 +154,13 @@ describe("setup GitHub account selection", () => {
     expect(existsSync(join(repoRoot, ".prs/config.local.json"))).toBe(false);
   });
 });
+
+it.each(["github", "none"] as const)("preserves explicit %s tracker on setup reruns with forge disabled", async type => {
+  const repoRoot = setupRepo();
+  writeFileSync(join(repoRoot, ".prs/config.json"), JSON.stringify({forge: {type: "none"}, issueTracker: {type}}));
+  for (let i = 0; i < 2; i++) {
+    await runSetupCommand({repoRoot, skills: "none", promptForLine: async () => ""});
+    expect(JSON.parse(readFileSync(join(repoRoot, ".prs/config.json"), "utf8")))
+      .toMatchObject({forge: {type: "none"}, issueTracker: {type}});
+  }
+});

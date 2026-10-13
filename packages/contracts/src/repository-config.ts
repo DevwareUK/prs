@@ -15,6 +15,11 @@ export const RepositoryForgeConfig = z
 
 export type RepositoryForgeConfigType = z.infer<typeof RepositoryForgeConfig>;
 
+export const RepositoryIssueTrackerConfig = z.object({
+  type: RepositoryForgeType.optional(),
+}).strict();
+export type RepositoryIssueTrackerConfigType = z.infer<typeof RepositoryIssueTrackerConfig>;
+
 export const RepositoryAiContextConfig = z
   .object({
     excludePaths: z
@@ -65,6 +70,7 @@ export const AgentRepositoryConfig = z
     baseBranch: z.string().trim().min(1, "baseBranch must be non-empty").optional(),
     buildCommand: RepositoryConfigCommand.optional(),
     forge: RepositoryForgeConfig.optional(),
+    issueTracker: RepositoryIssueTrackerConfig.optional(),
     localRuntime: RepositoryLocalRuntimeConfig.optional(),
     prReadiness: RepositoryPrReadinessConfig.optional(),
   })
@@ -94,6 +100,7 @@ export function migrateRepositoryConfigToAgentWorkflow(
     baseBranch: record.baseBranch,
     buildCommand: record.buildCommand,
     forge: record.forge,
+    issueTracker: record.issueTracker,
     localRuntime: record.localRuntime,
     prReadiness: record.prReadiness,
   });
@@ -126,6 +133,7 @@ export const ResolvedRepositoryConfig = z
         githubCliPath: z.string().trim().min(1).optional(),
       })
       .strict(),
+    issueTracker: z.object({ type: RepositoryForgeType }).strict(),
     localRuntime: RepositoryLocalRuntimeConfig.optional(),
     prReadiness: z
       .object({

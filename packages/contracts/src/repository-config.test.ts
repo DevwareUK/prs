@@ -29,6 +29,7 @@ describe("agent repository configuration", () => {
         baseBranch: "main",
         buildCommand: undefined,
         forge: undefined,
+        issueTracker: undefined,
         localRuntime: undefined,
         prReadiness: undefined,
       },
@@ -42,7 +43,14 @@ describe("agent repository configuration", () => {
       baseBranch: "main",
       buildCommand: ["pnpm", "build"],
       forge: { type: "github" },
+      issueTracker: { type: "github" },
       prReadiness: { commands: [] },
     })).toHaveProperty("baseBranch", "main");
   });
+});
+
+it("preserves explicit tracker configuration during migration and rejects unknown providers", () => {
+  expect(migrateRepositoryConfigToAgentWorkflow({forge: {type: "none"}, issueTracker: {type: "github"}}).config)
+    .toMatchObject({forge: {type: "none"}, issueTracker: {type: "github"}});
+  expect(() => AgentRepositoryConfig.parse({issueTracker: {type: "linear"}})).toThrow();
 });

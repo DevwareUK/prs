@@ -11,6 +11,7 @@ describe("resolveRepositoryConfig", () => {
       baseBranch: "main",
       buildCommand: ["pnpm", "build"],
       forge: { type: "github" },
+      issueTracker: { type: "github" },
       localRuntime: undefined,
       prReadiness: { commands: [] },
     });
@@ -30,5 +31,21 @@ describe("resolveRepositoryConfig", () => {
       forge: { type: "none" },
       prReadiness: { commands: [{ name: "smoke", command: ["make", "smoke"] }] },
     });
+  });
+});
+
+describe("independent issue tracker configuration", () => {
+  it.each([
+    [{}, "github", "github"],
+    [{ forge: { type: "none" } }, "none", "none"],
+    [{ forge: { type: "none" }, issueTracker: {} }, "none", "none"],
+    [{ forge: { type: "none" }, issueTracker: { type: "github" } }, "none", "github"],
+    [{ forge: { type: "github" }, issueTracker: { type: "none" } }, "github", "none"],
+    [{ forge: { type: "none" }, issueTracker: { type: "none" } }, "none", "none"],
+    [{ forge: { type: "github" }, issueTracker: { type: "github" } }, "github", "github"],
+  ] as const)("resolves %j independently", (input, forge, tracker) => {
+    const config = resolveRepositoryConfig(input);
+    expect(config.forge.type).toBe(forge);
+    expect(config.issueTracker.type).toBe(tracker);
   });
 });

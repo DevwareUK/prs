@@ -40,6 +40,7 @@ export function resolveRepositoryConfig(
         ? { githubCliPath: parsedConfig.forge.githubCliPath }
         : {}),
     },
+    issueTracker: { type: parsedConfig.issueTracker?.type ?? parsedConfig.forge?.type ?? DEFAULT_REPOSITORY_FORGE_TYPE },
     localRuntime: parsedConfig.localRuntime,
     prReadiness: {
       commands: parsedConfig.prReadiness?.commands ?? [],
