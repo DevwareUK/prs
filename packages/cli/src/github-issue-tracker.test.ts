@@ -77,3 +77,24 @@ it("filters actionable issues using real same-repository link evidence without c
     expect(result.issues.every(issue => !issue.hasLinkedOpenPullRequest)).toBe(true);
   }
 });
+
+it("owns issue-start updates even when the PR forge is disabled", async () => {
+  vi.mocked(execFileSync).mockImplementation((command, args, options) => {
+    if (command === "git") return "git@github.com:DevwareUK/prs.git";
+    if (args?.[0] === "auth") return "work-credential";
+    expect((options as {env: Record<string, string>}).env.GH_TOKEN).toBe("work-credential");
+    const endpoint = String(args?.[1]);
+    const payload = endpoint === "user" ? {login: "work"}
+      : endpoint === "orgs/DevwareUK/issue-fields" ? []
+      : {assignees: [{login: "work"}]};
+    return `HTTP/2.0 200 OK\r\n\r\n${JSON.stringify(payload)}`;
+  });
+  const tracker = createIssueTracker(root, resolveRepositoryConfig({forge: {type: "none"}, issueTracker: {type: "github"}}));
+  expect(await tracker.startIssueWork(373)).toEqual({assignee: {status: "already-set", value: "work"}, issueStatus: {status: "unavailable", reason: "Status issue field is not configured"}});
+});
+
+it("disabled tracker cannot start issue work", async () => {
+  const tracker = createIssueTracker(root, resolveRepositoryConfig({issueTracker: {type: "none"}}));
+  await expect(tracker.startIssueWork(373)).rejects.toThrow("issueTracker.type");
+  expect(vi.mocked(execFileSync)).not.toHaveBeenCalled();
+});

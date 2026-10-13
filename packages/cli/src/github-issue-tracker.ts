@@ -1,3 +1,4 @@
+import { startIssueWork as updateIssueAtStart } from "./issue-start-github";
 import type { ResolvedRepositoryConfigType } from "@prs/contracts";
 import { loadResolvedRepositoryConfig } from "./config";
 import { updateGitHubComment } from "./github-api";
@@ -21,7 +22,7 @@ import {
   listOpenIssues,
   createGitHubIssue,
 } from "./github-api";
-import { requestGitHub } from "./github-client";
+import { requestGitHub, createGitHubClient } from "./github-client";
 import { ISSUE_PLAN_COMMENT_MARKER, startsWithManagedMarker } from "@prs/contracts";
 import type { IssueTracker, IssueReference } from "./issue-tracker";
 import { listGitHubIssues } from "./github-issue-list";
@@ -47,6 +48,14 @@ class GitHubIssueTracker implements IssueTracker {
   async fetchIssueDetails(issueNumber: number): Promise<IssueDetails> {
     const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
     return fetchIssueWithApi(owner, repo, issueNumber, this.repoRoot);
+  }
+
+  async startIssueWork(issueNumber: number) {
+    const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
+    return updateIssueAtStart({
+      owner, repo, issueNumber,
+      request: createGitHubClient({ repoRoot: this.repoRoot }).request,
+    });
   }
 
   private parseIssueIdentity(payload: unknown, context: string): IssueIdentity {

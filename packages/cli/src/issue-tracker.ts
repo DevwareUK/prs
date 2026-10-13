@@ -1,3 +1,4 @@
+import type { IssueStartGitHubResult } from "./issue-start-github";
 import type { ResolvedRepositoryConfigType } from "@prs/contracts";
 import type {
   IssueDetails,
@@ -27,6 +28,7 @@ export interface IssueTracker {
   getRepositoryIdentity(): RepositoryIdentity;
   isAuthenticated(): boolean;
   fetchIssueDetails(issueNumber: number): Promise<IssueDetails>;
+  startIssueWork(issueNumber: number): Promise<IssueStartGitHubResult>;
   fetchIssueIdentity(issueNumber: number): Promise<IssueIdentity>;
   fetchIssueParent(issueNumber: number): Promise<IssueIdentity | null>;
   fetchIssueChildren(issueNumber: number): Promise<IssueIdentity[]>;
@@ -65,6 +67,10 @@ class NoopIssueTracker implements IssueTracker {
     throw new Error(
       "Issue tracker support is disabled by .prs/config.json. Configure `issueTracker.type` to enable issue workflows."
     );
+  }
+
+  async startIssueWork(): Promise<IssueStartGitHubResult> {
+    throw new Error("Issue tracker support is disabled by .prs/config.json. Configure `issueTracker.type` to enable issue workflows.");
   }
 
   async fetchIssueIdentity(): Promise<IssueIdentity> {
