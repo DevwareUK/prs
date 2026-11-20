@@ -205,6 +205,22 @@ The September 24, 2026 catalogue adds GPT-6 Luna and Sol for Codex and Copilot. 
 
 The October 1, 2026 snapshot adds exact `gpt-6.1-sol` pricing for Codex, effective from its [September 29 release](https://developers.openai.com/api/docs/changelog). Its [standard API rates](https://developers.openai.com/api/docs/models/gpt-6.1-sol) per million tokens are $2 uncached input, $0.10 cached input, $2.50 cache write, and $10 output through 272K input tokens; above that boundary they are $4, $0.20, $5, and $15 respectively. GPT-6 Sol retains its separate historical cards. Context tiers apply per request, so a model subtotal alone cannot establish the exact estimate.
 
+The November 20, 2026 snapshot adds GPT-6.2 Astra and Sol and GPT-6.1 Terra for Codex and Copilot, and fills the Copilot GPT-6.1 Sol gap. Codex cards apply from the published releases (November 17 for GPT-6.2, October 26 for Terra); new Copilot cards apply from the reviewed snapshot date. It also adds Claude Fable 5.2, Opus 5.5, Sonnet 5.5, and Haiku 5.5 for Claude Code and Copilot, plus Mythos 5.2 for Claude Code. New Claude cards conservatively apply from November 20, without inferring historical prices from release dates.
+
+Standard USD rates per million tokens, in uncached input / cached input / cache write / output order:
+
+| Model | Default | Long context | Input-token boundary |
+| --- | --- | --- | --- |
+| GPT-6.2 Astra | 8 / 0.40 / 10 / 40 | 16 / 0.80 / 20 / 60 | 272,000 |
+| GPT-6.2 Sol | 2 / 0.10 / 2.50 / 10 | 4 / 0.20 / 5 / 15 | 272,000 |
+| GPT-6.1 Terra | 1 / 0.05 / 1.25 / 5 | 2 / 0.10 / 2.50 / 7.50 | 272,000 |
+| Claude Fable/Mythos 5.2 | 8 / 0.20 / 10 / 40 | Same | Unbounded rate tier |
+| Claude Opus 5.5 | 4 / 0.20 / 5 / 20 | Same | Unbounded rate tier |
+| Claude Sonnet 5.5 | 2 / 0.10 / 2.50 / 10 | Same | Unbounded rate tier |
+| Claude Haiku 5.5 | 0.10 / 0.01 / 0.125 / 0.50 | 0.50 / 0.05 / 0.625 / 2.50 | 100,000 |
+
+Sources: [OpenAI pricing](https://developers.openai.com/api/docs/pricing), [OpenAI release dates](https://developers.openai.com/api/docs/changelog), [Anthropic pricing](https://platform.claude.com/docs/en/about-claude/pricing), and [GitHub Copilot pricing](https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing). The boundary includes cached reads and writes; the long-context rate applies to the full request above the boundary. Cache-write estimates use standard short retention (OpenAI 30 minutes, Anthropic 5 minutes); extended retention and service-tier premiums require a separately supplied applicable card. Existing historical cards and captured selections are preserved.
+
 Codex and Claude Code amounts are API-equivalent estimates, not subscription charges or invoices. Copilot amounts use GitHub's host-specific token prices; their displayed GitHub AI-credit equivalent uses GitHub's published `1 AI credit = USD 0.01` conversion and remains distinct from reported credit consumption. Provider-reported charges and host-reported estimates are also kept separate.
 
 For bounded rates, capture derives context length only from the three non-overlapping input buckets: uncached input, cached input/read, and cache write/creation. If any is unknown, the tier is unresolved and the event remains unpriced. Unbounded single tiers do not require a fabricated context count. Promotional cards have explicit expiry timestamps. A snapshot without an authoritative historical start is effective no earlier than its reviewed retrieval date, so it cannot silently price earlier work. Regional/compliance uplifts, auto-selection discounts, batch or fast modes, negotiated discounts, taxes, and undisclosed Copilot code-review models remain unpriced unless explicit evidence supplies an applicable card.

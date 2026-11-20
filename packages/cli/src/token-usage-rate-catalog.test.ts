@@ -3,6 +3,65 @@ import { resolveUsageRate } from "./token-usage-rate-catalog";
 
 describe("built-in token usage rate catalog", () => {
   it.each([
+    ["codex", "openai", "gpt-6.2-astra", 272000, [8, 0.4, 10, 40]],
+    ["codex", "openai", "gpt-6.2-astra", 272001, [16, 0.8, 20, 60]],
+    ["codex", "openai", "gpt-6.2-sol", 272000, [2, 0.1, 2.5, 10]],
+    ["codex", "openai", "gpt-6.2-sol", 272001, [4, 0.2, 5, 15]],
+    ["codex", "openai", "gpt-6.1-terra", 272000, [1, 0.05, 1.25, 5]],
+    ["codex", "openai", "gpt-6.1-terra", 272001, [2, 0.1, 2.5, 7.5]],
+    ["copilot", "github", "gpt-6.2-astra", 272000, [8, 0.4, 10, 40]],
+    ["copilot", "github", "gpt-6.2-astra", 272001, [16, 0.8, 20, 60]],
+    ["copilot", "github", "gpt-6.2-sol", 272000, [2, 0.1, 2.5, 10]],
+    ["copilot", "github", "gpt-6.2-sol", 272001, [4, 0.2, 5, 15]],
+    ["copilot", "github", "gpt-6.1-terra", 272000, [1, 0.05, 1.25, 5]],
+    ["copilot", "github", "gpt-6.1-terra", 272001, [2, 0.1, 2.5, 7.5]],
+    ["copilot", "github", "gpt-6.1-sol", 272000, [2, 0.1, 2.5, 10]],
+    ["copilot", "github", "gpt-6.1-sol", 272001, [4, 0.2, 5, 15]],
+    ["claude-code", "anthropic", "claude-fable-5-2", 900000, [8, 0.2, 10, 40]],
+    ["claude-code", "anthropic", "claude-mythos-5-2", 900000, [8, 0.2, 10, 40]],
+    ["claude-code", "anthropic", "claude-opus-5-5", 900000, [4, 0.2, 5, 20]],
+    ["claude-code", "anthropic", "claude-sonnet-5-5", 900000, [2, 0.1, 2.5, 10]],
+    ["claude-code", "anthropic", "claude-haiku-5-5", 100000, [0.1, 0.01, 0.125, 0.5]],
+    ["claude-code", "anthropic", "claude-haiku-5-5", 100001, [0.5, 0.05, 0.625, 2.5]],
+    ["copilot", "github", "claude-fable-5.2", 900000, [8, 0.2, 10, 40]],
+    ["copilot", "github", "claude-opus-5.5", 900000, [4, 0.2, 5, 20]],
+    ["copilot", "github", "claude-sonnet-5.5", 900000, [2, 0.1, 2.5, 10]],
+    ["copilot", "github", "claude-haiku-5.5", 100000, [0.1, 0.01, 0.125, 0.5]],
+    ["copilot", "github", "claude-haiku-5.5", 100001, [0.5, 0.05, 0.625, 2.5]],
+  ] as const)("resolves November rates for %s %s %s at %s input tokens", (host, provider, model, tokens, rates) => {
+    expect(resolveUsageRate({ host, provider, model,
+      usage: { uncachedInputTokens: 1, cachedInputTokens: tokens - 2, cacheWriteTokens: 1, outputTokens: 1 },
+      observedAt: "2026-11-20T12:00:00Z",
+    })).toMatchObject({ status: "resolved", context: { tokens }, rateCard: {
+      retrievedAt: "2026-11-20T00:00:00Z",
+      perMillion: { uncachedInputTokens: rates[0], cachedInputTokens: rates[1], cacheWriteTokens: rates[2], outputTokens: rates[3] },
+    } });
+  });
+
+  it.each([
+    ["gpt-6.2-astra", "2026-11-17"], ["gpt-6.2-sol", "2026-11-17"], ["gpt-6.1-terra", "2026-10-26"],
+  ])("prices Codex %s from its release, while Copilot starts at the reviewed snapshot", (model, release) => {
+    const base = { provider: "openai", model,
+      usage: { uncachedInputTokens: 1, cachedInputTokens: 0, cacheWriteTokens: 0, outputTokens: 1 } };
+    const observedAt = `${release}T00:00:00Z`;
+    expect(resolveUsageRate({ ...base, host: "codex", observedAt })).toMatchObject({ status: "resolved", rateCard: { effectiveAt: observedAt } });
+    expect(resolveUsageRate({ ...base, host: "codex", observedAt: new Date(Date.parse(observedAt) - 1).toISOString() }).status).toBe("unpriced");
+    expect(resolveUsageRate({ ...base, host: "copilot", observedAt: "2026-11-19T23:59:59Z" }).status).toBe("unpriced");
+  });
+
+  it("requires complete context evidence for new bounded models and preserves host-specific IDs", () => {
+    for (const [host, provider, model] of [
+      ["codex", "openai", "gpt-6.2-sol"], ["claude-code", "anthropic", "claude-haiku-5-5"],
+      ["copilot", "github", "claude-haiku-5.5"],
+    ] as const) {
+      expect(resolveUsageRate({ host, provider, model, usage: { uncachedInputTokens: 1 }, observedAt: "2026-11-20T00:00:00Z" }))
+        .toMatchObject({ status: "unpriced", reason: expect.stringMatching(/context/i) });
+    }
+    expect(resolveUsageRate({ host: "claude-code", provider: "anthropic", model: "claude-sonnet-5.5",
+      usage: { uncachedInputTokens: 1 }, observedAt: "2026-11-20T00:00:00Z" }).status).toBe("unpriced");
+  });
+
+  it.each([
     [272000, "default", 2, 0.1, 2.5, 10],
     [272001, "long", 4, 0.2, 5, 15],
   ] as const)("prices GPT-6.1 Sol at %s input tokens", (tokens, tier, input, cached, write, output) => {
