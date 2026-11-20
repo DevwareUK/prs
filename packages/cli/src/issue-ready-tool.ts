@@ -21,7 +21,8 @@ export type IssueReadyToolResult =
       spec: IssueSpecStatus;
       plan: IssuePlanStatus;
       comments: { count: number };
-      githubUpdate: IssueStartGitHubResult;
+      trackerUpdate: IssueStartGitHubResult;
+      githubUpdate?: IssueStartGitHubResult;
       suggestedBranchName: string;
       runDir: string;
       metadataFilePath: string;
@@ -125,6 +126,7 @@ function writeMetadata(input: {
   unattended: boolean;
   comments: RepositoryComment[];
   githubUpdate: IssueStartGitHubResult;
+  trackerType: string;
   issue: IssueDetails;
   issueNumber: number;
   metadataFilePath: string;
@@ -148,7 +150,8 @@ function writeMetadata(input: {
         comments: {
           count: input.comments.length,
         },
-        githubUpdate: input.githubUpdate,
+        trackerUpdate: input.githubUpdate,
+        ...(input.trackerType === "github" ? {githubUpdate: input.githubUpdate} : {}),
       },
       null,
       2
@@ -164,7 +167,7 @@ export async function readyIssueTool(
       status: "blocked",
       reason: "not-github",
       message: "Issue tracker support is disabled by .prs/config.json.",
-      nextAction: "Configure `issueTracker.type` to `github` before using issue readiness tools.",
+      nextAction: "Configure `issueTracker.type` before using issue readiness tools.",
     };
   }
 
@@ -193,10 +196,10 @@ export async function readyIssueTool(
     try {
       githubUpdate = await options.tracker.startIssueWork(options.issueNumber);
     } catch {
-      githubUpdate = unavailableGitHubUpdate("Could not start GitHub issue work (request setup failed)");
+      githubUpdate = unavailableGitHubUpdate(options.tracker.type === "github" ? "Could not start GitHub issue work (request setup failed)" : "Could not start Monday issue work (request setup failed)");
     }
   } else {
-    githubUpdate = unavailableGitHubUpdate("Managed specification and plan are required before starting GitHub issue work");
+    githubUpdate = unavailableGitHubUpdate(options.tracker.type === "github" ? "Managed specification and plan are required before starting GitHub issue work" : "Managed specification and plan are required before starting Monday issue work");
   }
 
   writeMetadata({
@@ -205,6 +208,7 @@ export async function readyIssueTool(
     issue,
     issueNumber: options.issueNumber,
     githubUpdate,
+    trackerType: options.tracker.type,
     metadataFilePath,
     planComment,
     runDir: relativeRunDir,
@@ -221,7 +225,8 @@ export async function readyIssueTool(
     comments: {
       count: comments.length,
     },
-    githubUpdate,
+    trackerUpdate: githubUpdate,
+    ...(options.tracker.type === "github" ? {githubUpdate} : {}),
     suggestedBranchName,
     runDir: relativeRunDir,
     metadataFilePath: toRepoRelativePath(options.repoRoot, metadataFilePath),

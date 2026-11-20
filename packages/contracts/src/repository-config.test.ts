@@ -54,3 +54,19 @@ it("preserves explicit tracker configuration during migration and rejects unknow
     .toMatchObject({forge: {type: "none"}, issueTracker: {type: "github"}});
   expect(() => AgentRepositoryConfig.parse({issueTracker: {type: "linear"}})).toThrow();
 });
+
+it("accepts native Monday defaults independently of project scope", () => {
+  const issueTracker = { type: "monday", defaults: { columnValues: { task_epic: { item_ids: ["3276311061"] } } }, monday: { boardId: "5105675010", scope: { columnRules: [{ columnId: "task_epic", operator: "any_of", compareValue: [3276311061] }] }, defaultsByBoard: { "5105675017": { columnValues: {} } } } };
+  expect(AgentRepositoryConfig.parse({ issueTracker })).toMatchObject({ issueTracker });
+});
+
+it.each([
+  { type: "monday" },
+  { type: "monday", monday: { boardId: "0" } },
+  { type: "github", monday: { boardId: "1" } },
+  { type: "monday", monday: { boardId: "1", tokenEnv: "BAD-NAME" } },
+  { type: "monday", defaults: { columnValues: "{}" }, monday: { boardId: "1" } },
+  { type: "github", defaults: { columnValues: {} } },
+])("rejects unusable provider defaults before network work: %j", (issueTracker) => {
+  expect(() => AgentRepositoryConfig.parse({ issueTracker })).toThrow();
+});

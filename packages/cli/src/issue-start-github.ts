@@ -1,13 +1,7 @@
 import type { GitHubClient } from "./github-client";
 
-export type GitHubUpdateStep =
-  | { status: "updated" | "already-set"; value: string }
-  | { status: "unavailable"; reason: string };
-
-export type IssueStartGitHubResult = {
-  assignee: GitHubUpdateStep;
-  issueStatus: GitHubUpdateStep;
-};
+export type { IssueUpdateStep as GitHubUpdateStep, IssueStartResult as IssueStartGitHubResult } from "./issue-start-types";
+import type { IssueUpdateStep as GitHubUpdateStep, IssueStartResult as IssueStartGitHubResult } from "./issue-start-types";
 
 type ApiResult<T> = { ok: true; value: T } | { ok: false; status: number };
 type IssuePayload = { assignees?: Array<{ login?: string }> };

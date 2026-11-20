@@ -40,7 +40,17 @@ export function resolveRepositoryConfig(
         ? { githubCliPath: parsedConfig.forge.githubCliPath }
         : {}),
     },
-    issueTracker: { type: parsedConfig.issueTracker?.type ?? parsedConfig.forge?.type ?? DEFAULT_REPOSITORY_FORGE_TYPE },
+    issueTracker: {
+      ...parsedConfig.issueTracker,
+      type: parsedConfig.issueTracker?.type ?? parsedConfig.forge?.type ?? DEFAULT_REPOSITORY_FORGE_TYPE,
+      ...(parsedConfig.issueTracker?.monday ? {monday: {
+        ...parsedConfig.issueTracker.monday,
+        apiVersion: parsedConfig.issueTracker.monday.apiVersion ?? "2026-07",
+        tokenEnv: parsedConfig.issueTracker.monday.tokenEnv ?? "MONDAY_API_TOKEN",
+        doneBoardIds: parsedConfig.issueTracker.monday.doneBoardIds ?? [],
+        doneGroupIds: parsedConfig.issueTracker.monday.doneGroupIds ?? [],
+      }} : {}),
+    },
     localRuntime: parsedConfig.localRuntime,
     prReadiness: {
       commands: parsedConfig.prReadiness?.commands ?? [],

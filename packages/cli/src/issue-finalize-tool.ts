@@ -89,7 +89,9 @@ export async function finalizeIssueChanges(input: {
   const issue = input.tracker.type === "none"
     ? undefined
     : await input.tracker.fetchIssueDetails(input.issueNumber);
-  const message = buildIssueCommitMessage(input.issueNumber, issue);
+  const message = input.tracker.type === "monday"
+    ? `feat: resolve Monday item ${input.issueNumber}\n\nIssue: ${issue?.title.trim()}\n${issue?.url}`
+    : buildIssueCommitMessage(input.issueNumber, issue);
   if (!(await input.confirm({ commitMessage: message, stagedChanges }))) {
     return {
       status: "skipped",

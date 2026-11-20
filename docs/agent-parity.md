@@ -1,65 +1,111 @@
-# Agent parity validation
+---
+name: prs-create
+description: Use when turning a rough idea into one approved GitHub issue or a dependency-linked issue set in a prs-configured repository.
+---
 
-Parity has two distinct evidence layers. Keep them separate so a passing install check is never presented as a completed host lifecycle.
+# Create prs issues
 
-## Automated static parity
+Draft implementation-ready work in a task-specific directory beneath `.prs/runs`, then use the deterministic creation tool only after approval.
 
-Run:
+## Local artifacts
 
-```bash
-prs skills validate --json
+`.prs/runs/<task-specific-run>/` is the only repository-local root for generated workflow artifacts. Use a run directory returned by `prs` when available; otherwise create a task-specific directory beneath `.prs/runs`.
+
+This covers issue drafts, linked-set manifests, specifications, plans, working notes, and completion evidence. They are raw workflow artifacts and stay local. Never stage or commit them, and never create another repository-local scratch root such as `.prs-work`.
+
+PRS artifact locality overrides the Superpowers default document paths and commit instructions. Both written artifacts are required even for bounded work. If either required Superpowers skill is unavailable, report the blocker and next action; do not skip a phase.
+
+## Artifact preparation
+
+Use `superpowers:brainstorming` to inspect repository behavior and clarify decisions that materially affect scope, data, access, rollout or acceptance criteria. Write and self-review each specification in the task-specific run directory. For a linked implementation set, every issue gets its own issue-specific specification; children reference shared architecture and prerequisites without copying sibling scope.
+
+Use `superpowers:writing-plans` to write and self-review each implementation plan from its candidate specification. Include concrete files, steps, acceptance coverage and verification commands checked against repository source. The designated parent's plan owns coordination, integration and final acceptance; each child plan owns only that child's implementation. Prepare both artifacts without requesting intermediate approval between the specification and plan.
+
+## Unified approval
+
+Draft an H1-titled Markdown issue in the same run directory. For multiple tasks, keep one draft, specification and plan per issue plus a version-2 linked-set manifest. Recommend a designated parent/orchestrator for coordination, integration and final acceptance. Reuse a parent only when the user explicitly designates its `issueNumber`; never infer one from title, order or dependency links. When orchestration is unnecessary, record the user's explicit flat choice and reason. Parent membership and dependency order are separate: `parentId` establishes tracker-native hierarchy while `dependsOn` and `blocks` govern readiness.
+
+```json
+{
+  "version": 2,
+  "mode": "multiple",
+  "orchestration": { "mode": "parent", "orchestratorId": "delivery" },
+  "issues": [
+    {
+      "id": "delivery",
+      "issueNumber": 123,
+      "draftFile": ".prs/runs/<run>/delivery.md",
+      "specFile": ".prs/runs/<run>/delivery-spec.md",
+      "planFile": ".prs/runs/<run>/delivery-plan.md",
+      "dependsOn": [], "blocks": [], "related": []
+    },
+    {
+      "id": "contract",
+      "parentId": "delivery",
+      "draftFile": ".prs/runs/<run>/contract.md",
+      "specFile": ".prs/runs/<run>/contract-spec.md",
+      "planFile": ".prs/runs/<run>/contract-plan.md",
+      "dependsOn": [], "blocks": [], "related": []
+    }
+  ]
+}
 ```
 
-The command creates a different temporary home for Codex, Claude Code, and GitHub Copilot. For each host it installs the canonical pack, checks the exact inventory and content hashes, confirms that the combined instructions reference every retained deterministic lifecycle operation, and reports the named `artifact-locality` and `staged-only-finalization` safeguards. The JSON result contains canonical `requiredSafeguards`, a separate host row with its own passing `safeguards` and errors, and an overall status. It also requires create and refine artifact-preparation, unified-approval and completion instructions independently of the manifest and combined references. It does not launch an agent runtime or claim end-to-end workflow success.
+Flat sets use `"orchestration": { "mode": "flat", "reason": "..." }` and omit every `parentId`. Version-1 linked manifests receive upgrade guidance; do not work around it with one shared artifact pair.
 
-## Manual lifecycle smoke matrix
+Show the exact issue draft or linked set and every reviewed artifact together: each issue's own specification and plan, dependency links, explicit parent/flat choice, and intended native hierarchy. Obtain one explicit user approval that accepts every specification and plan and authorizes the workflow to create or reuse the issues, publish both managed comments per issue, and apply the hierarchy mutations. Design approval alone does not authorize publication. No remote write may happen before this approval.
 
-Local usage adapter fixtures and `prs tool token-usage capture` / `render` tests validate deterministic mappings, replay safety and accounting without launching models. Static parity checks both installed command references and the local Copilot contract: opted-in capture uses a fresh managed binding and verified exporter, explicit values stay authoritative, ambiguous state stays unavailable, and hosted coding-agent evidence is unsupported. Neither layer demonstrates native telemetry availability or completes a host lifecycle. The recorded Codex probe is separate evidence; Claude/Copilot capture still awaits real-issue validation. Run native validation only when requested and authorized; record unattempted rows as `not-run`. Missing usage evidence is a valid unavailable record, not a reason to make billable calls.
+An acknowledgment accompanied by a question, qualification, scope change, content change or target change is not approval. Update every affected artifact and relationship, recheck the packet for consistency, and show one complete revised packet for one fresh approval. Unchanged material may be reused while revising, but any later content or target change invalidates the previous authorization.
 
-Use a disposable GitHub repository owned for testing. Never point the smoke procedure at a production repository. Native evidence is manual, separate from static validation, and must be run sequentially in a fresh clone and a fresh native session for each host.
+Before any remote write, for each issue check both files exist, contain non-empty Markdown and match the displayed, approved versions; also check the draft and every artifact stay inside the selected run directory after symlink resolution. Single-issue creation keeps the global artifact flags; linked creation reads `specFile` and `planFile` from each manifest entry:
 
-1. Create a task-specific directory beneath `.prs/runs` and copy `docs/examples/agent-lifecycle-smoke-matrix.template.json` into it. Keep every issue draft, specification, plan, working note, and completion artifact in that directory or a run directory returned by `prs`.
-2. For each of `codex`, `claude-code`, and `copilot`, create a fresh clone, run `prs setup --skills <host>` to install the current host pack, then start a fresh native session so it loads those instructions. Do not reuse a session, clone, issue, branch, or pull request from another host.
-3. In the host's own row, record the eight native lifecycle phases: `create`, `refine`, `plan`, `implement`, `verify`, `finalize`, `open-pr`, and `validate`. Mark a phase `passed` only from evidence produced by that row's host; use `failed` for an attempted failure and `not-run` when it was not attempted.
-4. During `create`, settle requirements, write and self-review the issue-specific specification and implementation plan without intermediate approval, and prepare the exact disposable issue draft. Present all three together and record one explicit approval that accepts both artifacts and authorizes creating the issue and publishing both exact managed comments, plus the returned issue and comment URLs. During `refine` and `plan`, start from that existing issue and apply the same single-packet approval process, preserving its body and identity; verify both updated comments. Keep raw artifacts below the task-specific `.prs/runs` directory established before issue creation. Record checkpoint evidence in a local Markdown companion to the matrix without changing its schema.
-5. During `implement`, add `agentStatusLabel(host)` to `src/status.js` so it returns `` `${host}: ready` ``, and add a `node:test` assertion in `test/status.test.js`. During `verify`, run `pnpm test`, `pnpm lint`, and `pnpm build` and record their results.
-6. During `finalize`, create the host-specific root sentinel (`sentinel-codex.txt`, `sentinel-claude-code.txt`, or `sentinel-copilot.txt`). Stage only `src/status.js` and `test/status.test.js`, inspect the index with `git diff --cached --name-status`, and run `prs issue finalize <number>`. The sentinel must remain present and untracked; raw `.prs/runs` artifacts must remain ignored and uncommitted.
-7. During `open-pr` and `validate`, open a separate, unmerged disposable pull request, query its state and hosted checks through normal GitHub tooling, and publish the final audit evidence. Inspect the local commit and pull-request file list; both must contain only `src/status.js` and `test/status.test.js`.
-8. Complete only that host's row with its native session identifier, issue and pull-request URLs, commit SHA, artifact paths, inspected committed paths, sentinel state, local and hosted checks, capability fallbacks, and deviations. Fallback and deviation arrays are required even when empty. Never copy another host's URLs, session identifier, paths, or results.
+```bash
+prs tool issue create --draft-file .prs/runs/<run>/issue.md --spec-file .prs/runs/<run>/spec.md --plan-file .prs/runs/<run>/plan.md --json
+prs tool issue create --issue-set .prs/runs/<run>/issue-set.json --run-dir .prs/runs/<run> --json
+```
 
-The version-2 matrix requires exactly one separately attributed row for each of `codex`, `claude-code`, and `copilot`, with all eight phases present. Store completed matrices under `.prs/runs/<task-specific-run>/`; publish them only after reviewing the repository and URLs to ensure they are disposable test resources.
+## Completion verification
 
-## Create and refine instruction checks
+For every created or reused issue, require `managedComments` records with `status: published` for both `<!-- prs:issue-spec -->` and `<!-- prs:issue-plan -->`. Read `prs tool issue context <number> --json` and confirm both managed artifacts are present; check the published content matches the approved files. For parent mode, also require every requested `hierarchy.relationships` entry to have `status: verified`, then confirm both hierarchy directions. Flat mode must report its reason and perform no parent mutation. Missing or incomplete comments or relationships mean incomplete work even when some issues were created.
 
-Static validation requires `prs-create` and `prs-issue` independently of their presence in the manifest. It checks substantive artifact-preparation, unified-approval and completion sections in the relevant skill, both Superpowers references, preparation without intermediate approval, one approval accepting all relevant artifacts and authorizing the exact remote work, required artifact files and flags, complete-packet revision handling, both managed markers and live publication verification. Refinement must retain the original issue and stop after publication when implementation was not requested. Optional artifact prose, staged approval headings or directives, pre-approval remote-write directives, and known contradictory refinement directives are rejected. These are conservative section-scoped text checks, not a natural-language proof or native-host evidence.
+If linked publication is partial, preserve the known issue numbers and approved files, plus `issue-set-receipt.json` and relationship results. Retry the same approved linked creation command; it reconciles recorded identities, updates managed comments in place and verifies native links without force-reparenting. For a single issue, recover with `prs tool issue publish-artifacts <number> --spec-file <spec> --plan-file <plan> --json`. Changed content or targets require renewed approval. If recovery is blocked, report the issue or relationship, tool message and next action; do not declare completion or substitute Markdown links for native hierarchy.
 
-The regression fixtures mutate the canonical pack before installing it for all three hosts. A pack with a missing phase must fail even when all installed copies have identical hashes. Tests also retain empty headings, move approval prose to unrelated sections, omit required skills from the manifest, weaken preparation, approval or file/flag checks, restore staged specification/plan approval gates, and introduce conflicting refinement instructions.
+Report every created or reused issue by number, title and URL, plus both verified managed-comment URLs. Issue creation alone is not completion. Keep raw prompts and working notes local. Before destructive cleanup, obtain separate explicit user approval.
 
-For separately authorized native smoke runs, include these scenarios in the local companion evidence:
+## Usage evidence
 
-- Ask questions during discovery, then request a specification or plan revision after the complete packet is shown. Verify the agent updates every affected item, shows the complete revised packet and requests one fresh approval rather than separate artifact approvals. Approve design without authorizing publication, and include an acknowledgment with a question or scope addition; no issue or artifact write may occur.
-- Create a version-2 linked set with a designated parent, distinct approved spec/plan documents for every stable ID, and native sub-issues; verify each issue's own comments plus hierarchy in both directions. Also exercise explicit flat mode and confirm it performs no parent mutation.
-- Refine an existing issue without requesting implementation. Verify its number, URL and body are retained, both updated managed comments match approved content, and no replacement issue, readiness or implementation occurs.
-- Supply a missing or empty artifact and interrupt after one comment publishes. Verify preflight prevents an invalid write, and recovery retains the known issue number and uses approved files. Missing artifacts must leave the workflow visibly incomplete.
+As soon as this task has a run directory, start a local checkpoint with `prs tool token-usage capture --host <codex|claude-code|copilot> --output .prs/runs/<run>/usage-evidence.json --json`. It reads only the selected session's usage metadata and makes no model calls. The first call starts at now; use `--since <ISO>` only with a known task-start timestamp for retrospective capture.
 
-Keep native results separately attributed by host, including approval checkpoints, issue/comment URLs, failures and not-run scenarios. Ordinary static checks do not launch these sessions or publish test issues.
+Codex uses `CODEX_THREAD_ID` and an exact matching session file. For Claude Code, supply `--session <id>` and `--source <transcript-path>` from native session metadata (or `PRS_USAGE_SESSION_ID` / `PRS_USAGE_SOURCE`). For local Copilot app/CLI sessions, opted-in PRS telemetry setup supplies a fresh managed session binding for the same repository and a verified managed exporter to the bare capture command. Explicit `--session` and `--source` values remain authoritative. Missing, stale, invalid, or ambiguous managed bindings stay unavailable rather than selecting a recent session; hosted Copilot coding-agent evidence remains unsupported. Do not guess the latest session, search transcript contents, add or alter hooks during capture, change global telemetry, discover credentials, or launch models to obtain evidence. Missing setup produces an unavailable record with guidance; report it instead of zero.
 
-## Pull-request instruction checks
+Refresh capture using the same output before completion, then run `prs tool token-usage render --file .prs/runs/<run>/usage-evidence.json --output .prs/runs/<run>/token-usage.md --json`. Preserve that artifact's original host, session, source and start boundary across readiness, finish and PR handoffs, even when readiness returns a new run directory. Do not copy it into a new run, reset its start, overwrite supplied manual evidence, or sum repeated reports. For a different host/session, use a separate artifact and keep totals separate unless non-overlapping coverage is established.
 
-The six-skill pack includes `prs-pr`. Static validation independently requires its installation, the existing-PR router entry, and non-empty `review`, `resolve-conflicts`, `address-comments`, and `fix-tests` sections. Removing a workflow from the canonical manifest cannot produce a passing report merely because all three hosts share the omission. Repository tests also check the completion handoff, readiness boundaries, publication/push guidance, and upgrades from the five-skill inventory. These checks do not establish native-host PR behaviour; any such smoke evidence must be separately attributed to the host that ran it.
+Review capture warnings, partial/unpriced results and the checkpoint range. Full-task/subagent coverage is unproven; the final response and later work require a later checkpoint. Model tokens, host counters, credits, host cost estimates and actual charges remain distinct. Adapter fixtures are not native validation. The PRS source's `docs/usage-evidence.md` documents supported formats and optional setup; if the capture command is unavailable, preserve existing evidence and report the limitation.
 
-## JDI audit authorization checks
+Obtain explicit user approval before publishing the reviewed Markdown with `prs audit publish --issue <number> --file .prs/runs/<run>/token-usage.md --section token-usage` (or `--pr <number>`). Raw JSON, transcripts and private source paths stay local. Reuse the same report when publishing to an issue and PR.
 
-Static validation requires the finish policy that carries an explicit JDI issue-implementation request through completion and token-usage publication on the issue and its resulting PR. It checks the interactive approval fallback, readiness-only boundary, preserved unified artifact approval and handoffs from the router, issue and PR skills. Regression fixtures remove those rules or restore contradictory unconditional audit approval instructions. All three host rows must reject the broken pack. These checks do not establish native-agent approval behavior.
+## Provider defaults and conversion evidence
 
-## GitHub account context
+Preflight the configured tracker and show resolved project/target-board defaults with the approval packet when they affect creation. Scope is independent of defaults and workflow-group placement. On Monday, use native item IDs and real column JSON values; an Epic default links to an Epic item and is distinct from a parent/subitem relationship.
 
-All three hosts use the same GitHub CLI infrastructure for separate issue-tracker and forge integrations when calling `prs`. Both share the origin repository, CLI path and personal account selection. GitHub-backed commands require installed and authenticated `gh`. Interactive `prs setup` can write a personal account choice to ignored `.prs/config.local.json` (`forge.githubAccount`); it selects PRS's identity without changing the active GitHub CLI account. Direct host `gh` commands and Git transport do not read this setting. When no account is selected, `gh` handles normal authentication, including environment tokens for automation.
+Parent-mode creation may return a replacement native subitem for an existing top-level Monday item. Use the returned active ID/URL for artifacts, dependencies, audits and later commands, preserving `replacementOf` in receipts. Require verified copies, artifact publication and both hierarchy directions before original retirement; partial results remain incomplete and retries reconcile the same replacement. Flat mode performs no conversion. Existing unrelated parents and linked open PRs require resolution, not forced reparenting. Do not change the original issue target merely during ordinary refinement.
 
-## Credential-store recovery parity
+## Cross-provider pull request references
 
-When `forge.githubAccount` is configured, each host must honor that account without switching the global GitHub account, falling back to another account, or using an inherited token. Never run `gh auth switch`. GitHub CLI owns credential storage and the login/refresh process.
+Issue arguments and audits use the configured tracker. GitHub-tracked issues may use verified same-repository closing references. For a Monday issue, include its API-returned canonical item URL and the exact marker `<!-- prs:issue-ref monday ITEM_ID -->` in the GitHub PR body. Never emit `Closes #ITEM_ID` for a Monday item; GitHub cannot close it. Keep PR audits/reviews/checks on the forge.
 
-When a JSON result contains `reason: "github-credential-store-inaccessible"` and `nextAction: "retry-with-credential-store-access"`, retry the exact PRS command through the active host's normal permission mechanism. PRS must not elevate itself or invoke a host-specific permission mechanism. Preserve unchanged approval, artifact paths, targets, and known issue numbers across this permission-only retry. Ask the user to log in or refresh credentials only after an unrestricted retry still reports missing or rejected credentials; that authentication state uses `github-auth-required` and `configure-github-auth`.
+For converted Monday items, use the verified active replacement ID/URL and preserve original lineage in the completion record. The PR link adapter discovers historical original references. Do not reset usage checkpoints during conversion or readiness handoffs. Completion audits and review/check verification remain required for either tracker; no provider selection waives them.
 
-The recovery result does not authorize a different target, account change, or another creation attempt after a partial remote write. Host diagnostics must never print or capture token values, authentication headers, subprocess stderr, credential paths, or inherited token variables.
+## Tracker-aware orchestration
+
+Project configuration selects GitHub or Monday for every issue child and managed artifact; the GitHub forge remains responsible for PRs. Numeric issue arguments are provider-native IDs. Parent membership, dependency order and Epic scope are separate. Use each returned active ID/URL, preserving original/replacement receipt lineage after a verified Monday conversion. Never launch work from a retired original, treat unavailable PR evidence as an empty set, or retire an original before all required copies/artifacts/hierarchy checks succeed.
+
+## Issue tracker independence
+
+PR numbers, reviews, checks and PR audits always use the configured forge. Linked issue context/artifacts/audits use the configured tracker, which may be Monday with a GitHub forge. Preserve native issue IDs and any verified original/replacement lineage; do not infer a GitHub issue from a Monday numeric ID or generate GitHub closing syntax for it.
+
+## Monday tracker parity
+
+All three hosts use the same issue command surface with GitHub or Monday selected by project config. Native Monday item IDs are issue arguments, readiness reports `trackerUpdate`, and PR work stays on the GitHub forge. Creation defaults are independent from scope; configured Epic links belong to the appropriate board schema. Conversion receipts supply the new active subitem identity and retain the original as provenance.
+
+The shared adapter workflow tests verify deterministic results with provider API fixtures. They are not native-host or real Monday validation. A version-2 smoke matrix may declare `issueTracker: { "type": "monday", "accountHost": "your-account.monday.com", "boardIds": ["YOUR_BOARD_ID"] }`; its issue URLs must belong to that exact account/board, while repository and PR URLs remain strict GitHub identities. Omitting issueTracker retains the existing GitHub matrix behavior. Live pilot records must separately demonstrate API content round-trip, creation metadata, hierarchy, retirement/recovery and PR evidence before claiming native parity.

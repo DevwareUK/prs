@@ -1,3 +1,4 @@
+import { createMondayIssuePullRequestLinks } from "./monday-issue-pr-links";
 import type { ResolvedRepositoryConfigType } from "@prs/contracts";
 import type { IssueReference } from "./issue-tracker";
 import type { IssueLinkedPullRequest } from "./integration-types";
@@ -19,5 +20,5 @@ export function createIssuePullRequestLinks(repoRoot: string, config: ResolvedRe
     findLinkedPullRequests: async () => ({status: "unavailable", reason}),
     formatClosingReference: () => undefined,
   };
-  return createGitHubIssuePullRequestLinks(repoRoot);
+  return config.issueTracker.type === "monday" ? createMondayIssuePullRequestLinks(repoRoot,config) : createGitHubIssuePullRequestLinks(repoRoot);
 }

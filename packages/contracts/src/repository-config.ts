@@ -15,11 +15,51 @@ export const RepositoryForgeConfig = z
 
 export type RepositoryForgeConfigType = z.infer<typeof RepositoryForgeConfig>;
 
-export const RepositoryIssueTrackerType = z.enum(["github", "none"]);
-
-export const RepositoryIssueTrackerConfig = z.object({
-  type: RepositoryIssueTrackerType.optional(),
+export const RepositoryIssueTrackerType = z.enum(["github", "monday", "none"]);
+const positiveId = z.string().regex(/^[1-9]\d*$/, "Expected a positive decimal ID");
+export const MondayCreationDefaults = z.object({
+  groupId: z.string().trim().min(1).optional(),
+  columnValues: z.record(z.string().min(1), z.json()).optional(),
 }).strict();
+export const GitHubCreationDefaults = z.object({
+  labels: z.array(z.string().trim().min(1)).optional(),
+  assignees: z.array(z.string().trim().min(1)).optional(),
+  milestone: z.number().int().positive().optional(),
+}).strict();
+export const MondayRepositoryConfig = z.object({
+  boardId: positiveId,
+  apiVersion: z.string().regex(/^\d{4}-(01|04|07|10)$/).optional(),
+  tokenEnv: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/).optional(),
+  scope: z.object({
+    groupIds: z.array(z.string().min(1)).min(1).optional(),
+    columnRules: z.array(z.object({ columnId: z.string().min(1), operator: z.string().min(1), compareValue: z.json() }).strict()).min(1).optional(),
+  }).strict().optional(),
+  doneBoardIds: z.array(positiveId).optional(),
+  doneGroupIds: z.array(z.string().min(1)).optional(),
+  defaultsByBoard: z.record(positiveId, MondayCreationDefaults).optional(),
+  bodyUpdatePrefix: z.string().min(1).optional(),
+  workflow: z.record(positiveId, z.object({
+    statusColumnId: z.string().min(1).optional(), peopleColumnId: z.string().min(1).optional(),
+    inProgressLabel: z.string().min(1).optional(), doneLabels: z.array(z.string().min(1)).optional(),
+    labelsColumnId: z.string().min(1).optional(), closedLabel: z.string().min(1).optional(),
+    migrationSourceColumnId: z.string().min(1).optional(),
+  }).strict()).optional(),
+}).strict();
+const issueTrackerShape = {
+  type: RepositoryIssueTrackerType.optional(),
+  defaults: z.union([MondayCreationDefaults, GitHubCreationDefaults]).optional(),
+  monday: MondayRepositoryConfig.optional(),
+};
+function validateTracker(value: {type?: string; defaults?: unknown; monday?: unknown}, ctx: z.RefinementCtx) {
+  if (value.type === "monday") {
+    if (!value.monday) ctx.addIssue({code: "custom", path: ["monday"], message: "Monday board configuration is required"});
+    if (value.defaults && !MondayCreationDefaults.safeParse(value.defaults).success) ctx.addIssue({code: "custom", path: ["defaults"], message: "Expected Monday creation defaults"});
+  } else {
+    if (value.monday) ctx.addIssue({code: "custom", path: ["monday"], message: "Monday settings require issueTracker.type monday"});
+    if (value.defaults && (value.type === "none" || !GitHubCreationDefaults.safeParse(value.defaults).success)) ctx.addIssue({code: "custom", path: ["defaults"], message: "Expected enabled GitHub creation defaults"});
+  }
+}
+export const RepositoryIssueTrackerConfig = z.object(issueTrackerShape).strict().superRefine(validateTracker);
 export type RepositoryIssueTrackerConfigType = z.infer<typeof RepositoryIssueTrackerConfig>;
 
 export const RepositoryAiContextConfig = z
@@ -135,7 +175,7 @@ export const ResolvedRepositoryConfig = z
         githubCliPath: z.string().trim().min(1).optional(),
       })
       .strict(),
-    issueTracker: z.object({ type: RepositoryIssueTrackerType }).strict(),
+    issueTracker: z.object({ ...issueTrackerShape, type: RepositoryIssueTrackerType }).strict().superRefine(validateTracker),
     localRuntime: RepositoryLocalRuntimeConfig.optional(),
     prReadiness: z
       .object({

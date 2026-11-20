@@ -18,7 +18,7 @@ Personal skill installation is intentionally machine-local. It is not recorded i
 - `baseBranch`: branch used as the default integration base; defaults to `main`.
 - `buildCommand`: command segments used for verification preflight; defaults to `pnpm build`.
 - `forge.type`: `github` or `none` for PR collaboration; defaults to `github`.
-- `issueTracker.type`: `github` or `none` for issue tracking; when omitted, inherits `forge.type` (including `none`). Setup writes the effective tracker type explicitly.
+- `issueTracker.type`: `github`, `monday` or `none` for issue tracking; when omitted, inherits `forge.type` (including `none`). Setup writes the effective tracker type explicitly.
 - `forge.githubCliPath`: optional explicit GitHub CLI path shared by both GitHub integrations.
 - `aiContext.excludePaths`: paths omitted from agent-facing repository context. This is context filtering, not model configuration.
 - `localRuntime`: optional local application readiness commands and URL.
@@ -54,7 +54,7 @@ When no account is configured, GitHub CLI handles its usual authentication, incl
 
 Creating issues and publishing comments require authentication. Issue tools require an enabled issue tracker; PR tools require an enabled forge. Both GitHub integrations use the origin repository and share the legacy `forge.githubCliPath` and local `forge.githubAccount` settings. Account selection still overrides inherited tokens for every GitHub request.
 
-Explicit `forge: { "type": "none" }` with `issueTracker: { "type": "github" }` enables tracker-only workflows; the reverse enables PR-only workflows. Both `github` enables the full lifecycle, while both `none` keeps local tools available. Existing configurations without `issueTracker.type` retain their previous behavior. Separate tracker accounts/repositories and non-GitHub trackers are not supported.
+Explicit `forge: { "type": "none" }` with `issueTracker: { "type": "github" }` enables tracker-only workflows; the reverse enables PR-only workflows. Both `github` enables the full lifecycle, while both `none` keeps local tools available. Existing configurations without `issueTracker.type` retain their previous behavior. Monday can be selected independently with a GitHub forge. Separate GitHub tracker accounts/repositories are not supported.
 
 Issue context and ordinary listing return `linkedPullRequestsStatus: { "status": "unavailable", "reason": "forge-disabled" }` when PR linking is disabled. An empty linked-PR array in that state does not prove there are no PRs. Actionable issue listing returns `reason: "issue-pr-links-unavailable"` instead of guessing. Issue-to-PR workflows must preflight both integrations before mutations.
 
@@ -65,3 +65,11 @@ GitHub CLI owns stored credentials and its login or refresh flow. When GitHub CL
 Retry the exact PRS command through the active host's normal permission mechanism. PRS must not elevate itself or invoke a host-specific permission mechanism. Preserve unchanged approval, artifact paths, targets, and known issue numbers during this permission-only retry. Ask the user to log in or refresh the selected account only if the unrestricted retry still reports missing or rejected credentials; those states return `reason: "github-auth-required"` and `nextAction: "configure-github-auth"`.
 
 Neither recovery state authorizes switching accounts, falling back to another account or an inherited token, changing targets, or repeating an uncertain create operation after a partial remote write. Diagnostic output must never include token values, authentication headers, subprocess stderr, credential paths, or inherited token variables.
+
+## Task creation defaults and Monday scope
+
+`issueTracker.defaults` supplies creation metadata for the selected provider: GitHub `labels`, `assignees`, `milestone`; Monday optional `groupId` and `columnValues` keyed by actual column IDs with native JSON values. Monday requires `issueTracker.monday.boardId`; optional `scope` controls membership independently of creation defaults. Scope can combine group IDs and AND-combined column rules. Defaults never become an implicit lookup filter.
+
+Monday also accepts `defaultsByBoard` to override default properties for different main/subitem schemas; its `columnValues` property replaces the entire project column map. Creation uses defaults, board overrides, copied source values and explicit fields in that order, protecting internal identities. Readiness, reuse and content/audit changes leave defaults alone. `prs setup` preserves all these settings on reruns.
+
+Use `tokenEnv` (default `MONDAY_API_TOKEN`) and `apiVersion` (default `2026-07`). Keep tokens in the environment or ignored `.env`, never shared configuration. Workflow mappings by actual board ID select people/status columns, progress/done/closed labels, a dropdown labels column and the conversion text identity column. Missing/non-writable fields or incompatible values fail with repair guidance before writes; PRS never silently creates board schema. Completed items may be configured with `doneBoardIds`, `doneGroupIds` and per-board `doneLabels`. See the [README Monday example](../README.md#monday-issue-tracking-and-task-defaults) for FOCAL's Epic-based membership and subitem overrides.

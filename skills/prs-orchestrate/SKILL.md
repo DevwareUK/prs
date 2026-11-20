@@ -1,6 +1,6 @@
 ---
 name: prs-orchestrate
-description: Use when a linked GitHub issue set needs dependency-aware coordination, separate pull requests, and one final validation pass.
+description: Use when a linked configured-tracker issue set needs dependency-aware coordination, separate pull requests, and one final validation pass.
 ---
 
 # Orchestrate a prs issue set
@@ -35,3 +35,7 @@ Refresh capture using the same output before completion, then run `prs tool toke
 Review capture warnings, partial/unpriced results and the checkpoint range. Full-task/subagent coverage is unproven; the final response and later work require a later checkpoint. Model tokens, host counters, credits, host cost estimates and actual charges remain distinct. Adapter fixtures are not native validation. The PRS source's `docs/usage-evidence.md` documents supported formats and optional setup; if the capture command is unavailable, preserve existing evidence and report the limitation.
 
 Obtain explicit user approval before publishing the reviewed Markdown with `prs audit publish --issue <number> --file .prs/runs/<run>/token-usage.md --section token-usage` (or `--pr <number>`). Raw JSON, transcripts and private source paths stay local. Reuse the same report when publishing to an issue and PR.
+
+## Tracker-aware orchestration
+
+Project configuration selects GitHub or Monday for every issue child and managed artifact; the GitHub forge remains responsible for PRs. Numeric issue arguments are provider-native IDs. Parent membership, dependency order and Epic scope are separate. Use each returned active ID/URL, preserving original/replacement receipt lineage after a verified Monday conversion. Never launch work from a retired original, treat unavailable PR evidence as an empty set, or retire an original before all required copies/artifacts/hierarchy checks succeed.

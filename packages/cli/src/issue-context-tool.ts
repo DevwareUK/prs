@@ -52,7 +52,7 @@ export async function contextIssueTool(input: {
     input.tracker.fetchIssueDetails(input.issueNumber),
     input.tracker.fetchIssueComments(input.issueNumber),
     input.tracker.fetchIssuePlanComment(input.issueNumber),
-    input.links.findLinkedPullRequests(input.tracker.getIssueReference(input.issueNumber)),
+    input.links.findLinkedPullRequests(await input.tracker.getIssueReference(input.issueNumber)),
     input.tracker.fetchIssueParent(input.issueNumber),
     input.tracker.fetchIssueChildren(input.issueNumber),
   ] satisfies [

@@ -98,3 +98,18 @@ it("disabled tracker cannot start issue work", async () => {
   await expect(tracker.startIssueWork(373)).rejects.toThrow("issueTracker.type");
   expect(vi.mocked(execFileSync)).not.toHaveBeenCalled();
 });
+
+it("creates Github issues with project default labels, assignees and milestone", async () => {
+  let body: Record<string, unknown> | undefined;
+  vi.mocked(execFileSync).mockImplementation((command, args, options) => {
+    if (command === "git") return "git@github.com:DevwareUK/prs.git";
+    if (args?.[0] === "auth") return "work-credential";
+    const endpoint=String(args?.[1]);
+    const input=(options as {input?: string}).input;
+    if (input) body=JSON.parse(input);
+    return `HTTP/2.0 200 OK\r\n\r\n${JSON.stringify(endpoint.includes("?state=open") ? [] : {number:375,title:"New",html_url:"https://github.com/DevwareUK/prs/issues/375"})}`;
+  });
+  const tracker=createIssueTracker(root,resolveRepositoryConfig({issueTracker:{type:"github",defaults:{labels:["ready"],assignees:["work"],milestone:2}}}));
+  await tracker.createOrReuseIssue("New","Request",["bug"]);
+  expect(body).toMatchObject({labels:["ready","bug"],assignees:["work"],milestone:2});
+});

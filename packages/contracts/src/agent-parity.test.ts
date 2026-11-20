@@ -248,3 +248,11 @@ describe("agent lifecycle smoke evidence", () => {
     }
   );
 });
+
+it("accepts explicitly scoped Monday issue identities while keeping Github PR identity validation", () => {
+  const hosts=(['codex','claude-code','copilot'] as const).map((host,index)=>({...completedRow(host),issueUrl:`https://example.monday.com/boards/10/pulses/${index+1}`}));
+  const matrix={version:2,repository:'https://github.com/example/disposable-prs-smoke',recordedAt:'2026-10-13T00:00:00Z',issueTracker:{type:'monday',accountHost:'example.monday.com',boardIds:['10']},hosts};
+  expect(AgentLifecycleSmokeMatrix.safeParse(matrix).success).toBe(true);
+  expect(AgentLifecycleSmokeMatrix.safeParse({...matrix,hosts:hosts.map((row,index)=>index?row:{...row,issueUrl:'https://other.monday.com/boards/10/pulses/1'})}).success).toBe(false);
+  expect(AgentLifecycleSmokeMatrix.safeParse({...matrix,hosts:hosts.map((row,index)=>index?row:{...row,pullRequestUrl:'https://github.com/other/repo/pull/11'})}).success).toBe(false);
+});

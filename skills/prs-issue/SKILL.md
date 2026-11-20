@@ -1,6 +1,6 @@
 ---
 name: prs-issue
-description: Use when refining, planning, implementing, verifying, or completing one existing GitHub issue through the prs lifecycle.
+description: Use when refining, planning, implementing, verifying, or completing one existing configured-tracker issue through the prs lifecycle.
 ---
 
 # Work a prs issue
@@ -51,7 +51,7 @@ Continue here only when implementation was requested. An implementation request 
 
 1. Reconcile the live specification and plan with the requested implementation. For a linked set, consume this issue's own approved pair rather than a parent or sibling plan; native parent membership does not imply a dependency. Use the Refinement process above if artifacts are missing or need changes. Reuse existing approved, unchanged artifacts; do not republish them just to start implementation.
 2. For an implementation lifecycle that will produce a PR, preflight both `issueTracker.type` and `forge.type` before branch, commit or remote mutations. An omitted tracker type inherits the forge type. Unavailable issue–PR link evidence must not be treated as an empty set of PRs. Tracker-only readiness can update issue metadata; it does not remove a required PR integration.
-3. Run `prs tool issue ready <number> --json` after implementation is authorized. Require both managed artifacts before any GitHub update; otherwise readiness skips both updates. With that condition met, the issue tracker adds the selected GitHub user as an assignee and sets an existing organization issue field `Status` to `In Progress` if configured. Inspect the separate `githubUpdate` outcomes; a missing field or failed update does not block local readiness. Use its suggested branch and returned run directory. Keep subsequent working notes and evidence in that returned directory.
+3. Run `prs tool issue ready <number> --json` after implementation is authorized. Require both managed artifacts before any GitHub update; otherwise readiness skips both updates. With that condition met, the GitHub tracker adds the selected GitHub user as an assignee and sets an existing organization issue field `Status` to `In Progress` if configured; Monday uses its configured people/status columns. Inspect `trackerUpdate` for either provider (`githubUpdate` is retained only for GitHub); a missing field or failed update does not block local readiness. Use its suggested branch and returned run directory. Keep subsequent working notes and evidence in that returned directory.
 4. Prefer a fresh branch or worktree from the updated configured base. If isolation is unavailable, continue in the active workspace and record the fallback.
 5. Implement in small verified steps. Delegate independent tasks only when supported and authorized; otherwise execute sequentially.
 6. Run the repository's relevant verification, including tests for changed behaviour.
@@ -70,3 +70,9 @@ Refresh capture using the same output before completion, then run `prs tool toke
 Review capture warnings, partial/unpriced results and the checkpoint range. Full-task/subagent coverage is unproven; the final response and later work require a later checkpoint. Model tokens, host counters, credits, host cost estimates and actual charges remain distinct. Adapter fixtures are not native validation. The PRS source's `docs/usage-evidence.md` documents supported formats and optional setup; if the capture command is unavailable, preserve existing evidence and report the limitation.
 
 Apply the audit publication authorization in `prs-finish` before publishing the reviewed Markdown with `prs audit publish --issue <number> --file .prs/runs/<run>/token-usage.md --section token-usage` (or `--pr <number>`). Raw JSON, transcripts and private source paths stay local. Reuse the same report when publishing to an issue and PR.
+
+## Configured tracker semantics
+
+`<number>` means the configured tracker's native issue identifier; do not interpret a Monday item ID as a configured-tracker issue number. A mixed Monday tracker/GitHub forge supports the full lifecycle. Project defaults fill new task fields, including configured Epic relations; membership comes from configured scope, not the creation group. Reused items and readiness are not patched with defaults.
+
+Preserve the original target throughout refinement as above. A separately approved parent-mode linked creation may explicitly convert a top-level Monday item into a new native subitem. In that case, use the returned active replacement identity after verified conversion for implementation/audits and carry both original/replacement identities in handoffs. Original-target preservation is not permission to continue writing to the retired item.

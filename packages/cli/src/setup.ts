@@ -114,7 +114,7 @@ export async function runSetupCommand(options: {
     baseBranch: migration.config.baseBranch ?? detectBaseBranch(options.repoRoot),
     buildCommand: migration.config.buildCommand ?? detectBuildCommand(options.repoRoot),
     forge: migration.config.forge ?? { type: "github" },
-    issueTracker: { type: migration.config.issueTracker?.type ?? migration.config.forge?.type ?? "github" },
+    issueTracker: { ...migration.config.issueTracker, type: migration.config.issueTracker?.type ?? migration.config.forge?.type ?? "github" },
   };
   const configPath = getRepositoryConfigPath(options.repoRoot);
   mkdirSync(resolve(options.repoRoot, ".prs"), { recursive: true });

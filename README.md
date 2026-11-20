@@ -4,7 +4,7 @@
 
 The agent does the reasoning and implementation. `prs` provides the repeatable local operations around it: loading issue context, publishing approved artifacts, preparing a branch, validating a pull request, and publishing an audit trail.
 
-The repository does not execute a model, require an AI-provider API key, or distribute GitHub Actions. Codex, Claude Code, and GitHub Copilot can all call the same local JSON tools. Issue tracking and repository collaboration use separate integrations. GitHub is currently supported for both: the issue tracker owns issues, hierarchy and issue artifacts; the forge owns pull requests, reviews and checks.
+The repository does not execute a model, require an AI-provider API key, or distribute GitHub Actions. Codex, Claude Code, and GitHub Copilot can all call the same local JSON tools. Issue tracking and repository collaboration use separate integrations. The issue tracker can be GitHub or Monday and owns issues, hierarchy and issue artifacts; the GitHub forge owns pull requests, reviews and checks. Project configuration selects the tracker independently.
 
 ## Install
 
@@ -192,7 +192,7 @@ The configured account applies to every GitHub operation performed by `prs` and 
 
 For `prs tool issue list`, `prs tool pr list`, and `prs tool issue create`, a configured account that GitHub CLI still knows about but whose credential cannot be read by the host process returns `github-credential-store-inaccessible` with `retry-with-credential-store-access`. This includes status checks that become indeterminate because the restricted process cannot reach the credential store or GitHub. Retry the exact command through the host's normal permission mechanism, preserving approvals, artifact paths, targets, and any known issue number; PRS does not elevate itself or invoke a host-specific mechanism. Only after that unrestricted retry still reports missing or rejected credentials should the selected account be logged in or refreshed. A missing or rejected credential returns `github-auth-required` with `configure-github-auth`. Neither result authorizes exposing credentials, switching accounts, changing targets, or repeating an uncertain creation after a partial remote write. See [setup configuration](docs/setup-configuration.md) and [the CLI reference](docs/cli-reference.md#github-authentication-results).
 
-Configure `forge.type` for pull request workflows and `issueTracker.type` for issue workflows; each accepts `github` or `none`. If the tracker type is omitted, it inherits the effective forge type, preserving existing configurations. Setup writes both effective types explicitly. Both GitHub integrations use the same origin repository and existing `forge.githubCliPath` / local `forge.githubAccount` settings.
+Configure `forge.type` (`github` or `none`) for pull request workflows and `issueTracker.type` (`github`, `monday` or `none`) for issue workflows. If the tracker type is omitted, it inherits the effective forge type, preserving existing configurations. Setup writes both effective types explicitly. Both GitHub integrations use the same origin repository and existing `forge.githubCliPath` / local `forge.githubAccount` settings.
 
 | Forge | Issue tracker | Available workflows |
 |---|---|---|
@@ -201,7 +201,7 @@ Configure `forge.type` for pull request workflows and `issueTracker.type` for is
 | `none` | `github` | Issue creation, listing, context, readiness, hierarchy, managed artifacts and issue audits |
 | `none` | `none` | Local setup, usage evidence and staged-only local finalization |
 
-Issue context and ordinary issue listing report unavailable linked-PR evidence explicitly when the forge is disabled. `issue list --actionable` blocks without that evidence. Issue-to-PR completion needs both integrations enabled. GitHub issue arguments remain numeric; additional trackers and separate tracker accounts/repositories are not yet supported.
+Issue context and ordinary issue listing report unavailable linked-PR evidence explicitly when the forge is disabled. `issue list --actionable` blocks without that evidence. Issue-to-PR completion needs both integrations enabled. Issue arguments remain numeric: GitHub issue numbers for a GitHub tracker, native Monday item IDs for a Monday tracker. PR numbers always belong to the configured forge. See the Monday configuration below; separate GitHub tracker repositories/accounts are not supported.
 
 See [the CLI reference](docs/cli-reference.md), [setup configuration](docs/setup-configuration.md), [agent parity guide](docs/agent-parity.md), [migration guide](docs/migration.md), and [development guide](docs/development.md).
 
@@ -216,3 +216,57 @@ pnpm test
 ```
 
 The focused parity command validates the identical Codex, Claude Code, and GitHub Copilot skill installations plus the lifecycle evidence contract. The sole repository workflow, `.github/workflows/test.yml`, runs all of these checks for pull requests. It is repository CI, not a distributed `prs` action.
+
+## Monday issue tracking and task defaults
+
+The same `prs tool issue list`, `context`, `ready`, `create`, `publish-artifacts`, `prs issue finalize` and issue audit commands work with either configured tracker. Monday requires the token named by `tokenEnv` (default `MONDAY_API_TOKEN`) in the environment or the repository's ignored `.env`; GitHub forge operations still require the selected GitHub CLI account. PR-only and tracker-only workflows remain independent.
+
+For example, FOCAL's Tasks board uses an Epic relationship to identify project membership, independently of workflow groups:
+
+```json
+{
+  "forge": { "type": "github" },
+  "issueTracker": {
+    "type": "monday",
+    "defaults": {
+      "groupId": "topics",
+      "columnValues": { "task_epic": { "item_ids": ["3276311061"] } }
+    },
+    "monday": {
+      "boardId": "5105675010",
+      "scope": {
+        "columnRules": [{ "columnId": "task_epic", "operator": "any_of", "compareValue": [3276311061] }]
+      },
+      "doneGroupIds": ["group_mkr5k2yh"],
+      "defaultsByBoard": { "5105675017": { "columnValues": {} } },
+      "workflow": {
+        "5105675010": {
+          "peopleColumnId": "task_owner", "statusColumnId": "task_status",
+          "inProgressLabel": "In Progress", "doneLabels": ["Done", "No Longer Needed"],
+          "closedLabel": "No Longer Needed"
+        },
+        "5105675017": {
+          "peopleColumnId": "person", "statusColumnId": "status",
+          "inProgressLabel": "Working on it", "doneLabels": ["Done"]
+        }
+      }
+    }
+  }
+}
+```
+
+Use actual board/column IDs and existing options for each project. This example needs a configured dropdown `labelsColumnId` on each relevant board before requesting labels, and a writable subitem text `migrationSourceColumnId` before converting existing items. PRS checks these prerequisites without adding columns or labels. `apiVersion` defaults to `2026-07`; `doneBoardIds`, `doneGroupIds` and `bodyUpdatePrefix` are optional. `bodyUpdatePrefix` enables reading existing sync-owned body mirrors without editing them.
+
+`defaults` are initial task values, not repeated updates. Monday accepts optional `groupId` and arbitrary supported writable `columnValues` as actual JSON values. Group placement applies only to top-level items; subitems inherit their parent's placement. `defaultsByBoard` overrides top-level default properties; a board override's `columnValues` replaces the complete base map, including when empty. Copied source values and explicit task values take precedence; explicit null/empty values clear fields where supported. Protected title/parent/migration identities cannot be supplied as defaults. Existing/reused tasks, readiness and artifact/audit writes are not retroactively patched with defaults. GitHub defaults accept `labels`, `assignees` and `milestone`; default and explicit labels are combined without duplicates.
+
+`scope` controls reads, reuse and writes independently of defaults. Optional `groupIds` and column rules are combined with AND; supported operators are `any_of`, `not_any_of`, `contains_text`, `is_empty` and `is_not_empty`. With no scope restrictions, the whole configured board is in scope. Subtasks belong through their top-level ancestor, even when their own board has no Epic field. Completed boards, groups and configured status labels are excluded from actionable selection and protected from writes.
+
+Monday request bodies, specifications, plans and audits use separate PRS-owned Updates containing escaped Markdown. Repeated publication verifies and edits the same managed update; human discussion and imported body mirrors remain separate. Foreign-owned or duplicate managed updates block writes. Readiness returns `trackerUpdate` with separate assignment/status outcomes; GitHub also retains `githubUpdate` for compatibility.
+
+Parent-mode linked sets create new children directly as native subitems. Attaching an existing top-level Monday item creates a replacement subitem, copies its request and mapped metadata/artifacts, verifies links and both hierarchy directions, and only then sets the original's configured closed status. Receipts retain `replacementOf`, and the returned issue records contain the active subitem IDs/URLs. Partial failures preserve the original and resume the recorded replacement; unrelated parents and linked open PRs block conversion. Conversion is limited to source items without descendants: PRS stops before writes when it cannot preserve a source subtree. Classic boards support one subitem level; multi-level boards use their native depth limit. Flat sets perform no hierarchy conversion.
+
+For a PR originating from a Monday item, include its canonical item URL and `<!-- prs:issue-ref monday ITEM_ID -->` in the PR body. PRS scans all repository PR pages and follows verified original/replacement references and same-repository imported GitHub source links. Unavailable evidence is reported explicitly and blocks actionable selection. GitHub closing syntax cannot close a Monday item; PR completion audits and subsequent Monday status management remain separate from merge behavior. PR audits, reviews and checks always use the forge.
+
+Incomplete Monday creations retain local receipts under `.prs/runs/*-monday-create/`. A known item ID is read back and repaired using the original request; an uncertain result without a known ID requires receipt reconciliation rather than a blind retry or ordinary title reuse. Creation checks placement and every effective writable value, and rejects calculated/rollup targets that cannot preserve requested values.
+
+Native Monday write validation is explicitly opt-in: after exact-target approval and preparation of a complete local pilot config, run `PRS_MONDAY_PILOT_CONFIG=/absolute/path/config.json PRS_MONDAY_PILOT_APPROVED=issue-375 PRS_MONDAY_PILOT_REPO=/absolute/path/repository PRS_MONDAY_PILOT_RUN=/absolute/path/prs/.prs/runs/pilot pnpm exec vitest run packages/cli/src/monday-live-pilot.test.ts`. Supply the configured token through the environment before running it. This trial creates/updates disposable named items and retires its disposable conversion source; normal tests skip it. The environment binding is a guard, not authorization to change live data.

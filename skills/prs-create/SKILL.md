@@ -1,6 +1,6 @@
 ---
 name: prs-create
-description: Use when turning a rough idea into one approved GitHub issue or a dependency-linked issue set in a prs-configured repository.
+description: Use when turning a rough idea into one approved configured-tracker issue or a dependency-linked issue set in a prs-configured repository.
 ---
 
 # Create prs issues
@@ -23,7 +23,7 @@ Use `superpowers:writing-plans` to write and self-review each implementation pla
 
 ## Unified approval
 
-Draft an H1-titled Markdown issue in the same run directory. For multiple tasks, keep one draft, specification and plan per issue plus a version-2 linked-set manifest. Recommend a designated parent/orchestrator for coordination, integration and final acceptance. Reuse a parent only when the user explicitly designates its `issueNumber`; never infer one from title, order or dependency links. When orchestration is unnecessary, record the user's explicit flat choice and reason. Parent membership and dependency order are separate: `parentId` establishes native GitHub hierarchy while `dependsOn` and `blocks` govern readiness.
+Draft an H1-titled Markdown issue in the same run directory. For multiple tasks, keep one draft, specification and plan per issue plus a version-2 linked-set manifest. Recommend a designated parent/orchestrator for coordination, integration and final acceptance. Reuse a parent only when the user explicitly designates its `issueNumber`; never infer one from title, order or dependency links. When orchestration is unnecessary, record the user's explicit flat choice and reason. Parent membership and dependency order are separate: `parentId` establishes tracker-native hierarchy while `dependsOn` and `blocks` govern readiness.
 
 ```json
 {
@@ -83,3 +83,9 @@ Refresh capture using the same output before completion, then run `prs tool toke
 Review capture warnings, partial/unpriced results and the checkpoint range. Full-task/subagent coverage is unproven; the final response and later work require a later checkpoint. Model tokens, host counters, credits, host cost estimates and actual charges remain distinct. Adapter fixtures are not native validation. The PRS source's `docs/usage-evidence.md` documents supported formats and optional setup; if the capture command is unavailable, preserve existing evidence and report the limitation.
 
 Obtain explicit user approval before publishing the reviewed Markdown with `prs audit publish --issue <number> --file .prs/runs/<run>/token-usage.md --section token-usage` (or `--pr <number>`). Raw JSON, transcripts and private source paths stay local. Reuse the same report when publishing to an issue and PR.
+
+## Provider defaults and conversion evidence
+
+Preflight the configured tracker and show resolved project/target-board defaults with the approval packet when they affect creation. Scope is independent of defaults and workflow-group placement. On Monday, use native item IDs and real column JSON values; an Epic default links to an Epic item and is distinct from a parent/subitem relationship.
+
+Parent-mode creation may return a replacement native subitem for an existing top-level Monday item. Use the returned active ID/URL for artifacts, dependencies, audits and later commands, preserving `replacementOf` in receipts. Require verified copies, artifact publication and both hierarchy directions before original retirement; partial results remain incomplete and retries reconcile the same replacement. Flat mode performs no conversion. Existing unrelated parents and linked open PRs require resolution, not forced reparenting. Do not change the original issue target merely during ordinary refinement.

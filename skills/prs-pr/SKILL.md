@@ -68,3 +68,7 @@ Refresh capture using the same output before completion, then run `prs tool toke
 Review capture warnings, partial/unpriced results and the checkpoint range. Full-task/subagent coverage is unproven; the final response and later work require a later checkpoint. Model tokens, host counters, credits, host cost estimates and actual charges remain distinct. Adapter fixtures are not native validation. The PRS source's `docs/usage-evidence.md` documents supported formats and optional setup; if the capture command is unavailable, preserve existing evidence and report the limitation.
 
 Apply the audit publication authorization in `prs-finish` before publishing the reviewed Markdown with `prs audit publish --issue <number> --file .prs/runs/<run>/token-usage.md --section token-usage` (or `--pr <number>`). Raw JSON, transcripts and private source paths stay local. Reuse the same report when publishing to an issue and PR.
+
+## Issue tracker independence
+
+PR numbers, reviews, checks and PR audits always use the configured forge. Linked issue context/artifacts/audits use the configured tracker, which may be Monday with a GitHub forge. Preserve native issue IDs and any verified original/replacement lineage; do not infer a GitHub issue from a Monday numeric ID or generate GitHub closing syntax for it.

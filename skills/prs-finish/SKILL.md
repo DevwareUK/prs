@@ -51,3 +51,9 @@ Refresh capture using the same output before completion, then run `prs tool toke
 Review capture warnings, partial/unpriced results and the checkpoint range. Full-task/subagent coverage is unproven; the final response and later work require a later checkpoint. Model tokens, host counters, credits, host cost estimates and actual charges remain distinct. Adapter fixtures are not native validation. The PRS source's `docs/usage-evidence.md` documents supported formats and optional setup; if the capture command is unavailable, preserve existing evidence and report the limitation.
 
 Apply the audit publication authorization above when publishing the reviewed Markdown with `prs audit publish --issue <number> --file .prs/runs/<run>/token-usage.md --section token-usage` (or `--pr <number>`). Raw JSON, transcripts and private source paths stay local. Reuse the same report when publishing to an issue and PR.
+
+## Cross-provider pull request references
+
+Issue arguments and audits use the configured tracker. GitHub-tracked issues may use verified same-repository closing references. For a Monday issue, include its API-returned canonical item URL and the exact marker `<!-- prs:issue-ref monday ITEM_ID -->` in the GitHub PR body. Never emit `Closes #ITEM_ID` for a Monday item; GitHub cannot close it. Keep PR audits/reviews/checks on the forge.
+
+For converted Monday items, use the verified active replacement ID/URL and preserve original lineage in the completion record. The PR link adapter discovers historical original references. Do not reset usage checkpoints during conversion or readiness handoffs. Completion audits and review/check verification remain required for either tracker; no provider selection waives them.

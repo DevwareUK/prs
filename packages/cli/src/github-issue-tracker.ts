@@ -1,3 +1,4 @@
+import { resolveIssueCreateDefaults } from "./issue-create-defaults";
 import { startIssueWork as updateIssueAtStart } from "./issue-start-github";
 import type { ResolvedRepositoryConfigType } from "@prs/contracts";
 import { loadResolvedRepositoryConfig } from "./config";
@@ -238,7 +239,9 @@ class GitHubIssueTracker implements IssueTracker {
   async createDraftIssue(title: string, body: string): Promise<string> {
     const { owner, repo } = parseGitHubRepoFromRemote(this.repoRoot);
 
-    const createdIssue = await createGitHubIssue(owner, repo, this.repoRoot, title, body, []);
+    const defaults = resolveIssueCreateDefaults(this.config, {isSubitem: false});
+    if (defaults.type !== "github") throw new Error("Expected GitHub creation defaults");
+    const createdIssue = await createGitHubIssue(owner, repo, this.repoRoot, title, body, defaults.labels, defaults);
     return createdIssue.url;
   }
 
@@ -298,7 +301,9 @@ class GitHubIssueTracker implements IssueTracker {
       };
     }
 
-    const createdIssue = await createGitHubIssue(owner, repo, this.repoRoot, title, body, labels);
+    const defaults = resolveIssueCreateDefaults(this.config, {isSubitem: false}, {labels});
+    if (defaults.type !== "github") throw new Error("Expected GitHub creation defaults");
+    const createdIssue = await createGitHubIssue(owner, repo, this.repoRoot, title, body, defaults.labels, {assignees: defaults.assignees, milestone: defaults.milestone});
     this.openIssuesByTitle.set(createdIssue.title.trim().toLowerCase(), createdIssue);
     return {
       ...createdIssue,
@@ -313,6 +318,6 @@ class GitHubIssueTracker implements IssueTracker {
   }
   listIssues(options: {actionable: boolean}) { return listGitHubIssues({ ...options, repoRoot: this.repoRoot, config: this.config }); }
 }
-export function createGitHubIssueTracker(repoRoot: string, config = loadResolvedRepositoryConfig(repoRoot)): IssueTracker {
+export function createGitHubIssueTracker(repoRoot: string, config: ResolvedRepositoryConfigType = loadResolvedRepositoryConfig(repoRoot)): IssueTracker {
   return new GitHubIssueTracker(repoRoot, config);
 }

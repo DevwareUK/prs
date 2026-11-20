@@ -138,6 +138,10 @@ export const AgentLifecycleSmokeMatrix = z
     version: z.literal(2),
     repository: z.string().min(1),
     recordedAt: z.string().datetime(),
+    issueTracker: z.discriminatedUnion("type", [
+      z.object({type: z.literal("github")}).strict(),
+      z.object({type: z.literal("monday"), accountHost: z.string().regex(/^[a-z0-9-]+\.monday\.com$/), boardIds: z.array(z.string().regex(/^[1-9]\d*$/)).min(1)}).strict(),
+    ]).optional(),
     hosts: z.array(SmokeHostRow).length(3),
   })
   .strict()
@@ -181,13 +185,18 @@ export const AgentLifecycleSmokeMatrix = z
         ["pullRequestUrl", row.pullRequestUrl, "pull", pullRequestIdentities],
       ] as const) {
         if (!value) continue;
-        const identity = parseGitHubResource(value, resource);
-        if (!identity || !repositoryIdentity || identity.owner !== repositoryIdentity.owner || identity.repository !== repositoryIdentity.repository) {
-          context.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: [...hostPath, field],
-            message: `${field} must be a canonical GitHub ${resource} URL for the matrix repository`,
-          });
+        const githubIdentity = parseGitHubResource(value, resource);
+        const monday = resource === "issues" && matrix.issueTracker?.type === "monday" ? matrix.issueTracker : undefined;
+        let identity: {key: string} | undefined;
+        if (monday) {
+          try {
+            const url = new URL(value);
+            const match = /^\/boards\/([1-9]\d*)\/pulses\/([1-9]\d*)$/.exec(url.pathname);
+            if (url.protocol === "https:" && url.hostname === monday.accountHost && !url.username && !url.password && !url.search && !url.hash && match && monday.boardIds.includes(match[1])) identity = {key: `${url.hostname}/items/${match[2]}`};
+          } catch { /* invalid native identity */ }
+        } else if (githubIdentity && repositoryIdentity && githubIdentity.owner === repositoryIdentity.owner && githubIdentity.repository === repositoryIdentity.repository) identity = githubIdentity;
+        if (!identity) {
+          context.addIssue({code: z.ZodIssueCode.custom, path: [...hostPath, field], message: `${field} must be a canonical ${monday ? "Monday item URL for the configured account and board" : `GitHub ${resource} URL for the matrix repository`}`});
           continue;
         }
         if (seen.has(identity.key)) {

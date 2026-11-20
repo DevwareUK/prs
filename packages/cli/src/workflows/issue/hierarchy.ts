@@ -52,6 +52,7 @@ export async function ensureIssueHierarchy(input: {
   tracker: IssueTracker;
   issueSet: ParsedIssueDraftSet;
   issues: ToolCreatedIssueRecord[];
+  onIdentityChange?: () => void;
 }): Promise<IssueHierarchyResult> {
   if (input.issueSet.orchestration.mode === "flat") {
     return {
@@ -86,7 +87,7 @@ export async function ensureIssueHierarchy(input: {
         childUrl: childRecord.url,
         status: "incomplete",
         message,
-        nextAction: "Check GitHub issue permissions and retry the same approved issue-set creation command.",
+        nextAction: "Check issue tracker permissions and retry the same approved issue-set creation command.",
       });
     }
     return {
@@ -113,7 +114,7 @@ export async function ensureIssueHierarchy(input: {
         childUrl: childRecord.url,
         status: "incomplete",
         message: error instanceof Error ? error.message : String(error),
-        nextAction: "Check GitHub issue permissions and retry the same approved issue-set creation command.",
+        nextAction: "Check issue tracker permissions and retry the same approved issue-set creation command.",
       });
       continue;
     }
@@ -129,7 +130,14 @@ export async function ensureIssueHierarchy(input: {
 
       if (!currentParent) {
         try {
-          await input.tracker.addIssueChild(parent.number, child.id);
+          const replacement = await input.tracker.addIssueChild(parent.number, child.id);
+          if (replacement && replacement.number !== child.number) {
+            childRecord.replacementOf = child;
+            childRecord.number = replacement.number;
+            childRecord.url = replacement.url;
+            child = replacement;
+            input.onIdentityChange?.();
+          }
         } catch {
           // The response may have been lost after GitHub applied the relationship.
         }
@@ -146,7 +154,7 @@ export async function ensureIssueHierarchy(input: {
     } catch (error) {
       relationships.push(relationship(parent, child, "incomplete", {
         message: error instanceof Error ? error.message : String(error),
-        nextAction: "Check GitHub issue permissions and retry the same approved issue-set creation command.",
+        nextAction: "Check issue tracker permissions and retry the same approved issue-set creation command.",
       }));
     }
   }

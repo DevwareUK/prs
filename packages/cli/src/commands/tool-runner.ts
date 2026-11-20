@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { renderTokenUsageTool } from "../token-usage-tool";
 import { captureTokenUsageTool } from "../token-usage-capture-tool";
 import { recordCopilotCaptureBinding, type CopilotBridgeOptions } from "../copilot-session-bridge";
@@ -24,7 +24,7 @@ import { readyPullRequestTool } from "../pr-ready-tool";
 import { parsePrsToolCommandArgs } from "../prs-tool-command";
 import { ensureVerificationCommandAvailable } from "../workflow-preflights";
 import { publishLinkedIssueArtifacts, publishManagedCommentsFromArtifacts, ensurePrsManagedIssueBody } from "../workflows/issue/artifacts";
-import { createIssueDraftSetWithRecords } from "../workflows/issue/create-set";
+import { createIssueDraftSetWithRecords, updateIssueSetLinks } from "../workflows/issue/create-set";
 import { parseIssueDraftDocument } from "../workflows/issue/draft-parser";
 import { loadIssueDraftSet } from "../workflows/issue/draft-set";
 import { ensureIssueHierarchy } from "../workflows/issue/hierarchy";
@@ -126,6 +126,10 @@ export async function runToolCommand(options: { stdin?: NodeJS.ReadableStream; c
         fallbackAuthMessage
       );
     }
+    if (!authenticated && tracker.type === "monday") {
+      writeJson({status: "blocked", reason: "monday-auth-required", message: "Set the configured Monday token environment variable before creating issues.", nextAction: "configure-monday-token"});
+      return;
+    }
     if (!authenticated) {
       writeJson({
         status: "blocked",
@@ -185,15 +189,27 @@ export async function runToolCommand(options: { stdin?: NodeJS.ReadableStream; c
       labels: command.labels,
       forcePrsManaged: command.forcePrsManaged,
       receiptFilePath: resolve(runDir, "issue-set-receipt.json"),
+      deferLinks: tracker.type === "monday",
     });
-    const managed = await publishLinkedIssueArtifacts({
-      tracker,
-      issueSet,
-      issues,
-    });
-    const hierarchy = await ensureIssueHierarchy({ tracker, issueSet, issues });
-    const incomplete = managed.managedCommentFailures.length > 0 ||
-      hierarchy.relationships.some((relationship) => relationship.status !== "verified");
+    const persist = () => writeFileSync(resolve(runDir, "issue-set-receipt.json"), `${JSON.stringify({version: 1, issues}, null, 2)}\n`, "utf8");
+    const earlyHierarchy = tracker.type === "monday" ? await ensureIssueHierarchy({tracker, issueSet, issues, onIdentityChange: persist}) : undefined;
+    if (earlyHierarchy?.relationships.some(r => r.status !== "verified")) {
+      persist(); process.exitCode = 1;
+      writeJson({status: "partial", mode: "multiple", issues, createdIssues: issues, hierarchy: earlyHierarchy, nextAction: "Resume the same approved linked-set command after resolving hierarchy failures; original items remain open."});
+      return;
+    }
+    if (tracker.type === "monday") await updateIssueSetLinks({tracker, issueSet, issues, forcePrsManaged: command.forcePrsManaged});
+    const managed = await publishLinkedIssueArtifacts({tracker, issueSet, issues});
+    const hierarchy = earlyHierarchy ?? await ensureIssueHierarchy({tracker, issueSet, issues});
+    const migrations: Array<{original: number; replacement: number; status: string; message?: string}> = [];
+    const artifactsComplete = managed.managedCommentFailures.length === 0 && hierarchy.relationships.every(r => r.status === "verified");
+    if (artifactsComplete && tracker.finalizeIssueReplacement) {
+      for (const record of issues) if (record.replacementOf) {
+        migrations.push({original: record.replacementOf.number, replacement: record.number, ...await tracker.finalizeIssueReplacement(record.replacementOf.number, record.number)});
+      }
+    }
+    persist();
+    const incomplete = !artifactsComplete || migrations.some(m => m.status !== "verified");
     if (incomplete) process.exitCode = 1;
     writeJson({
       status: incomplete ? "partial" : "ok",
@@ -202,6 +218,7 @@ export async function runToolCommand(options: { stdin?: NodeJS.ReadableStream; c
       createdIssues: issues,
       ...managed,
       hierarchy,
+      ...(migrations.length ? {migrations} : {}),
       ...(incomplete ? {
         nextAction: "Retry the same approved issue-set creation command after addressing the reported comment or hierarchy failures.",
       } : {}),

@@ -1,3 +1,4 @@
+import type { ResolvedRepositoryConfigType } from "@prs/contracts";
 import { createIssuePullRequestLinks } from "./issue-pr-links";
 import { createIssueTracker } from "./issue-tracker";
 import { resolve } from "node:path";
@@ -18,7 +19,7 @@ export function loadRepoEnv(repoRoot: string): void {
   dotenv.config({ path: resolve(repoRoot, ".env"), quiet: true });
 }
 
-export function getRepositoryConfig(repoRoot = getDefaultRepoRoot()) {
+export function getRepositoryConfig(repoRoot = getDefaultRepoRoot()): ResolvedRepositoryConfigType {
   return loadResolvedRepositoryConfig(repoRoot);
 }
 

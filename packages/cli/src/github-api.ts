@@ -934,7 +934,8 @@ export async function createGitHubIssue(
   repoRoot: string | undefined,
   title: string,
   body: string,
-  labels: string[]
+  labels: string[],
+  metadata?: {assignees?: string[]; milestone?: number}
 ): Promise<{ number: number; title: string; url: string }> {
   const response = await requestGitHub(repoRoot, `repos/${owner}/${repo}/issues`, {
     method: "POST",
@@ -942,6 +943,7 @@ export async function createGitHubIssue(
       title,
       body,
       labels,
+      ...metadata,
     }),
   });
 

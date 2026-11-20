@@ -1,3 +1,4 @@
+import { createMondayIssueTracker } from "./monday-issue-tracker";
 import type { IssueStartGitHubResult } from "./issue-start-github";
 import type { ResolvedRepositoryConfigType } from "@prs/contracts";
 import type {
@@ -21,10 +22,10 @@ export type {
   IssueLinkedPullRequest,
 } from "./integration-types";
 
-export type IssueReference = { provider: string; scope: string; key: string; url: string };
+export type IssueReference = { provider: string; scope: string; key: string; url: string; sourceUrl?: string; previous?: IssueReference[] };
 
 export interface IssueTracker {
-  readonly type: "github" | "none";
+  readonly type: "github" | "monday" | "none";
   getRepositoryIdentity(): RepositoryIdentity;
   isAuthenticated(): boolean;
   fetchIssueDetails(issueNumber: number): Promise<IssueDetails>;
@@ -32,7 +33,9 @@ export interface IssueTracker {
   fetchIssueIdentity(issueNumber: number): Promise<IssueIdentity>;
   fetchIssueParent(issueNumber: number): Promise<IssueIdentity | null>;
   fetchIssueChildren(issueNumber: number): Promise<IssueIdentity[]>;
-  addIssueChild(parentNumber: number, childDatabaseId: number): Promise<void>;
+  addIssueChild(parentNumber: number, childDatabaseId: number): Promise<void | IssueIdentity>;
+  preflightIssueSet?(input: {issues: {id: string; parentId?: string; issueNumber?: number}[]; labels: string[]}): Promise<void>;
+  finalizeIssueReplacement?(originalNumber: number, replacementNumber: number): Promise<{status: "verified" | "incomplete"; message?: string}>;
   fetchIssueComments(issueNumber: number): Promise<RepositoryComment[]>;
   fetchIssuePlanComment(issueNumber: number): Promise<IssuePlanComment | undefined>;
   fetchAuditComment(target: AuditTarget): Promise<RepositoryComment | undefined>;
@@ -45,9 +48,10 @@ export interface IssueTracker {
   createOrReuseIssue(
     title: string,
     body: string,
-    labels: string[]
+    labels: string[],
+    options?: {parentNumber?: number}
   ): Promise<CreatedIssueRecord>;
-  getIssueReference(issueNumber: number): IssueReference;
+  getIssueReference(issueNumber: number): IssueReference | Promise<IssueReference>;
   listIssues(options: { actionable: boolean }): Promise<IssueListToolResult>;
 }
 
@@ -161,5 +165,5 @@ class NoopIssueTracker implements IssueTracker {
 }
 
 export function createIssueTracker(repoRoot: string, config: ResolvedRepositoryConfigType): IssueTracker {
-  return config.issueTracker.type === "none" ? new NoopIssueTracker() : createGitHubIssueTracker(repoRoot, config);
+  return config.issueTracker.type === "none" ? new NoopIssueTracker() : config.issueTracker.type === "monday" ? createMondayIssueTracker(repoRoot, config) : createGitHubIssueTracker(repoRoot, config);
 }

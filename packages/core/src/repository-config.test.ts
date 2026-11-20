@@ -49,3 +49,8 @@ describe("independent issue tracker configuration", () => {
     expect(config.issueTracker.type).toBe(tracker);
   });
 });
+
+it("resolves and preserves Monday scope and actual-board defaults", () => {
+  const config = resolveRepositoryConfig({ issueTracker: { type: "monday", defaults: { columnValues: { task_epic: { item_ids: ["3276311061"] } } }, monday: { boardId: "5105675010", defaultsByBoard: { "5105675017": { columnValues: {} } } } } });
+  expect(config.issueTracker).toMatchObject({ type: "monday", defaults: { columnValues: { task_epic: { item_ids: ["3276311061"] } } }, monday: { apiVersion: "2026-07", tokenEnv: "MONDAY_API_TOKEN", defaultsByBoard: { "5105675017": { columnValues: {} } } } });
+});

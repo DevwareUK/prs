@@ -5,7 +5,7 @@ description: Use when choosing or coordinating a prs issue, pull-request, creati
 
 # prs
 
-Use `prs` as the router for the local GitHub workflow. The active coding agent owns reasoning and implementation; deterministic `prs tool ... --json` commands provide state and perform approved writes.
+Use `prs` as the router for the local issue and GitHub PR workflow. The active coding agent owns reasoning and implementation; deterministic `prs tool ... --json` commands provide state and perform approved writes.
 
 ## Route
 
@@ -18,7 +18,7 @@ Use `prs` as the router for the local GitHub workflow. The active coding agent o
 
 ## Integration boundaries
 
-Issue workflows and issue audits use `issueTracker.type`; PR workflows and PR audits use `forge.type`. GitHub is currently the only enabled provider for either. An omitted tracker type inherits the forge type for compatibility. Both GitHub integrations share the existing `forge.githubCliPath` and local `forge.githubAccount` settings.
+Issue workflows and issue audits use `issueTracker.type`; PR workflows and PR audits use `forge.type`. Issue trackers support GitHub and Monday; the forge supports GitHub. A GitHub forge with a Monday tracker is a valid configuration. An omitted tracker type inherits the forge type for compatibility. Both GitHub integrations share the existing `forge.githubCliPath` and local `forge.githubAccount` settings.
 
 Check `linkedPullRequestsStatus` in issue context/list results. `unavailable` means the link evidence is unknown; never treat an empty array or false linked-PR flag as proof of no PR in that state. Actionable issue listing blocks without link evidence. Before starting an issue-to-PR implementation lifecycle, verify both integrations are enabled; tracker-only creation/refinement and forge-only PR work remain independent.
 
@@ -38,7 +38,7 @@ This covers issue drafts, linked-set manifests, specifications, plans, working n
 
 ## Shared safeguards
 
-- Get explicit user approval immediately before creating issues or publishing GitHub comments. For routine completion and token-usage audits from an explicitly requested JDI issue implementation, apply the audit publication authorization in `prs-finish`; carry its originating request, mode and issue/PR targets through handoffs instead of asking again.
+- Get explicit user approval immediately before creating issues or publishing tracker or forge comments. For routine completion and token-usage audits from an explicitly requested JDI issue implementation, apply the audit publication authorization in `prs-finish`; carry its originating request, mode and issue/PR targets through handoffs instead of asking again.
 - Get explicit user approval before destructive cleanup. Never discard uncommitted or unpushed work.
 - For issue implementation, prefer an isolated branch or worktree. If isolation is unavailable, continue in the active workspace and report that fallback. Existing-PR local testing follows `prs-pr` in the main checkout used by the local runtime.
 - Delegate independent work only when the host supports delegation and the user has authorized it. Otherwise execute sequentially.
@@ -50,3 +50,11 @@ This covers issue drafts, linked-set manifests, specifications, plans, working n
 - Treating a readiness response as implementation completion.
 - Publishing locally drafted content before approval.
 - Claiming parity based on command spelling instead of matching outcomes and safeguards.
+
+## Provider identity and project defaults
+
+Numeric issue arguments are native identifiers for the configured tracker: GitHub issue numbers or Monday item IDs. The JSON `issueNumber` field remains a compatibility name. PR numbers always belong to the forge. Issue reads, artifacts, readiness and issue audits use the tracker; PR work and PR audits use the forge. Never require the two provider types to match.
+
+Creation defaults and project scope are separate configuration objects. Defaults set initial metadata (including a Monday Epic link); they do not identify which items belong to the project, and readiness does not reapply them. Subitem defaults use the actual target board schema. Workflow groups are placement/status, not issue dependencies, Epic membership or hierarchy.
+
+After Monday conversion, follow the returned active replacement ID/URL and `replacementOf` receipt lineage for subsequent commands and reports. Verify content/artifacts and both hierarchy directions before the original is retired; never delete/recreate items as a workaround or discard partial receipts. Preserve the original only as provenance, not as the active work target.
