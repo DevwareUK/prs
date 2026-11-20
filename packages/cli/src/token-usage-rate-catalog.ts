@@ -118,7 +118,50 @@ const COPILOT_ANTHROPIC: Array<[string, Prices]> = [
   ["claude-fable-5.1", { uncachedInputTokens: 10, cachedInputTokens: 0.25, cacheWriteTokens: 12.5, outputTokens: 50 }],
 ];
 
+// New snapshots never replace historical cards embedded in earlier captures.
+const NOVEMBER_SNAPSHOT = "2026-11-20T00:00:00Z";
+const november = (host: UsageEvent["host"], provider: string, model: string, modelTiers: readonly Tier[], effectiveAt = NOVEMBER_SNAPSHOT) => makeEntry({
+  host, provider, model,
+  sourceName: host === "codex" ? "openai" : host === "copilot" ? "github-copilot" : "anthropic",
+  sourceUrl: host === "codex" ? `${OPENAI_SOURCE}/${model}` : host === "copilot" ? COPILOT_SOURCE : ANTHROPIC_SOURCE,
+  observedProviders: host === "copilot" ? [provider, "github", "github-copilot"] : [provider],
+  tiers: modelTiers, effectiveAt, retrievedAt: NOVEMBER_SNAPSHOT,
+});
+
+const NOVEMBER_OPENAI: ReadonlyArray<readonly [string, string, Prices, Prices]> = [
+  ["gpt-6.2-astra", "2026-11-17T00:00:00Z",
+    { uncachedInputTokens: 8, cachedInputTokens: 0.4, cacheWriteTokens: 10, outputTokens: 40 },
+    { uncachedInputTokens: 16, cachedInputTokens: 0.8, cacheWriteTokens: 20, outputTokens: 60 }],
+  ["gpt-6.2-sol", "2026-11-17T00:00:00Z",
+    { uncachedInputTokens: 2, cachedInputTokens: 0.1, cacheWriteTokens: 2.5, outputTokens: 10 },
+    { uncachedInputTokens: 4, cachedInputTokens: 0.2, cacheWriteTokens: 5, outputTokens: 15 }],
+  ["gpt-6.1-terra", "2026-10-26T00:00:00Z",
+    { uncachedInputTokens: 1, cachedInputTokens: 0.05, cacheWriteTokens: 1.25, outputTokens: 5 },
+    { uncachedInputTokens: 2, cachedInputTokens: 0.1, cacheWriteTokens: 2.5, outputTokens: 7.5 }],
+];
+const NOVEMBER_ANTHROPIC: ReadonlyArray<readonly [string, string, Tier[]]> = [
+  ["claude-fable-5-2", "claude-fable-5.2", single({ uncachedInputTokens: 8, cachedInputTokens: 0.2, cacheWriteTokens: 10, outputTokens: 40 })],
+  ["claude-opus-5-5", "claude-opus-5.5", single({ uncachedInputTokens: 4, cachedInputTokens: 0.2, cacheWriteTokens: 5, outputTokens: 20 })],
+  ["claude-sonnet-5-5", "claude-sonnet-5.5", single({ uncachedInputTokens: 2, cachedInputTokens: 0.1, cacheWriteTokens: 2.5, outputTokens: 10 })],
+  ["claude-haiku-5-5", "claude-haiku-5.5", tiers(100000,
+    { uncachedInputTokens: 0.1, cachedInputTokens: 0.01, cacheWriteTokens: 0.125, outputTokens: 0.5 },
+    { uncachedInputTokens: 0.5, cachedInputTokens: 0.05, cacheWriteTokens: 0.625, outputTokens: 2.5 })],
+];
+
 const CATALOG: readonly CatalogEntry[] = [
+  ...NOVEMBER_OPENAI.flatMap(([model, release, standard, long]) => [
+    november("codex", "openai", model, tiers(272000, standard, long), release),
+    november("copilot", "openai", model, tiers(272000, standard, long)),
+  ]),
+  november("copilot", "openai", "gpt-6.1-sol", tiers(272000,
+    { uncachedInputTokens: 2, cachedInputTokens: 0.1, cacheWriteTokens: 2.5, outputTokens: 10 },
+    { uncachedInputTokens: 4, cachedInputTokens: 0.2, cacheWriteTokens: 5, outputTokens: 15 })),
+  ...NOVEMBER_ANTHROPIC.flatMap(([nativeModel, copilotModel, modelTiers]) => [
+    november("claude-code", "anthropic", nativeModel, modelTiers),
+    november("copilot", "anthropic", copilotModel, modelTiers),
+  ]),
+  november("claude-code", "anthropic", "claude-mythos-5-2", single({ uncachedInputTokens: 8, cachedInputTokens: 0.2, cacheWriteTokens: 10, outputTokens: 40 })),
+
   openai("gpt-5-mini", { uncachedInputTokens: 0.25, cachedInputTokens: 0.025, cacheWriteTokens: 0, outputTokens: 2 }),
   openai("gpt-5.3-codex", { uncachedInputTokens: 1.75, cachedInputTokens: 0.175, cacheWriteTokens: 0, outputTokens: 14 }),
   openai("gpt-5.4", [
