@@ -8,6 +8,7 @@ import {
   validateAuditAuthorizationInstructions,
   validateGitHubCredentialAccessInstructions,
   validateIssueApprovalInstructions,
+  validateUpdateAuditInstructions,
 } from "./agent-skill-approval-contract";
 
 const HOSTS: AgentHostType[] = ["codex", "claude-code", "copilot"];
@@ -176,6 +177,7 @@ export function validateAgentSkillParity(options: {
       errors.push(...validateIssueApprovalInstructions(name, installedContent.get(name)));
     }
     errors.push(...validateAuditAuthorizationInstructions(installedContent));
+    errors.push(...validateUpdateAuditInstructions(installedContent));
     errors.push(...validateGitHubCredentialAccessInstructions(installedContent.get("prs")));
     for (const name of COPILOT_CAPTURE_SKILLS) {
       const content = installedContent.get(name) ?? "";

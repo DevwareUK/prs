@@ -26,14 +26,14 @@ describe.each(["codex", "claude-code", "copilot"] as const)("%s PR skill migrati
     const manifestPath = join(sourceRoot, "skills", "manifest.json");
     const currentManifest = readFileSync(manifestPath, "utf8");
     const previous = JSON.parse(currentManifest);
-    previous.skills = previous.skills.filter((skill: { name: string }) => skill.name !== "prs-pr");
+    previous.skills = previous.skills.filter((skill: { name: string }) => !["prs-pr", "prs-update-audit"].includes(skill.name));
     writeFileSync(manifestPath, JSON.stringify(previous));
     expect(installAgentSkills({ host, home, sourceRoot }).installed).toHaveLength(5);
 
     writeFileSync(manifestPath, currentManifest);
     const upgraded = installAgentSkills({ host, home, sourceRoot });
     const installedFile = join(upgraded.targetRoot, "prs-pr", "SKILL.md");
-    expect(upgraded.installed).toEqual([installedFile]);
+    expect(upgraded.installed).toEqual([installedFile, join(upgraded.targetRoot, "prs-update-audit", "SKILL.md")]);
     const canonicalFile = join(sourceRoot, "skills", "prs-pr", "SKILL.md");
     expect(readFileSync(installedFile, "utf8")).toBe(readFileSync(canonicalFile, "utf8"));
 
@@ -62,7 +62,7 @@ describe("Codex Agent Skills installer", () => {
   it("finds the repository canonical pack without a source override", () => {
     const root = mkdtempSync(join(tmpdir(), "prs-codex-default-source-"));
     const result = installAgentSkills({ host: "codex", home: join(root, "home") });
-    expect(result.installed).toHaveLength(6);
+    expect(result.installed).toHaveLength(7);
   });
 
   it("installs the canonical files unchanged under the shared skills root", () => {
@@ -71,10 +71,10 @@ describe("Codex Agent Skills installer", () => {
     const result = installAgentSkills({ host: "codex", home, sourceRoot });
 
     expect(result.targetRoot).toBe(join(home, ".agents", "skills"));
-    expect(result.installed).toHaveLength(6);
+    expect(result.installed).toHaveLength(7);
     expect(result.updated).toEqual([]);
     expect(result.skipped).toEqual([]);
-    for (const name of ["prs", "prs-create", "prs-issue", "prs-finish", "prs-orchestrate", "prs-pr"]) {
+    for (const name of ["prs", "prs-create", "prs-issue", "prs-finish", "prs-orchestrate", "prs-pr", "prs-update-audit"]) {
       expect(readFileSync(join(result.targetRoot, name, "SKILL.md"), "utf8")).toBe(
         readFileSync(join(sourceRoot, "skills", name, "SKILL.md"), "utf8")
       );
@@ -87,7 +87,7 @@ describe("Codex Agent Skills installer", () => {
     const { home, sourceRoot } = fixture();
     const first = installAgentSkills({ host: "codex", home, sourceRoot });
     const second = installAgentSkills({ host: "codex", home, sourceRoot });
-    expect(second.unchanged).toHaveLength(6);
+    expect(second.unchanged).toHaveLength(7);
 
     const managedFile = join(first.targetRoot, "prs", "SKILL.md");
     writeFileSync(managedFile, `${readFileSync(managedFile, "utf8")}\ncustom note\n`);
@@ -115,7 +115,7 @@ describe("Codex Agent Skills installer", () => {
       `${JSON.stringify({ version: 1, host: "codex", skills: state.skills }, null, 2)}\n`
     );
 
-    expect(installAgentSkills({ host: "codex", home, sourceRoot }).unchanged).toHaveLength(6);
+    expect(installAgentSkills({ host: "codex", home, sourceRoot }).unchanged).toHaveLength(7);
   });
 
   it("protects an untracked custom collision", () => {
@@ -178,8 +178,8 @@ describe("Claude Code Agent Skills installer", () => {
 
     expect(result.host).toBe("claude-code");
     expect(result.targetRoot).toBe(join(home, ".claude", "skills"));
-    expect(result.installed).toHaveLength(6);
-    for (const name of ["prs", "prs-create", "prs-issue", "prs-finish", "prs-orchestrate", "prs-pr"]) {
+    expect(result.installed).toHaveLength(7);
+    for (const name of ["prs", "prs-create", "prs-issue", "prs-finish", "prs-orchestrate", "prs-pr", "prs-update-audit"]) {
       expect(readFileSync(join(result.targetRoot, name, "SKILL.md"), "utf8")).toBe(
         readFileSync(join(sourceRoot, "skills", name, "SKILL.md"), "utf8")
       );
@@ -213,7 +213,7 @@ describe("GitHub Copilot Agent Skills installer", () => {
     expect(copilot.host).toBe("copilot");
     expect(copilot.targetRoot).toBe(codex.targetRoot);
     expect(copilot.installed).toEqual([]);
-    expect(copilot.unchanged).toHaveLength(6);
+    expect(copilot.unchanged).toHaveLength(7);
     const state = JSON.parse(
       readFileSync(join(copilot.targetRoot, ".prs-managed-skills.json"), "utf8")
     ) as { hosts: string[] };

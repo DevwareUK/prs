@@ -64,6 +64,10 @@ prs tool issue create --draft-file .prs/runs/<run>/issue.md --spec-file .prs/run
 prs tool issue create --issue-set .prs/runs/<run>/issue-set.json --run-dir .prs/runs/<run> --json
 ```
 
+## Update-audit JDI handoff
+
+Apply the JDI publication policy in `prs-update-audit` only for an explicit `prs-update-audit --jdi` request or an authorized saved schedule with that invocation for the same named project. Carry the originating authorization, execution mode, repository identity, reviewed run files and exact issue targets or new issue keys. Use per-issue labels and follow the audit's live-state and receipt reconciliation. Ordinary creation and refinement use their unified approval workflows.
+
 ## Completion verification
 
 For every created or reused issue, require `managedComments` records with `status: published` for both `<!-- prs:issue-spec -->` and `<!-- prs:issue-plan -->`. Read `prs tool issue context <number> --json` and confirm both managed artifacts are present; check the published content matches the approved files. For parent mode, also require every requested `hierarchy.relationships` entry to have `status: verified`, then confirm both hierarchy directions. Flat mode must report its reason and perform no parent mutation. Missing or incomplete comments or relationships mean incomplete work even when some issues were created.

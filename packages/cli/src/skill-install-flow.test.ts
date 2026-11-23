@@ -22,7 +22,7 @@ describe("shared skills/setup telemetry flow", () => {
     await runSkillsCommand(["skills", "install", "all", "--json"], { ...f, interactive: true, promptForLine: async () => { throw Error("JSON must not prompt"); } });
     const output = JSON.parse(chunks.join(""));
     expect(output.hosts.map((r: { host: string }) => r.host)).toEqual(["codex", "claude-code", "copilot"]);
-    expect(output.hosts[2].unchanged).toHaveLength(6);
+    expect(output.hosts[2].unchanged).toHaveLength(7);
     expect(existsSync(join(f.home, ".agents/skills/prs/SKILL.md"))).toBe(true);
     expect(existsSync(join(f.home, ".claude/skills/prs/SKILL.md"))).toBe(true);
     expect(f.values.size).toBe(0);

@@ -46,11 +46,27 @@ Keep native results separately attributed by host, including approval checkpoint
 
 ## Pull-request instruction checks
 
-The six-skill pack includes `prs-pr`. Static validation independently requires its installation, the existing-PR router entry, and non-empty `review`, `resolve-conflicts`, `address-comments`, and `fix-tests` sections. Removing a workflow from the canonical manifest cannot produce a passing report merely because all three hosts share the omission. Repository tests also check the completion handoff, readiness boundaries, publication/push guidance, and upgrades from the five-skill inventory. These checks do not establish native-host PR behaviour; any such smoke evidence must be separately attributed to the host that ran it.
+The canonical pack includes `prs-pr`. Static validation independently requires its installation, the existing-PR router entry, and non-empty `review`, `resolve-conflicts`, `address-comments`, and `fix-tests` sections. Removing a workflow from the canonical manifest cannot produce a passing report merely because all three hosts share the omission. Repository tests also check the completion handoff, readiness boundaries, publication/push guidance, and upgrades from the five-skill inventory. These checks do not establish native-host PR behaviour; any such smoke evidence must be separately attributed to the host that ran it.
 
 ## JDI audit authorization checks
 
 Static validation requires the finish policy that carries an explicit JDI issue-implementation request through completion and token-usage publication on the issue and its resulting PR. It checks the interactive approval fallback, readiness-only boundary, preserved unified artifact approval and handoffs from the router, issue and PR skills. Regression fixtures remove those rules or restore contradictory unconditional audit approval instructions. All three host rows must reject the broken pack. These checks do not establish native-agent approval behavior.
+
+## Project update audit checks
+
+Static parity requires the installed `prs-update-audit` skill, its router entry, explicit interactive approval, and project-bound JDI authorization in both the audit and its creation handoff. Regression fixtures omit the skill or weaken those instructions. Existing create and refine checks still apply. Static checks inspect installed guidance. They do not run an audit, launch a schedule, or write to GitHub.
+
+For a separately authorized smoke test in a disposable repository, exercise the following in each native host and retain the results in the local run directory.
+
+| Scenario | Expected result |
+| --- | --- |
+| Mixed severities and a compatible routine group | Confirmed security fixes come first. Each security issue has exactly one severity label with the original upstream rating and affected and fixed versions. Routine issues receive no severity label. |
+| Unknown affected range or missing runtime evidence | The affected candidate remains unresolved with the specific gap. |
+| Existing issue already covers the fix | The audit cites the issue and skips matching writes. |
+| Interactive packet awaiting approval | There are no GitHub writes. |
+| Authorized project-bound scheduled JDI | A verified item can be published with its artifacts and labels. A different checkout receives no writes. |
+| Identical scheduled rerun | No remote writes occur. |
+| Interrupted creation or artifact publication | Reconcile the prior attempt and known issue number. Confirm both comments and labels on GitHub before recording completion. |
 
 ## GitHub account context
 
