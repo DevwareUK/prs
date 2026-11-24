@@ -30,6 +30,11 @@
       "name": "prs-pr",
       "source": "skills/prs-pr/SKILL.md",
       "phases": ["implement", "verify", "finalize", "validate"]
+    },
+    {
+      "name": "prs-update-audit",
+      "source": "skills/prs-update-audit/SKILL.md",
+      "phases": ["create", "refine", "plan", "verify"]
     }
   ]
 }

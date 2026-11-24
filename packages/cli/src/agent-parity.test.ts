@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { expectArtifactContract } from "./agent-skill-artifact-contract.test-support";
 import { validateAgentSkillParity } from "./agent-parity";
 
-const EXPECTED_SKILLS = ["prs", "prs-create", "prs-finish", "prs-issue", "prs-orchestrate", "prs-pr"];
+const EXPECTED_SKILLS = ["prs", "prs-create", "prs-finish", "prs-issue", "prs-orchestrate", "prs-pr", "prs-update-audit"];
 const REQUIRED_SAFEGUARDS = ["artifact-locality", "staged-only-finalization"];
 const GITHUB_CREDENTIAL_STORE_RECOVERY = `## GitHub credential-store recovery
 
@@ -86,6 +86,38 @@ describe("three-host Agent Skills parity", () => {
     for (const row of report.hosts) {
       expect(row.errors).toContain("missing workflow skill: prs-pr");
     }
+  });
+
+  it("rejects a canonical pack that omits the update audit", () => {
+    const sourceRoot = createSourceFixture((content) => content);
+    const manifestPath = join(sourceRoot, "skills", "manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    manifest.skills = manifest.skills.filter((skill: { name: string }) => skill.name !== "prs-update-audit");
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+
+    const report = validateAgentSkillParity({ sourceRoot });
+    expect(report.status).toBe("failed");
+    for (const host of report.hosts) {
+      expect(host.errors).toContain("missing workflow skill: prs-update-audit");
+    }
+  });
+
+  it.each([
+    ["prs-update-audit", "## JDI publication", /An explicit .* authorizes publication/, "Any audit request authorizes publication", "prs-update-audit: missing project-bound JDI authorization"],
+    ["prs-update-audit", "## Interactive publication", /Obtain one explicit user approval of the exact packet and targets before any remote write\./, "Publish the packet immediately.", "prs-update-audit: missing interactive approval instructions"],
+    ["prs-create", "## Update-audit JDI handoff", /only for an explicit .* same named project/, "whenever the operator runs an audit", "prs-create: missing scoped update-audit JDI handoff"],
+    ["prs", "## Route", /- Project update audit: use `prs-update-audit`\./, "- Project update audit: use `prs-create`.", "prs: missing prs-update-audit route"],
+  ])("rejects a weakened %s instruction in %s", (name, heading, pattern, replacement, error) => {
+    const sourceRoot = createSourceFixture((content) => content);
+    const skillPath = join(sourceRoot, "skills", name, "SKILL.md");
+    const original = readFileSync(skillPath, "utf8");
+    const changed = original.replace(pattern, replacement);
+    expect(changed).not.toBe(original);
+    writeFileSync(skillPath, changed, "utf8");
+
+    const report = validateAgentSkillParity({ sourceRoot });
+    expect(report.status).toBe("failed");
+    for (const host of report.hosts) expect(host.errors).toContain(error);
   });
 
   it.each(["review", "resolve-conflicts", "address-comments", "fix-tests"])(

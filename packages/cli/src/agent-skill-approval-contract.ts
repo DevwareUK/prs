@@ -221,3 +221,40 @@ export function validateGitHubCredentialAccessInstructions(content: string | und
     ? []
     : ["prs: missing GitHub credential-store recovery instructions"];
 }
+
+export function validateUpdateAuditInstructions(content: Map<string, string>): string[] {
+  const errors: string[] = [];
+  if (!/^\s*- Project update audit:[^\n]*`prs-update-audit`/m.test(content.get("prs") ?? "")) {
+    errors.push("prs: missing prs-update-audit route");
+  }
+
+  const audit = content.get("prs-update-audit")?.replace(/\r\n/g, "\n");
+  if (audit === undefined) return [...errors, "missing workflow skill: prs-update-audit"];
+
+  const interactive = section(audit, "Interactive publication", 2);
+  if (
+    !interactive.includes("unified approval workflow in `prs-create`") ||
+    !interactive.includes("Obtain one explicit user approval of the exact packet and targets before any remote write")
+  ) {
+    errors.push("prs-update-audit: missing interactive approval instructions");
+  }
+
+  const jdi = section(audit, "JDI publication", 2);
+  if (
+    !/An explicit `prs-update-audit --jdi` request or an authorized saved schedule containing that invocation for a named project authorizes publication[^.]*in that selected project/.test(jdi) ||
+    !jdi.includes("A generic schedule, bare audit or another workflow's JDI mode supplies no update-audit authorization") ||
+    !jdi.includes("A different project requires its own authorization")
+  ) {
+    errors.push("prs-update-audit: missing project-bound JDI authorization");
+  }
+
+  const create = (content.get("prs-create") ?? "").replace(/\r\n/g, "\n");
+  const handoff = section(create, "Update-audit JDI handoff", 2);
+  if (
+    !/only for an explicit `prs-update-audit --jdi` request or an authorized saved schedule with that invocation for the same named project/.test(handoff) ||
+    !handoff.includes("Ordinary creation and refinement use their unified approval workflows")
+  ) {
+    errors.push("prs-create: missing scoped update-audit JDI handoff");
+  }
+  return errors;
+}

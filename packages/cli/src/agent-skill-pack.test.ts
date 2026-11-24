@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { AgentSkillManifest } from "@prs/contracts";
 import { expectArtifactContract } from "./agent-skill-artifact-contract.test-support";
 
-const EXPECTED_SKILLS = ["prs", "prs-create", "prs-finish", "prs-issue", "prs-orchestrate", "prs-pr"];
+const EXPECTED_SKILLS = ["prs", "prs-create", "prs-finish", "prs-issue", "prs-orchestrate", "prs-pr", "prs-update-audit"];
 
 describe("canonical agent skill pack", () => {
   it("publishes the exact portable inventory through one manifest", () => {
