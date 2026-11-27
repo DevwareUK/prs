@@ -1,3 +1,4 @@
+import { parseArgs } from "node:util";
 import type { AuditTarget } from "../integration-types";
 
 function parseTargetNumber(rawValue: string | undefined): number {
@@ -11,7 +12,7 @@ function parseTargetNumber(rawValue: string | undefined): number {
   return value;
 }
 
-export type AuditCommandOptions = {
+export type AuditCommandOptions = { action: "validate-coverage"; filePath: string } | {
   action: "publish";
   target: AuditTarget;
   filePath: string;
@@ -23,12 +24,22 @@ export type AuditCommandOptions = {
 const AUDIT_PUBLISH_USAGE =
   "Usage: prs audit publish (--issue <number>|--pr <number>) --file <path> --section <name> [--local-run <path>] [--media-manifest <path>]";
 
+export const AUDIT_COVERAGE_USAGE = "prs audit validate-coverage --file <path> --json";
+
 export function parseAuditCommandArgs(args: string[]): AuditCommandOptions {
   const auditArgs = args[0] === "audit" ? args.slice(1) : args;
   const subcommand = auditArgs[0];
 
+  if (subcommand === "validate-coverage") {
+    const { values } = parseArgs({
+      args: auditArgs.slice(1),
+      options: { file: { type: "string" }, json: { type: "boolean" } },
+    });
+    if (!values.file || !values.json) throw new Error(`Usage: ${AUDIT_COVERAGE_USAGE}`);
+    return { action: "validate-coverage", filePath: values.file };
+  }
   if (subcommand !== "publish") {
-    throw new Error(AUDIT_PUBLISH_USAGE);
+    throw new Error(`${AUDIT_PUBLISH_USAGE}\n       ${AUDIT_COVERAGE_USAGE}`);
   }
 
   const optionArgs = auditArgs.slice(1);

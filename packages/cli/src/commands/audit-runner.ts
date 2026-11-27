@@ -4,6 +4,7 @@ import { publishAuditArtifact } from "../audit-artifacts";
 import { getCliArgs,getDefaultRepoRoot,getRepositoryForge,getIssueTracker } from "../cli-context";
 import { loadMediaEvidenceForPublication } from "../cli-git";
 import { appendMediaEvidenceSection } from "../media-evidence";
+import { validateReleaseCoverage } from "../release-coverage";
 import { parseAuditCommandArgs } from "./audit";
 
 export async function runAuditCommand(): Promise<void> {
@@ -15,6 +16,12 @@ export async function runAuditCommand(): Promise<void> {
 
   if (!existsSync(artifactPath)) {
     throw new Error(`Audit artifact file does not exist: ${command.filePath}`);
+  }
+
+  if (command.action === "validate-coverage") {
+    const evidence: unknown = JSON.parse(readFileSync(artifactPath, "utf8"));
+    console.log(JSON.stringify(validateReleaseCoverage(evidence), null, 2));
+    return;
   }
 
   const store = command.target.type === "issue" ? issueAuditStore(repoRoot) : forgeAuditStore(repoRoot);

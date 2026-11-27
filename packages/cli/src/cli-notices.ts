@@ -1,3 +1,5 @@
+import { AUDIT_COVERAGE_USAGE } from "./commands/audit";
+
 export const TOP_LEVEL_HELP = [
   "prs",
   "",
@@ -21,6 +23,7 @@ export const TOP_LEVEL_HELP = [
   "  prs tool pr ready <pr-number> [--unattended|--auto|--jdi] --json",
   "",
   "Audit:",
+  `  ${AUDIT_COVERAGE_USAGE}`,
   "  prs tool token-usage render --file <path> --output <path> --json",
   "  prs tool token-usage capture --host <codex|claude-code|copilot> --output <path> [--session <id>] [--source <path>] [--since <ISO>] --json",
   "  prs audit publish (--issue <number>|--pr <number>) --file <path> --section <name>",

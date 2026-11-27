@@ -38,6 +38,21 @@ Parity validation installs all three host adapters into separate temporary homes
 
 The validator also requires `prs-pr`, its existing-PR router entry, and non-empty sections for `review`, `resolve-conflicts`, `address-comments`, and `fix-tests`. It also independently requires `prs-create` and `prs-issue`, their section-scoped artifact-preparation, unified-approval and completion rules, and the refine-only identity and stopping boundaries. It rejects restored staged gates and pre-approval remote writes. Missing or weakened instructions are reported in each host's `errors`, even when the installed files match the canonical pack exactly. These conservative text checks cannot prove native approval behavior.
 
+## Package release coverage
+
+```text
+prs audit validate-coverage --file <path> --json
+```
+
+The command reads local version-1 JSON and reports coverage for the inventoried lockfiles. It requires no GitHub credentials or registry access. The evidence producer establishes the inventory, runs the upstream lookups, and saves their results. See the [mixed Composer and npm example](examples/release-coverage.json).
+
+- `baseline` contains `repository`, `ref` and the full Git `revision`. Record `startedAt` before discovery. Timestamps use ISO 8601 with a time zone.
+- `lockfiles` lists each repo-relative `path` and `ecosystem`, with its inventoried `packageCount` (null if unknown). Use optional `inventoryGaps` for missing locks or other inventory gaps. Each gap records `scope`, `reason` and `detail`.
+- `observations` records the lockfile `path` and `ecosystem`, `kind` (`release` or `advisory`), `repository`, `revision`, `observedAt`, `sources` (HTTP(S) URLs), `resultRef` (local result path or evidence reference), `checkedCount` and `gaps`. Use one release observation per lockfile. Record unavailable or excluded entries as gaps.
+- Release observations also contain `findings` with `package`, `lockedVersion`, `targetVersion`, `status` (`compatible`, `held` or `scheduled`) and `evidence`. Optional `schedule.preparation` and `schedule.deployment` each have their own `status` (`active`, `paused` or `unknown`) and `evidence`.
+
+A complete lockfile comparison matches the baseline and covers every inventoried entry with a release source observed during the audit run. A missing, stale or partial comparison yields `incomplete` while retaining verified findings from covered entries. Advisory observations appear separately. An empty inventory with no gaps yields `not-applicable`. All three statuses are valid JSON results. Invalid input exits with an error.
+
 ## Issue tools
 
 | Command | Behaviour |

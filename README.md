@@ -56,13 +56,13 @@ For GitHub Copilot, `prs skills install copilot` shares the Codex installation u
 
 Copilot telemetry setup treats empty macOS launch-environment values as unset; conflicting nonempty settings are preserved and stop setup.
 
-`prs skills validate --json` installs each host pack in an isolated temporary home and checks its inventory, hashes, retained operation references, and the named `artifact-locality` and `staged-only-finalization` instructions. It also requires the `prs-pr` skill, its router entry and non-empty sections for all four PR actions, even if every host installs the same incomplete pack. It independently checks create and refine artifact preparation, unified approval and completion instructions, including refinement on the original issue and its stopping boundary, and rejects contradictory staged approval gates or pre-approval remote writes. It also checks the JDI completion-audit authorization and the update-audit route, interactive approval and project-bound JDI handoff. These are static checks: they do not launch a native host runtime. Native behavioral evidence is a separate manual smoke matrix with one independently attributed row for each host; see [the agent parity guide](docs/agent-parity.md).
+`prs skills validate --json` installs each host pack in an isolated temporary home and checks its inventory, hashes, retained operation references, and the named `artifact-locality` and `staged-only-finalization` instructions. It also requires the `prs-pr` skill, its router entry and non-empty sections for all four PR actions, even if every host installs the same incomplete pack. It independently checks create and refine artifact preparation, unified approval and completion instructions, including refinement on the original issue and its stopping boundary, and rejects contradictory staged approval gates or pre-approval remote writes. It also checks the JDI completion-audit authorization and the update-audit route, interactive approval and project-bound JDI handoff, plus the release coverage requirements for each installed pack. These are static checks: they do not launch a native host runtime. Native behavioral evidence is a separate manual smoke matrix with one independently attributed row for each host; see [the agent parity guide](docs/agent-parity.md).
 
 All generated workflow artifacts use `.prs/runs/<task-specific-run>/` as their only repository-local root. Use a run directory returned by `prs` when available; otherwise create a task-specific directory beneath `.prs/runs`. This covers issue drafts, linked-set manifests, specifications, plans, working notes, and completion evidence. These raw files remain local: never stage or commit them, and never create an alternative scratch root such as `.prs-work`.
 
 ## Project update audits
 
-In a PRS-configured checkout, invoke the `prs-update-audit` skill in Codex, Claude Code or GitHub Copilot. The agent checks tracked pins and any documented runtime inventory, verifies upstream fixes, and compares candidates against existing issues, PRs and scheduled work. It prioritizes confirmed security fixes and shows a single approval packet for any proposed GitHub changes.
+In a PRS-configured checkout, invoke the `prs-update-audit` skill in Codex, Claude Code or GitHub Copilot. The agent checks tracked pins and documented runtime inventory, runs fresh release comparisons for all tracked lockfiles, and verifies advisories independently. It validates release evidence with `prs audit validate-coverage --file <path> --json`, reports incomplete scopes alongside verified findings, and compares candidates against existing issues, PRs and scheduled work. It prioritizes confirmed security fixes and shows a single approval packet for any proposed GitHub changes.
 
 Invoke the skill as `prs-update-audit --jdi` to authorize publication of the verified backlog for the selected project. A host schedule can run it daily when you explicitly authorize the same invocation for a named project and bind the schedule to that checkout. An identical rerun compares live issues, comments and labels and skips matching writes. The audit keeps evidence and retry receipts under `.prs/runs` and reports gaps alongside its results.
 
@@ -139,6 +139,7 @@ prs issue finalize <issue-number>
 prs tool pr list [--actionable] --json
 prs tool pr ready <pr-number> [--unattended|--auto|--jdi] --json
 
+prs audit validate-coverage --file <path> --json
 prs audit publish (--issue <number>|--pr <number>) --file <path> --section <name>
                   [--local-run <path>] [--media-manifest <path>]
 prs tool token-usage render --file <path> --output <path> --json

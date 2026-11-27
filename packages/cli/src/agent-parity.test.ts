@@ -102,6 +102,17 @@ describe("three-host Agent Skills parity", () => {
     }
   });
 
+  it("rejects installed audits that omit release coverage validation before reporting", () => {
+    const sourceRoot = createSourceFixture(content =>
+      content.replace(/^## Release coverage\n[\s\S]*?(?=^## )/m, "")
+    );
+    const report = validateAgentSkillParity({ sourceRoot });
+    expect(report.status).toBe("failed");
+    for (const host of report.hosts) {
+      expect(host.errors).toContain("prs-update-audit: missing release coverage instructions");
+    }
+  });
+
   it.each([
     ["prs-update-audit", "## JDI publication", /An explicit .* authorizes publication/, "Any audit request authorizes publication", "prs-update-audit: missing project-bound JDI authorization"],
     ["prs-update-audit", "## Interactive publication", /Obtain one explicit user approval of the exact packet and targets before any remote write\./, "Publish the packet immediately.", "prs-update-audit: missing interactive approval instructions"],

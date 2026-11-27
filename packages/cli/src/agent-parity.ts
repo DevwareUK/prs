@@ -21,6 +21,7 @@ const REQUIRED_OPERATIONS = [
   "prs tool pr list",
   "prs tool pr ready",
   "prs audit publish",
+  "prs audit validate-coverage",
   "prs tool token-usage render",
   "prs tool token-usage capture",
 ];
@@ -178,6 +179,17 @@ export function validateAgentSkillParity(options: {
     }
     errors.push(...validateAuditAuthorizationInstructions(installedContent));
     errors.push(...validateUpdateAuditInstructions(installedContent));
+    const releaseCoverage = installedContent.get("prs-update-audit")
+      ?.split(/^## Release coverage\r?$/m)[1]?.split(/^## /m)[0] ?? "";
+    if (![
+      /inventory.*independently of release results/,
+      /fresh release comparison in this audit run/,
+      /Record advisory checks separately/,
+      /prs audit validate-coverage[^`]+ --json` before reporting coverage or preparing any publication packet/,
+      /coverage as incomplete[^.]+while retaining verified findings elsewhere/,
+    ].every(requirement => requirement.test(releaseCoverage))) {
+      errors.push("prs-update-audit: missing release coverage instructions");
+    }
     errors.push(...validateGitHubCredentialAccessInstructions(installedContent.get("prs")));
     for (const name of COPILOT_CAPTURE_SKILLS) {
       const content = installedContent.get(name) ?? "";
