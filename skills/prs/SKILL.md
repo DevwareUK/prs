@@ -29,6 +29,8 @@ Check `linkedPullRequestsStatus` in issue context/list results. `unavailable` me
 
 This covers issue drafts, linked-set manifests, specifications, plans, working notes, and completion evidence. They are raw workflow artifacts and stay local. Never stage or commit them, and never create another repository-local scratch root such as `.prs-work`.
 
+Keep lightweight records separate from disposable payloads. Put temporary source copies, dependency installations and build outputs under `.prs/runs/<run>/scratch/`, and record their exact ownership when creating them. Local-only storage is not permanent retention: use the Completion cleanup contract in `prs-finish`. Do not copy whole databases, media trees or backup generations into run records by default; follow the project backup policy when recovery data is actually required.
+
 ## GitHub credential-store recovery
 
 - When `forge.githubAccount` is configured, honor that account without switching the global GitHub account or falling back to another account or an inherited token. Never run `gh auth switch`.
@@ -40,7 +42,7 @@ This covers issue drafts, linked-set manifests, specifications, plans, working n
 ## Shared safeguards
 
 - Get explicit user approval immediately before creating issues or publishing GitHub comments. For routine completion and token-usage audits from an explicitly requested JDI issue implementation, apply the audit publication authorization in `prs-finish`; carry its originating request, mode and issue/PR targets through handoffs instead of asking again. For a project update audit, apply the project-bound JDI publication authorization in `prs-update-audit`.
-- Get explicit user approval before destructive cleanup. Never discard uncommitted or unpushed work.
+- Get explicit user approval before destructive cleanup. Reuse unchanged task- or project-scoped cleanup authorization without asking again; audit/JDI authorization alone does not authorize deletion. Never discard uncommitted or unpushed work. Apply the Completion cleanup contract in `prs-finish` before reporting authorized work finished.
 - For issue implementation, prefer an isolated branch or worktree. If isolation is unavailable, continue in the active workspace and report that fallback. Existing-PR local testing follows `prs-pr` in the main checkout used by the local runtime.
 - Delegate independent work only when the host supports delegation and the user has authorized it. Otherwise execute sequentially.
 - Run fresh verification before completion. Report failures and preserve evidence under `.prs/runs`.

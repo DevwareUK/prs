@@ -34,11 +34,26 @@ The command commits only the existing index and leaves unstaged changes and untr
 4. Push the issue branch and open or update its pull request with the host's normal GitHub capability. Keep one issue task per pull request unless the approved plan says otherwise.
 5. Use `prs-pr` to prepare the pull request in the main checkout with `prs tool pr ready <number> --json`, including its checkout and worktree preflight. Resolve local-readiness failures or merge conflicts within the authorized scope and re-run verification.
 6. Write a concise completion artifact in the run directory returned for this task. If none is available, create a task-specific directory beneath `.prs/runs`. Apply the audit publication authorization above when publishing the reviewed content with `prs audit publish --issue <number> ...` or `prs audit publish --pr <number> ...`.
-7. Confirm hosted checks and review state. Clean branches or worktrees only after explicit approval and only when no uncommitted or unpushed work can be lost.
+7. Confirm hosted checks and review state. Perform Completion cleanup under the recorded cleanup authorization before the final handoff; preserve or report any resources that cannot safely be removed. Never discard uncommitted or unpushed work.
 
 Once the pull request exists, use `prs-pr` for requested pull request testing, review, comment fixes, conflict resolution, or failing-test repairs in the main checkout. Preserve the PR number and authorized scope; readiness alone does not authorize those follow-up actions. Existing PRs with no linked issue use `prs-pr` directly and its normal Git finalization, without returning to this issue-finishing flow.
 
 Never claim completion from stale verification, a pending check, or a local commit that was not pushed.
+
+## Completion cleanup
+
+Make cleanup part of finishing the authorized task. Reuse an explicit task- or project-scoped cleanup approval while its scope is unchanged; do not ask again. Read `~/.agents/prs-cleanup-policy.md` when present for the user's recorded standing authorization; respect its exact scope and any later task instruction. Never create or broaden that personal policy without the user's authorization. Implementation, audit publication and JDI modes alone do not authorize deletion. Without cleanup authorization, prepare the exact cleanup scope and ask once before deleting it.
+
+Keep lightweight records (specification, plan, completion summary, verification metadata, rendered usage and its source evidence) in the run directory. Put disposable copied checkouts, dependencies, builds and synthetic fixtures under `.prs/runs/<run>/scratch/`. Record exact paths, worktrees, Compose projects, image references and fixture-volume ownership when creating them. Keep recovery backups under the project's backup/retention policy, not silently inside an indefinitely retained run.
+
+After verification, pushing the work, required hosted validation and approved evidence publication are complete, clean the resources that the finished task no longer needs before the final handoff:
+
+- Remove recorded disposable source copies, `node_modules`, Composer dependencies and build/cache directories. Preserve lightweight records and any explicitly retained failure evidence. Do not infer disposability from a path prefix or age alone, and do not delete an entire `.prs` directory.
+- Tear down only the run's owned test stack through the project's normal teardown. Remove exact temporary images or synthetic fixture volumes only when ownership is established and no container references them. Preserve canonical application data, external volumes and other agents' resources. Do not use global Docker pruning as a finish step.
+- Remove an isolated worktree only after a fresh check proves it has no uncommitted or untracked source changes, no unpublished commits, no active process/editor/container references and no unknown ignored user files. Verify the exact HEAD is published or preserved by a verified merge. Keep the branch/remote PR available for later review; do not delete branches as a side effect. Use the native host's worktree lifecycle when it owns the checkout; otherwise run `git worktree remove` from outside it, without force. Never remove the canonical checkout.
+- If ownership, publication, references or ignored-file safety is uncertain, keep that resource and report the exact reason. Do not copy the whole worktree or its bulky generated files into a new recovery directory to make removal succeed. Preserve unfinished work and useful failure evidence until it is explicitly finished or abandoned with an approved cleanup scope.
+
+Write a small cleanup receipt in the retained run directory listing removed resources, kept resources/reasons and measured space recovered when available. A run is not fully cleaned merely because its Git worktree was removed: separately check copied source trees and generated payloads in its run directory. Report any deferred cleanup honestly.
 
 ## Usage evidence
 

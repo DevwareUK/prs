@@ -20,7 +20,7 @@ This covers issue drafts, linked-set manifests, specifications, plans, working n
 5. For each issue: run `prs tool issue ready`, implement, verify, use `prs-finish`, and keep its pull request separate.
 6. Merge dependency pull requests in order. Refresh the base before starting a dependent issue.
 7. After all children are integrated, the designated parent performs the full repository verification suite, integration checks and cross-issue final acceptance. Keep coordinator notes and final evidence in the parent's task-specific run directory.
-8. Publish the final audit only with explicit user approval. Report each issue, pull request, merge result, verification result, and any capability fallback.
+8. Publish the final audit only with explicit user approval. Apply the Completion cleanup contract in `prs-finish` to completed child and parent resources under the recorded cleanup authorization; do not retain bulky child payloads inside coordinator records. Report each issue, pull request, merge result, verification result, cleanup outcome, and any capability fallback.
 
 An explicitly flat set has no parent mutation or implied coordinator; orchestrate it only when the user separately requests coordination. Creating a set never starts agents or merges pull requests. Do not hardcode a model, branch or merge policy. Do not use one successful child or one host's result as evidence for another required row. Before destructive cleanup, obtain separate explicit user approval.
 
