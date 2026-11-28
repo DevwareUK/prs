@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "baseline": {
+    "repository": "example/commerce",
+    "ref": "main",
+    "revision": "d283b5b48d70e6a4d6a1eb99c4e087dcc1c33251"
+  },
+  "startedAt": "2026-11-27T12:00:00Z",
+  "lockfiles": [
+    {
+      "ecosystem": "composer",
+      "path": "composer.lock",
+      "packageCount": 2
+    },
+    {
+      "ecosystem": "npm",
+      "path": "assets/package-lock.json",
+      "packageCount": 1
+    }
+  ],
+  "observations": [
+    {
+      "kind": "release",
+      "ecosystem": "composer",
+      "path": "composer.lock",
+      "repository": "example/commerce",
+      "revision": "d283b5b48d70e6a4d6a1eb99c4e087dcc1c33251",
+      "observedAt": "2026-11-27T12:03:00Z",
+      "sources": [
+        "https://packages.drupal.org/8",
+        "https://packagist.org/"
+      ],
+      "resultRef": ".prs/runs/example/composer-releases.json",
+      "checkedCount": 2,
+      "gaps": [],
+      "findings": [
+        {
+          "package": "drupal/graphql_core_schema",
+          "lockedVersion": "1.0.29",
+          "targetVersion": "1.0.30",
+          "status": "compatible",
+          "evidence": "Synthetic Drupal compatibility evidence."
+        },
+        {
+          "package": "phpstan/phpstan-phpunit",
+          "lockedVersion": "2.1.3",
+          "targetVersion": "2.1.4",
+          "status": "compatible",
+          "evidence": "Synthetic Packagist compatibility evidence.",
+          "schedule": {
+            "preparation": {
+              "status": "active",
+              "evidence": "Weekly preparation fixture."
+            },
+            "deployment": {
+              "status": "paused",
+              "evidence": "Paused deployment fixture."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "kind": "release",
+      "ecosystem": "npm",
+      "path": "assets/package-lock.json",
+      "repository": "example/commerce",
+      "revision": "d283b5b48d70e6a4d6a1eb99c4e087dcc1c33251",
+      "observedAt": "2026-11-27T12:03:00Z",
+      "sources": [
+        "https://registry.npmjs.org/"
+      ],
+      "resultRef": ".prs/runs/example/npm-releases.json",
+      "checkedCount": 1,
+      "gaps": [],
+      "findings": [
+        {
+          "package": "example-dependency",
+          "lockedVersion": "1.0.0",
+          "targetVersion": "1.0.1",
+          "status": "compatible",
+          "evidence": "Synthetic npm compatibility evidence."
+        }
+      ]
+    }
+  ]
+}

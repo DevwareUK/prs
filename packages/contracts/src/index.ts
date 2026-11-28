@@ -5,3 +5,4 @@ export * from "./github-output-framing";
 export * from "./issue-draft";
 export * from "./repository-config";
 export * from "./token-usage";
+export * from "./release-coverage";
